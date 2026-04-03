@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   Image,
@@ -92,6 +93,7 @@ const PRIVATE_GROUPS = [
 
 export default function GroupsScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [selectedGroup, setSelectedGroup] = useState<any>(null);
 
   return (
@@ -119,15 +121,16 @@ export default function GroupsScreen() {
         <View className="flex-row justify-between mb-8 px-2">
           <ActionItem
             icon={<UserPlusIcon size={24} color="#374151" />}
-            label="Tạo nhóm\nmới"
+            label="Tạo nhóm mới"
+            onPress={() => router.push("/groups/create-group")}
           />
           <ActionItem
             icon={<EnvelopeIcon size={24} color="#374151" />}
-            label="Lời mời vào\nnhóm"
+            label="Lời mời vào nhóm"
           />
           <ActionItem
             icon={<PaperAirplaneIcon size={24} color="#374151" />}
-            label="Lời mời đã\ngửi"
+            label="Lời mời đã gửi"
           />
           <ActionItem
             icon={<StarIcon size={24} color="#374151" />}
@@ -183,9 +186,17 @@ export default function GroupsScreen() {
 }
 
 // Component con: Nút bấm tròn
-function ActionItem({ icon, label }: { icon: React.ReactNode; label: string }) {
+function ActionItem({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onPress?: () => void;
+}) {
   return (
-    <TouchableOpacity className="items-center w-20">
+    <TouchableOpacity className="items-center w-20" onPress={onPress}>
       <View className="w-14 h-14 bg-gray-50 rounded-full items-center justify-center mb-2">
         {icon}
       </View>
