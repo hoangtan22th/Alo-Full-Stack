@@ -102,7 +102,7 @@ export default function GroupsScreen() {
       style={{ flex: 1, backgroundColor: "white", paddingTop: insets.top + 10 }}
     >
       {/* Thanh tìm kiếm */}
-      <View className="border-b-[1px] border-gray-100">
+      <View className="border-b-[1px] border-gray-100 px-4">
         <View className="flex-row items-center bg-gray-50 rounded-2xl px-4 py-3 mb-2">
           <MagnifyingGlassIcon size={20} color="#9ca3af" />
           <TextInput
