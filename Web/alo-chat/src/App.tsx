@@ -1,12 +1,21 @@
-import "./App.css";
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import ContactLayout from '@/pages/contacts/ContactLayout';
+// import ChatRoomPage from '@/pages/chat/ChatRoomPage'; // Ví dụ ông B sẽ import file của ổng ở đây
 
 function App() {
   return (
-    <div className="flex items-center justify-center h-screen bg-slate-100">
-      <h1 className="text-4xl font-bold text-blue-600 p-6 bg-white rounded-2xl shadow-lg">
-        Chào Tấn! Tailwind CSS đã hoạt động! 🎉
-      </h1>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        {/* Đường dẫn mặc định (Khi vào web, tự động chuyển sang trang danh bạ) */}
+        <Route path="/" element={<Navigate to="/contacts" replace />} />
+
+        {/* Tuyến đường 1: Trang Danh bạ anh em mình vừa làm */}
+        <Route path="/contacts" element={<ContactLayout />} />
+
+        {/* Tuyến đường 2: Trang Chat (Ông bạn B sẽ tự thêm dòng này vào) */}
+        {/* <Route path="/chat" element={<ChatRoomPage />} /> */}
+      </Routes>
+    </BrowserRouter>
   );
 }
 
