@@ -1,0 +1,24 @@
+server:
+  port: 8083
+  servlet:
+    context-path: /message-service
+
+spring:
+  application:
+    name: message-service
+
+  mongodb:
+    uri: mongodb://${MONGO_USER:admin}:${MONGO_PASSWORD:password}@${MONGO_HOST:localhost}:${MONGO_PORT:27017}/${MONGO_DB:alo_message_db}?authSource=admin
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
