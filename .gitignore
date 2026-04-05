@@ -26,3 +26,11 @@ $RECYCLE.BIN/
 *.msm
 *.msp
 *.lnk
+
+### Cấu hình IDE của thư mục gốc ###
+.idea/
+*.iml
+
+### Chặn tuyệt đối biến môi trường ở mọi nơi ###
+.env
+*.env
