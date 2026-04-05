@@ -8,9 +8,9 @@ spring:
     name: contact-service
 
   datasource:
-    url: jdbc:mariadb://localhost:3306/alo_contact_db?createDatabaseIfNotExist=true
-    username: root
-    password: root
+    url: jdbc:mariadb://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:alo_auth_db}?createDatabaseIfNotExist=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
     driver-class-name: org.mariadb.jdbc.Driver
 
   jpa:

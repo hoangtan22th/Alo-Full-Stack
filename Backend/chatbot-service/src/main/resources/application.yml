@@ -1,5 +1,7 @@
 server:
   port: 8085
+  servlet:
+    context-path: /chatbot-service
 
 spring:
   application:
@@ -15,6 +17,6 @@ spring:
 
 eureka:
   client:
-    enabled: false
+#    enabled: false
     service-url:
       defaultZone: http://localhost:8761/eureka/
