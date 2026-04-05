@@ -8,7 +8,7 @@
         <version>4.0.5</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <groupId>edu.iuh.fit.</groupId>
+    <groupId>edu.iuh.fit</groupId>
     <artifactId>chatbot-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>chatbot-service</name>
@@ -58,6 +58,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>edu.iuh.fit</groupId>
+            <artifactId>common-service</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
         </dependency>
     </dependencies>
     <dependencyManagement>
