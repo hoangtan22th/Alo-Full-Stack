@@ -1,4 +1,4 @@
-package edu.iuh.fit.contact_service.dto;
+package edu.iuh.fit.contact_service.dto.request;
 
 import lombok.Data;
 
