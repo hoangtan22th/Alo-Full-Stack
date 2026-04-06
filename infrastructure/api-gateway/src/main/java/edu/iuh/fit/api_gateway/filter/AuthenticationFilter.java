@@ -22,7 +22,10 @@ public class AuthenticationFilter implements GlobalFilter {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
-
+        // CHÈN ĐOÀN NÀY VÀO ĐẦU TIÊN: Chấp nhận mọi request OPTIONS để fix lỗi CORS Preflight
+        if (request.getMethod().name().equals("OPTIONS")) {
+            return chain.filter(exchange);
+        }
         // 1. Kiểm tra xem Request này có cần bảo mật không (Whitelist check)
         if (validator.isSecured.test(request)) {
 
@@ -48,7 +51,7 @@ public class AuthenticationFilter implements GlobalFilter {
                 return chain.filter(exchange.mutate().request(modifiedRequest).build());
 
             } catch (Exception e) {
-                // Token lởm hoặc hết hạn
+                System.out.println("Lỗi xác thực Token: " + e.getMessage());
                 exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                 return exchange.getResponse().setComplete();
             }

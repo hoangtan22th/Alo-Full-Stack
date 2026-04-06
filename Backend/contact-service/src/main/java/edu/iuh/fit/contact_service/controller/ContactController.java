@@ -100,7 +100,6 @@ public class ContactController {
         return ResponseEntity.ok(ApiResponse.success(contactService.sendFriendRequest(requestDTO)));
     }
 
-    // Lấy danh sách chờ: Lấy userId từ Header
     @GetMapping("/pending")
     public ResponseEntity<ApiResponse<List<FriendshipResponseDTO>>> getPendingRequests(
             @RequestHeader("X-User-Id") String userId) {
