@@ -58,8 +58,8 @@ export default function AccountSecurityScreen() {
 
   const fetchProfile = async () => {
     try {
-      const res = await api.get("/auth/me");
-      const user = res.data;
+      const res: any = await api.get("/auth/me");
+      const user = res;
 
       const initialDate = user.dateOfBirth
         ? new Date(user.dateOfBirth)

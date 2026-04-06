@@ -31,12 +31,12 @@ export default function LoginScreen() {
     }
     setLoading(true);
     try {
-      const res = await api.post("/auth/login", {
+      const res: any = await api.post("/auth/login", {
         email,
         password,
         deviceId: "Mobile_App",
       });
-      await AsyncStorage.setItem("accessToken", res.data.accessToken);
+      await AsyncStorage.setItem("accessToken", res.accessToken);
       router.replace("/(tabs)");
     } catch (error: any) {
       const msg =
