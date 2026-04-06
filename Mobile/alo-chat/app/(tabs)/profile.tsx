@@ -8,25 +8,31 @@ import {
   Alert,
   TextInput,
   ScrollView,
+  Image,
   Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
+import { Ionicons, Feather } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import api from "../../services/api";
 
 export default function ProfileScreen() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
   const [updating, setUpdating] = useState(false);
+
+  // Quản lý DatePicker
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState(new Date(2000, 0, 1)); // Mặc định lùi về năm 2000 khi mở lịch
 
   const [formData, setFormData] = useState({
     fullName: "",
     phoneNumber: "",
-    gender: 1,
-    dateOfBirth: new Date(), // Lưu dạng Date object để dùng cho Picker
+    gender: 1, // 0: Female, 1: Male, 2: Other
+    email: "",
+    dateOfBirth: null as Date | null, // Trạng thái ban đầu là null
   });
 
   const router = useRouter();
@@ -38,242 +44,394 @@ export default function ProfileScreen() {
   const fetchProfile = async () => {
     try {
       const res = await api.get("/auth/me");
-      setUser(res.data);
+      const userData = res.data;
+      setUser(userData);
       setFormData({
-        fullName: res.data.fullName || "",
-        phoneNumber: res.data.phoneNumber || "",
-        gender: res.data.gender ?? 1,
-        // Chuyển chuỗi YYYY-MM-DD từ server thành Date object
-        dateOfBirth: res.data.dateOfBirth
-          ? new Date(res.data.dateOfBirth)
-          : new Date(),
+        fullName: userData.fullName || "",
+        phoneNumber: userData.phoneNumber || "",
+        gender: userData.gender ?? 1,
+        email: userData.email || "",
+        // Kiểm tra nếu server có ngày sinh thì mới set, không thì để null
+        dateOfBirth: userData.dateOfBirth
+          ? new Date(userData.dateOfBirth)
+          : null,
       });
     } catch (err) {
+      console.log("Lỗi tải profile:", err);
       router.replace("/login");
     } finally {
       setLoading(false);
     }
   };
 
-  // Hàm format Date thành YYYY-MM-DD để gửi lên Backend
-  const formatDateToString = (date: Date) => {
+  const formatDateToString = (date: Date | null) => {
+    if (!date) return "";
     return date.toISOString().split("T")[0];
+  };
+
+  // Logic mở Picker: Nếu chưa có ngày, gợi ý năm 2000
+  const openDatePicker = () => {
+    setTempDate(formData.dateOfBirth || new Date(2000, 0, 1));
+    setShowDatePicker(true);
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === "android") {
+      setShowDatePicker(false);
+      // Android: Chỉ cập nhật khi nhấn nút OK
+      if (event.type === "set" && selectedDate) {
+        setFormData({ ...formData, dateOfBirth: selectedDate });
+      }
+    } else {
+      // iOS: Lưu vào biến tạm chờ nhấn Done
+      if (selectedDate) setTempDate(selectedDate);
+    }
+  };
+
+  const confirmDateIOS = () => {
+    setFormData({ ...formData, dateOfBirth: tempDate });
+    setShowDatePicker(false);
   };
 
   const handleUpdate = async () => {
     setUpdating(true);
     try {
-      await api.put("/auth/me", {
+      const res = await api.put("/auth/me", {
         fullName: formData.fullName,
         phoneNumber: formData.phoneNumber,
         gender: formData.gender,
         dateOfBirth: formatDateToString(formData.dateOfBirth),
       });
-      Alert.alert("Thành công", "Đã cập nhật thông tin!");
-      setIsEditing(false);
-      fetchProfile();
+      setUser(res.data);
+      Alert.alert("Thành công", "Thông tin cá nhân đã được cập nhật!");
     } catch (error: any) {
-      Alert.alert("Lỗi", "Không thể cập nhật thông tin");
+      Alert.alert("Lỗi", "Không thể lưu thông tin. Vui lòng thử lại.");
     } finally {
       setUpdating(false);
     }
   };
 
-  const onDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(Platform.OS === "ios"); // iOS giữ hiện, Android tự đóng
-    if (selectedDate) {
-      setFormData({ ...formData, dateOfBirth: selectedDate });
-    }
+  const logout = async () => {
+    Alert.alert("Đăng xuất", "Bạn có chắc muốn thoát tài khoản?", [
+      { text: "Hủy", style: "cancel" },
+      {
+        text: "Thoát",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await api.post("/auth/logout");
+          } catch (e) {}
+          await AsyncStorage.removeItem("accessToken");
+          router.replace("/login");
+        },
+      },
+    ]);
   };
 
   if (loading)
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#0084ff" />
+        <ActivityIndicator size="large" color="#000" />
       </View>
     );
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.headerTitle}>Thông tin cá nhân</Text>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.mainContainer}
+    >
+      {/* Header */}
+      <View style={styles.headerBar}>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Ionicons name="close" size={28} color="#333" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Edit Profile</Text>
+        <TouchableOpacity onPress={handleUpdate} disabled={updating}>
+          {updating ? (
+            <ActivityIndicator size="small" color="#000" />
+          ) : (
+            <Text style={styles.doneText}>Done</Text>
+          )}
+        </TouchableOpacity>
+      </View>
 
-      <View style={styles.card}>
-        <Text style={styles.label}>HỌ VÀ TÊN</Text>
-        {isEditing ? (
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Banner & Avatar */}
+        <View style={styles.imageSection}>
+          <Image
+            source={{
+              uri: "https://images.unsplash.com/photo-1557683316-973673baf926",
+            }}
+            style={styles.coverImage}
+          />
+          <View style={styles.avatarContainer}>
+            <Image
+              source={{
+                uri: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email || "Felix"}`,
+              }}
+              style={styles.avatarImage}
+            />
+            <TouchableOpacity style={styles.cameraBtn}>
+              <Feather name="camera" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.form}>
+          <Text style={styles.inputLabel}>FULL NAME</Text>
           <TextInput
             style={styles.input}
             value={formData.fullName}
             onChangeText={(t) => setFormData({ ...formData, fullName: t })}
+            placeholder="Alexandra Chen"
+            placeholderTextColor="#aaa"
           />
-        ) : (
-          <Text style={styles.value}>{user?.fullName || "Chưa thiết lập"}</Text>
-        )}
 
-        <Text style={styles.label}>SỐ ĐIỆN THOẠI</Text>
-        {isEditing ? (
+          <Text style={styles.inputLabel}>GENDER</Text>
+          <View style={styles.genderRow}>
+            {["FEMALE", "MALE", "OTHER"].map((label, index) => (
+              <TouchableOpacity
+                key={label}
+                style={[
+                  styles.genderTab,
+                  formData.gender === index && styles.activeGenderTab,
+                ]}
+                onPress={() => setFormData({ ...formData, gender: index })}
+              >
+                <Text
+                  style={[
+                    styles.genderTabText,
+                    formData.gender === index && styles.activeGenderText,
+                  ]}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* DATE OF BIRTH FIELD */}
+          <Text style={styles.inputLabel}>DATE OF BIRTH</Text>
+          <TouchableOpacity style={styles.input} onPress={openDatePicker}>
+            <View style={styles.datePickerContent}>
+              <Text
+                style={[
+                  styles.dateValueText,
+                  !formData.dateOfBirth && { color: "#999" },
+                ]}
+              >
+                {formData.dateOfBirth
+                  ? formatDateToString(formData.dateOfBirth)
+                  : "Chọn ngày sinh"}
+              </Text>
+              <Ionicons name="calendar-outline" size={20} color="#8e8e93" />
+            </View>
+          </TouchableOpacity>
+
+          {showDatePicker && (
+            <View style={styles.pickerWrapper}>
+              {Platform.OS === "ios" && (
+                <View style={styles.iosPickerHeader}>
+                  <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                    <Text style={{ color: "red" }}>Hủy</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={confirmDateIOS}>
+                    <Text style={{ color: "#007AFF", fontWeight: "bold" }}>
+                      Xác nhận
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              <DateTimePicker
+                value={tempDate}
+                mode="date"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={onDateChange}
+                maximumDate={new Date()}
+              />
+            </View>
+          )}
+
+          <Text style={styles.inputLabel}>PHONE NUMBER</Text>
           <TextInput
             style={styles.input}
             value={formData.phoneNumber}
             keyboardType="phone-pad"
             onChangeText={(t) => setFormData({ ...formData, phoneNumber: t })}
+            placeholder="+1 (555) 0123 4567"
+            placeholderTextColor="#aaa"
           />
-        ) : (
-          <Text style={styles.value}>
-            {user?.phoneNumber || "Chưa thiết lập"}
-          </Text>
-        )}
 
-        <Text style={styles.label}>GIỚI TÍNH</Text>
-        {isEditing ? (
-          <View style={styles.genderRow}>
-            <TouchableOpacity
-              style={[
-                styles.genderBtn,
-                formData.gender === 1 && styles.activeBtn,
-              ]}
-              onPress={() => setFormData({ ...formData, gender: 1 })}
-            >
-              <Text
-                style={[
-                  styles.genderText,
-                  formData.gender === 1 && styles.activeText,
-                ]}
-              >
-                Nam
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.genderBtn,
-                formData.gender === 0 && styles.activeBtn,
-              ]}
-              onPress={() => setFormData({ ...formData, gender: 0 })}
-            >
-              <Text
-                style={[
-                  styles.genderText,
-                  formData.gender === 0 && styles.activeText,
-                ]}
-              >
-                Nữ
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <Text style={styles.value}>{user?.gender === 1 ? "Nam" : "Nữ"}</Text>
-        )}
+          <Text style={styles.inputLabel}>EMAIL ADDRESS</Text>
+          <TextInput
+            style={[styles.input, styles.disabledInput]}
+            value={formData.email}
+            editable={false}
+          />
 
-        <Text style={styles.label}>NGÀY SINH</Text>
-        {isEditing ? (
-          <View>
-            <TouchableOpacity
-              style={styles.input}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Text>{formatDateToString(formData.dateOfBirth)}</Text>
-            </TouchableOpacity>
-            {showDatePicker && (
-              <DateTimePicker
-                value={formData.dateOfBirth}
-                mode="date"
-                display="default"
-                onChange={onDateChange}
-                maximumDate={new Date()} // Không cho chọn ngày tương lai
-              />
-            )}
-          </View>
-        ) : (
-          <Text style={styles.value}>
-            {user?.dateOfBirth || "Chưa thiết lập"}
-          </Text>
-        )}
-      </View>
-
-      <View style={styles.buttonGroup}>
-        {isEditing ? (
-          <>
-            <TouchableOpacity
-              style={[styles.btn, styles.saveBtn]}
-              onPress={handleUpdate}
-              disabled={updating}
-            >
-              {updating ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.btnText}>Lưu thay đổi</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.btn, styles.cancelBtn]}
-              onPress={() => setIsEditing(false)}
-            >
-              <Text style={{ fontWeight: "700" }}>Hủy</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
           <TouchableOpacity
-            style={[styles.btn, styles.editBtn]}
-            onPress={() => setIsEditing(true)}
+            style={styles.saveBtn}
+            onPress={handleUpdate}
+            disabled={updating}
           >
-            <Text style={styles.btnText}>Chỉnh sửa thông tin</Text>
+            {updating ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.saveBtnText}>LƯU THAY ĐỔI</Text>
+            )}
           </TouchableOpacity>
-        )}
-      </View>
-    </ScrollView>
+
+          <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+            <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
+            <Text style={styles.logoutBtnText}>ĐĂNG XUẤT TÀI KHOẢN</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f0f2f5", padding: 20 },
-  center: { flex: 1, justifyContent: "center" },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
-    marginTop: 40,
-    marginBottom: 20,
+  mainContainer: { flex: 1, backgroundColor: "#fff" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  headerBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === "ios" ? 50 : 25,
+    paddingBottom: 15,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#eee",
   },
-  card: {
+  headerTitle: { fontSize: 17, fontWeight: "700", color: "#000" },
+  doneText: { fontSize: 16, fontWeight: "600", color: "#000" },
+  container: { flex: 1 },
+  scrollContent: { paddingBottom: 100 },
+  imageSection: { height: 240, alignItems: "center", marginBottom: 50 },
+  coverImage: { width: "100%", height: 180 },
+  avatarContainer: {
+    position: "absolute",
+    bottom: 0,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 4,
+    borderColor: "#fff",
     backgroundColor: "#fff",
-    padding: 20,
-    borderRadius: 15,
-    elevation: 2,
+    elevation: 8,
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
   },
-  label: { color: "#8e8e93", fontSize: 11, fontWeight: "700", marginBottom: 8 },
-  value: {
-    fontSize: 16,
-    color: "#1c1c1e",
-    marginBottom: 20,
-    fontWeight: "500",
+  avatarImage: { width: "100%", height: "100%", borderRadius: 60 },
+  cameraBtn: {
+    position: "absolute",
+    bottom: 2,
+    right: 2,
+    backgroundColor: "#333",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  form: { paddingHorizontal: 25 },
+  inputLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#8e8e93",
+    marginBottom: 10,
+    marginTop: 25,
+    letterSpacing: 1.2,
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#e5e5ea",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 20,
-    backgroundColor: "#fafafa",
+    backgroundColor: "#f2f2f7",
+    height: 55,
+    borderRadius: 28,
+    paddingHorizontal: 25,
+    fontSize: 15,
+    color: "#000",
+    fontWeight: "500",
+    justifyContent: "center",
   },
-  genderRow: { flexDirection: "row", marginBottom: 20, gap: 10 },
-  genderBtn: {
+  disabledInput: { color: "#999", backgroundColor: "#f9f9f9" },
+  datePickerContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  dateValueText: { fontSize: 15, fontWeight: "500", color: "#000" },
+  pickerWrapper: {
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    marginTop: 10,
+    overflow: "hidden",
+    borderBottomWidth: 1,
+    borderColor: "#eee",
+  },
+  iosPickerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    padding: 15,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#eee",
+  },
+  genderRow: {
+    flexDirection: "row",
+    backgroundColor: "#f2f2f7",
+    borderRadius: 28,
+    height: 56,
+    padding: 4,
+  },
+  genderTab: {
     flex: 1,
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e5e5ea",
+    justifyContent: "center",
     alignItems: "center",
+    borderRadius: 24,
   },
-  activeBtn: { backgroundColor: "#0084ff", borderColor: "#0084ff" },
-  genderText: { fontWeight: "600" },
-  activeText: { color: "#fff" },
-  buttonGroup: { marginTop: 30 },
-  btn: {
-    padding: 16,
-    borderRadius: 12,
+  activeGenderTab: {
+    backgroundColor: "#fff",
+    elevation: 3,
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+  },
+  genderTabText: { fontSize: 12, fontWeight: "700", color: "#8e8e93" },
+  activeGenderText: { color: "#000" },
+  saveBtn: {
+    backgroundColor: "#000",
+    height: 60,
+    borderRadius: 30,
+    justifyContent: "center",
     alignItems: "center",
-    marginBottom: 12,
+    marginTop: 40,
   },
-  btnText: { color: "#fff", fontWeight: "700" },
-  editBtn: { backgroundColor: "#0084ff" },
-  saveBtn: { backgroundColor: "#34c759" },
-  cancelBtn: { backgroundColor: "#e5e5ea" },
+  saveBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  logoutBtn: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 40,
+    paddingVertical: 15,
+    borderRadius: 30,
+    borderWidth: 1.5,
+    borderColor: "#FF3B30",
+    gap: 10,
+  },
+  logoutBtnText: {
+    color: "#FF3B30",
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
 });
