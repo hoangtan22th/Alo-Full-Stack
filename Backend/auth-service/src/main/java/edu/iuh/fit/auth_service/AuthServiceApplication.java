@@ -3,7 +3,7 @@ package edu.iuh.fit.auth_service;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"edu.iuh.fit"})
 public class AuthServiceApplication {
 
 	public static void main(String[] args) {
