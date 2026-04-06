@@ -35,19 +35,19 @@ public class AuthController {
     }
     // Lấy thông tin cá nhân (Yêu cầu Authorize JWT)
     @GetMapping("/me")
-    public ResponseEntity<User> getMyProfile(@AuthenticationPrincipal String userId) {
+    public ResponseEntity<User> getMyProfile(@RequestHeader("X-User-Id") String userId) {
         return ResponseEntity.ok(authService.getProfile(userId));
     }
 
     // Lấy danh sách thiết bị đăng nhập
     @GetMapping("/sessions")
-    public ResponseEntity<List<UserSessionResponse>> getMySessions(@AuthenticationPrincipal String userId) {
+    public ResponseEntity<List<UserSessionResponse>> getMySessions(@RequestHeader("X-User-Id") String userId) {
         return ResponseEntity.ok(authService.getActiveSessions(userId));
     }
 
     // Đăng xuất từ xa
     @DeleteMapping("/sessions/{id}")
-    public ResponseEntity<String> logoutFromDevice(@AuthenticationPrincipal String userId, @PathVariable String id) {
+    public ResponseEntity<String> logoutFromDevice(@RequestHeader("X-User-Id") String userId, @PathVariable String id) {
         authService.terminateSession(userId, id);
         return ResponseEntity.ok("Đã đăng xuất thiết bị thành công");
     }
@@ -83,7 +83,7 @@ public class AuthController {
     // Cập nhật thông tin cá nhân
     @PutMapping("/me")
     public ResponseEntity<User> updateProfile(
-            @AuthenticationPrincipal String userId,
+            @RequestHeader("X-User-Id") String userId,
             @RequestBody UpdateProfileRequest request) {
         return ResponseEntity.ok(authService.updateProfile(userId, request));
     }
