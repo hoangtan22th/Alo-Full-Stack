@@ -10,6 +10,9 @@ public class RouteValidator {
     // Danh sách các API không cần kiểm tra Token
     public static final List<String> openApiEndpoints = List.of(
             "/api/v1/auth/register",
+            "/api/v1/auth/send-otp",
+            "/api/v1/auth/forgot-password/send-otp",
+            "/api/v1/auth/forgot-password/reset",
             "/api/v1/auth/login",
             "/api/v1/auth/qr/generate",
             "/api/v1/auth/qr/status",

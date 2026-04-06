@@ -41,6 +41,24 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(Map.of("accessToken", accessToken)));
     }
 
+    @PostMapping("/forgot-password/send-otp")
+    public ResponseEntity<ApiResponse<String>> sendForgotPasswordOtp(@RequestBody SendOtpRequest request) {
+        authService.sendForgotPasswordOtp(request.email());
+        return ResponseEntity.ok(ApiResponse.success("Mã khôi phục đã được gửi đến email của bạn"));
+    }
+
+    @PostMapping("/forgot-password/reset")
+    public ResponseEntity<ApiResponse<String>> resetPassword(@RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok(ApiResponse.success("Mật khẩu đã được đặt lại thành công"));
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<ApiResponse<String>> changePassword(@RequestHeader("X-User-Id") String userId, @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(userId, request);
+        return ResponseEntity.ok(ApiResponse.success("Đổi mật khẩu thành công"));
+    }
+
     // Lấy thông tin cá nhân (Yêu cầu Authorize JWT)
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getMyProfile(@RequestHeader("X-User-Id") String userId) {
