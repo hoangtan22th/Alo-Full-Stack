@@ -127,6 +127,7 @@ public class AuthService {
         if (request.phoneNumber() != null) user.setPhoneNumber(request.phoneNumber());
         if (request.gender() != null) user.setGender(request.gender());
         if (request.dateOfBirth() != null) user.setDateOfBirth(request.dateOfBirth());
+        if (request.email() != null && !request.email().isBlank()) user.setEmail(request.email());
 
         return userRepository.save(user);
     }
