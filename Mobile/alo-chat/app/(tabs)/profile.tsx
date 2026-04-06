@@ -26,7 +26,7 @@ export default function ProfileScreen() {
     fullName: "",
     phoneNumber: "",
     gender: 1,
-    dateOfBirth: new Date(), // Lưu dạng Date object để dùng cho Picker
+    dateOfBirth: new Date(),
   });
 
   const router = useRouter();
@@ -43,7 +43,6 @@ export default function ProfileScreen() {
         fullName: res.data.fullName || "",
         phoneNumber: res.data.phoneNumber || "",
         gender: res.data.gender ?? 1,
-        // Chuyển chuỗi YYYY-MM-DD từ server thành Date object
         dateOfBirth: res.data.dateOfBirth
           ? new Date(res.data.dateOfBirth)
           : new Date(),
@@ -55,7 +54,6 @@ export default function ProfileScreen() {
     }
   };
 
-  // Hàm format Date thành YYYY-MM-DD để gửi lên Backend
   const formatDateToString = (date: Date) => {
     return date.toISOString().split("T")[0];
   };
@@ -63,15 +61,15 @@ export default function ProfileScreen() {
   const handleUpdate = async () => {
     setUpdating(true);
     try {
-      await api.put("/auth/me", {
+      const res = await api.put("/auth/me", {
         fullName: formData.fullName,
         phoneNumber: formData.phoneNumber,
         gender: formData.gender,
         dateOfBirth: formatDateToString(formData.dateOfBirth),
       });
+      setUser(res.data);
       Alert.alert("Thành công", "Đã cập nhật thông tin!");
       setIsEditing(false);
-      fetchProfile();
     } catch (error: any) {
       Alert.alert("Lỗi", "Không thể cập nhật thông tin");
     } finally {
@@ -79,8 +77,20 @@ export default function ProfileScreen() {
     }
   };
 
+  const logout = async () => {
+    try {
+      await api.post("/auth/logout");
+      await AsyncStorage.removeItem("accessToken");
+      router.replace("/login");
+    } catch (error) {
+      // Dù API lỗi vẫn xóa token ở máy để thoát ra ngoài
+      await AsyncStorage.removeItem("accessToken");
+      router.replace("/login");
+    }
+  };
+
   const onDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(Platform.OS === "ios"); // iOS giữ hiện, Android tự đóng
+    setShowDatePicker(Platform.OS === "ios");
     if (selectedDate) {
       setFormData({ ...formData, dateOfBirth: selectedDate });
     }
@@ -178,7 +188,7 @@ export default function ProfileScreen() {
                 mode="date"
                 display="default"
                 onChange={onDateChange}
-                maximumDate={new Date()} // Không cho chọn ngày tương lai
+                maximumDate={new Date()}
               />
             )}
           </View>
@@ -207,7 +217,7 @@ export default function ProfileScreen() {
               style={[styles.btn, styles.cancelBtn]}
               onPress={() => setIsEditing(false)}
             >
-              <Text style={{ fontWeight: "700" }}>Hủy</Text>
+              <Text style={{ fontWeight: "700", color: "#333" }}>Hủy</Text>
             </TouchableOpacity>
           </>
         ) : (
@@ -218,6 +228,11 @@ export default function ProfileScreen() {
             <Text style={styles.btnText}>Chỉnh sửa thông tin</Text>
           </TouchableOpacity>
         )}
+
+        {/* NÚT ĐĂNG XUẤT ĐÃ QUAY TRỞ LẠI ĐÂY DƯƠNG NHÉ */}
+        <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+          <Text style={styles.logoutText}>Đăng xuất</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -225,20 +240,31 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f0f2f5", padding: 20 },
-  center: { flex: 1, justifyContent: "center" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
   headerTitle: {
     fontSize: 22,
     fontWeight: "bold",
     marginTop: 40,
     marginBottom: 20,
+    color: "#1a1a1a",
   },
   card: {
     backgroundColor: "#fff",
     padding: 20,
     borderRadius: 15,
     elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
-  label: { color: "#8e8e93", fontSize: 11, fontWeight: "700", marginBottom: 8 },
+  label: {
+    color: "#8e8e93",
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
   value: {
     fontSize: 16,
     color: "#1c1c1e",
@@ -261,19 +287,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e5e5ea",
     alignItems: "center",
+    backgroundColor: "#fff",
   },
   activeBtn: { backgroundColor: "#0084ff", borderColor: "#0084ff" },
-  genderText: { fontWeight: "600" },
+  genderText: { fontWeight: "600", color: "#333" },
   activeText: { color: "#fff" },
-  buttonGroup: { marginTop: 30 },
+  buttonGroup: { marginTop: 30, marginBottom: 50 },
   btn: {
     padding: 16,
     borderRadius: 12,
     alignItems: "center",
     marginBottom: 12,
   },
-  btnText: { color: "#fff", fontWeight: "700" },
+  btnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
   editBtn: { backgroundColor: "#0084ff" },
   saveBtn: { backgroundColor: "#34c759" },
   cancelBtn: { backgroundColor: "#e5e5ea" },
+  logoutBtn: {
+    marginTop: 20,
+    padding: 15,
+    borderRadius: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ff3b30",
+  },
+  logoutText: { color: "#ff3b30", fontWeight: "700", fontSize: 16 },
 });
