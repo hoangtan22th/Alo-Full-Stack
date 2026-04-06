@@ -35,6 +35,7 @@ public class AuthService {
                 .password(passwordEncoder.encode(request.password()))
                 .fullName(request.fullName())
                 .authProvider(User.AuthProvider.LOCAL)
+                .gender(2)
                 .build();
         userRepository.save(user);
     }
