@@ -69,6 +69,7 @@ public class AuthService {
         User user = User.builder()
                 .id(UUID.randomUUID().toString())
                 .email(request.email())
+                .phoneNumber(request.phoneNumber())
                 .password(passwordEncoder.encode(request.password()))
                 .fullName(request.fullName())
                 .authProvider(User.AuthProvider.LOCAL)
@@ -80,8 +81,9 @@ public class AuthService {
     // Trong AuthService.java
 
     public String login(LoginRequest request, HttpServletResponse response) {
-        User user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new ResourceNotFoundException("Email không tồn tại"));
+        // request.email() ở đây có thể là email hoặc số điện thoại
+        User user = userRepository.findByEmailOrPhoneNumber(request.email(), request.email())
+                .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
 
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             throw new UnauthorizedException("Sai mật khẩu");
@@ -221,5 +223,69 @@ public class AuthService {
         return userRepository.findAllById(ids).stream()
                 .map(UserResponse::fromEntity)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void sendForgotPasswordOtp(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Email không tồn tại trong hệ thống"));
+
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        String otp = String.format("%06d", random.nextInt(1000000));
+
+        String redisKey = "OTP_FORGOT:" + email;
+        stringRedisTemplate.opsForValue().set(redisKey, otp, 5, java.util.concurrent.TimeUnit.MINUTES);
+
+        String subject = "Mã xác thực Khôi phục mật khẩu ALO";
+        String text = "Xin chào " + user.getFullName() + ",\n\n"
+                + "Bạn đã yêu cầu đặt lại mật khẩu. Mã OTP của bạn là: " + otp + "\n"
+                + "Mã này sẽ hết hạn trong vòng 5 phút.\n\n"
+                + "Nếu bạn không thực hiện yêu cầu này, vui lòng đổi mật khẩu càng sớm càng tốt để bảo vệ tài khoản.\n\n"
+                + "Trân trọng,\nĐội ngũ ALO";
+        emailService.sendTextEmail(email, subject, text);
+    }
+
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        String redisKey = "OTP_FORGOT:" + request.email();
+        String savedOtp = stringRedisTemplate.opsForValue().get(redisKey);
+
+        if (savedOtp == null) {
+            throw new RuntimeException("Mã OTP đã hết hạn hoặc chưa được yêu cầu");
+        }
+
+        if (!savedOtp.equals(request.otp())) {
+            throw new RuntimeException("Mã OTP không chính xác");
+        }
+
+        User user = userRepository.findByEmail(request.email())
+                .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
+
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+
+        // Xóa Key OTP
+        stringRedisTemplate.delete(redisKey);
+    }
+
+    @Transactional
+    public void changePassword(String userId, ChangePasswordRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
+
+        if (!passwordEncoder.matches(request.oldPassword(), user.getPassword())) {
+            throw new RuntimeException("Mật khẩu hiện tại không chính xác");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+
+        // Gửi email thông báo
+        String subject = "Thông báo: Đổi mật khẩu thành công";
+        String text = "Xin chào " + user.getFullName() + ",\n\n"
+                + "Mật khẩu cho tài khoản ALO của bạn đã được thay đổi thành công.\n"
+                + "Nếu bạn không thực hiện hành động này, vui lòng thực hiện Khôi phục mật khẩu ngay lập tức.\n\n"
+                + "Trân trọng,\nĐội ngũ ALO";
+        emailService.sendTextEmail(user.getEmail(), subject, text);
     }
 }

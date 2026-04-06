@@ -12,6 +12,9 @@ import {
   TouchableOpacity,
   View,
   RefreshControl,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
@@ -49,6 +52,29 @@ export default function AccountSecurityScreen() {
   });
 
   const [refreshing, setRefreshing] = useState(false);
+
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ oldPassword: "", newPassword: "" });
+  const [changingPass, setChangingPass] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!passwordForm.oldPassword || !passwordForm.newPassword) {
+      Alert.alert("Lỗi", "Vui lòng nhập đầy đủ thông tin");
+      return;
+    }
+    try {
+      setChangingPass(true);
+      await api.post("/auth/change-password", passwordForm);
+      Alert.alert("Thành công", "Đổi mật khẩu thành công. Thông báo đã được gửi về email của bạn.");
+      setShowChangePasswordModal(false);
+      setPasswordForm({ oldPassword: "", newPassword: "" });
+    } catch (err: any) {
+      const msg = err.response?.data?.message || "Đổi mật khẩu thất bại";
+      Alert.alert("Lỗi", msg);
+    } finally {
+      setChangingPass(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -347,6 +373,67 @@ export default function AccountSecurityScreen() {
           </TouchableOpacity>
         </Modal>
 
+        {/* Modal Đổi mật khẩu */}
+        <Modal
+          visible={showChangePasswordModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowChangePasswordModal(false)}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View className="flex-1 justify-end bg-black/50">
+              <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+                <View className="bg-white rounded-t-3xl p-6 pb-20">
+                  <View className="flex-row justify-between items-center mb-6 border-b border-gray-100 pb-4">
+                    <Text className="text-xl font-bold text-gray-900">
+                      Đổi mật khẩu
+                    </Text>
+                    <TouchableOpacity onPress={() => setShowChangePasswordModal(false)} className="p-2">
+                      <Text className="text-red-500 font-bold">Thoát</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">MẬT KHẨU HIỆN TẠI</Text>
+                  <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-5 border-[1px] border-gray-200">
+                    <TextInput 
+                      secureTextEntry
+                      value={passwordForm.oldPassword}
+                      onChangeText={(val) => setPasswordForm({...passwordForm, oldPassword: val})}
+                      className="text-base text-gray-900"
+                      placeholder="••••••••"
+                      placeholderTextColor="#9ca3af"
+                    />
+                  </View>
+
+                  <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">MẬT KHẨU MỚI</Text>
+                  <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-8 border-[1px] border-gray-200">
+                    <TextInput 
+                      secureTextEntry
+                      value={passwordForm.newPassword}
+                      onChangeText={(val) => setPasswordForm({...passwordForm, newPassword: val})}
+                      className="text-base text-gray-900"
+                      placeholder="••••••••"
+                      placeholderTextColor="#9ca3af"
+                    />
+                  </View>
+
+                  <TouchableOpacity 
+                    disabled={changingPass}
+                    onPress={handleChangePassword}
+                    className="bg-gray-900 py-4 rounded-full items-center justify-center flex-row shadow-sm"
+                  >
+                    {changingPass ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text className="text-white font-bold text-base">Xác nhận Đổi Mật Khẩu</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </KeyboardAvoidingView>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+
         {/* Section 2: BẢO MẬT */}
         <View className="mb-6">
           <Text className="text-[11px] font-bold text-gray-400 tracking-wider mb-4 px-1">
@@ -385,6 +472,7 @@ export default function AccountSecurityScreen() {
             <MenuItem
               icon={<KeyIcon size={20} color="#6b7280" />}
               title="Mật khẩu"
+              onPress={() => setShowChangePasswordModal(true)}
             />
           </View>
         </View>
@@ -453,13 +541,16 @@ function MenuItem({
   icon,
   title,
   showBorder = false,
+  onPress,
 }: {
   icon: any;
   title: string;
   showBorder?: boolean;
+  onPress?: () => void;
 }) {
   return (
     <TouchableOpacity
+      onPress={onPress}
       className={`flex-row items-center justify-between p-4 bg-white ${showBorder ? "border-b border-gray-100" : ""}`}
     >
       <View className="flex-row items-center">
