@@ -16,10 +16,8 @@ export default function ContactSidebar() {
     if (e.key === "Enter" && searchPhone) {
       try {
         const res = await axios.get(
-          `http://localhost:8888/contact-service/api/contacts/search?phone=${searchPhone}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
+          `http://localhost:8888/api-gateway/contact-service/api/contacts/search?phone=${searchPhone}`,
+          { headers: { Authorization: `Bearer ${token}` } },
         );
         const userFound = res.data.data;
         if (userFound) {
