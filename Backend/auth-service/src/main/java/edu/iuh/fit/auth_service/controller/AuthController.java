@@ -2,6 +2,7 @@ package edu.iuh.fit.auth_service.controller;
 
 
 import edu.iuh.fit.auth_service.dto.request.*;
+import edu.iuh.fit.auth_service.dto.response.UserResponse;
 import edu.iuh.fit.auth_service.dto.response.UserSessionResponse;
 import edu.iuh.fit.auth_service.entity.User;
 import edu.iuh.fit.auth_service.service.AuthService;
@@ -112,5 +113,17 @@ public class AuthController {
         } catch (java.io.IOException e) {
             return ResponseEntity.status(500).body(null);
         }
+    }
+
+    // API: Tìm kiếm người dùng theo số điện thoại (Dùng cho Modal Thêm Bạn)
+    @GetMapping("/search")
+    public ResponseEntity<UserResponse> searchUser(@RequestParam String phone) {
+        return ResponseEntity.ok(authService.searchByPhone(phone));
+    }
+
+    // API: Lấy danh sách thông tin User theo List ID (Dùng để hiển thị tên/avatar trong danh sách bạn bè)
+    @PostMapping("/users/by-ids")
+    public ResponseEntity<List<UserResponse>> getUsersByIds(@RequestBody List<String> ids) {
+        return ResponseEntity.ok(authService.getUsersByIds(ids));
     }
 }
