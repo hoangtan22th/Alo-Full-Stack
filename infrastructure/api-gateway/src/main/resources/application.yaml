@@ -15,6 +15,7 @@ spring:
               predicates:
                 - Path=/api-gateway/auth-service/**
               filters:
+                - AuthenticationFilter
                 - StripPrefix=1
 
             - id: contact-service
@@ -22,6 +23,7 @@ spring:
               predicates:
                 - Path=/api-gateway/contact-service/**
               filters:
+                - AuthenticationFilter
                 - StripPrefix=1
 
             - id: group-service
@@ -29,6 +31,7 @@ spring:
               predicates:
                 - Path=/api-gateway/group-service/**
               filters:
+                - AuthenticationFilter
                 - StripPrefix=1
 
             - id: message-service
@@ -36,6 +39,7 @@ spring:
               predicates:
                 - Path=/api-gateway/message-service/**
               filters:
+                - AuthenticationFilter
                 - StripPrefix=1
 
             - id: notification-service
@@ -43,6 +47,7 @@ spring:
               predicates:
                 - Path=/api-gateway/notification-service/**
               filters:
+                - AuthenticationFilter
                 - StripPrefix=1
 
             - id: chatbot-service
@@ -50,6 +55,7 @@ spring:
               predicates:
                 - Path=/api-gateway/chatbot-service/**
               filters:
+                - AuthenticationFilter
                 - StripPrefix=1
 
 eureka:
