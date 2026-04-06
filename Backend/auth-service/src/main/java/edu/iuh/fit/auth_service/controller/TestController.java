@@ -8,6 +8,6 @@ public class TestController {
 
     @GetMapping("/ping")
     public String ping() {
-        return "Alo Chat Auth Service lên dồi";
+        return "Alo Chat Auth Service lên dồi cc";
     }
 }
