@@ -1,99 +1,107 @@
-import {
-  UserPlusIcon,
-  EllipsisHorizontalIcon,
-} from "@heroicons/react/24/outline";
-
-// Data giả lập để test giao diện
-const mockData = [
-  {
-    id: 1,
-    name: "Em Trang không thuộc về tôi",
-    time: "2 giờ trước",
-    message: "Xin lỗi em chỉ coi anh là bạn.",
-    avatar: "../../public/z7692626459332_4bcadb4046a562f0e5da2cbcfe7e3391.jpg",
-  },
-  {
-    id: 2,
-    name: "Lê Thị Mai",
-    time: "5 giờ trước",
-    message: "Rất ấn tượng với portfolio của bạn, kết nối nhé!",
-    avatar: "https://i.pravatar.cc/150?img=5",
-  },
-  {
-    id: 3,
-    name: "Trần Minh Hoàng",
-    time: "Hôm qua",
-    message:
-      "Mình là PM tại TechGlobal, muốn mời bạn tham gia cộng đồng design.",
-    avatar: "https://i.pravatar.cc/150?img=8",
-  },
-  {
-    id: 4,
-    name: "Phạm Ngọc Ánh",
-    time: "Hôm qua",
-    message: "Đã lâu không gặp, kết bạn lại nhé!",
-    avatar: "https://i.pravatar.cc/150?img=3",
-  },
-];
+import { useEffect, useState } from "react";
+import axios from "axios";
+import { UserPlusIcon } from "@heroicons/react/24/outline";
 
 export default function FriendRequestPage() {
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const token = localStorage.getItem("accessToken");
+
+  // Hàm lấy danh sách đang chờ (giữ nguyên)
+  const fetchRequests = async () => {
+    try {
+      const res = await axios.get(
+        "http://localhost:8888/api-gateway/contact-service/api/contacts/pending",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      setRequests(res.data.data || []);
+    } catch (err) {
+      console.error("Lỗi lấy danh sách lời mời:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Hàm xử lý Đồng ý / Từ chối gọi theo API mới
+  const handleAction = async (
+    requestId: string,
+    actionType: "ACCEPT" | "DECLINE",
+  ) => {
+    try {
+      const baseUrl = `http://localhost:8888/api-gateway/contact-service/api/contacts/${requestId}`;
+
+      if (actionType === "ACCEPT") {
+        await axios.put(
+          `${baseUrl}/accept`,
+          {},
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        );
+        alert("Đã trở thành bạn bè!");
+      } else {
+        await axios.delete(`${baseUrl}/decline`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        alert("Đã từ chối lời mời.");
+      }
+
+      // Ảo thuật UI: Lọc cái thẻ vừa bấm ra khỏi danh sách để nó biến mất ngay lập tức
+      setRequests((prev) => prev.filter((req) => req.id !== requestId));
+    } catch (err) {
+      console.error("Lỗi thao tác:", err);
+      alert("Có lỗi xảy ra, vui lòng thử lại sau!");
+    }
+  };
+
+  useEffect(() => {
+    fetchRequests();
+  }, []);
+
+  if (loading) return <div className="p-8">Đang tải...</div>;
+
   return (
     <div className="flex-1 h-screen bg-[#fafafa] p-8 overflow-y-auto">
-      {/* Header khu vực */}
-      <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-200/60">
-        <div className="flex items-center gap-4">
-          <div className="p-2.5 bg-gray-100 rounded-full text-black">
-            <UserPlusIcon className="w-6 h-6" />
-          </div>
-          <div>
-            <h2 className="text-[20px] font-bold">Lời mời kết bạn</h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Bạn có 12 yêu cầu đang chờ xử lý
-            </p>
-          </div>
+      <div className="flex items-center gap-4 mb-8 pb-4 border-b">
+        <div className="p-2.5 bg-gray-100 rounded-full text-black">
+          <UserPlusIcon className="w-6 h-6" />
         </div>
-
-        <div className="flex items-center gap-3">
-          <button className="px-4 py-2 bg-gray-200/60 text-gray-800 rounded-full text-sm font-semibold hover:bg-gray-200 transition-colors">
-            Đánh dấu đã đọc
-          </button>
-          <button className="p-2 text-gray-500 hover:text-black hover:bg-gray-100 rounded-full transition-colors">
-            <EllipsisHorizontalIcon className="w-6 h-6" />
-          </button>
+        <div>
+          <h2 className="text-[20px] font-bold">Lời mời kết bạn</h2>
+          <p className="text-sm text-gray-500">
+            Bạn có {requests.length} yêu cầu đang chờ
+          </p>
         </div>
       </div>
 
-      {/* Grid chứa thẻ (Responsive: 1 cột -> 2 cột -> 3 cột) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {mockData.map((user) => (
+        {requests.map((req: any) => (
           <div
-            key={user.id}
-            className="bg-white border border-gray-100 rounded-[2rem] p-6 flex flex-col items-center text-center shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-md transition-shadow"
+            key={req.id}
+            className="bg-white border rounded-[2rem] p-6 flex flex-col items-center text-center shadow-sm"
           >
-            {/* Avatar */}
-            <div className="w-20 h-20 bg-blue-50 rounded-full mb-4 overflow-hidden border border-gray-100">
-              <img
-                src={user.avatar}
-                alt={user.name}
-                className="w-full h-full object-cover"
-              />
+            <div className="w-20 h-20 bg-blue-50 rounded-full mb-4 flex items-center justify-center font-bold text-gray-400 border border-dashed border-gray-300">
+              Avatar
             </div>
-
-            {/* Tên & Thời gian */}
-            <h3 className="font-bold text-[17px] text-gray-900">{user.name}</h3>
-            <p className="text-[13px] text-gray-400 mb-4">{user.time}</p>
-
-            {/* Lời nhắn */}
-            <p className="text-[14px] text-gray-600 mb-6 px-2 h-10 line-clamp-2">
-              "{user.message}"
+            <h3 className="font-bold text-[13px] mb-2">
+              Người gửi: {req.requesterId}
+            </h3>
+            <p className="text-[14px] text-gray-600 mb-6 italic">
+              "{req.greetingMessage || "Kết bạn nhé!"}"
             </p>
-
-            {/* Nút thao tác */}
             <div className="flex gap-3 w-full mt-auto">
-              <button className="flex-1 bg-black text-white py-2.5 rounded-full font-semibold text-[15px] hover:bg-gray-800 transition-colors">
+              <button
+                onClick={() => handleAction(req.id, "ACCEPT")}
+                className="flex-1 bg-black text-white py-2.5 rounded-full font-semibold hover:bg-gray-800 transition-transform active:scale-95"
+              >
                 Đồng ý
               </button>
-              <button className="flex-1 bg-gray-100 text-gray-800 py-2.5 rounded-full font-semibold text-[15px] hover:bg-gray-200 transition-colors">
+              <button
+                onClick={() => handleAction(req.id, "DECLINE")}
+                className="flex-1 bg-gray-100 text-gray-800 py-2.5 rounded-full font-semibold hover:bg-gray-200 transition-transform active:scale-95"
+              >
                 Từ chối
               </button>
             </div>

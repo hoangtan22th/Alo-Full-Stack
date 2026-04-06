@@ -8,9 +8,9 @@ spring:
     name: auth-service
 
   datasource:
-    url: jdbc:mariadb://localhost:3306/alo_auth_db?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Ho_Chi_Minh
-    username: root
-    password: root
+    url: jdbc:mariadb://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:alo_auth_db}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Ho_Chi_Minh
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
 
     driver-class-name: org.mariadb.jdbc.Driver
 
@@ -28,12 +28,15 @@ spring:
 
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
   rabbitmq:
-    host: localhost
-    port: 5672
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
 
 eureka:
   client:
@@ -46,7 +49,7 @@ eureka:
 
 # Cấu hình JWT Custom
 jwt:
-  secret: "MsHrNEtyzJ1VU7uKnh6BSgwnRu9IlzR78hlhM3eq8KK"
+  secret: ${JWT_SECRET:MsHrNEtyzJ1VU7uKnh6BSgwnRu9IlzR78hlhM3eq8KK}
 
 # Cấu hình Swagger UI
 springdoc:
