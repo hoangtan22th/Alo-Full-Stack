@@ -1,7 +1,9 @@
 package edu.iuh.fit.chatbot_service.controller;
 
+import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import edu.iuh.fit.chatbot_service.dto.ChatRequest;
 import edu.iuh.fit.chatbot_service.service.ChatService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,7 +20,7 @@ public class ChatController {
 
 
     @PostMapping("/ask")
-    String chat(@RequestBody ChatRequest chatRequest) {
-        return chatService.chat(chatRequest);
+    public ResponseEntity<ApiResponse<String>> chat(@RequestBody ChatRequest chatRequest) {
+        return ResponseEntity.ok(ApiResponse.success(chatService.chat(chatRequest)));
     }
 }
