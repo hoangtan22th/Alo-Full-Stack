@@ -9,7 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/auth/qr")
+@RequestMapping("/api/v1/auth/qr")
 @RequiredArgsConstructor
 public class QrAuthController {
 

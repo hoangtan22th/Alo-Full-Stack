@@ -9,15 +9,15 @@ import java.util.function.Predicate;
 public class RouteValidator {
     // Danh sách các API không cần kiểm tra Token
     public static final List<String> openApiEndpoints = List.of(
-            "/auth/register",
-            "/auth/login",
-            "/auth/qr/generate",
-            "/auth/qr/status",
+            "/api/v1/auth/register",
+            "/api/v1/auth/login",
+            "/api/v1/auth/qr/generate",
+            "/api/v1/auth/qr/status",
             "/eureka"
     );
 
     public Predicate<ServerHttpRequest> isSecured =
             request -> openApiEndpoints
                     .stream()
-                    .noneMatch(uri -> request.getURI().getPath().contains(uri));
+                    .noneMatch(uri -> request.getURI().getPath().startsWith(uri));
 }
