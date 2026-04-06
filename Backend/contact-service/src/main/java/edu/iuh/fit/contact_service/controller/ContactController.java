@@ -82,43 +82,48 @@ public class ContactController {
 
     private final ContactService contactService;
 
+    // Tìm kiếm: Lấy currentUserId từ Header do Gateway dập mộc
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<SearchFriendResponseDTO>> searchUserToMakeFriend(
             @RequestParam String phone,
-            @RequestParam String currentUserId) {
+            @RequestHeader("X-User-Id") String currentUserId) {
         return ResponseEntity.ok(ApiResponse.success(contactService.searchUserByPhone(phone, currentUserId)));
     }
 
+    // Gửi lời mời: RequesterId lấy từ Header
     @PostMapping("/request")
     public ResponseEntity<ApiResponse<FriendshipResponseDTO>> sendRequest(
-            @RequestBody FriendRequestDTO requestDTO) {
-        // Frontend sẽ truyền sẵn 2 trường requesterId và recipientId nằm ngay trong cục JSON body
+            @RequestBody FriendRequestDTO requestDTO,
+            @RequestHeader("X-User-Id") String requesterId) {
+
+        requestDTO.setRequesterId(requesterId);
         return ResponseEntity.ok(ApiResponse.success(contactService.sendFriendRequest(requestDTO)));
     }
 
+    // Lấy danh sách chờ: Lấy userId từ Header
     @GetMapping("/pending")
     public ResponseEntity<ApiResponse<List<FriendshipResponseDTO>>> getPendingRequests(
-            @RequestParam String userId) {
+            @RequestHeader("X-User-Id") String userId) {
         return ResponseEntity.ok(ApiResponse.success(contactService.getPendingRequests(userId)));
     }
 
     @GetMapping("/friends")
     public ResponseEntity<ApiResponse<List<FriendshipResponseDTO>>> getFriendsList(
-            @RequestParam String userId) {
+            @RequestHeader("X-User-Id") String userId) {
         return ResponseEntity.ok(ApiResponse.success(contactService.getFriendsList(userId)));
     }
 
     @PutMapping("/accept/{id}")
     public ResponseEntity<ApiResponse<FriendshipResponseDTO>> acceptRequest(
             @PathVariable String id,
-            @RequestParam String userId) {
+            @RequestHeader("X-User-Id") String userId) {
         return ResponseEntity.ok(ApiResponse.success(contactService.acceptRequest(id, userId)));
     }
 
     @PutMapping("/decline/{id}")
     public ResponseEntity<ApiResponse<String>> declineRequest(
             @PathVariable String id,
-            @RequestParam String userId) {
+            @RequestHeader("X-User-Id") String userId) {
         contactService.declineRequest(id, userId);
         return ResponseEntity.ok(ApiResponse.success("Đã từ chối lời mời kết bạn!"));
     }
