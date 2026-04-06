@@ -60,3 +60,13 @@ logging:
   level:
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+cloud:
+  aws:
+    credentials:
+      access-key: "AKIAZEDAJ7K45LG5KJEO"
+      secret-key: "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"
+    region:
+      static: ap-southeast-1
+    s3:
+      bucket: btl-alo-chat
+

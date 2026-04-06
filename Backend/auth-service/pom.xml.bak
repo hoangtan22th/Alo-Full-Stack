@@ -109,7 +109,7 @@
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
-			<version>1.18.34</version>
+			<version>1.18.44</version>
 			<scope>compile</scope>
 		</dependency>
 		<dependency>
@@ -136,12 +136,6 @@
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>2.2.0</version>
 		</dependency>
-<dependency>
-<groupId>software.amazon.awssdk</groupId>
-<artifactId>s3</artifactId>
-<version>2.20.162</version>
-</dependency>
-
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>
@@ -152,12 +146,6 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
-<dependency>
-<groupId>software.amazon.awssdk</groupId>
-<artifactId>s3</artifactId>
-<version>2.20.162</version>
-</dependency>
-
 		</dependencies>
 	</dependencyManagement>
 
@@ -166,19 +154,6 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<configuration>
-					<annotationProcessorPaths>
-						<path>
-							<groupId>org.projectlombok</groupId>
-							<artifactId>lombok</artifactId>
-							<version>1.18.34</version>
-						</path>
-					</annotationProcessorPaths>
-				</configuration>
 			</plugin>
 		</plugins>
 	</build>

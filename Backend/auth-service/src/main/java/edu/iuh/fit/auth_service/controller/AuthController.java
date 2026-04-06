@@ -87,4 +87,28 @@ public class AuthController {
             @RequestBody UpdateProfileRequest request) {
         return ResponseEntity.ok(authService.updateProfile(userId, request));
     }
+
+    // Cập nhật Avatar ảnh đại diện
+    @PostMapping(value = "/me/avatar", consumes = "multipart/form-data")
+    public ResponseEntity<User> updateAvatar(
+            @RequestHeader("X-User-Id") String userId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        try {
+            return ResponseEntity.ok(authService.updateAvatarOrCover(userId, file, true));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
+    // Cập nhật ảnh bìa
+    @PostMapping(value = "/me/cover", consumes = "multipart/form-data")
+    public ResponseEntity<User> updateCover(
+            @RequestHeader("X-User-Id") String userId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        try {
+            return ResponseEntity.ok(authService.updateAvatarOrCover(userId, file, false));
+        } catch (java.io.IOException e) {
+            return ResponseEntity.status(500).body(null);
+        }
+    }
 }

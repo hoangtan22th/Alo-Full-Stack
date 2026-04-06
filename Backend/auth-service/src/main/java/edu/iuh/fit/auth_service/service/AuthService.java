@@ -26,6 +26,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
     private final CookieUtil cookieUtil;
+    private final S3Service s3Service;
 
     @Transactional
     public void register(RegisterRequest request) {
@@ -126,6 +127,22 @@ public class AuthService {
         if (request.phoneNumber() != null) user.setPhoneNumber(request.phoneNumber());
         if (request.gender() != null) user.setGender(request.gender());
         if (request.dateOfBirth() != null) user.setDateOfBirth(request.dateOfBirth());
+
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public User updateAvatarOrCover(String userId, org.springframework.web.multipart.MultipartFile file, boolean isAvatar) throws java.io.IOException {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Người dùng không tồn tại"));
+
+        String fileUrl = s3Service.uploadFile(file);
+
+        if (isAvatar) {
+            user.setAvatar(fileUrl);
+        } else {
+            user.setCoverImage(fileUrl);
+        }
 
         return userRepository.save(user);
     }
