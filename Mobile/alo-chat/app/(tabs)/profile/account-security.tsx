@@ -132,6 +132,18 @@ export default function AccountSecurityScreen() {
     return "";
   };
 
+  const formatDateForDisplay = (dateString: string) => {
+    if (!dateString) return "";
+
+    // Tách chuỗi theo dấu "-"
+    const parts = dateString.split("-");
+    if (parts.length === 3) {
+      // parts[0] là Năm, parts[1] là Tháng, parts[2] là Ngày
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateString;
+  };
+
   if (loading) {
     return (
       <View className="flex-1 justify-center items-center bg-white">
@@ -141,9 +153,7 @@ export default function AccountSecurityScreen() {
   }
 
   return (
-    <View
-      style={{ flex: 1, backgroundColor: "#fafafa", paddingTop: insets.top }}
-    >
+    <View style={{ flex: 1, backgroundColor: "#fff", paddingTop: insets.top }}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 bg-white border-b-[1px] border-gray-200">
         <View className="flex-row items-center">
@@ -164,7 +174,10 @@ export default function AccountSecurityScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} className="flex-1 px-4">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        className="flex-1 px-4 bg-[#fafafa]"
+      >
         {/* Section 1: THÔNG TIN TÀI KHOẢN */}
         <View className="mt-6 mb-6">
           <Text className="text-[11px] font-bold text-gray-400 tracking-wider mb-4 px-1">
@@ -180,7 +193,7 @@ export default function AccountSecurityScreen() {
           />
           <InputField
             label="NGÀY SINH"
-            value={accountInfo.dateOfBirth}
+            value={formatDateForDisplay(accountInfo.dateOfBirth)}
             onPress={() => {
               // Cập nhật lại tempDate mỗi khi mở picker để tránh sai lệch
               const currentSetDate = accountInfo.dateOfBirth
