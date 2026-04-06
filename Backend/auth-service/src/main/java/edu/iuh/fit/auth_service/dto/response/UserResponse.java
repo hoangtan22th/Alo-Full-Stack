@@ -1,4 +1,9 @@
 package edu.iuh.fit.auth_service.dto.response;
 
-public class UserResponse {
-}
+public record UserResponse(
+        String id,
+        String email,
+        String fullName,
+        String phoneNumber,
+        String avatar
+) {}

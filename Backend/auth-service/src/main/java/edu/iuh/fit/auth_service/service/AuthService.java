@@ -3,6 +3,7 @@ package edu.iuh.fit.auth_service.service;
 
 
 import edu.iuh.fit.auth_service.dto.request.*;
+import edu.iuh.fit.auth_service.dto.response.UserResponse;
 import edu.iuh.fit.auth_service.dto.response.UserSessionResponse;
 import edu.iuh.fit.auth_service.entity.*;
 import edu.iuh.fit.auth_service.repository.*;
@@ -161,5 +162,26 @@ public class AuthService {
         }
 
         return updatedUser;
+    }
+
+    public UserResponse searchByPhone(String phone) {
+        User user = userRepository.findByPhoneNumber(phone)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng với số điện thoại này"));
+
+        // Trả về DTO thay vì Entity User để bảo mật (không lộ password)
+        return new UserResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getPhoneNumber(),
+                user.getAvatar()
+        );
+    }
+
+    // Để bên Contact Service có thể lấy thông tin hàng loạt bạn bè
+    public List<UserResponse> getUsersByIds(List<String> ids) {
+        return userRepository.findAllById(ids).stream()
+                .map(u -> new UserResponse(u.getId(), u.getEmail(), u.getFullName(), u.getPhoneNumber(), u.getAvatar()))
+                .collect(Collectors.toList());
     }
 }
