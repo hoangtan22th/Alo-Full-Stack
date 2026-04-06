@@ -1,7 +1,6 @@
 server:
   port: 8085
-  servlet:
-    context-path: /chatbot-service
+
 
 spring:
   application:

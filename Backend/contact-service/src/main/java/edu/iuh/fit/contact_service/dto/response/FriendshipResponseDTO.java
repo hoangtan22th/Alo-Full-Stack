@@ -10,6 +10,9 @@ public class FriendshipResponseDTO {
     private String id;
     private String requesterId;
     private String recipientId;
+    private String status;
     private String greetingMessage;
-    private FriendshipStatus status;
+
+    private String requesterName;
+    private String requesterAvatar;
 }

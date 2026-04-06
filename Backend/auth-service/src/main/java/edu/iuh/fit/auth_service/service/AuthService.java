@@ -3,10 +3,15 @@ package edu.iuh.fit.auth_service.service;
 
 
 import edu.iuh.fit.auth_service.dto.request.*;
+import edu.iuh.fit.auth_service.dto.response.UserResponse;
 import edu.iuh.fit.auth_service.dto.response.UserSessionResponse;
 import edu.iuh.fit.auth_service.entity.*;
 import edu.iuh.fit.auth_service.repository.*;
 import edu.iuh.fit.auth_service.util.CookieUtil;
+import edu.iuh.fit.common_service.exception.AppException;
+import edu.iuh.fit.common_service.exception.ForbiddenException;
+import edu.iuh.fit.common_service.exception.ResourceNotFoundException;
+import edu.iuh.fit.common_service.exception.UnauthorizedException;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -45,10 +50,10 @@ public class AuthService {
 
     public String login(LoginRequest request, HttpServletResponse response) {
         User user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new RuntimeException("Email không tồn tại"));
+                .orElseThrow(() -> new ResourceNotFoundException("Email không tồn tại"));
 
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
-            throw new RuntimeException("Sai mật khẩu");
+            throw new UnauthorizedException("Sai mật khẩu");
         }
 
         String deviceId = (request.deviceId() == null) ? "unknown" : request.deviceId();
@@ -80,7 +85,7 @@ public class AuthService {
     // 1. API: Lấy Profile (Dựa trên userId từ JWT)
     public User getProfile(String userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+                .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại"));
     }
 
     // 2. API: Logout (Xóa phiên đăng nhập hiện tại)
@@ -101,10 +106,10 @@ public class AuthService {
     @Transactional
     public void terminateSession(String userId, String sessionId) {
         UserSession session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new RuntimeException("Session không tồn tại"));
+                .orElseThrow(() -> new ResourceNotFoundException("Session không tồn tại"));
 
         if (!session.getUser().getId().equals(userId)) {
-            throw new RuntimeException("Bạn không có quyền!");
+            throw new ForbiddenException("Bạn không có quyền!");
         }
         sessionRepository.delete(session);
     }
@@ -120,7 +125,7 @@ public class AuthService {
     @Transactional
     public User updateProfile(String userId, UpdateProfileRequest request) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Người dùng không tồn tại"));
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
 
         // Cập nhật các thông tin (chỉ cập nhật nếu request có dữ liệu)
         if (request.fullName() != null) user.setFullName(request.fullName());
@@ -135,7 +140,7 @@ public class AuthService {
     @Transactional
     public User updateAvatarOrCover(String userId, org.springframework.web.multipart.MultipartFile file, boolean isAvatar) throws java.io.IOException {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Người dùng không tồn tại"));
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
 
         // Lưu URL cũ để xóa sau khi upload mới thành công
         String oldUrl = isAvatar ? user.getAvatar() : user.getCoverImage();
@@ -161,5 +166,20 @@ public class AuthService {
         }
 
         return updatedUser;
+    }
+
+    public UserResponse searchByPhone(String phone) {
+        User user = userRepository.findByPhoneNumber(phone)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với số điện thoại này"));
+
+        // Trả về DTO thay vì Entity User để bảo mật (không lộ password)
+        return UserResponse.fromEntity(user);
+    }
+
+    // Để bên Contact Service có thể lấy thông tin hàng loạt bạn bè
+    public List<UserResponse> getUsersByIds(List<String> ids) {
+        return userRepository.findAllById(ids).stream()
+                .map(UserResponse::fromEntity)
+                .collect(Collectors.toList());
     }
 }
