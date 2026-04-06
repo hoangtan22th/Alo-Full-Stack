@@ -27,7 +27,7 @@ const RegisterPage = () => {
         }
 
         try {
-            const response = await fetch('http://localhost:8080/auth-service/auth/register', {
+            const response = await fetch('http://localhost:8888/api-gateway/auth-service/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

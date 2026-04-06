@@ -112,18 +112,21 @@ public class ContactController {
         return ResponseEntity.ok(ApiResponse.success(contactService.getFriendsList(userId)));
     }
 
-    @PutMapping("/accept/{id}")
-    public ResponseEntity<ApiResponse<FriendshipResponseDTO>> acceptRequest(
-            @PathVariable String id,
+    @PutMapping("/{friendshipId}/accept")
+    public ResponseEntity<ApiResponse<FriendshipResponseDTO>> acceptFriendRequest(
+            @PathVariable String friendshipId,
             @RequestHeader("X-User-Id") String userId) {
-        return ResponseEntity.ok(ApiResponse.success(contactService.acceptRequest(id, userId)));
+
+        FriendshipResponseDTO response = contactService.acceptRequest(friendshipId, userId);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @PutMapping("/decline/{id}")
-    public ResponseEntity<ApiResponse<String>> declineRequest(
-            @PathVariable String id,
+    @DeleteMapping("/{friendshipId}/decline")
+    public ResponseEntity<ApiResponse<String>> declineFriendRequest(
+            @PathVariable String friendshipId,
             @RequestHeader("X-User-Id") String userId) {
-        contactService.declineRequest(id, userId);
-        return ResponseEntity.ok(ApiResponse.success("Đã từ chối lời mời kết bạn!"));
+
+        contactService.declineRequest(friendshipId, userId);
+        return ResponseEntity.ok(ApiResponse.success("Đã từ chối lời mời kết bạn"));
     }
 }
