@@ -4,7 +4,7 @@ import axios from "axios";
 const IP_ADDRESS = process.env.EXPO_PUBLIC_IP_ADDRESS;
 
 const api = axios.create({
-  baseURL: `http://${IP_ADDRESS}:8080/auth-service`,
+  baseURL: `http://${IP_ADDRESS}:8888/api-gateway/auth-service`,
   timeout: 10000,
 });
 
