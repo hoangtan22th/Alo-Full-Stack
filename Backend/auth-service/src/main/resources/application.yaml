@@ -46,7 +46,12 @@ eureka:
 
 # Cấu hình JWT Custom
 jwt:
-  secret: "your_very_long_and_very_secure_secret_key_zalo_clone_2026_edu_iuh_fit"
+  secret: "MsHrNEtyzJ1VU7uKnh6BSgwnRu9IlzR78hlhM3eq8KK
+
+👁️
+Hide Secret
+
+⚡"
 
 # Cấu hình Swagger UI
 springdoc:
