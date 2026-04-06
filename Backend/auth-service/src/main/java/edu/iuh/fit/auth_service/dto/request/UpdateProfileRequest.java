@@ -6,5 +6,6 @@ public record UpdateProfileRequest(
         String fullName,
         String phoneNumber,
         Integer gender,
-        LocalDate dateOfBirth
+        LocalDate dateOfBirth,
+        String email
 ) {}

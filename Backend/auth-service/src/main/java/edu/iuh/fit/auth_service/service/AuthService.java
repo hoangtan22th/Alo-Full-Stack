@@ -26,6 +26,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
     private final CookieUtil cookieUtil;
+    private final S3Service s3Service;
 
     @Transactional
     public void register(RegisterRequest request) {
@@ -126,7 +127,39 @@ public class AuthService {
         if (request.phoneNumber() != null) user.setPhoneNumber(request.phoneNumber());
         if (request.gender() != null) user.setGender(request.gender());
         if (request.dateOfBirth() != null) user.setDateOfBirth(request.dateOfBirth());
+        if (request.email() != null && !request.email().isBlank()) user.setEmail(request.email());
 
         return userRepository.save(user);
+    }
+
+    @Transactional
+    public User updateAvatarOrCover(String userId, org.springframework.web.multipart.MultipartFile file, boolean isAvatar) throws java.io.IOException {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Người dùng không tồn tại"));
+
+        // Lưu URL cũ để xóa sau khi upload mới thành công
+        String oldUrl = isAvatar ? user.getAvatar() : user.getCoverImage();
+
+        String fileUrl = s3Service.uploadFile(file);
+
+        if (isAvatar) {
+            user.setAvatar(fileUrl);
+        } else {
+            user.setCoverImage(fileUrl);
+        }
+
+        User updatedUser = userRepository.save(user);
+
+        // Xóa ảnh cũ trên S3 nếu có
+        if (oldUrl != null && oldUrl.startsWith("https://")) {
+            // Chạy async hoặc try-catch để nếu lỗi xóa s3 cũng không làm gián đoạn Flow chính
+            try {
+                s3Service.deleteFile(oldUrl);
+            } catch (Exception e) {
+                System.err.println("Không thể xóa ảnh cũ: " + oldUrl);
+            }
+        }
+
+        return updatedUser;
     }
 }
