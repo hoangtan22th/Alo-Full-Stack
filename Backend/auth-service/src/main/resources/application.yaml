@@ -66,10 +66,10 @@ logging:
 cloud:
   aws:
     credentials:
-      access-key: "AKIAZEDAJ7K45LG5KJEO"
-      secret-key: "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"
+      access-key: ${AWS_ACCESS_KEY}
+      secret-key: ${AWS_SECRET_KEY}
     region:
-      static: ap-southeast-1
+      static: ${AWS_REGION:ap-southeast-1}
     s3:
-      bucket: btl-alo-chat
+      bucket: ${AWS_S3_BUCKET:btl-alo-chat}
 

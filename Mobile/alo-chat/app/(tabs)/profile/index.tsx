@@ -9,6 +9,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import api from "../../../services/api";
@@ -17,6 +18,7 @@ export default function MainProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [user, setUser] = useState<any>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -32,6 +34,12 @@ export default function MainProfileScreen() {
       console.log("Lỗi tải profile:", err);
     }
   };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchProfile();
+    setRefreshing(false);
+  }, []);
 
   const handleLogout = () => {
     Alert.alert("Đăng xuất", "Bạn có chắc muốn thoát tài khoản?", [
@@ -67,6 +75,14 @@ export default function MainProfileScreen() {
       <ScrollView
         className="flex-1 bg-[#f9fafb]"
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#000"]} // Android
+            tintColor="#000" // iOS
+          />
+        }
         // Thêm flexGrow: 1 để ScrollView có thể giãn hết chiều cao, paddingBottom để không bị lẹm TabBar
         contentContainerStyle={{
           flexGrow: 1,

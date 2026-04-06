@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,6 +11,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  RefreshControl,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
@@ -47,9 +48,13 @@ export default function AccountSecurityScreen() {
     email: "",
   });
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfile();
+    }, []),
+  );
 
   const fetchProfile = async () => {
     try {
@@ -75,6 +80,12 @@ export default function AccountSecurityScreen() {
       setLoading(false);
     }
   };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchProfile();
+    setRefreshing(false);
+  }, []);
 
   const handleUpdateProfile = async () => {
     try {
@@ -177,6 +188,14 @@ export default function AccountSecurityScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         className="flex-1 px-4 bg-[#fafafa]"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#000"]}
+            tintColor="#000"
+          />
+        }
       >
         {/* Section 1: THÔNG TIN TÀI KHOẢN */}
         <View className="mt-6 mb-6">

@@ -53,4 +53,18 @@ public class S3Service {
 
         return String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, fileName);
     }
+
+    public void deleteFile(String fileUrl) {
+        if (fileUrl == null || fileUrl.isBlank() || !fileUrl.contains(".amazonaws.com/")) {
+            return;
+        }
+        
+        try {
+            // Lấy ra tên file / object key từ URL
+            String fileKey = fileUrl.substring(fileUrl.indexOf(".amazonaws.com/") + 15);
+            s3Client.deleteObject(builder -> builder.bucket(bucketName).key(fileKey));
+        } catch (Exception e) {
+            System.err.println("Lỗi khi xóa file trên S3: " + e.getMessage());
+        }
+    }
 }

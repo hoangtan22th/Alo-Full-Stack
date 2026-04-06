@@ -137,6 +137,9 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Người dùng không tồn tại"));
 
+        // Lưu URL cũ để xóa sau khi upload mới thành công
+        String oldUrl = isAvatar ? user.getAvatar() : user.getCoverImage();
+
         String fileUrl = s3Service.uploadFile(file);
 
         if (isAvatar) {
@@ -145,6 +148,18 @@ public class AuthService {
             user.setCoverImage(fileUrl);
         }
 
-        return userRepository.save(user);
+        User updatedUser = userRepository.save(user);
+
+        // Xóa ảnh cũ trên S3 nếu có
+        if (oldUrl != null && oldUrl.startsWith("https://")) {
+            // Chạy async hoặc try-catch để nếu lỗi xóa s3 cũng không làm gián đoạn Flow chính
+            try {
+                s3Service.deleteFile(oldUrl);
+            } catch (Exception e) {
+                System.err.println("Không thể xóa ảnh cũ: " + oldUrl);
+            }
+        }
+
+        return updatedUser;
     }
 }
