@@ -9,14 +9,13 @@ import java.util.List;
 
 @FeignClient(
         name = "auth-service",
-        url = "http://localhost:8888/api-gateway/auth-service", // Gọi qua Gateway chuẩn bài
         configuration = FeignClientConfig.class // Kích hoạt Token Relay
 )
 public interface UserClient {
 
-    @GetMapping("/auth/search")
+    @GetMapping("/api/v1/auth/search")
     ApiResponse<UserDTO> getUserByPhone(@RequestParam("phone") String phone);
 
-    @PostMapping("/auth/users/by-ids")
+    @PostMapping("/api/v1/auth/users/by-ids")
     List<UserDTO> getUsersByIds(@RequestBody List<String> ids);
 }

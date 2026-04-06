@@ -10,7 +10,7 @@ export default function FriendRequestPage() {
   const fetchRequests = async () => {
     try {
       const res = await axios.get(
-        "http://localhost:8888/api-gateway/contact-service/api/contacts/pending",
+        "http://localhost:8888/api/v1/contacts/pending",
         { headers: { Authorization: `Bearer ${token}` } },
       );
       // Backend trả về ApiResponse<List<FriendshipResponseDTO>>
@@ -28,7 +28,7 @@ export default function FriendRequestPage() {
     actionType: "ACCEPT" | "DECLINE",
   ) => {
     try {
-      const baseUrl = `http://localhost:8888/api-gateway/contact-service/api/contacts/${requestId}`;
+      const baseUrl = `http://localhost:8888/api/v1/contacts/${requestId}`;
       if (actionType === "ACCEPT") {
         await axios.put(
           `${baseUrl}/accept`,

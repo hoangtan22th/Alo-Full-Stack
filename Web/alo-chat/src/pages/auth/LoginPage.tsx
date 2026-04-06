@@ -21,7 +21,7 @@ const LoginPage = () => {
   const fetchQrToken = async () => {
     try {
       const response = await fetch(
-        "http://localhost:8888/api-gateway/auth-service/auth/qr/generate",
+        "http://localhost:8888/api/v1/auth/qr/generate",
       );
       if (response.ok) {
         const data = await response.json();
@@ -40,7 +40,7 @@ const LoginPage = () => {
     const interval = setInterval(async () => {
       try {
         const response = await fetch(
-          `http://localhost:8888/api-gateway/auth-service/auth/qr/status/${qrToken}`,
+          `http://localhost:8888/api/v1/auth/qr/status/${qrToken}`,
         );
         if (response.ok) {
           const data = await response.json();
@@ -69,7 +69,7 @@ const LoginPage = () => {
 
     try {
       const response = await fetch(
-        "http://localhost:8888/api-gateway/auth-service/auth/login",
+        "http://localhost:8888/api/v1/auth/login",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

@@ -33,7 +33,7 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
     setFoundUser(null);
     try {
       const res = await axios.get(
-        `http://localhost:8888/api-gateway/auth-service/auth/search?phone=${phone}`,
+        `http://localhost:8888/api/v1/auth/search?phone=${phone}`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
       setFoundUser(res.data); // Res.data vì Backend trả về trực tiếp UserResponse
@@ -51,7 +51,7 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
     setSending(true);
     try {
       await axios.post(
-        "http://localhost:8888/api-gateway/contact-service/api/contacts/request", // THÊM /request VÀO ĐÂY
+        "http://localhost:8888/api/v1/contacts/request", // THÊM /request VÀO ĐÂY
         {
           recipientId: foundUser.id,
           greetingMessage: message,

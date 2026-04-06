@@ -21,7 +21,7 @@ export default function FriendListPage() {
   const fetchFriends = async () => {
     try {
       const res = await axios.get(
-        "http://localhost:8888/api-gateway/contact-service/api/contacts/friends",
+        "http://localhost:8888/api/v1/contacts/friends",
         {
           headers: { Authorization: `Bearer ${token}` },
         },
