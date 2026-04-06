@@ -1,6 +1,7 @@
 package edu.iuh.fit.contact_service.service.impl;
 
 import edu.iuh.fit.common_service.dto.response.ApiResponse;
+import edu.iuh.fit.common_service.exception.AppException;
 import edu.iuh.fit.common_service.exception.DuplicateResourceException;
 import edu.iuh.fit.common_service.exception.ForbiddenException;
 import edu.iuh.fit.common_service.exception.ResourceNotFoundException;
@@ -33,14 +34,14 @@ public class ContactServiceImpl implements ContactService {
     public SearchFriendResponseDTO searchUserByPhone(String phone, String currentUserId) {
         ApiResponse<UserDTO> userResponse = userClient.getUserByPhone(phone);
         if (userResponse == null || userResponse.getData() == null) {
-            throw new RuntimeException("Không tìm thấy người dùng!");
+            throw new ResourceNotFoundException("Không tìm thấy người dùng!");
         }
 
         UserDTO foundUser = userResponse.getData();
         String foundUserId = foundUser.getId();
 
         if (foundUserId.equals(currentUserId)) {
-            throw new RuntimeException("Bạn không thể tự tìm chính mình!");
+            throw new AppException(400, "Bạn không thể tự tìm chính mình!");
         }
 
         // Kiểm tra quan hệ 2 chiều từ Database

@@ -20,7 +20,7 @@ public class ChatController {
 
 
     @PostMapping("/ask")
-    public ResponseEntity<ApiResponse<String>> chat(@RequestBody ChatRequest chatRequest) {
-        return ResponseEntity.ok(ApiResponse.success(chatService.chat(chatRequest)));
+    public ResponseEntity<ApiResponse<String>> ask(@RequestBody ChatRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(chatService.chat(request)));
     }
 }
