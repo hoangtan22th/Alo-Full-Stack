@@ -17,6 +17,7 @@ import {
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, AntDesign, FontAwesome } from "@expo/vector-icons";
+import * as Device from 'expo-device';
 import api from "../services/api";
 
 export default function LoginScreen() {
@@ -83,10 +84,17 @@ export default function LoginScreen() {
     }
     setLoading(true);
     try {
+      let deviceName = "Unknown Device";
+      if (Platform.OS === 'web') {
+        deviceName = "Trình duyệt Web";
+      } else {
+        deviceName = `${Device.brand || 'Máy'} ${Device.modelName || 'Không xác định'} (${Platform.OS})`;
+      }
+
       const res: any = await api.post("/auth/login", {
         email,
         password,
-        deviceId: "Mobile_App",
+        deviceId: deviceName,
       });
       await AsyncStorage.setItem("accessToken", res.accessToken);
       router.replace("/(tabs)");

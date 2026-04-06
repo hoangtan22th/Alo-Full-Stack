@@ -33,6 +33,10 @@ public class AuthService {
     private final org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
     private final EmailService emailService;
 
+    // Hằng số cho Brute-Force
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final long LOCK_TIME_DURATION = 15; // 15 Phút
+    
     @Transactional
     public void sendRegistrationOtp(String email) {
         if (userRepository.findByEmail(email).isPresent()) {
@@ -85,9 +89,32 @@ public class AuthService {
         User user = userRepository.findByEmailOrPhoneNumber(request.email(), request.email())
                 .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
 
-        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
-            throw new UnauthorizedException("Sai mật khẩu");
+        String lockKey = "USER_LOCK:" + user.getId();
+        String attemptsKey = "FAILED_ATTEMPTS:" + user.getId();
+
+        // Kiểm tra xem User có đang trong thời gian phạt hay không
+        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(lockKey))) {
+            throw new UnauthorizedException("Tài khoản đang bị khóa tạm thời do sai quá nhiều lần. Vui lòng thử lại sau 15 phút.");
         }
+
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            // Tăng số đếm
+            Long attempts = stringRedisTemplate.opsForValue().increment(attemptsKey);
+            if (attempts != null && attempts >= MAX_FAILED_ATTEMPTS) {
+                // Đạt ngưỡng cửa cấm: Set khóa cờ 15 phút
+                stringRedisTemplate.opsForValue().set(lockKey, "LOCKED", LOCK_TIME_DURATION, java.util.concurrent.TimeUnit.MINUTES);
+                stringRedisTemplate.delete(attemptsKey); // Đếm lại từ đầu sau khi hết khóa
+                throw new UnauthorizedException("Bạn đã nhập sai 5 lần. Tài khoản bị khóa 15 phút bảo vệ.");
+            }
+            // Cho thời gian sống chu kỳ đếm sai là 1 Tiếng
+            if (attempts != null && attempts == 1) {
+                 stringRedisTemplate.expire(attemptsKey, 1, java.util.concurrent.TimeUnit.HOURS);
+            }
+            throw new UnauthorizedException("Sai mật khẩu. Bạn còn " + (Math.max(0, MAX_FAILED_ATTEMPTS - (attempts != null ? attempts : 1))) + " lần thử.");
+        }
+
+        // Đăng nhập thành công -> Xóa hết tiền án tiền sự nhập sai
+        stringRedisTemplate.delete(attemptsKey);
 
         String deviceId = (request.deviceId() == null) ? "unknown" : request.deviceId();
 
