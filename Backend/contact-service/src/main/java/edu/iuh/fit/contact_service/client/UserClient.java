@@ -17,5 +17,5 @@ public interface UserClient {
     ApiResponse<UserDTO> getUserByPhone(@RequestParam("phone") String phone);
 
     @PostMapping("/api/v1/auth/users/by-ids")
-    List<UserDTO> getUsersByIds(@RequestBody List<String> ids);
+    ApiResponse<List<UserDTO>> getUsersByIds(@RequestBody List<String> ids);
 }

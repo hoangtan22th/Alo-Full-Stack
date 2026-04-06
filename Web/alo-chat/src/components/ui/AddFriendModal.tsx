@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import axios from "axios";
+import axiosClient from "../../config/axiosClient";
 import {
   XMarkIcon,
   MagnifyingGlassIcon,
@@ -24,7 +24,7 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
 
-  const token = localStorage.getItem("accessToken");
+
 
   // 1. Hàm tìm kiếm User theo Số điện thoại (Gọi sang Auth Service)
   const handleSearch = async () => {
@@ -32,11 +32,8 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
     setLoading(true);
     setFoundUser(null);
     try {
-      const res = await axios.get(
-        `http://localhost:8888/api/v1/auth/search?phone=${phone}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      setFoundUser(res.data); // Res.data vì Backend trả về trực tiếp UserResponse
+      const res: any = await axiosClient.get(`/auth/search?phone=${phone}`);
+      setFoundUser(res);
     } catch (err) {
       alert("Không tìm thấy người dùng này Tấn ơi!");
     } finally {
@@ -50,14 +47,10 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
     if (!foundUser) return;
     setSending(true);
     try {
-      await axios.post(
-        "http://localhost:8888/api/v1/contacts/request", // THÊM /request VÀO ĐÂY
-        {
-          recipientId: foundUser.id,
-          greetingMessage: message,
-        },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      await axiosClient.post("/contacts/request", {
+        recipientId: foundUser.id,
+        greetingMessage: message,
+      });
       alert("Đã gửi lời mời thành công!");
       onClose();
     } catch (err) {

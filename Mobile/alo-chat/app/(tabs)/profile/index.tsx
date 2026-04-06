@@ -28,8 +28,8 @@ export default function MainProfileScreen() {
 
   const fetchProfile = async () => {
     try {
-      const res = await api.get("/auth/me");
-      setUser(res.data);
+      const res: any = await api.get("/auth/me");
+      setUser(res);
     } catch (err) {
       console.log("Lỗi tải profile:", err);
     }

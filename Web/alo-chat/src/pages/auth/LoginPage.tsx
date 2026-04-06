@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { UserIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 import { QRCodeSVG } from "qrcode.react";
+import axiosClient from "../../config/axiosClient";
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
@@ -20,11 +21,8 @@ const LoginPage = () => {
 
   const fetchQrToken = async () => {
     try {
-      const response = await fetch(
-        "http://localhost:8888/api/v1/auth/qr/generate",
-      );
-      if (response.ok) {
-        const data = await response.json();
+      const data: any = await axiosClient.get("/auth/qr/generate");
+      if (data) {
         setQrToken(data.qrToken);
         setQrStatus(data.status);
       }
@@ -39,16 +37,18 @@ const LoginPage = () => {
 
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(
-          `http://localhost:8888/api/v1/auth/qr/status/${qrToken}`,
-        );
-        if (response.ok) {
-          const data = await response.json();
+        const data: any = await axiosClient.get(`/auth/qr/status/${qrToken}`);
+        if (data) {
           setQrStatus(data.status);
 
           if (data.status === "CONFIRMED") {
             clearInterval(interval);
-            localStorage.setItem("accessToken", data.accessToken);
+            const token = data.accessToken;
+            if (token) { 
+              localStorage.setItem("accessToken", token); 
+            } else { 
+              console.error("Không tìm thấy token trong response", data); 
+            }
             alert("Đăng nhập bằng mã QR thành công!");
             navigate("/contacts");
           } else if (data.status === "EXPIRED") {
@@ -68,26 +68,17 @@ const LoginPage = () => {
     setError("");
 
     try {
-      const response = await fetch(
-        "http://localhost:8888/api/v1/auth/login",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        },
-      );
-
-      const data = await response.json();
-
-      if (response.ok) {
-        localStorage.setItem("accessToken", data.accessToken);
-        alert("Đăng nhập thành công!");
-        navigate("/contacts");
-      } else {
-        setError(data.message || "Đăng nhập thất bại");
+      const res: any = await axiosClient.post("/auth/login", { email, password });
+      const token = res.accessToken;
+      if (token) { 
+        localStorage.setItem("accessToken", token); 
+      } else { 
+        console.error("Không tìm thấy token trong response", res); 
       }
-    } catch (err) {
-      setError("Không thể kết nối đến server");
+      alert("Đăng nhập thành công!");
+      navigate("/contacts");
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Đăng nhập thất bại");
     }
   };
 

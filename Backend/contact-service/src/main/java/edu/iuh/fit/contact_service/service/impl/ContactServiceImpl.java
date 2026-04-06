@@ -91,7 +91,7 @@ public class ContactServiceImpl implements ContactService {
         Friendship saved = friendshipRepository.save(friendship);
 
         // 3. Làm giàu dữ liệu để trả về UI ngay lập tức
-        List<UserDTO> users = userClient.getUsersByIds(List.of(dto.getRequesterId(), dto.getRecipientId()));
+        List<UserDTO> users = userClient.getUsersByIds(List.of(dto.getRequesterId(), dto.getRecipientId())).getData();
         FriendshipResponseDTO responseDTO = mapToDTO(saved);
 
         users.stream()
@@ -114,7 +114,7 @@ public class ContactServiceImpl implements ContactService {
                 .map(Friendship::getRequesterId)
                 .collect(Collectors.toList());
 
-        List<UserDTO> userInfos = userClient.getUsersByIds(requesterIds);
+        List<UserDTO> userInfos = userClient.getUsersByIds(requesterIds).getData();
 
         return requests.stream().map(req -> {
             FriendshipResponseDTO dto = mapToDTO(req);
@@ -139,7 +139,7 @@ public class ContactServiceImpl implements ContactService {
                 .map(f -> f.getRequesterId().equals(userId) ? f.getRecipientId() : f.getRequesterId())
                 .collect(Collectors.toList());
 
-        List<UserDTO> userInfos = userClient.getUsersByIds(friendIds);
+        List<UserDTO> userInfos = userClient.getUsersByIds(friendIds).getData();
 
         return friends.stream().map(f -> {
             FriendshipResponseDTO dto = mapToDTO(f);
