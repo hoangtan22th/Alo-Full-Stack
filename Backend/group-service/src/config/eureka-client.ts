@@ -1,20 +1,24 @@
 // src/config/eureka-client.ts
 import { Eureka } from "eureka-js-client";
 import dotenv from "dotenv";
+import ip from "ip";
 
 dotenv.config();
 
 // Chuyển đổi PORT từ chuỗi (string) sang số (number) để đảm bảo Type Safety
 const PORT: number = parseInt(process.env.PORT as string, 10) || 8082;
+const myIp = ip.address();
+const instanceId = `${myIp}:group-service:${PORT}`;
 
 const eurekaClient = new Eureka({
   // 1. Thông tin khai báo của bản thân group-service
   instance: {
+    instanceId: instanceId,
     app: "GROUP-SERVICE", // Trùng tên với Gateway cấu hình để nó map đúng route
-    hostName: "localhost",
-    ipAddr: "127.0.0.1",
-    statusPageUrl: `http://localhost:${PORT}/info`,
-    healthCheckUrl: `http://localhost:${PORT}/health`,
+    hostName: myIp,
+    ipAddr: myIp,
+    statusPageUrl: `http://${myIp}:${PORT}/info`,
+    healthCheckUrl: `http://${myIp}:${PORT}/health`,
     port: {
       $: PORT,
       "@enabled": true, // TypeScript dùng boolean `true` thay vì chuỗi `"true"`
