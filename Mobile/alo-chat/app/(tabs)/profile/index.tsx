@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   Alert,
   Image,
@@ -18,9 +18,11 @@ export default function MainProfileScreen() {
   const insets = useSafeAreaInsets();
   const [user, setUser] = useState<any>(null);
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfile();
+    }, []),
+  );
 
   const fetchProfile = async () => {
     try {
@@ -85,7 +87,7 @@ export default function MainProfileScreen() {
                 source={{
                   uri:
                     user?.avatar ||
-                    "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
+                    "https://api.dicebear.com/7.x/avataaars/png?seed=Felix",
                 }}
                 className="w-16 h-16 rounded-full bg-gray-200"
               />

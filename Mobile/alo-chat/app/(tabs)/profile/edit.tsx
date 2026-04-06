@@ -141,7 +141,7 @@ export default function EditProfileScreen() {
               source={{
                 uri:
                   user?.avatar ||
-                  `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email || "Felix"}`,
+                  `https://api.dicebear.com/7.x/avataaars/png?seed=${user?.email || "Felix"}`,
               }}
               className="w-full h-full rounded-full"
             />
