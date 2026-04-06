@@ -1,6 +1,5 @@
 package edu.iuh.fit.auth_service.controller;
 
-
 import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import edu.iuh.fit.auth_service.dto.request.*;
 import edu.iuh.fit.auth_service.dto.response.UserResponse;
@@ -14,15 +13,20 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 
-//@CrossOrigin(origins = "*", allowedHeaders = "*")
+// @CrossOrigin(origins = "*", allowedHeaders = "*")
 
 public class AuthController {
     private final AuthService authService;
+
+    @PostMapping("/send-otp")
+    public ResponseEntity<ApiResponse<String>> sendOtp(@RequestBody SendOtpRequest request) {
+        authService.sendRegistrationOtp(request.email());
+        return ResponseEntity.ok(ApiResponse.success("Mã xác nhận đã được gửi đến email của bạn"));
+    }
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<String>> register(@RequestBody RegisterRequest request) {
@@ -31,10 +35,12 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<Map<String, String>>> login(@RequestBody LoginRequest request, HttpServletResponse response) {
+    public ResponseEntity<ApiResponse<Map<String, String>>> login(@RequestBody LoginRequest request,
+            HttpServletResponse response) {
         String accessToken = authService.login(request, response);
         return ResponseEntity.ok(ApiResponse.success(Map.of("accessToken", accessToken)));
     }
+
     // Lấy thông tin cá nhân (Yêu cầu Authorize JWT)
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getMyProfile(@RequestHeader("X-User-Id") String userId) {
@@ -43,13 +49,15 @@ public class AuthController {
 
     // Lấy danh sách thiết bị đăng nhập
     @GetMapping("/sessions")
-    public ResponseEntity<ApiResponse<List<UserSessionResponse>>> getMySessions(@RequestHeader("X-User-Id") String userId) {
+    public ResponseEntity<ApiResponse<List<UserSessionResponse>>> getMySessions(
+            @RequestHeader("X-User-Id") String userId) {
         return ResponseEntity.ok(ApiResponse.success(authService.getActiveSessions(userId)));
     }
 
     // Đăng xuất từ xa
     @DeleteMapping("/sessions/{id}")
-    public ResponseEntity<ApiResponse<String>> logoutFromDevice(@RequestHeader("X-User-Id") String userId, @PathVariable String id) {
+    public ResponseEntity<ApiResponse<String>> logoutFromDevice(@RequestHeader("X-User-Id") String userId,
+            @PathVariable String id) {
         authService.terminateSession(userId, id);
         return ResponseEntity.ok(ApiResponse.success("Đã đăng xuất thiết bị thành công"));
     }
@@ -58,7 +66,7 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<String>> logout(
             @CookieValue(name = "refreshToken", required = false) String refreshToken,
-            jakarta.servlet.http.HttpServletResponse response) { 
+            jakarta.servlet.http.HttpServletResponse response) {
 
         if (refreshToken != null && !refreshToken.isBlank()) {
             try {
@@ -76,7 +84,8 @@ public class AuthController {
     public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
             @RequestHeader("X-User-Id") String userId,
             @RequestBody UpdateProfileRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(UserResponse.fromEntity(authService.updateProfile(userId, request))));
+        return ResponseEntity
+                .ok(ApiResponse.success(UserResponse.fromEntity(authService.updateProfile(userId, request))));
     }
 
     // Cập nhật Avatar ảnh đại diện
@@ -84,7 +93,8 @@ public class AuthController {
     public ResponseEntity<ApiResponse<UserResponse>> updateAvatar(
             @RequestHeader("X-User-Id") String userId,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file) throws java.io.IOException {
-        return ResponseEntity.ok(ApiResponse.success(UserResponse.fromEntity(authService.updateAvatarOrCover(userId, file, true))));
+        return ResponseEntity
+                .ok(ApiResponse.success(UserResponse.fromEntity(authService.updateAvatarOrCover(userId, file, true))));
     }
 
     // Cập nhật ảnh bìa
@@ -92,7 +102,8 @@ public class AuthController {
     public ResponseEntity<ApiResponse<UserResponse>> updateCover(
             @RequestHeader("X-User-Id") String userId,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file) throws java.io.IOException {
-        return ResponseEntity.ok(ApiResponse.success(UserResponse.fromEntity(authService.updateAvatarOrCover(userId, file, false))));
+        return ResponseEntity
+                .ok(ApiResponse.success(UserResponse.fromEntity(authService.updateAvatarOrCover(userId, file, false))));
     }
 
     // API: Tìm kiếm người dùng theo số điện thoại (Dùng cho Modal Thêm Bạn)
@@ -101,7 +112,8 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(authService.searchByPhone(phone)));
     }
 
-    // API: Lấy danh sách thông tin User theo List ID (Dùng để hiển thị tên/avatar trong danh sách bạn bè)
+    // API: Lấy danh sách thông tin User theo List ID (Dùng để hiển thị tên/avatar
+    // trong danh sách bạn bè)
     @PostMapping("/users/by-ids")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getUsersByIds(@RequestBody List<String> ids) {
         return ResponseEntity.ok(ApiResponse.success(authService.getUsersByIds(ids)));

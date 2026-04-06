@@ -1,7 +1,5 @@
 package edu.iuh.fit.auth_service.service;
 
-
-
 import edu.iuh.fit.auth_service.dto.request.*;
 import edu.iuh.fit.auth_service.dto.response.UserResponse;
 import edu.iuh.fit.auth_service.dto.response.UserSessionResponse;
@@ -32,9 +30,42 @@ public class AuthService {
     private final TokenService tokenService;
     private final CookieUtil cookieUtil;
     private final S3Service s3Service;
+    private final org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
+    private final EmailService emailService;
+
+    @Transactional
+    public void sendRegistrationOtp(String email) {
+        if (userRepository.findByEmail(email).isPresent()) {
+            throw new RuntimeException("Email đã được đăng ký");
+        }
+
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        String otp = String.format("%06d", random.nextInt(1000000));
+
+        String redisKey = "OTP_REG:" + email;
+        stringRedisTemplate.opsForValue().set(redisKey, otp, 5, java.util.concurrent.TimeUnit.MINUTES);
+
+        String subject = "Mã xác nhận đăng ký tài khoản ALO";
+        String text = "Xin chào,\n\nMã OTP xác nhận đăng ký tài khoản của bạn là: " + otp + "\nMã này sẽ hết hạn trong vòng 5 phút.\n\nTrân trọng,\nĐội ngũ ALO";
+        emailService.sendTextEmail(email, subject, text);
+    }
 
     @Transactional
     public void register(RegisterRequest request) {
+        String redisKey = "OTP_REG:" + request.email();
+        String savedOtp = stringRedisTemplate.opsForValue().get(redisKey);
+
+        if (savedOtp == null) {
+            throw new RuntimeException("Mã OTP đã hết hạn hoặc chưa được yêu cầu");
+        }
+
+        if (!savedOtp.equals(request.otp())) {
+            throw new RuntimeException("Mã OTP không chính xác");
+        }
+
+        // Xóa Key khi đăng ký đúng để tránh bị dùng lại mã
+        stringRedisTemplate.delete(redisKey);
+
         User user = User.builder()
                 .id(UUID.randomUUID().toString())
                 .email(request.email())
@@ -65,7 +96,8 @@ public class AuthService {
         // Lấy Token ID từ JWT để lưu vào DB (Dùng để logout sau này)
         String tokenId = tokenService.getTokenIdFromJWT(refreshToken);
 
-        // 2. Lưu Session vào MariaDB (Vì bạn đang ẩn Redis nên phải lưu vào DB để quản lý)
+        // 2. Lưu Session vào MariaDB (Vì bạn đang ẩn Redis nên phải lưu vào DB để quản
+        // lý)
         UserSession session = UserSession.builder()
                 .id(UUID.randomUUID().toString())
                 .user(user)
@@ -113,6 +145,7 @@ public class AuthService {
         }
         sessionRepository.delete(session);
     }
+
     public String getTokenIdFromToken(String token) {
         return tokenService.getTokenIdFromJWT(token);
     }
@@ -128,17 +161,23 @@ public class AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
 
         // Cập nhật các thông tin (chỉ cập nhật nếu request có dữ liệu)
-        if (request.fullName() != null) user.setFullName(request.fullName());
-        if (request.phoneNumber() != null) user.setPhoneNumber(request.phoneNumber());
-        if (request.gender() != null) user.setGender(request.gender());
-        if (request.dateOfBirth() != null) user.setDateOfBirth(request.dateOfBirth());
-        if (request.email() != null && !request.email().isBlank()) user.setEmail(request.email());
+        if (request.fullName() != null)
+            user.setFullName(request.fullName());
+        if (request.phoneNumber() != null)
+            user.setPhoneNumber(request.phoneNumber());
+        if (request.gender() != null)
+            user.setGender(request.gender());
+        if (request.dateOfBirth() != null)
+            user.setDateOfBirth(request.dateOfBirth());
+        if (request.email() != null && !request.email().isBlank())
+            user.setEmail(request.email());
 
         return userRepository.save(user);
     }
 
     @Transactional
-    public User updateAvatarOrCover(String userId, org.springframework.web.multipart.MultipartFile file, boolean isAvatar) throws java.io.IOException {
+    public User updateAvatarOrCover(String userId, org.springframework.web.multipart.MultipartFile file,
+            boolean isAvatar) throws java.io.IOException {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
 
@@ -157,7 +196,8 @@ public class AuthService {
 
         // Xóa ảnh cũ trên S3 nếu có
         if (oldUrl != null && oldUrl.startsWith("https://")) {
-            // Chạy async hoặc try-catch để nếu lỗi xóa s3 cũng không làm gián đoạn Flow chính
+            // Chạy async hoặc try-catch để nếu lỗi xóa s3 cũng không làm gián đoạn Flow
+            // chính
             try {
                 s3Service.deleteFile(oldUrl);
             } catch (Exception e) {
