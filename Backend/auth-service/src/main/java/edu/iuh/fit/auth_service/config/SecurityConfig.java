@@ -28,7 +28,9 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/auth/login",
-                                "/auth/register"
+                                "/auth/register",
+                                "/auth/qr/generate",
+                                "/auth/qr/status/**"
                         ).permitAll()
 
                         // 2. Với Microservices, ta tin tưởng Gateway.
