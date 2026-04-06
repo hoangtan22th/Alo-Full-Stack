@@ -1,0 +1,22 @@
+server:
+  port: 8085
+  servlet:
+    context-path: /chatbot-service
+
+spring:
+  application:
+    name: chatbot-service
+  ai:
+    openai:
+      api-key: ${GROQ_API_KEY}
+      chat:
+        base-url: https://api.groq.com/openai
+        options:
+          model: llama-3.1-8b-instant
+          temperature: 0.7
+
+eureka:
+  client:
+#    enabled: false
+    service-url:
+      defaultZone: http://localhost:8761/eureka/

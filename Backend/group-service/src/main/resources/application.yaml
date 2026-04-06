@@ -1,14 +1,14 @@
 server:
-  port: 8081
+  port: 8082
   servlet:
-    context-path: /contact-service
+    context-path: /group-service
 
 spring:
   application:
-    name: contact-service
+    name: group-service
 
   datasource:
-    url: jdbc:mariadb://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:alo_contact_db}?createDatabaseIfNotExist=true
+    url: jdbc:mariadb://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:alo_group_db}?createDatabaseIfNotExist=true
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
     driver-class-name: org.mariadb.jdbc.Driver

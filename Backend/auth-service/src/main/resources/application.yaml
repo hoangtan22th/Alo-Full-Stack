@@ -8,10 +8,10 @@ spring:
     name: auth-service
 
   datasource:
-    # Thêm tham số chuẩn hóa thời gian cho MariaDB
     url: jdbc:mariadb://localhost:3306/alo_auth_db?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Ho_Chi_Minh
     username: root
     password: root
+
     driver-class-name: org.mariadb.jdbc.Driver
 
   jpa:

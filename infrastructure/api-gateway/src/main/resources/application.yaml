@@ -17,6 +17,41 @@ spring:
               filters:
                 - StripPrefix=1
 
+            - id: contact-service
+              uri: lb://CONTACT-SERVICE
+              predicates:
+                - Path=/api-gateway/contact-service/**
+              filters:
+                - StripPrefix=1
+
+            - id: group-service
+              uri: lb://GROUP-SERVICE
+              predicates:
+                - Path=/api-gateway/group-service/**
+              filters:
+                - StripPrefix=1
+
+            - id: message-service
+              uri: lb://MESSAGE-SERVICE
+              predicates:
+                - Path=/api-gateway/message-service/**
+              filters:
+                - StripPrefix=1
+
+            - id: notification-service
+              uri: lb://NOTIFICATION-SERVICE
+              predicates:
+                - Path=/api-gateway/notification-service/**
+              filters:
+                - StripPrefix=1
+
+            - id: chatbot-service
+              uri: lb://CHATBOT-SERVICE
+              predicates:
+                - Path=/api-gateway/chatbot-service/**
+              filters:
+                - StripPrefix=1
+
 eureka:
   client:
     service-url:
