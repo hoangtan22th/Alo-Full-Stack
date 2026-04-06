@@ -169,19 +169,13 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng với số điện thoại này"));
 
         // Trả về DTO thay vì Entity User để bảo mật (không lộ password)
-        return new UserResponse(
-                user.getId(),
-                user.getEmail(),
-                user.getFullName(),
-                user.getPhoneNumber(),
-                user.getAvatar()
-        );
+        return UserResponse.fromEntity(user);
     }
 
     // Để bên Contact Service có thể lấy thông tin hàng loạt bạn bè
     public List<UserResponse> getUsersByIds(List<String> ids) {
         return userRepository.findAllById(ids).stream()
-                .map(u -> new UserResponse(u.getId(), u.getEmail(), u.getFullName(), u.getPhoneNumber(), u.getAvatar()))
+                .map(UserResponse::fromEntity)
                 .collect(Collectors.toList());
     }
 }
