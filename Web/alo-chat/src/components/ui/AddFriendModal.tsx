@@ -1,69 +1,115 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
+// Đảm bảo import đúng tên từ bản v2
+import {
+  XMarkIcon,
+  MagnifyingGlassIcon,
+  CheckBadgeIcon,
+  UsersIcon,
+} from "@heroicons/react/24/outline";
 
-// Giả lập Component Modal cho giao diện Thêm Bạn Mới
-const AddFriendModal = ({ onClose }) => {
-  const [inputValue, setInputValue] = useState('');
-  const [message, setMessage] = useState('');
+const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
+  const [inputValue, setInputValue] = useState("");
+  const [message, setMessage] = useState(
+    "Chào Tú, mình là bạn của Tấn. Rất vui được kết nối!",
+  );
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 font-sans text-white">
-      {/* Container Modal Chính */}
-      <div className="bg-black border border-white rounded-[32px] p-8 max-w-[500px] w-full relative">
-        {/* Nút Đóng (x) ở góc trên bên phải */}
-        <button 
-          onClick={onClose} 
-          className="absolute top-6 right-8 text-white hover:text-gray-400 text-3xl font-light"
+    // Backdrop làm mờ nền
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 font-sans">
+      {/* Container Modal Chính - Chỉnh lại text-black để không bị thừa hưởng text-white từ ngoài */}
+      <div className="bg-white rounded-[40px] p-8 max-w-[480px] w-full relative shadow-2xl text-black">
+        {/* Nút Đóng (x) */}
+        <button
+          onClick={onClose}
+          className="absolute top-6 right-8 text-gray-400 hover:text-black transition-colors"
         >
-          &times;
+          <XMarkIcon className="w-7 h-7 stroke-2" />
         </button>
 
         {/* Tiêu đề Modal */}
-        <h1 className="text-3xl font-extrabold mb-4">THÊM BẠN MỚI</h1>
-        
-        {/* Mô tả nhỏ */}
-        <p className="text-gray-400 mb-8 text-[15px]">
-          Nhập số điện thoại hoặc email để tìm bạn bè.
-        </p>
+        <h1 className="text-[22px] font-extrabold text-gray-900 mb-6">
+          Thêm bạn mới
+        </h1>
 
-        {/* Ô nhập thông tin chính (Số điện thoại/Email) */}
-        <div className="relative mb-3">
-          <input 
-            type="text" 
-            placeholder="SỐ ĐIỆN THOẠI / EMAIL" 
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            className="w-full bg-black border border-white rounded-[24px] px-6 py-4.5 text-[15px] placeholder-gray-500 outline-none focus:border-gray-300"
-          />
-          {/* Icon Thêm Bạn */}
-          <span className="absolute right-6 top-1/2 transform -translate-y-1/2 text-white text-3xl font-light">
-            +<span className='font-mono'>👤</span>
-          </span>
+        {/* Phần Tìm kiếm */}
+        <div className="mb-8">
+          <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3 ml-1">
+            TÌM KIẾM THEO SỐ ĐIỆN THOẠI
+          </label>
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              {/* SỬA LỖI: Dùng đúng tên MagnifyingGlassIcon đã import */}
+              <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Nhập số điện thoại..."
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                // text-gray-900 để chữ nhập vào hiện rõ trên nền xám
+                className="w-full bg-[#f3f3f3] border-none rounded-2xl pl-12 pr-4 py-3.5 text-[15px] text-gray-900 focus:ring-2 focus:ring-black transition-all outline-none placeholder-gray-400"
+              />
+            </div>
+            <button className="bg-black text-white px-8 py-3.5 rounded-2xl font-bold text-[15px] hover:bg-gray-800 transition-all active:scale-95">
+              Tìm kiếm
+            </button>
+          </div>
         </div>
 
-        {/* Dòng thông báo đang chờ API */}
-        <p className="text-gray-500 text-[13px] mb-8">
-          Hệ thống đang chờ API...
-        </p>
+        {/* User Card (Hiển thị kết quả mẫu) */}
+        <div className="bg-[#f3f3f3] rounded-[28px] p-5 flex items-center gap-4 mb-8 border border-transparent hover:border-gray-200 transition-all">
+          <div className="relative shrink-0">
+            <div className="w-16 h-16 bg-white rounded-full overflow-hidden flex items-center justify-center border-2 border-white shadow-sm font-bold text-gray-400">
+              <img
+                src="https://api.dicebear.com/7.x/avataaars/svg?seed=Tu"
+                alt="avatar"
+                className="w-full h-full object-cover"
+              />
+            </div>
+          </div>
 
-        {/* Phần Lời nhắn tùy chọn */}
-        <h2 className="text-lg font-extrabold mb-3">LỜI NHẮN (TÙY CHỌN)</h2>
-        <textarea 
-          placeholder={`Ví dụ: Mình là Tấn, rất vui được làm quen!`}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          className="w-full bg-black border border-white rounded-[24px] p-6 text-[15px] placeholder-gray-600 h-[140px] mb-12 outline-none focus:border-gray-300 resize-none"
-        ></textarea>
+          <div className="flex-1">
+            <div className="flex items-center gap-1.5">
+              <h3 className="font-bold text-[17px] text-gray-900">
+                Nguyễn Minh Tú
+              </h3>
+              <CheckBadgeIcon className="w-5 h-5 text-blue-500" />
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <UsersIcon className="w-4 h-4 text-gray-400" />
+              <p className="text-[13px] text-gray-500 font-medium">
+                3 bạn chung
+              </p>
+            </div>
+          </div>
+        </div>
 
-        {/* Nhóm Nút Hành Động ở dưới cùng */}
-        <div className="space-y-4">
-          <button className="w-full bg-white text-black text-center font-bold text-[16px] py-4.5 rounded-[32px] hover:bg-gray-200 transition">
-            GỬI LỜI MỜI
-          </button>
-          <button 
-            onClick={onClose} 
-            className="w-full bg-black border border-white text-white text-center font-bold text-[16px] py-4.5 rounded-[32px] hover:bg-gray-800 transition"
+        {/* Lời chào */}
+        <div className="mb-10">
+          <div className="flex justify-between items-center mb-3 px-1">
+            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+              LỜI CHÀO
+            </label>
+            <span className="text-[11px] text-gray-300 font-bold">
+              {message.length}/150
+            </span>
+          </div>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value.slice(0, 150))}
+            className="w-full bg-[#f3f3f3] border-none rounded-[24px] p-5 text-[15px] text-gray-700 leading-relaxed h-28 outline-none focus:ring-2 focus:ring-black transition-all resize-none"
+          ></textarea>
+        </div>
+
+        {/* Nút Action */}
+        <div className="flex gap-4">
+          <button
+            onClick={onClose}
+            className="flex-1 bg-[#e5e5e5] text-black font-bold py-4 rounded-full hover:bg-gray-300 transition-all active:scale-95"
           >
-            HỦY
+            Hủy
+          </button>
+          <button className="flex-1 bg-black text-white font-bold py-4 rounded-full hover:bg-gray-800 shadow-lg transition-all active:scale-95">
+            Gửi yêu cầu
           </button>
         </div>
       </div>
