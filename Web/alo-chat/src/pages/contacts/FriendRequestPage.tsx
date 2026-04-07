@@ -3,11 +3,11 @@ import axiosClient from "../../config/axiosClient";
 import { UserPlusIcon } from "@heroicons/react/24/outline";
 import RequestPreviewModal from "@/components/ui/RequestPreviewModal";
 import FriendProfileModal from "@/components/ui/FriendProfileModal";
+import { toast } from "sonner";
 
 export default function FriendRequestPage() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [profileModalUserId, setProfileModalUserId] = useState<string | null>(
     null,
@@ -15,31 +15,12 @@ export default function FriendRequestPage() {
 
   const fetchRequests = async () => {
     try {
-      // CẬP NHẬT: Nhận thẳng mảng dữ liệu từ interceptor
       const data: any = await axiosClient.get("/contacts/pending");
       setRequests(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Lỗi lấy danh sách lời mời:", err);
+      console.error(err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleAction = async (
-    requestId: string,
-    actionType: "ACCEPT" | "DECLINE",
-  ) => {
-    try {
-      const baseUrl = `/contacts/${requestId}`;
-      if (actionType === "ACCEPT") {
-        await axiosClient.put(`${baseUrl}/accept`);
-      } else {
-        await axiosClient.delete(`${baseUrl}/decline`);
-      }
-      setRequests((prev) => prev.filter((req) => req.id !== requestId));
-      setSelectedRequest(null);
-    } catch (err) {
-      alert("Thao tác thất bại, Tấn kiểm tra lại log nhé!");
     }
   };
 
@@ -47,64 +28,80 @@ export default function FriendRequestPage() {
     fetchRequests();
   }, []);
 
+  const handleAction = async (
+    requestId: string,
+    actionType: "ACCEPT" | "DECLINE",
+  ) => {
+    try {
+      // FIX: Khớp với endpoint /{friendshipId}/accept và /{friendshipId}/decline
+      if (actionType === "ACCEPT")
+        await axiosClient.put(`/contacts/${requestId}/accept`);
+      else await axiosClient.delete(`/contacts/${requestId}/decline`);
+
+      setRequests((prev) => prev.filter((req) => req.id !== requestId));
+      setSelectedRequest(null);
+      toast.success(
+        actionType === "ACCEPT" ? "Đã chấp nhận kết bạn" : "Đã từ chối lời mời",
+      );
+    } catch (err) {
+      toast.error("Thao tác thất bại");
+    }
+  };
+
   if (loading)
-    return <div className="p-8 text-center font-bold">Đang tải lời mời...</div>;
+    return <div className="p-6 text-center text-xs font-bold">Đang tải...</div>;
 
   return (
-    <div className="flex-1 min-h-screen bg-[#fafafa] p-4 md:p-8 overflow-y-auto font-sans text-black">
-      <div className="flex items-center gap-4 mb-10 pb-6 border-b border-gray-200">
-        <div className="p-3 bg-black rounded-2xl text-white shadow-lg">
-          <UserPlusIcon className="w-7 h-7" />
+    <div className="flex-1 h-screen bg-[#fafafa] p-4 lg:p-6 overflow-y-auto">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-200">
+          <div className="p-2 bg-black rounded-xl text-white shadow-lg">
+            <UserPlusIcon className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-gray-900">
+              Lời mời kết bạn
+            </h2>
+            <p className="text-[11px] text-gray-500 font-bold uppercase">
+              Bạn có {requests.length} yêu cầu chờ duyệt
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-[24px] font-extrabold tracking-tight">
-            Lời mời kết bạn
-          </h2>
-          <p className="text-sm text-gray-500 font-medium">
-            Bạn đang có{" "}
-            <span className="text-black font-bold">{requests.length}</span> yêu
-            cầu kết nối
-          </p>
-        </div>
+
+        {requests.length === 0 ? (
+          <div className="text-center py-16 bg-white rounded-[20px] border border-dashed border-gray-200 shadow-sm">
+            <p className="text-gray-400 text-xs italic">
+              Hiện tại không có lời mời nào mới.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {requests.map((req: any) => (
+              <div
+                key={req.id}
+                onClick={() => setSelectedRequest(req)}
+                className="bg-white border border-gray-50 hover:border-black rounded-[20px] p-3.5 flex items-center gap-3 shadow-sm hover:shadow-lg transition-all cursor-pointer"
+              >
+                <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-100 bg-black shrink-0">
+                  <img
+                    src={req.requesterAvatar || "/avt-mac-dinh.jpg"}
+                    className="w-full h-full object-cover"
+                    alt=""
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-[14px] text-gray-900 truncate">
+                    {req.requesterName}
+                  </h3>
+                  <p className="text-[11px] text-gray-400 truncate italic">
+                    "{req.greetingMessage || "Muốn kết bạn"}"
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-
-      {requests.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-[32px] border-2 border-dashed border-gray-200">
-          <p className="text-gray-400 font-medium">
-            Hiện không có lời mời nào mới, Tấn ơi!
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {requests.map((req: any) => (
-            <div
-              key={req.id}
-              onClick={() => setSelectedRequest(req)}
-              className="bg-white border border-gray-100 rounded-[32px] p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-all cursor-pointer group active:scale-[0.98]"
-            >
-              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-50 shrink-0 shadow-inner">
-                <img
-                  src={
-                    req.requesterAvatar ||
-                    `https://api.dicebear.com/7.x/initials/svg?seed=${req.requesterName}`
-                  }
-                  alt="avatar"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <h3 className="font-extrabold text-[16px] text-gray-900 truncate group-hover:text-blue-600 transition-colors">
-                  {req.requesterName || "Người dùng ẩn danh"}
-                </h3>
-                <p className="text-[13px] text-gray-400 font-medium line-clamp-1 mt-0.5">
-                  "{req.greetingMessage || "Muốn kết nối với bạn"}"
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       <RequestPreviewModal
         request={selectedRequest}
@@ -116,12 +113,12 @@ export default function FriendRequestPage() {
           setSelectedRequest(null);
         }}
       />
-
       <FriendProfileModal
         isOpen={!!profileModalUserId}
         onClose={() => setProfileModalUserId(null)}
         userId={profileModalUserId}
         relationStatus="THEY_SENT_REQUEST"
+        onActionSuccess={fetchRequests}
       />
     </div>
   );
