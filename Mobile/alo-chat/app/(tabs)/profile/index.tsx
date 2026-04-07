@@ -12,6 +12,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../../../services/api";
 
 export default function MainProfileScreen() {
@@ -143,7 +144,9 @@ export default function MainProfileScreen() {
             title="Quyền riêng tư"
             onPress={() => router.push("/profile/privacy")}
           />
+
         </View>
+
 
         {/* Nút Đăng xuất: Dùng mt-auto để đẩy nó xuống dưới đáy */}
         <TouchableOpacity

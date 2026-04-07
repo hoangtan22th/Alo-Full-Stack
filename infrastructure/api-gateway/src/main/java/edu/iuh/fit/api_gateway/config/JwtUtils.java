@@ -22,4 +22,14 @@ public class JwtUtils {
                 .getBody()
                 .getSubject();
     }
+
+    public String extractSessionId(String token) {
+        SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        return Jwts.parserBuilder()
+                .setSigningKey(key)
+                .build()
+                .parseClaimsJws(token)
+                .getBody()
+                .get("sessionId", String.class);
+    }
 }

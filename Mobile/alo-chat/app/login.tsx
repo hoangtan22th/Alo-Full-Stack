@@ -58,6 +58,16 @@ export default function LoginScreen() {
       Alert.alert("Lỗi", "Vui lòng nhập OTP và mật khẩu mới");
       return;
     }
+
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!passwordRegex.test(forgotNewPassword)) {
+      Alert.alert(
+        "Lỗi mật khẩu",
+        "Mật khẩu phải dài ít nhất 8 ký tự, bao gồm ít nhất một chữ Hoa, một chữ Thường và một chữ Số."
+      );
+      return;
+    }
+
     setForgotLoading(true);
     try {
       await api.post("/auth/forgot-password/reset", {
@@ -106,9 +116,12 @@ export default function LoginScreen() {
       // signIn() lưu cả 2 token + cập nhật trạng thái -> _layout.tsx tự chuyển vào Tabs
       await signIn(res.accessToken, res.refreshToken);
     } catch (error: any) {
-      const msg =
-        error.response?.data?.message || "Sai tài khoản hoặc mật khẩu";
-      Alert.alert("Lỗi Đăng Nhập", msg);
+      if (!error.response) {
+        Alert.alert("Lỗi Kết Nối", "Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng hoặc địa chỉ IP.");
+      } else {
+        const msg = error.response?.data?.message || "Sai tài khoản hoặc mật khẩu";
+        Alert.alert("Lỗi Đăng Nhập", msg);
+      }
     } finally {
       setLoading(false);
     }

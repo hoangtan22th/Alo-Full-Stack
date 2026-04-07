@@ -38,9 +38,12 @@ public class AuthService {
     private static final long LOCK_TIME_DURATION = 15; // 15 Phút
     
     @Transactional
-    public void sendRegistrationOtp(String email) {
+    public void sendRegistrationOtp(String email, String phoneNumber) {
         if (userRepository.findByEmail(email).isPresent()) {
             throw new RuntimeException("Email đã được đăng ký");
+        }
+        if (userRepository.findByPhoneNumber(phoneNumber).isPresent()) {
+            throw new RuntimeException("Số điện thoại đã được đăng ký");
         }
 
         java.security.SecureRandom random = new java.security.SecureRandom();
@@ -69,6 +72,10 @@ public class AuthService {
 
         // Xóa Key khi đăng ký đúng để tránh bị dùng lại mã
         stringRedisTemplate.delete(redisKey);
+
+        if (userRepository.findByPhoneNumber(request.phoneNumber()).isPresent()) {
+            throw new RuntimeException("Số điện thoại đã được đăng ký");
+        }
 
         User user = User.builder()
                 .id(UUID.randomUUID().toString())
@@ -120,8 +127,10 @@ public class AuthService {
 
         String deviceId = (request.deviceId() == null) ? "unknown" : request.deviceId();
 
+        String sessionId = UUID.randomUUID().toString();
+
         // 1. Tạo Token
-        String accessToken = tokenService.generateAccessToken(user);
+        String accessToken = tokenService.generateAccessToken(user, sessionId);
         String refreshToken = tokenService.generateRefreshToken(user, deviceId);
 
         // Lấy Token ID từ JWT để lưu vào DB (Dùng để logout sau này)
@@ -130,7 +139,7 @@ public class AuthService {
         // 2. Lưu Session vào MariaDB (Vì bạn đang ẩn Redis nên phải lưu vào DB để quản
         // lý)
         UserSession session = UserSession.builder()
-                .id(UUID.randomUUID().toString())
+                .id(sessionId)
                 .user(user)
                 .deviceId(deviceId)
                 .refreshTokenId(tokenId)
@@ -155,14 +164,16 @@ public class AuthService {
     // 2. API: Logout (Xóa phiên đăng nhập hiện tại)
     @Transactional
     public void logout(String refreshTokenId) {
-        sessionRepository.deleteByRefreshTokenId(refreshTokenId);
-        // Lưu ý: Nếu sau này bạn mở lại Redis, hãy xóa key trong Redis ở đây luôn.
+        sessionRepository.findByRefreshTokenId(refreshTokenId).ifPresent(session -> {
+            stringRedisTemplate.opsForValue().set("BLACKLIST_SESSION:" + session.getId(), "KICKED", 15, java.util.concurrent.TimeUnit.MINUTES);
+            sessionRepository.delete(session);
+        });
     }
 
     // 3. API: Lấy danh sách thiết bị đang đăng nhập
-    public List<UserSessionResponse> getActiveSessions(String userId) {
+    public List<UserSessionResponse> getActiveSessions(String userId, String currentSessionId) {
         return sessionRepository.findByUserId(userId).stream()
-                .map(s -> new UserSessionResponse(s.getId(), s.getDeviceId(), s.getIpAddress(), s.getCreatedAt()))
+                .map(s -> new UserSessionResponse(s.getId(), s.getDeviceId(), s.getIpAddress(), s.getCreatedAt(), s.getId().equals(currentSessionId)))
                 .collect(Collectors.toList());
     }
 
@@ -175,7 +186,20 @@ public class AuthService {
         if (!session.getUser().getId().equals(userId)) {
             throw new ForbiddenException("Bạn không có quyền!");
         }
+        stringRedisTemplate.opsForValue().set("BLACKLIST_SESSION:" + sessionId, "KICKED", 15, java.util.concurrent.TimeUnit.MINUTES);
         sessionRepository.delete(session);
+    }
+
+    // API: Đăng xuất tất cả các thiết bị KHÁC thiết bị hiện tại
+    @Transactional
+    public void terminateAllOtherSessions(String userId, String currentSessionId) {
+        List<UserSession> allSessions = sessionRepository.findByUserId(userId);
+        for (UserSession session : allSessions) {
+            if (!session.getId().equals(currentSessionId)) {
+                stringRedisTemplate.opsForValue().set("BLACKLIST_SESSION:" + session.getId(), "KICKED", 15, java.util.concurrent.TimeUnit.MINUTES);
+                sessionRepository.delete(session);
+            }
+        }
     }
 
     /**
@@ -194,14 +218,14 @@ public class AuthService {
         }
 
         // 2. Kiểm tra session trong DB (đảm bảo chưa bị logout từ xa)
-        sessionRepository.findByRefreshTokenId(tokenId)
+        UserSession session = sessionRepository.findByRefreshTokenId(tokenId)
                 .orElseThrow(() -> new UnauthorizedException("Phiên đăng nhập đã bị thu hồi"));
 
         // 3. Lấy User và cấp Access Token mới
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
 
-        return tokenService.generateAccessToken(user);
+        return tokenService.generateAccessToken(user, session.getId());
     }
 
     public String getTokenIdFromToken(String token) {
