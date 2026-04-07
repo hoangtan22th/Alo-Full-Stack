@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -17,14 +17,22 @@ import {
 import { useRouter } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { Ionicons, AntDesign, FontAwesome } from "@expo/vector-icons";
-import * as Device from 'expo-device';
+import * as Device from "expo-device";
 import api from "../services/api";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    GoogleSignin.configure({
+      webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+      iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    });
+  }, []);
 
   const router = useRouter();
   const { signIn } = useAuth();
@@ -60,19 +68,25 @@ export default function LoginScreen() {
     }
     setForgotLoading(true);
     try {
-      await api.post("/auth/forgot-password/reset", { 
-        email: forgotEmail, 
-        otp: forgotOtp, 
-        newPassword: forgotNewPassword 
+      await api.post("/auth/forgot-password/reset", {
+        email: forgotEmail,
+        otp: forgotOtp,
+        newPassword: forgotNewPassword,
       });
-      Alert.alert("Thành công", "Mật khẩu đã được đặt lại thành công. Bạn có thể đăng nhập ngay bây giờ.");
+      Alert.alert(
+        "Thành công",
+        "Mật khẩu đã được đặt lại thành công. Bạn có thể đăng nhập ngay bây giờ.",
+      );
       setShowForgotModal(false);
       setForgotStep(1);
       setForgotEmail("");
       setForgotOtp("");
       setForgotNewPassword("");
     } catch (error: any) {
-      Alert.alert("Lỗi", error.response?.data?.message || "Đặt lại mật khẩu thất bại");
+      Alert.alert(
+        "Lỗi",
+        error.response?.data?.message || "Đặt lại mật khẩu thất bại",
+      );
     } finally {
       setForgotLoading(false);
     }
@@ -86,10 +100,10 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       let deviceName = "Unknown Device";
-      if (Platform.OS === 'web') {
+      if (Platform.OS === "web") {
         deviceName = "Trình duyệt Web";
       } else {
-        deviceName = `${Device.brand || 'Máy'} ${Device.modelName || 'Không xác định'} (${Platform.OS})`;
+        deviceName = `${Device.brand || "Máy"} ${Device.modelName || "Không xác định"} (${Platform.OS})`;
       }
 
       const res: any = await api.post("/auth/login", {
@@ -103,6 +117,39 @@ export default function LoginScreen() {
       const msg =
         error.response?.data?.message || "Sai tài khoản hoặc mật khẩu";
       Alert.alert("Lỗi Đăng Nhập", msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      setLoading(true);
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+
+      if (response.type === "cancelled") {
+        return;
+      }
+
+      if (response.type === "success") {
+        const idToken = response.data.idToken;
+
+        let deviceName = "Unknown Device";
+        if (Platform.OS === "web") {
+          deviceName = "Trình duyệt Web";
+        } else {
+          deviceName = `${Device.brand || "Máy"} ${Device.modelName || "Không xác định"} (${Platform.OS})`;
+        }
+
+        const res: any = await api.post("/auth/google", {
+          idToken,
+          deviceId: deviceName,
+        });
+        await signIn(res.accessToken, res.refreshToken);
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi Đăng Nhập Google", error.message || "Đăng nhập Google thất bại");
     } finally {
       setLoading(false);
     }
@@ -176,7 +223,10 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.forgotPass} onPress={() => setShowForgotModal(true)}>
+          <TouchableOpacity
+            style={styles.forgotPass}
+            onPress={() => setShowForgotModal(true)}
+          >
             <Text style={styles.forgotText}>Quên mật khẩu?</Text>
           </TouchableOpacity>
         </View>
@@ -205,10 +255,14 @@ export default function LoginScreen() {
         <View style={styles.divider}>
           <View style={styles.line} />
           <Text style={styles.dividerText}>HOẶC</Text>
-          <View style={styles.line} />
+          <View className="line" />
         </View>
 
-        <TouchableOpacity style={styles.googleButton}>
+        <TouchableOpacity
+          style={styles.googleButton}
+          onPress={handleGoogleLogin}
+          disabled={loading}
+        >
           <FontAwesome
             name="google"
             size={20}
@@ -235,22 +289,29 @@ export default function LoginScreen() {
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View className="flex-1 justify-end bg-black/50">
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+            >
               <View className="bg-white rounded-t-3xl p-6 pb-20">
                 <View className="flex-row justify-between items-center mb-2 border-b border-gray-100 pb-4">
                   <Text className="text-xl font-bold text-gray-900">
                     Khôi phục mật khẩu
                   </Text>
-                  <TouchableOpacity onPress={() => setShowForgotModal(false)} className="p-2">
+                  <TouchableOpacity
+                    onPress={() => setShowForgotModal(false)}
+                    className="p-2"
+                  >
                     <Text className="text-red-500 font-bold">Thoát</Text>
                   </TouchableOpacity>
                 </View>
 
                 {forgotStep === 1 ? (
                   <View>
-                    <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider mt-4">EMAIL ĐĂNG KÝ</Text>
+                    <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider mt-4">
+                      EMAIL ĐĂNG KÝ
+                    </Text>
                     <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-6 border-[1px] border-gray-200">
-                      <TextInput 
+                      <TextInput
                         value={forgotEmail}
                         onChangeText={setForgotEmail}
                         className="text-base text-gray-900"
@@ -259,7 +320,7 @@ export default function LoginScreen() {
                         placeholderTextColor="#9ca3af"
                       />
                     </View>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       disabled={forgotLoading}
                       onPress={handleSendForgotOtp}
                       className="bg-gray-900 py-4 rounded-full items-center justify-center flex-row shadow-sm mt-2"
@@ -267,15 +328,19 @@ export default function LoginScreen() {
                       {forgotLoading ? (
                         <ActivityIndicator color="#fff" />
                       ) : (
-                        <Text className="text-white font-bold text-base">Gửi Mã Xác Nhận</Text>
+                        <Text className="text-white font-bold text-base">
+                          Gửi Mã Xác Nhận
+                        </Text>
                       )}
                     </TouchableOpacity>
                   </View>
                 ) : (
                   <View>
-                    <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider mt-4">MÃ OTP (6 SỐ TỪ EMAIL)</Text>
+                    <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider mt-4">
+                      MÃ OTP (6 SỐ TỪ EMAIL)
+                    </Text>
                     <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-4 border-[1px] border-gray-200">
-                      <TextInput 
+                      <TextInput
                         value={forgotOtp}
                         onChangeText={setForgotOtp}
                         keyboardType="number-pad"
@@ -285,9 +350,11 @@ export default function LoginScreen() {
                         placeholderTextColor="#9ca3af"
                       />
                     </View>
-                    <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">MẬT KHẨU MỚI</Text>
+                    <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">
+                      MẬT KHẨU MỚI
+                    </Text>
                     <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-8 border-[1px] border-gray-200">
-                      <TextInput 
+                      <TextInput
                         secureTextEntry
                         value={forgotNewPassword}
                         onChangeText={setForgotNewPassword}
@@ -296,7 +363,7 @@ export default function LoginScreen() {
                         placeholderTextColor="#9ca3af"
                       />
                     </View>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       disabled={forgotLoading}
                       onPress={handleResetPassword}
                       className="bg-gray-900 py-4 rounded-full items-center justify-center flex-row shadow-sm"
@@ -304,7 +371,9 @@ export default function LoginScreen() {
                       {forgotLoading ? (
                         <ActivityIndicator color="#fff" />
                       ) : (
-                        <Text className="text-white font-bold text-base">Cập Nhật Mật Khẩu</Text>
+                        <Text className="text-white font-bold text-base">
+                          Cập Nhật Mật Khẩu
+                        </Text>
                       )}
                     </TouchableOpacity>
                   </View>
@@ -314,7 +383,6 @@ export default function LoginScreen() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
-
     </KeyboardAvoidingView>
   );
 }
