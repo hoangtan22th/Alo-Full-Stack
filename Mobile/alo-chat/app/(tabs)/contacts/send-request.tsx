@@ -1,98 +1,94 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Image,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   Alert,
   ActivityIndicator,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
-import { ArrowLeftIcon } from "react-native-heroicons/outline";
+import {
+  ArrowLeftIcon,
+  ChatBubbleBottomCenterTextIcon,
+  PhoneIcon,
+  VideoCameraIcon,
+  UserPlusIcon,
+  XMarkIcon,
+  CheckIcon,
+} from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { contactService } from "../../../services/contactService";
 import { userService, UserProfileDTO } from "../../../services/userService";
+import { contactService } from "../../../services/contactService";
 
-export default function SendRequestScreen() {
+export default function UserProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // Nhận dữ liệu truyền qua params
-  const { userId, fullName, phone, avatarUrl, relationStatus, requestId } =
-    useLocalSearchParams();
+  const {
+    userId,
+    fullName,
+    phone,
+    avatarUrl,
+    relationStatus,
+    requestId,
+    greetingMessage,
+  } = useLocalSearchParams();
 
-  // Kiểm tra trạng thái hiện tại
-  const isNotFriend = relationStatus === "NOT_FRIEND";
-  const isAlreadyFriend = relationStatus === "ACCEPTED";
-  const isYouSent =
-    relationStatus === "YOU_SENT_REQUEST" || relationStatus === "PENDING"; // Do PENDING từ send-request = đã gửi
-  const isTheySent = relationStatus === "THEY_SENT_REQUEST";
-
-  const defaultMsg =
-    "Xin chào, mình tìm thấy bạn qua số điện thoại. Kết bạn với mình nhé!";
-  const [message, setMessage] = useState(defaultMsg);
-  const [loading, setLoading] = useState(false);
-  const [currentStatus, setCurrentStatus] = useState(relationStatus);
   const [userData, setUserData] = useState<UserProfileDTO | null>(null);
+  const [currentStatus, setCurrentStatus] = useState<string>(
+    (relationStatus as string) || "NOT_FRIEND",
+  );
+  const [message, setMessage] = useState(
+    "Xin chào, mình muốn kết bạn với bạn!",
+  );
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
 
-  React.useEffect(() => {
-    if (userId) {
-      userService.getUserById(userId as string).then((res) => {
-        if (res) {
-          setUserData(res);
-        }
-      });
-    }
+  useEffect(() => {
+    if (userId) fetchUserDetail();
   }, [userId]);
 
-  const displayAvatar = userData?.avatar
-    ? { uri: userData.avatar }
-    : avatarUrl
-      ? { uri: avatarUrl as string }
-      : { uri: `https://api.dicebear.com/7.x/initials/svg?seed=${fullName}` };
-
-  const displayFullName =
-    userData?.fullName || fullName || "Người dùng ẩn danh";
-  const displayPhone = userData?.phoneNumber || phone || "Chưa cập nhật";
-  const displayGender =
-    userData?.gender === 1
-      ? "Nam"
-      : userData?.gender === 2
-        ? "Nữ"
-        : "Chưa cập nhật";
-  const displayEmail = userData?.email || "Đang cập nhật...";
-  // Ngày sinh đơn giản
-  const displayDob = userData?.dateOfBirth
-    ? new Date(userData.dateOfBirth).toLocaleDateString("vi-VN")
-    : "01/01/2000";
-
-  const handleSendRequest = async () => {
+  const fetchUserDetail = async () => {
     setLoading(true);
     try {
-      const response = await contactService.sendFriendRequest(
-        userId as string,
-        message,
-      );
-      if (response) {
-        Alert.alert("Thành công", "Đã gửi lời mời kết bạn");
-        setCurrentStatus("YOU_SENT_REQUEST");
-      } else {
-        Alert.alert("Lỗi", "Gửi lời mời thất bại");
-      }
+      const res = await userService.getUserById(userId as string);
+      if (res) setUserData(res);
     } catch (error) {
-      Alert.alert("Lỗi", "Đã xảy ra lỗi khi gửi lời mời");
+      console.log("Tìm không thấy user");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleSendRequest = async () => {
+    if (!userId) return;
+    setActionLoading(true);
+    try {
+      const res = await contactService.sendFriendRequest(
+        userId as string,
+        message,
+      );
+      if (res) {
+        Alert.alert("Thành công", "Đã gửi lời mời kết bạn");
+        setCurrentStatus("I_SENT_REQUEST");
+      } else {
+        Alert.alert("Lỗi", "Gửi lời mời thất bại");
+      }
+    } catch (error) {
+      Alert.alert("Lỗi", "Có lỗi xảy ra");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleAcceptRequest = async () => {
-    if (!requestId) return; // Cần requestId để accept
-    setLoading(true);
+    if (!requestId) return;
+    setActionLoading(true);
     try {
       const res = await contactService.acceptRequest(requestId as string);
       if (res) {
@@ -104,245 +100,360 @@ export default function SendRequestScreen() {
     } catch (error) {
       Alert.alert("Lỗi", "Không thể chấp nhận lời mời");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
   const handleDeclineRequest = async () => {
     if (!requestId) return;
-    setLoading(true);
+    setActionLoading(true);
     try {
       const res = await contactService.declineRequest(requestId as string);
       if (res) {
         Alert.alert("Thành công", "Đã từ chối lời mời");
         setCurrentStatus("NOT_FRIEND");
       } else {
-        Alert.alert("Lỗi", "Từ chối lời mời thất bại");
+        Alert.alert("Lỗi", "Từ chối thất bại");
       }
     } catch (error) {
-      Alert.alert("Lỗi", "Không thể từ chối lời mời");
+      Alert.alert("Lỗi", "Cõ lỗi xảy ra");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
   const handleRevokeRequest = async () => {
-    setLoading(true);
+    if (!userId) return;
+    setActionLoading(true);
     try {
       const res = await contactService.revokeRequest(userId as string);
       if (res) {
         Alert.alert("Thành công", "Đã thu hồi lời mời");
         setCurrentStatus("NOT_FRIEND");
       } else {
-        Alert.alert("Lỗi", "Thu hồi lời mời thất bại");
+        Alert.alert("Lỗi", "Thu hồi thất bại");
       }
     } catch (error) {
-      Alert.alert("Lỗi", "Không thể thu hồi lời mời");
+      Alert.alert("Lỗi", "Có lỗi xảy ra");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
+  const handleUnfriend = async () => {
+    if (!userId) return;
+    Alert.alert("Xác nhận", "Bạn có chắc muốn xóa bạn?", [
+      { text: "Hủy", style: "cancel" },
+      {
+        text: "Xóa",
+        style: "destructive",
+        onPress: async () => {
+          setActionLoading(true);
+          try {
+            const res = await contactService.removeFriend(userId as string);
+            if (res) {
+              Alert.alert("Thành công", "Đã xóa bạn");
+              setCurrentStatus("NOT_FRIEND");
+            } else {
+              Alert.alert("Lỗi", "Xóa bạn thất bại");
+            }
+          } catch (error) {
+            Alert.alert("Lỗi", "Có lỗi xảy ra");
+          } finally {
+            setActionLoading(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  // Tính toán hiển thị an toàn
+  const displayFullName =
+    userData?.fullName || (fullName as string) || "Người dùng ẩn danh";
+  const displayEmail = userData?.email || "Chưa cập nhật";
+  const displayPhone =
+    userData?.phoneNumber || (phone as string) || "Chưa cập nhật";
+  const displayGender =
+    userData?.gender === 1
+      ? "Nam"
+      : userData?.gender === 2
+        ? "Nữ"
+        : "Chưa cập nhật";
+  const displayDob = userData?.dateOfBirth
+    ? new Date(userData.dateOfBirth).toLocaleDateString("vi-VN")
+    : "Chưa cập nhật";
+
+  const displayAvatar = userData?.avatar
+    ? { uri: userData.avatar }
+    : (avatarUrl as string)
+      ? { uri: avatarUrl as string }
+      : {
+          uri: `https://api.dicebear.com/7.x/initials/svg?seed=${displayFullName}`,
+        };
+
+  const displayCover = userData?.coverImage
+    ? { uri: userData.coverImage }
+    : {
+        uri: "https://images.unsplash.com/photo-1542224566-6e85f2e6772f?q=80&w=600",
+      };
+
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "white" }}
+      className="flex-1 bg-white"
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View style={{ flex: 1, paddingTop: insets.top }}>
-        {/* 1. Header */}
-        <View className="flex-row items-center px-4 py-3 bg-white">
-          <TouchableOpacity onPress={() => router.back()} className="mr-4">
-            <ArrowLeftIcon size={24} color="#1f2937" />
-          </TouchableOpacity>
-          <Text className="text-lg font-bold text-gray-900">
-            Thông tin tài khoản
-          </Text>
-        </View>
+      {/* Nút Back - Được đặt position absolute để nổi đè lên trên ảnh bìa */}
+      <TouchableOpacity
+        className="absolute z-10 w-10 h-10 rounded-full bg-black/20 items-center justify-center left-4"
+        style={{ top: insets.top + 10 }}
+        onPress={() => router.back()}
+      >
+        <ArrowLeftIcon size={22} color="#fff" />
+      </TouchableOpacity>
 
+      {loading ? (
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#0ea5e9" />
+        </View>
+      ) : (
         <ScrollView
-          className="flex-1 px-4"
+          className="flex-1 bg-white"
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 140, flexGrow: 1 }}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          bounces={false}
         >
-          {/* 2. Ảnh đại diện và Thông tin nổi bật */}
-          <View className="items-center mt-8 mb-8">
-            <Image
-              source={displayAvatar}
-              className="w-28 h-28 rounded-full bg-gray-200 border-4 border-white shadow-sm mb-4"
-            />
-            <Text className="text-2xl font-bold text-gray-900 mb-1">
+          {/* --- Phần 1: Bìa & Avatar --- */}
+          {/* Căn chỉnh lại khoảng trống padding-top bằng 0, height tổng để tràn */}
+          <View className="items-center bg-[#fff]">
+            {/* Ảnh bìa - cho cao thêm chút xíu để bù tai thỏ */}
+            <View
+              className="w-full relative"
+              style={{ height: 180 + (insets.top > 0 ? insets.top : 0) }}
+            >
+              <Image
+                source={displayCover}
+                className="w-full h-full bg-[#e5e7eb]"
+                resizeMode="cover"
+              />
+            </View>
+
+            {/* Avatar (Kéo đè lên ảnh bìa) */}
+            <View className="-mt-[50px] relative z-20">
+              <View className="w-[105px] h-[105px] rounded-full border-[4px] border-[#fafafa] bg-white overflow-hidden shadow-sm">
+                <Image source={displayAvatar} className="w-full h-full" />
+              </View>
+              {/* Chấm trạng thái Online */}
+              {userData?.isOnline && (
+                <View className="absolute bottom-1 right-2 w-5 h-5 rounded-full bg-[#22c55e] border-[3px] border-white" />
+              )}
+            </View>
+          </View>
+
+          {/* --- Phần 2: Tên & Tiểu sử --- */}
+          <View className="items-center mt-3 mb-6 bg-[#fff] pb-4">
+            <Text className="text-[22px] font-bold text-gray-900 mb-1">
               {displayFullName}
             </Text>
-            <Text className="text-[15px] text-gray-500 mb-1">
-              {displayPhone}
+            <Text className="text-[14px] text-gray-500">
+              {displayEmail !== "Chưa cập nhật"
+                ? displayEmail
+                : "Giới thiệu bản thân..."}
             </Text>
           </View>
 
-          {/* Action Section dựa trên currentStatus */}
-          {currentStatus === "ACCEPTED" && (
-            <View className="mt-4 px-4 items-center">
-              <View className="bg-green-50 py-3 rounded-xl shadow-sm border border-green-200 w-full items-center">
-                <Text className="text-green-700 font-bold text-base">
-                  Bạn bè
-                </Text>
-                <Text className="text-green-600 text-xs mt-0.5">
-                  Hai bạn đã là bạn bè
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Thông tin cơ bản (Demo hiển thị thêm thông tin người dùng) */}
-          <View className="mt-6 px-4">
-            <Text className="text-[13px] font-bold text-gray-500 uppercase tracking-wider mb-3 ml-1">
-              Thông tin cơ bản
-            </Text>
-            <View className="bg-[#f4f5f7] rounded-[24px] p-5 border border-gray-100">
-              <View className="flex-row items-start pb-4 border-b border-gray-200">
-                <Text className="text-gray-500 w-24 text-sm font-medium">
-                  Điện thoại
-                </Text>
-                <Text className="text-gray-900 font-medium text-[15px] flex-1">
-                  {displayPhone}
-                </Text>
-              </View>
-              <View className="flex-row items-start py-4 border-b border-gray-200">
-                <Text className="text-gray-500 w-24 text-sm font-medium">
-                  Giới tính
-                </Text>
-                <Text className="text-gray-900 font-medium text-[15px] flex-1">
-                  {displayGender}
-                </Text>
-              </View>
-              <View className="flex-row items-start py-4 border-b border-gray-200">
-                <Text className="text-gray-500 w-24 text-sm font-medium">
-                  Ngày sinh
-                </Text>
-                <Text className="text-gray-900 font-medium text-[15px] flex-1">
-                  {displayDob}
-                </Text>
-              </View>
-              <View className="flex-row items-start pt-4">
-                <Text className="text-gray-500 w-24 text-sm font-medium">
-                  Email
-                </Text>
-                <Text className="text-gray-900 font-medium text-[15px] flex-1">
-                  {displayEmail}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {currentStatus === "YOU_SENT_REQUEST" && (
-            <View className="mt-4 px-4 items-center">
-              <View className="bg-gray-50 p-4 rounded-xl shadow-sm border border-gray-200 w-full items-center mb-4">
-                <Text className="text-gray-700 font-bold text-lg">
-                  Đã gửi lời mời
-                </Text>
-                <Text className="text-gray-500 text-sm mt-1">
-                  Chờ người này xác nhận
-                </Text>
-              </View>
-              <TouchableOpacity
-                className="w-full bg-red-100 py-3.5 rounded-xl"
-                onPress={handleRevokeRequest}
-                disabled={loading}
+          {/* --- Phần 3: Chức năng dựa theo Status --- */}
+          <View className="px-5 mb-8">
+            {currentStatus === "ACCEPTED" && (
+              <View
+                className="flex-row justify-center mt-2"
+                style={{ gap: 24 }}
               >
-                {loading ? (
-                  <ActivityIndicator color="#ef4444" />
-                ) : (
-                  <Text className="text-center font-bold text-red-600">
+                <ActionButton
+                  icon={
+                    <ChatBubbleBottomCenterTextIcon size={22} color="#1f2937" />
+                  }
+                  label="NHẮN TIN"
+                />
+                <ActionButton
+                  icon={<PhoneIcon size={22} color="#1f2937" />}
+                  label="GỌI ĐIỆN"
+                />
+                <ActionButton
+                  icon={<VideoCameraIcon size={24} color="#1f2937" />}
+                  label="VIDEO"
+                />
+              </View>
+            )}
+
+            {currentStatus === "NOT_FRIEND" && (
+              <View className="items-center w-full">
+                <View className="w-full mb-4">
+                  <Text className="text-[13px] font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1">
+                    Lời nhắn kết bạn
+                  </Text>
+                  <TextInput
+                    value={message}
+                    onChangeText={setMessage}
+                    placeholder="Nhập lời nhắn..."
+                    className="w-full bg-[#f4f5f7] px-4 py-3.5 rounded-2xl text-[15px] text-gray-800"
+                    maxLength={150}
+                  />
+                </View>
+                <TouchableOpacity
+                  className="w-full bg-blue-500 rounded-full py-4 items-center justify-center flex-row space-x-2"
+                  onPress={handleSendRequest}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <>
+                      <UserPlusIcon size={20} color="#fff" />
+                      <Text className="text-white font-bold text-[15px]">
+                        Kết bạn
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {currentStatus === "I_SENT_REQUEST" && (
+              <View className="items-center w-full">
+                <View className="bg-gray-100 rounded-full py-3 w-full mb-3 items-center">
+                  <Text className="text-gray-600 font-medium">
+                    Đã gửi lời mời kết bạn
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  className="w-full bg-gray-200 rounded-full py-4 items-center justify-center"
+                  onPress={handleRevokeRequest}
+                  disabled={actionLoading}
+                >
+                  <Text className="text-gray-800 font-bold text-[15px]">
                     Thu hồi lời mời
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {currentStatus === "THEY_SENT_REQUEST" && (
+              <View className="items-center w-full">
+                <Text className="text-gray-800 text-[15px] mb-3 text-center px-4">
+                  <Text className="font-semibold">{displayFullName}</Text> muốn
+                  kết bạn với bạn
+                </Text>
+                {greetingMessage ? (
+                  <View className="bg-[#f4f5f7] px-4 py-4 rounded-xl mb-4 w-full items-center">
+                    <Text className="text-gray-700 text-[14px] italic text-center">
+                      "{greetingMessage}"
+                    </Text>
+                  </View>
+                ) : null}
+                <View className="flex-row w-full justify-between gap-x-3">
+                  <TouchableOpacity
+                    className="flex-1 bg-blue-500 rounded-full py-4 items-center justify-center flex-row space-x-2"
+                    onPress={handleAcceptRequest}
+                    disabled={actionLoading}
+                  >
+                    <CheckIcon size={20} color="#fff" />
+                    <Text className="text-white font-bold text-[15px] ml-1">
+                      Chấp nhận
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-1 bg-gray-200 rounded-full py-4 items-center justify-center flex-row space-x-2"
+                    onPress={handleDeclineRequest}
+                    disabled={actionLoading}
+                  >
+                    <XMarkIcon size={20} color="#1f2937" />
+                    <Text className="text-gray-800 font-bold text-[15px] ml-1">
+                      Từ chối
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* --- Phần 4: Khối Thông tin Cá nhân --- */}
+          <View className="px-5">
+            <View className="bg-[#f9fafb] p-6 rounded-3xl border border-gray-100">
+              <Text className="text-[12px] font-bold text-gray-500 tracking-widest mb-6">
+                THÔNG TIN CÁ NHÂN
+              </Text>
+
+              <InfoRow label="SỐ ĐIỆN THOẠI" value={displayPhone} />
+              <InfoRow label="GIỚI TÍNH" value={displayGender} />
+              <InfoRow label="NGÀY SINH" value={displayDob} />
+              <InfoRow label="EMAIL" value={displayEmail} isLast />
+            </View>
+          </View>
+
+          {/* --- Phần 5: Cụm Nút Xóa/Chặn (Chỉ hiển thị khi là bạn bè) --- */}
+          {currentStatus === "ACCEPTED" && (
+            <View className="px-5 mt-10 space-y-3 pb-8">
+              <TouchableOpacity className="w-full py-4 rounded-full border border-red-200 bg-white items-center justify-center mb-3">
+                <Text className="text-[13px] font-bold text-red-600 uppercase tracking-wide">
+                  Chặn người dùng
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="w-full py-4 rounded-full border border-red-200 bg-white items-center justify-center"
+                onPress={handleUnfriend}
+                disabled={actionLoading}
+              >
+                {actionLoading ? (
+                  <ActivityIndicator color="#dc2626" size="small" />
+                ) : (
+                  <Text className="text-[13px] font-bold text-red-600 uppercase tracking-wide">
+                    Xoá bạn
                   </Text>
                 )}
               </TouchableOpacity>
             </View>
           )}
-
-          {currentStatus === "THEY_SENT_REQUEST" && (
-            <View className="mt-4 px-4">
-              <View className="bg-blue-50 p-4 rounded-xl shadow-sm border border-blue-100 w-full items-center mb-4">
-                <Text className="text-blue-800 font-bold text-lg">
-                  Lời mời kết bạn
-                </Text>
-                <Text className="text-blue-600 text-sm mt-1">
-                  {fullName} muốn kết bạn với bạn
-                </Text>
-              </View>
-              <View className="flex-row space-x-3 w-full">
-                <TouchableOpacity
-                  className="flex-1 bg-black rounded-full py-4 items-center justify-center"
-                  onPress={handleAcceptRequest}
-                  disabled={loading}
-                >
-                  <Text className="text-white font-bold">Chấp nhận</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="flex-1 bg-gray-200 rounded-full py-4 items-center justify-center"
-                  onPress={handleDeclineRequest}
-                  disabled={loading}
-                >
-                  <Text className="text-gray-800 font-bold">Từ chối</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {currentStatus === "NOT_FRIEND" && (
-            <>
-              {/* 3. Khung nhập lời nhắn kết bạn */}
-              <View className="mb-6">
-                <Text className="text-[13px] font-bold text-gray-500 uppercase tracking-wider mb-3 ml-1">
-                  Lời nhắn kết bạn
-                </Text>
-                <View className="bg-[#f4f5f7] rounded-3xl p-4 border border-gray-100">
-                  <TextInput
-                    className="text-base text-gray-800 leading-6"
-                    multiline={true}
-                    numberOfLines={4}
-                    value={message}
-                    onChangeText={setMessage}
-                    placeholder="Nhập lời nhắn của bạn..."
-                    placeholderTextColor="#9ca3af"
-                    style={{ minHeight: 100, textAlignVertical: "top" }}
-                    maxLength={150}
-                  />
-                  {/* Bộ đếm ký tự */}
-                  <Text className="text-right text-xs text-gray-400 mt-2">
-                    {message.length}/150
-                  </Text>
-                </View>
-              </View>
-
-              {/* 4. Các nút hành động nằm dưới đáy */}
-              <View className="mt-auto flex-row items-center space-x-3 pt-6">
-                <TouchableOpacity
-                  className="flex-1 bg-[#f4f5f7] py-4 rounded-full items-center justify-center"
-                  onPress={() => router.back()}
-                  activeOpacity={0.7}
-                >
-                  <Text className="text-gray-900 text-base font-bold">Hủy</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="flex-1 bg-black py-4 rounded-full items-center justify-center shadow-sm"
-                  onPress={handleSendRequest}
-                  disabled={loading || !message.trim()}
-                  activeOpacity={0.8}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#ffffff" />
-                  ) : (
-                    <Text className="text-white text-base font-bold">
-                      Gửi lời mời
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </>
-          )}
         </ScrollView>
-      </View>
+      )}
     </KeyboardAvoidingView>
+  );
+}
+
+// --- Component Phụ: Nút Chức Năng Tròn ---
+function ActionButton({ icon, label }: { icon: any; label: string }) {
+  return (
+    <TouchableOpacity
+      className="items-center"
+      style={{ width: 64 }}
+      activeOpacity={0.7}
+    >
+      <View className="w-14 h-14 bg-white rounded-full items-center justify-center mb-2 border border-gray-100 shadow-sm">
+        {icon}
+      </View>
+      <Text className="text-[10px] text-gray-600 text-center font-bold tracking-wide uppercase leading-tight">
+        {label.replace("\\n", "\n")}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+// --- Component Phụ: Dòng hiển thị thông tin ---
+function InfoRow({
+  label,
+  value,
+  isLast = false,
+}: {
+  label: string;
+  value: string;
+  isLast?: boolean;
+}) {
+  return (
+    <View className={isLast ? "" : "mb-5"}>
+      <Text className="text-[11px] text-gray-500 font-medium mb-1 uppercase tracking-wide">
+        {label}
+      </Text>
+      <Text className="text-base text-gray-900 font-medium">{value}</Text>
+    </View>
   );
 }

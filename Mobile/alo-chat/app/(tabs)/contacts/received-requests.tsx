@@ -149,6 +149,7 @@ function RequestCard({
             avatarUrl: request.requesterAvatar,
             relationStatus: "THEY_SENT_REQUEST",
             requestId: request.id,
+            greetingMessage: request.greetingMessage || "",
           },
         })
       }
