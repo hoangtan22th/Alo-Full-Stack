@@ -1,12 +1,11 @@
+// src/pages/contacts/FriendListPage.tsx
 import { useEffect, useState, useMemo } from "react";
 import axiosClient from "../../config/axiosClient";
 import AddFriendModal from "../../components/ui/AddFriendModal";
 import {
   UserPlusIcon,
-  InformationCircleIcon,
   MagnifyingGlassIcon,
   ArrowsUpDownIcon,
-  AdjustmentsHorizontalIcon,
 } from "@heroicons/react/24/outline";
 import FriendProfileModal from "@/components/ui/FriendProfileModal";
 
@@ -19,18 +18,35 @@ export default function FriendListPage() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
-  const handleOpenProfile = (friend: any) => {
-    // Lấy ID đối phương tùy thuộc vào việc mình là người gửi hay người nhận
-    const idToOpen =
-      friend.targetId || friend.recipientId || friend.requesterId;
-    setSelectedUserId(idToOpen);
-    setProfileModalOpen(true);
-  };
-
   const fetchFriends = async () => {
     try {
-      const friendData: any = await axiosClient.get("/contacts/friends");
-      setFriends(Array.isArray(friendData) ? friendData : []);
+      setLoading(true);
+
+      // 1. Lấy thông tin cá nhân của Tấn để xác định ID làm mốc so sánh
+      const meRes: any = await axiosClient.get("/auth/me");
+      const userData = meRes?.data || meRes;
+      const myId = userData?.id || userData?._id;
+
+      // 2. Lấy danh sách bạn bè thô từ API
+      const res: any = await axiosClient.get("/contacts/friends");
+      const rawData = Array.isArray(res) ? res : res?.data || [];
+
+      // 3. Chuẩn hóa dữ liệu hiển thị:
+      // Luôn trích xuất thông tin của "đối phương" (người bạn) thay vì lấy mặc định requester
+      const formattedFriends = rawData.map((f: any) => {
+        // Nếu Tấn là người gửi (requesterId trùng với myId) thì thông tin bạn bè nằm ở recipient
+        // Nếu Tấn là người nhận thì thông tin bạn bè nằm ở requester
+        const isMeRequester = f.requesterId === myId;
+
+        return {
+          ...f,
+          displayId: isMeRequester ? f.recipientId : f.requesterId,
+          displayName: isMeRequester ? f.recipientName : f.requesterName,
+          displayAvatar: isMeRequester ? f.recipientAvatar : f.requesterAvatar,
+        };
+      });
+
+      setFriends(formattedFriends);
     } catch (err) {
       console.error("Lỗi lấy danh sách bạn bè:", err);
     } finally {
@@ -42,174 +58,146 @@ export default function FriendListPage() {
     fetchFriends();
   }, []);
 
-  const toggleSortOrder = () => {
-    setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+  const handleOpenProfile = (friend: any) => {
+    // Luôn sử dụng displayId đã chuẩn hóa để mở đúng profile bạn bè
+    setSelectedUserId(friend.displayId);
+    setProfileModalOpen(true);
   };
 
   const groupedFriends = useMemo(() => {
-    const filtered = friends.filter((f) => {
-      const name = f.requesterName || "Người dùng Alo";
-      return name.toLowerCase().includes(searchQuery.toLowerCase());
-    });
+    // Thực hiện lọc và sắp xếp dựa trên tên đã chuẩn hóa (displayName)
+    const filtered = friends.filter((f) =>
+      (f.displayName || "").toLowerCase().includes(searchQuery.toLowerCase()),
+    );
 
     const sorted = filtered.sort((a, b) => {
-      const nameA = (a.requesterName || "").toLowerCase();
-      const nameB = (b.requesterName || "").toLowerCase();
+      const nameA = (a.displayName || "").toLowerCase();
+      const nameB = (b.displayName || "").toLowerCase();
       return sortOrder === "asc"
         ? nameA.localeCompare(nameB)
         : nameB.localeCompare(nameA);
     });
 
-    const grouped = sorted.reduce((acc: any, friend: any) => {
-      const name = friend.requesterName || "Unknown";
-      const firstLetter = name.charAt(0).toUpperCase();
-      const groupKey = /[A-Z]/.test(firstLetter) ? firstLetter : "#";
-
-      if (!acc[groupKey]) {
-        acc[groupKey] = [];
-      }
-      acc[groupKey].push(friend);
+    return sorted.reduce((acc: any, friend: any) => {
+      const firstLetter = (friend.displayName || "#").charAt(0).toUpperCase();
+      const key = /[A-Z]/.test(firstLetter) ? firstLetter : "#";
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(friend);
       return acc;
     }, {});
-
-    return grouped;
   }, [friends, searchQuery, sortOrder]);
+
+  const groupKeys = Object.keys(groupedFriends).sort((a, b) =>
+    sortOrder === "asc" ? a.localeCompare(b) : b.localeCompare(a),
+  );
 
   if (loading)
     return (
-      <div className="p-8 text-center font-bold">
-        Đang tải danh sách bạn bè...
+      <div className="p-6 text-center text-sm font-bold">
+        Đang tải dữ liệu...
       </div>
     );
 
-  const groupKeys = Object.keys(groupedFriends).sort((a, b) => {
-    if (sortOrder === "asc") return a.localeCompare(b);
-    return b.localeCompare(a);
-  });
-
   return (
-    <div className="flex-1 h-screen bg-[#fafafa] p-4 md:p-8 overflow-y-auto text-black font-sans">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-black rounded-xl text-white">
-            <UserPlusIcon className="w-6 h-6" />
+    <div className="flex-1 h-screen p-5 lg:p-6 overflow-y-auto bg-[#fafafa] scrollbar-hide">
+      <div className="max-w-5xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-black rounded-xl text-white shadow-lg">
+              <UserPlusIcon className="w-5 h-5" />
+            </div>
+            <h1 className="text-xl font-black tracking-tight">
+              Danh sách bạn bè
+            </h1>
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight">
-            Danh sách bạn bè
-          </h1>
-        </div>
-        <div className="flex items-center gap-3">
           <button
             onClick={() => setShowAddFriend(true)}
-            className="flex items-center gap-2 bg-black text-white px-6 py-3 rounded-2xl font-bold hover:bg-gray-800 transition active:scale-95 shadow-lg"
+            className="bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-neutral-800 transition shadow-md"
           >
-            <span className="text-xl">+</span>
-            Thêm bạn
-          </button>
-
-          {showAddFriend && (
-            <AddFriendModal onClose={() => setShowAddFriend(false)} />
-          )}
-
-          <button className="p-3 bg-white border border-gray-200 rounded-2xl hover:bg-gray-50 transition shadow-sm">
-            <InformationCircleIcon className="w-6 h-6 text-gray-400" />
+            + Thêm bạn mới
           </button>
         </div>
-      </div>
 
-      <p className="text-gray-400 font-bold uppercase tracking-widest text-[11px] mb-6">
-        BẠN BÈ HIỆN TẠI ({friends.length})
-      </p>
-
-      <div className="flex flex-col sm:flex-row items-center gap-4 mb-10">
-        <div className="flex-1 w-full flex items-center gap-3 bg-white border border-gray-100 px-5 py-3.5 rounded-[20px] shadow-sm focus-within:ring-2 focus-within:ring-black transition-all">
-          <MagnifyingGlassIcon className="w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Tìm kiếm trong danh sách..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-transparent w-full outline-none text-[15px] font-medium"
-          />
-        </div>
-
-        <div className="flex gap-3 w-full sm:w-auto">
-          <button
-            onClick={toggleSortOrder}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white border border-gray-100 px-5 py-3.5 rounded-[20px] text-[14px] font-bold shadow-sm hover:bg-gray-50 transition"
-          >
-            Tên ({sortOrder === "asc" ? "A-Z" : "Z-A"})
-            <ArrowsUpDownIcon className="w-4 h-4 text-gray-400" />
-          </button>
-
-          <button className="bg-white border border-gray-100 p-3.5 rounded-[20px] shadow-sm hover:bg-gray-50 transition">
-            <AdjustmentsHorizontalIcon className="w-5 h-5 text-gray-500" />
-          </button>
-        </div>
-      </div>
-
-      <div className="space-y-10">
-        {groupKeys.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-[32px] border-2 border-dashed border-gray-100">
-            <p className="text-gray-400 font-medium italic">
-              MÀY CÔ ĐƠN ĐÉO CÓ AI LÀM BẠN À ? TRANG CỦA MÀY ĐÂU ?
-            </p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-8">
+          <div className="md:col-span-3 flex items-center gap-3 bg-white border border-gray-100 px-4 py-2.5 rounded-xl shadow-sm focus-within:ring-1 focus-within:ring-black">
+            <MagnifyingGlassIcon className="w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Tìm kiếm tên..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-transparent w-full outline-none text-[14px] font-medium"
+            />
           </div>
-        ) : (
-          groupKeys.map((letter) => (
-            <div key={letter}>
-              <h2 className="text-[13px] font-black text-gray-300 mb-6 px-2 tracking-tighter">
-                {letter} ————————
-              </h2>
+          <button
+            onClick={() =>
+              setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
+            }
+            className="bg-white border border-gray-100 px-4 py-2.5 rounded-xl text-sm font-bold flex justify-between items-center shadow-sm"
+          >
+            {sortOrder.toUpperCase()}{" "}
+            <ArrowsUpDownIcon className="w-3 h-3 text-gray-400" />
+          </button>
+        </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {groupedFriends[letter].map((friend: any) => (
-                  <div
-                    key={friend.id}
-                    onClick={() => handleOpenProfile(friend)}
-                    className="flex items-center gap-4 p-4 bg-white rounded-[24px] border border-transparent hover:border-gray-100 hover:shadow-md transition-all cursor-pointer group"
-                  >
-                    {/* FIX: Avatar nền đen và fallback ảnh mặc định */}
-                    <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-gray-50 shrink-0 shadow-inner bg-black">
-                      <img
-                        src={
-                          friend.requesterAvatar &&
-                          friend.requesterAvatar.trim() !== ""
-                            ? friend.requesterAvatar
-                            : "/avt-mac-dinh.jpg"
-                        }
-                        onError={(e) => {
-                          e.currentTarget.src = "/avt-mac-dinh.jpg";
-                        }}
-                        alt="avatar"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-extrabold text-[16px] text-gray-900 truncate group-hover:text-blue-600 transition-colors">
-                        {friend.requesterName || "Người dùng ẩn danh"}
-                      </h3>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <p className="text-[12px] text-gray-400 font-bold uppercase tracking-tight">
-                          Trực tuyến
-                        </p>
+        <div className="space-y-10">
+          {groupKeys.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-[24px] border-2 border-dashed border-gray-100">
+              <p className="text-gray-400 text-sm font-medium italic">
+                Danh sách bạn bè hiện tại trống.
+              </p>
+            </div>
+          ) : (
+            groupKeys.map((letter) => (
+              <div key={letter}>
+                <h2 className="text-[11px] font-black text-gray-300 mb-4 px-1 tracking-widest uppercase">
+                  {letter} ————————
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {groupedFriends[letter].map((friend: any) => (
+                    <div
+                      key={friend.id}
+                      onClick={() => handleOpenProfile(friend)}
+                      className="flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-transparent hover:border-black hover:shadow-lg transition-all cursor-pointer group"
+                    >
+                      <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-100 bg-black shrink-0">
+                        <img
+                          src={friend.displayAvatar || "/avt-mac-dinh.jpg"}
+                          onError={(e) =>
+                            (e.currentTarget.src = "/avt-mac-dinh.jpg")
+                          }
+                          className="w-full h-full object-cover"
+                          alt=""
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-[14px] text-gray-900 truncate">
+                          {friend.displayName}
+                        </h3>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                          <p className="text-[10px] text-gray-400 font-bold uppercase">
+                            Trực tuyến
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))
-        )}
+            ))
+          )}
+        </div>
       </div>
+      {showAddFriend && (
+        <AddFriendModal onClose={() => setShowAddFriend(false)} />
+      )}
       <FriendProfileModal
         isOpen={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}
         userId={selectedUserId}
         relationStatus="ACCEPTED"
-        onActionSuccess={fetchFriends} // Refresh danh sách khi có thay đổi (vd: hủy kết bạn)
+        onActionSuccess={fetchFriends}
       />
     </div>
   );
