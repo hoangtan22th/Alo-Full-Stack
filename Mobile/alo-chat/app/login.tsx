@@ -19,7 +19,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { Ionicons, AntDesign, FontAwesome } from "@expo/vector-icons";
 import * as Device from "expo-device";
 import api from "../services/api";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
+// import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -28,10 +28,10 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    GoogleSignin.configure({
-      webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
-      iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    });
+    // GoogleSignin.configure({
+    //   webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+    //   iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    // });
   }, []);
 
   const router = useRouter();
@@ -123,6 +123,8 @@ export default function LoginScreen() {
   };
 
   const handleGoogleLogin = async () => {
+    Alert.alert("Thông báo", "Tính năng Google Login đang được build APK. Anh em tạm thời dùng form Email/Mật khẩu để đăng nhập test giao diện nhé!");
+    /*
     try {
       setLoading(true);
       await GoogleSignin.hasPlayServices();
@@ -153,6 +155,7 @@ export default function LoginScreen() {
     } finally {
       setLoading(false);
     }
+    */
   };
 
   return (
