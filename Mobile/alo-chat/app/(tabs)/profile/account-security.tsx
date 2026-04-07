@@ -11,12 +11,10 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  RefreshControl,
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
   Keyboard,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   ArrowLeftIcon,
   ChevronRightIcon,
@@ -24,7 +22,6 @@ import {
   KeyIcon,
   LockClosedIcon,
   TrashIcon,
-  CheckIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import api from "../../../services/api";
@@ -33,25 +30,7 @@ export default function AccountSecurityScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [isAppLocked, setIsAppLocked] = useState(false);
-
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showGenderPicker, setShowGenderPicker] = useState(false);
-
-  // Biến tạm để lưu trữ ngày được cuộn tới (dành riêng cho iOS)
-  const [tempDate, setTempDate] = useState(new Date());
-
-  const [accountInfo, setAccountInfo] = useState({
-    fullName: "",
-    dateOfBirth: "",
-    gender: "1", // 1: Nam, 0: Nữ, 2: Khác
-    phoneNumber: "",
-    email: "",
-  });
-
-  const [refreshing, setRefreshing] = useState(false);
 
   // States Đổi Mật Khẩu
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
@@ -82,12 +61,36 @@ export default function AccountSecurityScreen() {
         text: "Đăng xuất", 
         style: "destructive",
         onPress: async () => {
+           // Đảm bảo không cho tự kick trên giao diện
+           const session = sessions.find(s => s.id === sessionId);
+           if (session?.isCurrent) return;
+
           try {
             await api.delete(`/auth/sessions/${sessionId}`);
             setSessions(prev => prev.filter((s) => s.id !== sessionId));
             Alert.alert("Thành công", "Đã buộc thiết bị đăng xuất");
           } catch(err) {
             Alert.alert("Lỗi", "Không thể đăng xuất. Vui lòng thử lại");
+          }
+        }
+      }
+    ]);
+  };
+
+  const handleRevokeOtherSessions = () => {
+    Alert.alert("Đăng xuất tất cả", "Bạn có chắc chắn muốn đăng xuất TẤT CẢ các thiết bị khác trừ thiết bị này?", [
+      { text: "Hủy", style: "cancel" },
+      { 
+        text: "Xác nhận", 
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await api.delete(`/auth/sessions/others`);
+            const currentSession = sessions.find(s => s.isCurrent);
+            setSessions(currentSession ? [currentSession] : []);
+            Alert.alert("Thành công", "Đã đăng xuất tất cả các thiết bị khác");
+          } catch(err) {
+            Alert.alert("Lỗi", "Không thể thực hiện đăng xuất tất cả. Vui lòng thử lại");
           }
         }
       }
@@ -103,9 +106,17 @@ export default function AccountSecurityScreen() {
       Alert.alert("Lỗi", "Mật khẩu xác nhận không khớp");
       return;
     }
+
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!passwordRegex.test(passwordForm.newPassword)) {
+      Alert.alert(
+        "Lỗi mật khẩu",
+        "Mật khẩu phải dài ít nhất 8 ký tự, bao gồm ít nhất một chữ Hoa, một chữ Thường và một chữ Số."
+      );
+      return;
+    }
     try {
       setChangingPass(true);
-      // Chỉ gửi oldPassword và newPassword lên Backend
       await api.post("/auth/change-password", {
         oldPassword: passwordForm.oldPassword,
         newPassword: passwordForm.newPassword,
@@ -121,119 +132,6 @@ export default function AccountSecurityScreen() {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchProfile();
-    }, []),
-  );
-
-  const fetchProfile = async () => {
-    try {
-      const res: any = await api.get("/auth/me");
-      const user = res;
-
-      const initialDate = user.dateOfBirth
-        ? new Date(user.dateOfBirth)
-        : new Date();
-      setTempDate(initialDate);
-
-      setAccountInfo({
-        fullName: user.fullName || "",
-        dateOfBirth: user.dateOfBirth || "",
-        gender: user.gender !== undefined ? String(user.gender) : "1",
-        phoneNumber: user.phoneNumber || "",
-        email: user.email || "",
-      });
-    } catch (err) {
-      console.log("Lỗi tải profile:", err);
-      Alert.alert("Lỗi", "Không thể lấy thông tin tài khoản.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchProfile();
-    setRefreshing(false);
-  }, []);
-
-  const handleUpdateProfile = async () => {
-    try {
-      setSaving(true);
-      const payload = {
-        fullName: accountInfo.fullName,
-        phoneNumber: accountInfo.phoneNumber,
-        gender: parseInt(accountInfo.gender),
-        dateOfBirth: accountInfo.dateOfBirth || null, // YYYY-MM-DD
-        email: accountInfo.email || null,
-      };
-
-      await api.put("/auth/me", payload);
-      Alert.alert("Thành công", "Đã cập nhật thông tin cá nhân.");
-    } catch (err) {
-      console.log("Lỗi cập nhật profile:", err);
-      Alert.alert("Lỗi", "Không thể cập nhật thông tin.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const onChangeDate = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === "android") {
-      setShowDatePicker(false);
-      if (selectedDate && event.type !== "dismissed") {
-        updateDateOfBirthString(selectedDate);
-      }
-    } else {
-      // Đối với iOS, khi cuộn lịch, chúng ta chỉ cập nhật biến tạm `tempDate`
-      if (selectedDate) {
-        setTempDate(selectedDate);
-      }
-    }
-  };
-
-  // Hàm tiện ích để chuyển Date thành chuỗi YYYY-MM-DD
-  const updateDateOfBirthString = (date: Date) => {
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, "0");
-    const dd = String(date.getDate()).padStart(2, "0");
-    setAccountInfo({ ...accountInfo, dateOfBirth: `${yyyy}-${mm}-${dd}` });
-  };
-
-  // Hàm xác nhận ngày đối với iOS
-  const confirmIOSDate = () => {
-    updateDateOfBirthString(tempDate);
-    setShowDatePicker(false);
-  };
-
-  const getGenderText = (val: string) => {
-    if (val === "1") return "Nam";
-    if (val === "0") return "Nữ";
-    if (val === "2") return "Khác";
-    return "";
-  };
-
-  const formatDateForDisplay = (dateString: string) => {
-    if (!dateString) return "";
-
-    // Tách chuỗi theo dấu "-"
-    const parts = dateString.split("-");
-    if (parts.length === 3) {
-      // parts[0] là Năm, parts[1] là Tháng, parts[2] là Ngày
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
-    return dateString;
-  };
-
-  if (loading) {
-    return (
-      <View className="flex-1 justify-center items-center bg-white">
-        <ActivityIndicator size="large" color="#000" />
-      </View>
-    );
-  }
-
   return (
     <View style={{ flex: 1, backgroundColor: "#fff", paddingTop: insets.top }}>
       {/* Header */}
@@ -246,177 +144,12 @@ export default function AccountSecurityScreen() {
             Tài khoản và bảo mật
           </Text>
         </View>
-
-        <TouchableOpacity onPress={handleUpdateProfile} disabled={saving}>
-          {saving ? (
-            <ActivityIndicator size="small" color="#111827" />
-          ) : (
-            <CheckIcon size={24} color="#111827" />
-          )}
-        </TouchableOpacity>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         className="flex-1 px-4 bg-[#fafafa]"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={["#000"]}
-            tintColor="#000"
-          />
-        }
       >
-        {/* Section 1: THÔNG TIN TÀI KHOẢN */}
-        <View className="mt-6 mb-6">
-          <Text className="text-[11px] font-bold text-gray-400 tracking-wider mb-4 px-1">
-            THÔNG TIN TÀI KHOẢN
-          </Text>
-
-          <InputField
-            label="HỌ VÀ TÊN"
-            value={accountInfo.fullName}
-            onChangeText={(text) =>
-              setAccountInfo({ ...accountInfo, fullName: text })
-            }
-          />
-          <InputField
-            label="NGÀY SINH"
-            value={formatDateForDisplay(accountInfo.dateOfBirth)}
-            onPress={() => {
-              // Cập nhật lại tempDate mỗi khi mở picker để tránh sai lệch
-              const currentSetDate = accountInfo.dateOfBirth
-                ? new Date(accountInfo.dateOfBirth)
-                : new Date();
-              setTempDate(currentSetDate);
-              setShowDatePicker(true);
-            }}
-            editable={false}
-          />
-          <InputField
-            label="GIỚI TÍNH"
-            value={getGenderText(accountInfo.gender)}
-            onPress={() => setShowGenderPicker(true)}
-            editable={false}
-          />
-          <InputField
-            label="SỐ ĐIỆN THOẠI"
-            value={accountInfo.phoneNumber}
-            keyboardType="phone-pad"
-            onChangeText={(text) =>
-              setAccountInfo({ ...accountInfo, phoneNumber: text })
-            }
-          />
-          <InputField
-            label="EMAIL"
-            value={accountInfo.email}
-            keyboardType="email-address"
-            onChangeText={(text) =>
-              setAccountInfo({ ...accountInfo, email: text })
-            }
-          />
-        </View>
-
-        {/* --- Phần Modal cho iOS DatePicker --- */}
-        {Platform.OS === "ios" ? (
-          <Modal
-            visible={showDatePicker}
-            transparent={true}
-            animationType="fade"
-            onRequestClose={() => setShowDatePicker(false)}
-          >
-            <TouchableOpacity
-              className="flex-1 justify-end bg-black/50"
-              activeOpacity={1}
-              onPress={() => setShowDatePicker(false)}
-            >
-              <View className="bg-white rounded-t-3xl overflow-hidden pb-8">
-                {/* Thanh công cụ xác nhận/hủy của Modal iOS */}
-                <View className="flex-row justify-between items-center px-4 py-4 border-b border-gray-100">
-                  <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                    <Text className="text-red-500 text-base font-medium">
-                      Hủy
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={confirmIOSDate}>
-                    <Text className="text-blue-600 text-base font-bold">
-                      Xác nhận
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View className="flex items-center">
-                  <DateTimePicker
-                    testID="dateTimePicker"
-                    value={tempDate}
-                    mode="date"
-                    display="spinner" // Kiểu cuộn đặc trưng của iOS
-                    onChange={onChangeDate}
-                    maximumDate={new Date()}
-                    textColor="#000" // Đảm bảo text rõ ràng ở chế độ Light/Dark mode
-                  />
-                </View>
-              </View>
-            </TouchableOpacity>
-          </Modal>
-        ) : (
-          /* --- Phần DatePicker cho Android (Hiển thị ngay lập tức) --- */
-          showDatePicker && (
-            <DateTimePicker
-              testID="dateTimePicker"
-              value={
-                accountInfo.dateOfBirth
-                  ? new Date(accountInfo.dateOfBirth)
-                  : new Date()
-              }
-              mode="date"
-              display="default"
-              onChange={onChangeDate}
-              maximumDate={new Date()}
-            />
-          )
-        )}
-
-        {/* Render Modal chọn Giới tính */}
-        <Modal
-          visible={showGenderPicker}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setShowGenderPicker(false)}
-        >
-          <TouchableOpacity
-            className="flex-1 justify-end bg-black/50"
-            activeOpacity={1}
-            onPress={() => setShowGenderPicker(false)}
-          >
-            <View className="bg-white rounded-t-3xl p-6 pb-10">
-              <Text className="text-lg font-bold text-center mb-4">
-                Chọn giới tính
-              </Text>
-              {[
-                { label: "Nam", value: "1" },
-                { label: "Nữ", value: "0" },
-                { label: "Khác", value: "2" },
-              ].map((item) => (
-                <TouchableOpacity
-                  key={item.value}
-                  className="py-4 border-b border-gray-100"
-                  onPress={() => {
-                    setAccountInfo({ ...accountInfo, gender: item.value });
-                    setShowGenderPicker(false);
-                  }}
-                >
-                  <Text
-                    className={`text-center text-base ${accountInfo.gender === item.value ? "font-bold text-blue-600" : "text-gray-800"}`}
-                  >
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </TouchableOpacity>
-        </Modal>
 
         {/* Modal Quản Lý Thiết Bị */}
         <Modal
@@ -429,7 +162,7 @@ export default function AccountSecurityScreen() {
             <View className="flex-1 justify-end bg-black/50">
               <View className="bg-white rounded-t-3xl p-6 pb-20 h-3/4">
                 <View className="flex-row justify-between items-center mb-6 border-b border-gray-100 pb-4">
-                  <Text className="text-xl font-bold text-gray-900">Tính năng Quản lý máy</Text>
+                  <Text className="text-xl font-bold text-gray-900">Tính năng Quản lý thiết bị</Text>
                   <TouchableOpacity onPress={() => setShowDevicesModal(false)} className="p-2">
                     <Text className="text-red-500 font-bold">Thoát</Text>
                   </TouchableOpacity>
@@ -447,21 +180,37 @@ export default function AccountSecurityScreen() {
                       return (
                         <View key={index} className="bg-gray-50 rounded-2xl p-4 mb-4 border border-gray-200 flex-row items-center justify-between">
                           <View className="flex-1">
-                            <Text className="font-bold text-base text-gray-900 mb-1">{item.deviceId}</Text>
+                            <Text className="font-bold text-base text-gray-900 mb-1">
+                              {item.deviceId}
+                              {item.isCurrent && (
+                                <Text className="text-blue-600 font-bold text-xs ml-2"> (Thiết bị này)</Text>
+                              )}
+                            </Text>
                             <Text className="text-xs text-gray-500 mb-1">Thời gian: {loginDate}</Text>
                             <Text className="text-xs text-gray-400">IP: {item.ipAddress}</Text>
                           </View>
-                          <TouchableOpacity 
-                            onPress={() => handleRevokeSession(item.id)}
-                            className="bg-red-50 p-3 rounded-full ml-2"
-                          >
-                            <TrashIcon size={20} color="#dc2626" />
-                          </TouchableOpacity>
+                          {!item.isCurrent && (
+                            <TouchableOpacity 
+                              onPress={() => handleRevokeSession(item.id)}
+                              className="bg-red-50 p-3 rounded-full ml-2"
+                            >
+                              <TrashIcon size={20} color="#dc2626" />
+                            </TouchableOpacity>
+                          )}
                         </View>
                       )
                     })}
                     {sessions.length === 0 && (
                        <Text className="text-center text-gray-500 mt-10">Không tìm thấy phiên đăng nhập nào.</Text>
+                    )}
+
+                    {sessions.length > 1 && (
+                      <TouchableOpacity 
+                        onPress={handleRevokeOtherSessions}
+                        className="bg-red-500 py-3 rounded-full mt-4 flex-row justify-center items-center"
+                      >
+                        <Text className="text-white font-bold text-base">Đăng xuất tất cả thiết bị khác</Text>
+                      </TouchableOpacity>
                     )}
                   </ScrollView>
                 )}
@@ -547,9 +296,9 @@ export default function AccountSecurityScreen() {
         </Modal>
 
         {/* Section 2: BẢO MẬT */}
-        <View className="mb-6">
+        <View className="mt-6 mb-6">
           <Text className="text-[11px] font-bold text-gray-400 tracking-wider mb-4 px-1">
-            BẢO MẬT
+            MỞ KHÓA BẰNG VÂN TAY/FACE ID
           </Text>
 
           <View className="bg-white p-4 rounded-2xl flex-row items-center justify-between border-[1px] border-gray-200">
@@ -613,57 +362,8 @@ export default function AccountSecurityScreen() {
   );
 }
 
-// Component phụ cho Input Form
-function InputField({
-  label,
-  value,
-  onChangeText,
-  editable = true,
-  keyboardType = "default",
-  onPress,
-}: {
-  label: string;
-  value: string;
-  onChangeText?: (text: string) => void;
-  editable?: boolean;
-  keyboardType?: any;
-  onPress?: () => void;
-}) {
-  return (
-    <View className="mb-4">
-      <Text className="text-[10px] font-bold text-gray-400 tracking-wider mb-2 px-2">
-        {label}
-      </Text>
-      <TouchableOpacity activeOpacity={onPress ? 0.7 : 1} onPress={onPress}>
-        <View
-          className={`bg-white px-4 py-4 rounded-2xl border-[1px] border-gray-200 ${!editable && !onPress ? "opacity-50" : ""}`}
-        >
-          <TextInput
-            value={value}
-            onChangeText={onChangeText}
-            editable={editable && !onPress}
-            pointerEvents={onPress ? "none" : "auto"}
-            keyboardType={keyboardType}
-            className="text-base text-gray-900 font-medium"
-          />
-        </View>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
 // Component phụ cho Menu Item có mũi tên
-function MenuItem({
-  icon,
-  title,
-  showBorder = false,
-  onPress,
-}: {
-  icon: any;
-  title: string;
-  showBorder?: boolean;
-  onPress?: () => void;
-}) {
+function MenuItem({ icon, title, showBorder = false, onPress }: any) {
   return (
     <TouchableOpacity
       onPress={onPress}

@@ -22,10 +22,11 @@ public class TokenService {
 
     private final StringRedisTemplate redisTemplate;
 
-    public String generateAccessToken(User user) {
+    public String generateAccessToken(User user, String sessionId) {
         return Jwts.builder()
                 .setSubject(user.getId())
                 .claim("email", user.getEmail())
+                .claim("sessionId", sessionId)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + 900000)) // 15 mins
                 .signWith(Keys.hmacShaKeyFor(secret.getBytes()), SignatureAlgorithm.HS256)
