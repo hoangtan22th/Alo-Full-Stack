@@ -38,9 +38,12 @@ public class AuthService {
     private static final long LOCK_TIME_DURATION = 15; // 15 Phút
     
     @Transactional
-    public void sendRegistrationOtp(String email) {
+    public void sendRegistrationOtp(String email, String phoneNumber) {
         if (userRepository.findByEmail(email).isPresent()) {
             throw new RuntimeException("Email đã được đăng ký");
+        }
+        if (userRepository.findByPhoneNumber(phoneNumber).isPresent()) {
+            throw new RuntimeException("Số điện thoại đã được đăng ký");
         }
 
         java.security.SecureRandom random = new java.security.SecureRandom();
@@ -69,6 +72,10 @@ public class AuthService {
 
         // Xóa Key khi đăng ký đúng để tránh bị dùng lại mã
         stringRedisTemplate.delete(redisKey);
+
+        if (userRepository.findByPhoneNumber(request.phoneNumber()).isPresent()) {
+            throw new RuntimeException("Số điện thoại đã được đăng ký");
+        }
 
         User user = User.builder()
                 .id(UUID.randomUUID().toString())

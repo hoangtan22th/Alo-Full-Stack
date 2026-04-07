@@ -103,7 +103,10 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      await api.post("/auth/send-otp", { email: form.email });
+      await api.post("/auth/send-otp", { 
+        email: form.email.trim(),
+        phoneNumber: form.phoneNumber.trim() 
+      });
       Alert.alert("Thành công", "Mã OTP 6 số đã được gửi tới email của bạn!");
       setStep(2); // Chuyển sang màn hình nhập OTP
     } catch (error: any) {
@@ -135,11 +138,11 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await api.post("/auth/register", {
-        fullName: form.fullName,
-        email: form.email,
+        fullName: form.fullName.trim(),
+        email: form.email.trim(),
         password: form.password,
-        phoneNumber: form.phoneNumber,
-        otp: otp,
+        phoneNumber: form.phoneNumber.trim(),
+        otp: otp.trim(),
       });
 
       Alert.alert("Thành công", "Chào mừng! Tài khoản đã được tạo thành công.", [

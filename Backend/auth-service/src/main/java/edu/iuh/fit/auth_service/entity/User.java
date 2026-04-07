@@ -18,6 +18,7 @@ public class User {
 
     private String password;
     private String fullName;
+    @Column(unique = true)
     private String phoneNumber;
     private String avatar;
     private String coverImage;

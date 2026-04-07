@@ -58,6 +58,16 @@ export default function LoginScreen() {
       Alert.alert("Lỗi", "Vui lòng nhập OTP và mật khẩu mới");
       return;
     }
+
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!passwordRegex.test(forgotNewPassword)) {
+      Alert.alert(
+        "Lỗi mật khẩu",
+        "Mật khẩu phải dài ít nhất 8 ký tự, bao gồm ít nhất một chữ Hoa, một chữ Thường và một chữ Số."
+      );
+      return;
+    }
+
     setForgotLoading(true);
     try {
       await api.post("/auth/forgot-password/reset", {

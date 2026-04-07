@@ -79,6 +79,30 @@ export default function PersonalInfoScreen() {
   }, []);
 
   const handleUpdateProfile = async () => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneRegex = /^0[35789]\d{8}$/;
+
+    if (!accountInfo.fullName.trim()) {
+      Alert.alert("Lỗi", "Họ và tên không được để trống");
+      return;
+    }
+    if (accountInfo.fullName.trim().length < 1 || accountInfo.fullName.trim().length > 50) {
+      Alert.alert("Lỗi", "Họ và tên nên từ 1 đến 50 ký tự");
+      return;
+    }
+    if (!accountInfo.phoneNumber) {
+      Alert.alert("Lỗi", "Số điện thoại không được để trống");
+      return;
+    }
+    if (!phoneRegex.test(accountInfo.phoneNumber)) {
+      Alert.alert("Lỗi", "Số điện thoại không hợp lệ (10 số, bắt đầu bằng 0)");
+      return;
+    }
+    if (accountInfo.email && !emailRegex.test(accountInfo.email)) {
+      Alert.alert("Lỗi", "Email không đúng định dạng");
+      return;
+    }
+
     try {
       setSaving(true);
       const payload = {

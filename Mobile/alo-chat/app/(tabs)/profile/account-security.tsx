@@ -106,6 +106,15 @@ export default function AccountSecurityScreen() {
       Alert.alert("Lỗi", "Mật khẩu xác nhận không khớp");
       return;
     }
+
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!passwordRegex.test(passwordForm.newPassword)) {
+      Alert.alert(
+        "Lỗi mật khẩu",
+        "Mật khẩu phải dài ít nhất 8 ký tự, bao gồm ít nhất một chữ Hoa, một chữ Thường và một chữ Số."
+      );
+      return;
+    }
     try {
       setChangingPass(true);
       await api.post("/auth/change-password", {

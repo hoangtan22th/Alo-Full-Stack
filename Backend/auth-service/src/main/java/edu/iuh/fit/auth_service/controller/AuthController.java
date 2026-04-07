@@ -2,6 +2,7 @@ package edu.iuh.fit.auth_service.controller;
 
 import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import edu.iuh.fit.auth_service.dto.request.*;
+import edu.iuh.fit.auth_service.dto.request.RegistrationOtpRequest;
 import edu.iuh.fit.auth_service.dto.response.UserResponse;
 import edu.iuh.fit.auth_service.dto.response.UserSessionResponse;
 import edu.iuh.fit.auth_service.service.AuthService;
@@ -25,8 +26,8 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/send-otp")
-    public ResponseEntity<ApiResponse<String>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
-        authService.sendRegistrationOtp(request.email());
+    public ResponseEntity<ApiResponse<String>> sendOtp(@Valid @RequestBody RegistrationOtpRequest request) {
+        authService.sendRegistrationOtp(request.email(), request.phoneNumber());
         return ResponseEntity.ok(ApiResponse.success("Mã xác nhận đã được gửi đến email của bạn"));
     }
 
@@ -60,19 +61,19 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password/send-otp")
-    public ResponseEntity<ApiResponse<String>> sendForgotPasswordOtp(@RequestBody SendOtpRequest request) {
+    public ResponseEntity<ApiResponse<String>> sendForgotPasswordOtp(@Valid @RequestBody SendOtpRequest request) {
         authService.sendForgotPasswordOtp(request.email());
         return ResponseEntity.ok(ApiResponse.success("Mã khôi phục đã được gửi đến email của bạn"));
     }
 
     @PostMapping("/forgot-password/reset")
-    public ResponseEntity<ApiResponse<String>> resetPassword(@RequestBody ResetPasswordRequest request) {
+    public ResponseEntity<ApiResponse<String>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         authService.resetPassword(request);
         return ResponseEntity.ok(ApiResponse.success("Mật khẩu đã được đặt lại thành công"));
     }
 
     @PostMapping("/change-password")
-    public ResponseEntity<ApiResponse<String>> changePassword(@RequestHeader("X-User-Id") String userId, @RequestBody ChangePasswordRequest request) {
+    public ResponseEntity<ApiResponse<String>> changePassword(@RequestHeader("X-User-Id") String userId, @Valid @RequestBody ChangePasswordRequest request) {
         authService.changePassword(userId, request);
         return ResponseEntity.ok(ApiResponse.success("Đổi mật khẩu thành công"));
     }
@@ -129,7 +130,7 @@ public class AuthController {
     @PutMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
             @RequestHeader("X-User-Id") String userId,
-            @RequestBody UpdateProfileRequest request) {
+            @Valid @RequestBody UpdateProfileRequest request) {
         return ResponseEntity
                 .ok(ApiResponse.success(UserResponse.fromEntity(authService.updateProfile(userId, request))));
     }
