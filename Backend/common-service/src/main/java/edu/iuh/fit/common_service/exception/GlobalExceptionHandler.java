@@ -55,6 +55,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneralException(Exception ex) {
+        ex.printStackTrace(); // In ra log màn hình console để dễ debug
         return ResponseEntity.status(500)
                 .body(ApiResponse.error(500, "Lỗi máy chủ nội bộ: " + ex.getMessage()));
     }
