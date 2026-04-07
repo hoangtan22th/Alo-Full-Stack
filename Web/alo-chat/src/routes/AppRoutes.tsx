@@ -6,6 +6,7 @@ import FriendRequestPage from "@/pages/contacts/FriendRequestPage";
 import FriendListPage from "@/pages/contacts/FriendListPage";
 import ProtectedRoute from "./ProtectedRoute";
 import PublicRoute from "./PublicRoute"; // Import hàng rào mới
+import GroupListPage from "@/pages/contacts/GroupListPage";
 
 export default function AppRoutes() {
   return (
@@ -24,6 +25,7 @@ export default function AppRoutes() {
           <Route index element={<Navigate to="friends" replace />} />
           <Route path="friends" element={<FriendListPage />} />
           <Route path="requests" element={<FriendRequestPage />} />
+          <Route path="groups" element={<GroupListPage />} />
         </Route>
       </Route>
 

@@ -1,27 +1,21 @@
+// src/components/ui/FriendProfileModal.tsx
 import {
   XMarkIcon,
+  UserPlusIcon,
+  ArrowPathIcon,
+  CheckIcon,
+  TrashIcon,
   ChatBubbleLeftIcon,
   PhoneIcon,
   UserGroupIcon,
   ShareIcon,
   NoSymbolIcon,
   ExclamationTriangleIcon,
-  TrashIcon,
-  CheckIcon,
-  ArrowPathIcon,
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import { useState, useEffect } from "react";
 import axiosClient from "../../config/axiosClient";
-import { toast } from "sonner"; //
-
-interface FriendProfileModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  userId: string | null;
-  relationStatus?: string;
-  onActionSuccess?: () => void;
-}
+import { toast } from "sonner";
 
 export default function FriendProfileModal({
   isOpen,
@@ -29,16 +23,14 @@ export default function FriendProfileModal({
   userId,
   relationStatus = "NOT_FRIEND",
   onActionSuccess,
-}: FriendProfileModalProps) {
+}: any) {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen && userId) {
-      const handleEsc = (e: KeyboardEvent) => {
-        if (e.key === "Escape") onClose();
-      };
+      const handleEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
       window.addEventListener("keydown", handleEsc);
       document.body.style.overflow = "hidden";
       fetchUserData();
@@ -55,84 +47,84 @@ export default function FriendProfileModal({
       const res: any = await axiosClient.get(`/users/${userId}`);
       setUserData(res.data || res);
     } catch (error) {
-      toast.error("Không thể tải thông tin");
+      toast.error("Lỗi tải thông tin cá nhân");
     } finally {
       setLoading(false);
     }
   };
 
-  // Logic kết bạn
+  // Logic: Kết bạn
   const handleAddFriend = async () => {
     setActionLoading(true);
     try {
       await axiosClient.post("/contacts/request", { recipientId: userId });
-      if (onActionSuccess) onActionSuccess();
       toast.success("Đã gửi lời mời kết bạn!");
+      if (onActionSuccess) onActionSuccess();
       onClose();
     } catch (err) {
-      toast.error("Gửi lời mời thất bại");
+      toast.error("Lỗi khi gửi lời mời");
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Logic thu hồi
-  const handleRevokeRequest = async () => {
-    if (!window.confirm("Ông chắc chắn muốn thu hồi lời mời?")) return;
+  // Logic: Thu hồi lời mời
+  const handleRevoke = async () => {
     setActionLoading(true);
     try {
       await axiosClient.delete(`/contacts/request/revoke/${userId}`);
+      toast.success("Đã thu hồi lời mời");
       if (onActionSuccess) onActionSuccess();
-      toast.success("Đã thu hồi lời mời!");
       onClose();
     } catch (err) {
-      toast.error("Thu hồi thất bại");
+      toast.error("Không thể thu hồi lời mời");
     } finally {
       setActionLoading(false);
     }
   };
 
-  // FIX: Logic XÓA BẠN THẬT
-  const handleRemoveFriend = async () => {
-    if (
-      !window.confirm(
-        `Ông có chắc muốn xóa ${userData?.fullName || "người này"} khỏi danh sách bạn bè không?`,
-      )
-    )
-      return;
-
+  // Thực thi xóa thật (gọi API)
+  const executeRemoveFriend = async () => {
     setActionLoading(true);
     try {
-      // Gọi API xóa dựa trên userId
       await axiosClient.delete(`/contacts/friend/${userId}`);
-
-      toast.success("Đã xóa bạn bè thành công");
-
-      // Quan trọng: Gọi callback để FriendListPage.tsx load lại danh sách mới
+      toast.success("Đã xóa khỏi danh sách bạn bè");
       if (onActionSuccess) onActionSuccess();
-
       onClose();
     } catch (err) {
-      toast.error("Xóa bạn bè thất bại, kiểm tra lại API nhé!");
-      console.error(err);
+      toast.error("Lỗi khi xóa bạn bè");
     } finally {
       setActionLoading(false);
     }
+  };
+
+  // Gọi Toast Action của Sonner thay vì window.confirm
+  const handleRemoveFriend = () => {
+    toast("Xác nhận hủy kết bạn", {
+      description: `Bạn có chắc muốn xóa ${userData?.fullName || "người này"}?`,
+      action: {
+        label: "Xác nhận xóa",
+        onClick: () => executeRemoveFriend(),
+      },
+      cancel: {
+        label: "Đóng",
+        onClick: () => {},
+      },
+    });
   };
 
   if (!isOpen) return null;
 
-  const InfoRow = ({ label, value }: { label: string; value: string }) => (
-    <div className="flex py-3.5 border-b border-gray-50 last:border-0 text-[14px]">
-      <span className="w-28 text-gray-400 font-medium">{label}</span>
-      <span className="flex-1 text-gray-900 font-semibold">{value}</span>
+  const InfoRow = ({ label, value }: any) => (
+    <div className="flex py-2.5 border-b border-gray-50 last:border-0 text-[13px]">
+      <span className="w-24 text-gray-400 font-medium">{label}</span>
+      <span className="flex-1 text-gray-900 font-bold">{value}</span>
     </div>
   );
 
   const ActionItem = ({
     icon: Icon,
     label,
-    subLabel,
     color = "text-gray-800",
     onClick,
     disabled,
@@ -140,106 +132,112 @@ export default function FriendProfileModal({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`w-full flex items-center justify-between py-4 px-2 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 group ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+      className={`w-full flex items-center justify-between py-3 px-1 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 ${disabled ? "opacity-50" : ""}`}
     >
-      <div className="flex items-center gap-4">
-        <Icon className={`w-5 h-5 ${color} opacity-80`} />
-        <div className="flex flex-col text-left">
-          <span className={`text-[15px] font-bold ${color}`}>{label}</span>
-          {subLabel && (
-            <span className="text-[12px] text-gray-400 font-medium">
-              {subLabel}
-            </span>
-          )}
-        </div>
+      <div className="flex items-center gap-3">
+        <Icon className={`w-4 h-4 ${color}`} />
+        <span className={`text-[13px] font-bold ${color}`}>{label}</span>
       </div>
-      <ChevronRightIcon className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-colors" />
+      <ChevronRightIcon className="w-3 h-3 text-gray-300" />
     </button>
   );
 
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full max-w-[400px] h-[92vh] flex flex-col rounded-[28px] shadow-2xl overflow-hidden relative animate-in slide-in-from-bottom-10 duration-300"
+        className="bg-white w-full max-w-sm h-auto max-h-[85vh] flex flex-col rounded-[24px] shadow-2xl overflow-hidden relative animate-in slide-in-from-bottom-10"
       >
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
-          <h2 className="text-[17px] font-black text-gray-900">
-            Thông tin tài khoản
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
+          <h2 className="text-[14px] font-black text-gray-900 uppercase tracking-tight">
+            Hồ sơ người dùng
           </h2>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded-full text-gray-500"
+            className="p-1 hover:bg-gray-100 rounded-full text-gray-400"
           >
-            <XMarkIcon className="w-6 h-6 stroke-2" />
+            <XMarkIcon className="w-5 h-5 stroke-2" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto scrollbar-hide">
-          <div className="relative h-44 bg-black">
+        <div className="flex-1 overflow-y-auto scrollbar-hide pb-6">
+          <div className="relative h-32 bg-black">
             <img
               src={userData?.coverImage || "/black.jpg"}
               className="w-full h-full object-cover opacity-80"
-              alt="cover"
+              alt=""
             />
-            <div className="absolute -bottom-10 left-6">
-              <div className="w-24 h-24 rounded-full border-4 border-white overflow-hidden bg-black shadow-lg">
+            <div className="absolute -bottom-8 left-5">
+              <div className="w-20 h-20 rounded-full border-4 border-white overflow-hidden bg-black shadow-lg">
                 <img
                   src={userData?.avatar || "/avt-mac-dinh.jpg"}
                   onError={(e) => (e.currentTarget.src = "/avt-mac-dinh.jpg")}
                   className="w-full h-full object-cover"
-                  alt="avatar"
+                  alt=""
                 />
               </div>
             </div>
           </div>
 
-          <div className="mt-12 px-6">
-            <h1 className="text-[22px] font-black text-gray-900 tracking-tight">
-              {userData?.fullName || "..."}
+          <div className="mt-10 px-5">
+            <h1 className="text-[17px] font-black text-gray-900">
+              {userData?.fullName || "Đang tải..."}
             </h1>
 
-            <div className="flex gap-3 mt-6">
-              <button className="flex-1 bg-gray-100 text-gray-900 py-3 rounded-xl font-bold text-sm hover:bg-gray-200 transition active:scale-95">
-                Gọi điện
-              </button>
-              <button className="flex-1 bg-black text-white py-3 rounded-xl font-bold text-sm hover:bg-gray-800 transition active:scale-95 shadow-lg">
-                Nhắn tin
-              </button>
+            {/* Khu vực nút bấm chính */}
+            <div className="mt-4 space-y-2">
+              {relationStatus === "ACCEPTED" ? (
+                <div className="flex gap-2">
+                  <button className="flex-1 bg-gray-100 text-gray-900 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-200 transition">
+                    Gọi điện
+                  </button>
+                  <button className="flex-1 bg-black text-white py-2.5 rounded-xl font-bold text-xs hover:bg-neutral-800 transition">
+                    Nhắn tin
+                  </button>
+                </div>
+              ) : relationStatus === "YOU_SENT_REQUEST" ? (
+                <button
+                  onClick={handleRevoke}
+                  disabled={actionLoading}
+                  className="w-full bg-red-50 text-red-600 py-2.5 rounded-xl font-bold text-xs border border-red-100 flex justify-center items-center gap-2"
+                >
+                  <ArrowPathIcon
+                    className={`w-4 h-4 ${actionLoading ? "animate-spin" : ""}`}
+                  />{" "}
+                  Thu hồi lời mời
+                </button>
+              ) : relationStatus === "THEY_SENT_REQUEST" ? (
+                <div className="flex flex-col gap-2">
+                  <p className="text-[11px] text-center font-bold text-blue-600 uppercase mb-1">
+                    Người này đã gửi lời mời cho bạn
+                  </p>
+                  <div className="flex gap-2">
+                    <button className="flex-1 bg-black text-white py-2 rounded-xl font-bold text-xs">
+                      Chấp nhận
+                    </button>
+                    <button className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl font-bold text-xs">
+                      Từ chối
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={handleAddFriend}
+                  disabled={actionLoading}
+                  className="w-full bg-black text-white py-2.5 rounded-xl font-bold text-xs hover:bg-neutral-800 transition shadow-md flex justify-center items-center gap-2"
+                >
+                  <UserPlusIcon className="w-4 h-4" /> Kết bạn ngay
+                </button>
+              )}
             </div>
 
-            {/* Hiển thị trạng thái kết bạn */}
-            {relationStatus !== "ACCEPTED" && (
-              <div className="mt-4">
-                {relationStatus === "NOT_FRIEND" ? (
-                  <button
-                    onClick={handleAddFriend}
-                    disabled={actionLoading}
-                    className="w-full border-2 border-black text-black py-3 rounded-xl font-bold text-sm hover:bg-black hover:text-white transition"
-                  >
-                    {actionLoading ? "Đang gửi..." : "Kết bạn ngay"}
-                  </button>
-                ) : (
-                  relationStatus === "YOU_SENT_REQUEST" && (
-                    <button
-                      onClick={handleRevokeRequest}
-                      disabled={actionLoading}
-                      className="w-full bg-red-50 text-red-600 py-3 rounded-xl font-bold text-sm border border-red-100"
-                    >
-                      Thu hồi lời mời
-                    </button>
-                  )
-                )}
-              </div>
-            )}
+            <div className="h-[1px] bg-gray-50 my-6" />
 
-            <div className="h-[1px] bg-gray-100 my-8" />
-
-            <div className="space-y-1">
-              <h3 className="text-[13px] font-black text-gray-900 uppercase tracking-widest mb-4">
+            <div className="space-y-0.5">
+              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">
                 Thông tin cá nhân
               </h3>
               <InfoRow
@@ -253,26 +251,18 @@ export default function FriendProfileModal({
               />
             </div>
 
-            <div className="h-[1px] bg-gray-100 my-8" />
+            <div className="h-[1px] bg-gray-50 my-6" />
 
-            <div className="pb-10">
-              <ActionItem
-                icon={UserGroupIcon}
-                label="Nhóm chung"
-                subLabel="17 nhóm chung"
-              />
+            <div className="space-y-0.5">
+              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">
+                Tùy chọn bạn bè
+              </h3>
+              <ActionItem icon={UserGroupIcon} label="Nhóm chung" />
               <ActionItem icon={ShareIcon} label="Chia sẻ danh thiếp" />
-              <ActionItem
-                icon={NoSymbolIcon}
-                label="Chặn tin nhắn và cuộc gọi"
-              />
-              <ActionItem
-                icon={ExclamationTriangleIcon}
-                label="Báo xấu"
-                color="text-gray-900"
-              />
+              <ActionItem icon={NoSymbolIcon} label="Chặn người này" />
+              <ActionItem icon={ExclamationTriangleIcon} label="Báo xấu" />
 
-              {/* NÚT XÓA BẠN BÈ ĐÃ CÓ LOGIC */}
+              {/* Nút Xóa bạn bè được đẩy xuống cuối cùng */}
               {relationStatus === "ACCEPTED" && (
                 <ActionItem
                   icon={TrashIcon}
