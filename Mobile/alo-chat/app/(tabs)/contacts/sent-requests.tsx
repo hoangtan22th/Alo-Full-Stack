@@ -103,6 +103,26 @@ export default function SentRequestsScreen() {
               key={request.id}
               request={request}
               onRevoke={() => handleRevoke(request.recipientId)}
+              onPress={() => {
+                const displayName =
+                  request.recipientName ||
+                  request.requesterName ||
+                  "Người dùng ẩn danh";
+                const displayAvatar =
+                  request.recipientAvatar || request.requesterAvatar || "";
+                router.push({
+                  pathname: "/(tabs)/contacts/send-request",
+                  params: {
+                    userId: request.recipientId,
+                    fullName: displayName,
+                    phone: "Ẩn",
+                    avatarUrl: displayAvatar,
+                    relationStatus: "I_SENT_REQUEST",
+                    requestId: request.id,
+                    greetingMessage: request.greetingMessage || "",
+                  },
+                });
+              }}
             />
           ))}
         </ScrollView>
@@ -115,33 +135,44 @@ export default function SentRequestsScreen() {
 function RequestItem({
   request,
   onRevoke,
+  onPress,
 }: {
   request: FriendshipResponseDTO;
   onRevoke: () => void;
+  onPress: () => void;
 }) {
+  const displayAvatar =
+    request.recipientAvatar || request.requesterAvatar || "";
+  const displayName =
+    request.recipientName || request.requesterName || "Người dùng ẩn danh";
+
   return (
     <View className="flex-row items-center justify-between px-4 py-4">
       {/* Cụm Avatar và Info */}
-      <View className="flex-row items-center flex-1 pr-4">
+      <TouchableOpacity
+        className="flex-row items-center flex-1 pr-4"
+        activeOpacity={0.7}
+        onPress={onPress}
+      >
         <Image
           source={
-            request.recipientAvatar
-              ? { uri: request.recipientAvatar }
+            displayAvatar
+              ? { uri: displayAvatar }
               : {
-                  uri: `https://api.dicebear.com/7.x/initials/svg?seed=${request.recipientName || "Unknown"}`,
+                  uri: `https://api.dicebear.com/7.x/initials/svg?seed=${displayName}`,
                 }
           }
           className="w-14 h-14 rounded-full bg-gray-200"
         />
         <View className="ml-4 flex-1 justify-center">
           <Text className="text-[17px] font-semibold text-gray-900 mb-0.5">
-            {request.recipientName || "Người dùng ẩn danh"}
+            {displayName}
           </Text>
           <Text className="text-[13px] text-gray-500" numberOfLines={1}>
             {request.greetingMessage || "Từ số điện thoại"}
           </Text>
         </View>
-      </View>
+      </TouchableOpacity>
 
       {/* Nút Thu hồi */}
       <TouchableOpacity
