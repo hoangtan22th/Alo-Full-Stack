@@ -20,8 +20,6 @@ export default function FriendListPage() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const handleOpenProfile = (friend: any) => {
-    // SỬA LỖI 3: Chờ ông thêm targetId ở Backend thì nó sẽ lấy chuẩn.
-    // Tạm thời fallback để code không gãy.
     const idToOpen = friend.targetId || friend.recipientId;
     setSelectedUserId(idToOpen);
     setProfileModalOpen(true);
@@ -29,9 +27,8 @@ export default function FriendListPage() {
 
   const fetchFriends = async () => {
     try {
-      const res: any = await axiosClient.get("/contacts/friends");
-      // SỬA LỖI 2: Rút trích data an toàn xuyên qua các lớp ApiResponse
-      const friendData = res?.data?.data || res?.data || res || [];
+      // CẬP NHẬT: Không cần lột vỏ dư thừa nữa, nhận thẳng mảng
+      const friendData: any = await axiosClient.get("/contacts/friends");
       setFriends(Array.isArray(friendData) ? friendData : []);
     } catch (err) {
       console.error("Lỗi lấy danh sách bạn bè:", err);
@@ -91,7 +88,6 @@ export default function FriendListPage() {
 
   return (
     <div className="flex-1 h-screen bg-[#fafafa] p-4 md:p-8 overflow-y-auto text-black font-sans">
-      {/* HEADER (Giữ nguyên) */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-black rounded-xl text-white">
@@ -124,7 +120,6 @@ export default function FriendListPage() {
         BẠN BÈ HIỆN TẠI ({friends.length})
       </p>
 
-      {/* SEARCH & SORT (Giữ nguyên) */}
       <div className="flex flex-col sm:flex-row items-center gap-4 mb-10">
         <div className="flex-1 w-full flex items-center gap-3 bg-white border border-gray-100 px-5 py-3.5 rounded-[20px] shadow-sm focus-within:ring-2 focus-within:ring-black transition-all">
           <MagnifyingGlassIcon className="w-5 h-5 text-gray-400" />
@@ -152,7 +147,6 @@ export default function FriendListPage() {
         </div>
       </div>
 
-      {/* LIST BẠN BÈ */}
       <div className="space-y-10">
         {groupKeys.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-[32px] border-2 border-dashed border-gray-100">
@@ -171,7 +165,7 @@ export default function FriendListPage() {
                 {groupedFriends[letter].map((friend: any) => (
                   <div
                     key={friend.id}
-                    onClick={() => handleOpenProfile(friend)} // SỬA LỖI 1: Bọc onClick ở thẻ ngoài cùng này
+                    onClick={() => handleOpenProfile(friend)}
                     className="flex items-center gap-4 p-4 bg-white rounded-[24px] border border-transparent hover:border-gray-100 hover:shadow-md transition-all cursor-pointer group"
                   >
                     <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-gray-50 shrink-0 shadow-inner">
@@ -210,6 +204,5 @@ export default function FriendListPage() {
         relationStatus="ACCEPTED"
       />
     </div>
-  
   );
 }
