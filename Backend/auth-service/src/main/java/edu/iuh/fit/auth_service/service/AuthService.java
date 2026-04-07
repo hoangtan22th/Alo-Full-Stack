@@ -84,7 +84,7 @@ public class AuthService {
 
     // Trong AuthService.java
 
-    public String login(LoginRequest request, HttpServletResponse response) {
+    public java.util.Map<String, String> login(LoginRequest request, HttpServletResponse response) {
         // request.email() ở đây có thể là email hoặc số điện thoại
         User user = userRepository.findByEmailOrPhoneNumber(request.email(), request.email())
                 .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
@@ -140,7 +140,8 @@ public class AuthService {
         // 3. Set Cookie
         cookieUtil.createHttpOnlyCookie(response, "refreshToken", refreshToken, 604800);
 
-        return accessToken;
+        // Trả về cả 2 token (refreshToken cho Mobile lưu vào AsyncStorage)
+        return java.util.Map.of("accessToken", accessToken, "refreshToken", refreshToken);
     }
 
     // 1. API: Lấy Profile (Dựa trên userId từ JWT)
@@ -173,6 +174,32 @@ public class AuthService {
             throw new ForbiddenException("Bạn không có quyền!");
         }
         sessionRepository.delete(session);
+    }
+
+    /**
+     * Dùng Refresh Token để cấp lại Access Token mới.
+     * Kiểm tra Refresh Token còn hợp lệ và session còn tồn tại trong DB.
+     */
+    public String refreshAccessToken(String refreshToken) {
+        // 1. Giải mã Refresh Token để lấy userId và tokenId
+        String userId;
+        String tokenId;
+        try {
+            userId = tokenService.getUserIdFromToken(refreshToken);
+            tokenId = tokenService.getTokenIdFromJWT(refreshToken);
+        } catch (Exception e) {
+            throw new UnauthorizedException("Refresh Token không hợp lệ hoặc đã hết hạn");
+        }
+
+        // 2. Kiểm tra session trong DB (đảm bảo chưa bị logout từ xa)
+        sessionRepository.findByRefreshTokenId(tokenId)
+                .orElseThrow(() -> new UnauthorizedException("Phiên đăng nhập đã bị thu hồi"));
+
+        // 3. Lấy User và cấp Access Token mới
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
+
+        return tokenService.generateAccessToken(user);
     }
 
     public String getTokenIdFromToken(String token) {
