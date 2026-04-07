@@ -8,7 +8,8 @@ import java.util.List;
 
 public interface FriendshipService {
     FriendshipResponseDTO sendFriendRequest(FriendRequestDTO dto);
-    List<FriendshipResponseDTO> getPendingRequests(String userId); // Xem lời mời
+    List<FriendshipResponseDTO> getPendingRequests(String userId); // Xem lời mời (đã nhận)
+    List<FriendshipResponseDTO> getSentRequests(String userId); // Xem lời mời (đã gửi)
     List<FriendshipResponseDTO> getFriendsList(String userId);     // Xem danh sách bạn
     FriendshipResponseDTO acceptRequest(String friendshipId, String userId); // Đồng ý
     void declineRequest(String friendshipId, String userId);

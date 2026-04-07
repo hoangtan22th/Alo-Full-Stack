@@ -1,6 +1,8 @@
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   Text,
@@ -13,49 +15,50 @@ import {
   MagnifyingGlassIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-// --- Dữ liệu Giả lập (Mock Data) ---
-const SENT_REQUESTS = [
-  {
-    id: "1",
-    name: "Minh Anh",
-    subtitle: "Bạn cùng nhóm • 31/03",
-    avatar:
-      "https://api.dicebear.com/7.x/notionists/svg?seed=MinhAnh&backgroundColor=f3f4f6",
-  },
-  {
-    id: "2",
-    name: "Hoàng Nam",
-    subtitle: "Từ số điện thoại • 30/03",
-    avatar:
-      "https://api.dicebear.com/7.x/notionists/svg?seed=Nam&backgroundColor=e5e7eb",
-  },
-  {
-    id: "3",
-    name: "Linh Chi",
-    subtitle: "Gợi ý kết bạn • 28/03",
-    avatar:
-      "https://api.dicebear.com/7.x/notionists/svg?seed=Chi&backgroundColor=fecaca",
-  },
-  {
-    id: "4",
-    name: "Quốc Bảo",
-    subtitle: "Bạn của bạn • 25/03",
-    avatar:
-      "https://api.dicebear.com/7.x/notionists/svg?seed=Bao&backgroundColor=bfdbfe",
-  },
-  {
-    id: "5",
-    name: "Thanh Trúc",
-    subtitle: "Từ số điện thoại • 24/03",
-    avatar:
-      "https://api.dicebear.com/7.x/notionists/svg?seed=Truc&backgroundColor=bbf7d0",
-  },
-];
+import {
+  contactService,
+  FriendshipResponseDTO,
+} from "../../../services/contactService";
 
 export default function SentRequestsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
+  const [requests, setRequests] = useState<FriendshipResponseDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchRequests();
+  }, []);
+
+  const fetchRequests = async () => {
+    setLoading(true);
+    try {
+      const data = await contactService.getSentRequests();
+      setRequests(data || []);
+    } catch (error) {
+      Alert.alert("Lỗi", "Đã xảy ra lỗi khi tải danh sách lời mời");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRevoke = async (recipientId: string) => {
+    try {
+      // Dùng hàm revoke request trong contactService
+      const success = await contactService.revokeRequest(recipientId);
+      if (success) {
+        Alert.alert("Thành công", "Đã thu hồi lời mời kết bạn");
+        setRequests((prev) =>
+          prev.filter((req) => req.recipientId !== recipientId),
+        );
+      } else {
+        Alert.alert("Lỗi", "Thu hồi thất bại");
+      }
+    } catch (error) {
+      Alert.alert("Lỗi", "Đã xảy ra lỗi");
+    }
+  };
 
   return (
     <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
@@ -64,7 +67,7 @@ export default function SentRequestsScreen() {
         <TouchableOpacity onPress={() => router.back()} className="mr-4">
           <ArrowLeftIcon size={24} color="#1f2937" />
         </TouchableOpacity>
-        <Text className="text-xl font-bold text-gray-900">Sent Requests</Text>
+        <Text className="text-xl font-bold text-gray-900">Lời mời đã gửi</Text>
       </View>
 
       {/* 2. Thanh tìm kiếm */}
@@ -80,35 +83,62 @@ export default function SentRequestsScreen() {
       </View>
 
       {/* 3. Danh sách lời mời đã gửi */}
-      <ScrollView
-        className="flex-1"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }} // Đệm đáy để không bị lẹm TabBar
-      >
-        {SENT_REQUESTS.map((request) => (
-          <RequestItem key={request.id} request={request} />
-        ))}
-      </ScrollView>
+      {loading ? (
+        <View className="flex-1 justify-center items-center">
+          <ActivityIndicator size="large" color="#000" />
+          <Text className="mt-2 text-gray-500">Đang tải lời mời...</Text>
+        </View>
+      ) : requests.length === 0 ? (
+        <View className="flex-1 justify-center items-center">
+          <Text className="text-gray-500 text-lg">Chưa gửi lời mời nào</Text>
+        </View>
+      ) : (
+        <ScrollView
+          className="flex-1"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 100 }} // Đệm đáy để không bị lẹm TabBar
+        >
+          {requests.map((request) => (
+            <RequestItem
+              key={request.id}
+              request={request}
+              onRevoke={() => handleRevoke(request.recipientId)}
+            />
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
 
 // --- Component phụ cho từng dòng Lời mời ---
-function RequestItem({ request }: { request: any }) {
+function RequestItem({
+  request,
+  onRevoke,
+}: {
+  request: FriendshipResponseDTO;
+  onRevoke: () => void;
+}) {
   return (
     <View className="flex-row items-center justify-between px-4 py-4">
       {/* Cụm Avatar và Info */}
       <View className="flex-row items-center flex-1 pr-4">
         <Image
-          source={{ uri: request.avatar }}
+          source={
+            request.requesterAvatar
+              ? { uri: request.requesterAvatar }
+              : {
+                  uri: `https://api.dicebear.com/7.x/initials/svg?seed=${request.requesterName}`,
+                }
+          }
           className="w-14 h-14 rounded-full bg-gray-200"
         />
         <View className="ml-4 flex-1 justify-center">
           <Text className="text-[17px] font-semibold text-gray-900 mb-0.5">
-            {request.name}
+            {request.requesterName}
           </Text>
           <Text className="text-[13px] text-gray-500" numberOfLines={1}>
-            {request.subtitle}
+            {request.greetingMessage || "Từ số điện thoại"}
           </Text>
         </View>
       </View>
@@ -117,6 +147,7 @@ function RequestItem({ request }: { request: any }) {
       <TouchableOpacity
         className="bg-[#f4f5f7] px-5 py-2.5 rounded-full items-center justify-center"
         activeOpacity={0.7}
+        onPress={onRevoke}
       >
         <Text className="text-gray-800 font-medium text-[14.5px]">Thu hồi</Text>
       </TouchableOpacity>

@@ -57,13 +57,24 @@ export const contactService = {
     }
   },
 
-  // Danh sách lời mời chờ xác nhận
+  // Danh sách lời mời chờ xác nhận (đã nhận)
   getPendingRequests: async (): Promise<FriendshipResponseDTO[]> => {
     try {
       const data = await api.get<any, any>(`/contacts/pending`);
       return data || [];
     } catch (error) {
-      console.error("Lỗi khi tải danh sách lời mời:", error);
+      console.error("Lỗi khi tải danh sách lời mời nhận:", error);
+      return [];
+    }
+  },
+
+  // Danh sách lời mời đã gửi
+  getSentRequests: async (): Promise<FriendshipResponseDTO[]> => {
+    try {
+      const data = await api.get<any, any>(`/contacts/sent`);
+      return data || [];
+    } catch (error) {
+      console.error("Lỗi khi tải danh sách lời mời đã gửi:", error);
       return [];
     }
   },
