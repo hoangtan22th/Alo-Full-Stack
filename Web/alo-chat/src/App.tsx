@@ -4,10 +4,13 @@ import LoginPage from '@/pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import FriendRequestPage from '@/pages/contacts/FriendRequestPage';
 import FriendListPage from '@/pages/contacts/FriendListPage';
+import { Toaster } from 'sonner';
 
 function App() {
   return (
     <BrowserRouter>
+    {/* 2. Đặt Toaster ở đây để nó luôn lắng nghe mọi nơi */}
+      <Toaster position="top-right" richColors closeButton />
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />

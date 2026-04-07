@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserIcon, PhoneIcon, EnvelopeIcon, LockClosedIcon, SparklesIcon, KeyIcon } from '@heroicons/react/24/outline';
 import axiosClient from "../../config/axiosClient";
+import { toast } from 'sonner';
 
 const RegisterPage = () => {
     const [formData, setFormData] = useState({
@@ -32,7 +33,10 @@ const RegisterPage = () => {
         try {
             await axiosClient.post('/auth/send-otp', { email: formData.email });
             setOtpSent(true);
-            alert("Mã xác nhận đã được gửi đến email của bạn!");
+            toast.success("Mã xác nhận đã được gửi!", {
+                description: `Vui lòng kiểm tra hộp thư ${formData.email}`,
+                duration: 7000, // Hiển thị trong 7 giây
+            });
         } catch (err: any) {
             setError(err.response?.data?.message || 'Lỗi khi gửi OTP');
         } finally {
@@ -62,8 +66,9 @@ const RegisterPage = () => {
                 password: formData.password,
                 otp: formData.otp 
             });
-
-            alert("Đăng ký thành công! Hãy đăng nhập.");
+            toast.success("Đăng ký thành công!", {
+                description: "Hãy đăng nhập",
+            });
             navigate('/login');
         } catch (err: any) {
             setError(err.response?.data?.message || 'Đăng ký thất bại');
