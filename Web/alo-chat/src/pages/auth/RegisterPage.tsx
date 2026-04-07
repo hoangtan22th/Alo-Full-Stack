@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserIcon, PhoneIcon, EnvelopeIcon, LockClosedIcon, SparklesIcon } from '@heroicons/react/24/outline';
+import axiosClient from "../../config/axiosClient";
 
 const RegisterPage = () => {
     const [formData, setFormData] = useState({
@@ -27,25 +28,16 @@ const RegisterPage = () => {
         }
 
         try {
-            const response = await fetch('http://localhost:8888/api-gateway/auth-service/auth/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    fullName: formData.fullName,
-                    email: formData.email,
-                    password: formData.password,
-                }),
+            await axiosClient.post('/auth/register', {
+                fullName: formData.fullName,
+                email: formData.email,
+                password: formData.password,
             });
 
-            if (response.ok) {
-                alert("Đăng ký thành công! Hãy đăng nhập.");
-                navigate('/login');
-            } else {
-                const data = await response.json();
-                setError(data.message || 'Đăng ký thất bại');
-            }
-        } catch (err) {
-            setError('Không thể kết nối đến server');
+            alert("Đăng ký thành công! Hãy đăng nhập.");
+            navigate('/login');
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Đăng ký thất bại');
         }
     };
 

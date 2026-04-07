@@ -28,8 +28,8 @@ export default function MainProfileScreen() {
 
   const fetchProfile = async () => {
     try {
-      const res = await api.get("/auth/me");
-      setUser(res.data);
+      const res: any = await api.get("/auth/me");
+      setUser(res);
     } catch (err) {
       console.log("Lỗi tải profile:", err);
     }
@@ -118,6 +118,11 @@ export default function MainProfileScreen() {
           </TouchableOpacity>
 
           {/* Menu Items */}
+          <MenuOption
+            icon={<Ionicons name="qr-code-outline" size={22} color="#4b5563" />}
+            title="Quét mã QR đăng nhập Web"
+            onPress={() => router.push("/profile/scan-qr")}
+          />
           <MenuOption
             icon={
               <Ionicons

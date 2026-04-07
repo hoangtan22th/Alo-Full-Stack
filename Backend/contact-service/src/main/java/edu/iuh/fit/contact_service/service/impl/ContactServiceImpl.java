@@ -1,6 +1,7 @@
 package edu.iuh.fit.contact_service.service.impl;
 
 import edu.iuh.fit.common_service.dto.response.ApiResponse;
+import edu.iuh.fit.common_service.exception.AppException;
 import edu.iuh.fit.common_service.exception.DuplicateResourceException;
 import edu.iuh.fit.common_service.exception.ForbiddenException;
 import edu.iuh.fit.common_service.exception.ResourceNotFoundException;
@@ -14,10 +15,13 @@ import edu.iuh.fit.contact_service.enums.FriendshipStatus;
 import edu.iuh.fit.contact_service.repository.FriendshipRepository;
 import edu.iuh.fit.contact_service.service.ContactService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,75 +33,137 @@ public class ContactServiceImpl implements ContactService {
     @Override
     public SearchFriendResponseDTO searchUserByPhone(String phone, String currentUserId) {
         ApiResponse<UserDTO> userResponse = userClient.getUserByPhone(phone);
-
         if (userResponse == null || userResponse.getData() == null) {
-            throw new RuntimeException("Không tìm thấy người dùng với số điện thoại này!");
+            throw new ResourceNotFoundException("Không tìm thấy người dùng!");
         }
 
         UserDTO foundUser = userResponse.getData();
         String foundUserId = foundUser.getId();
 
         if (foundUserId.equals(currentUserId)) {
-            throw new RuntimeException("Bạn không thể tìm kiếm chính mình để kết bạn!");
+            throw new AppException(400, "Bạn không thể tự tìm chính mình!");
         }
 
-        Optional<Friendship> friendship = friendshipRepository.findByUserIds(currentUserId, foundUserId);
+        // Kiểm tra quan hệ 2 chiều từ Database
+        Optional<Friendship> friendshipOpt = friendshipRepository.findByUserIds(currentUserId, foundUserId);
 
         String status = "NOT_FRIEND";
-        if (friendship.isPresent()) {
-            status = friendship.get().getStatus().toString();
+        if (friendshipOpt.isPresent()) {
+            Friendship f = friendshipOpt.get();
+            if (f.getStatus() == FriendshipStatus.ACCEPTED) {
+                status = "ACCEPTED";
+            } else if (f.getRequesterId().equals(currentUserId)) {
+                // Trường hợp: Tấn là người gửi
+                status = "YOU_SENT_REQUEST";
+            } else {
+                // Trường hợp: Người kia gửi cho Tấn
+                status = "THEY_SENT_REQUEST";
+            }
         }
 
         return SearchFriendResponseDTO.builder()
                 .userId(foundUserId)
                 .fullName(foundUser.getFullName())
-                .avatarUrl(foundUser.getAvatarUrl())
-                .phone(foundUser.getPhone())
+                .avatarUrl(foundUser.getAvatar())
+                .phone(foundUser.getPhoneNumber())
                 .relationStatus(status)
                 .build();
     }
 
     @Override
+    @Transactional
     public FriendshipResponseDTO sendFriendRequest(FriendRequestDTO dto) {
-        // Kiểm tra xem đã kết bạn hoặc đang chờ hay chưa (cả 2 chiều)
+        // 1. Kiểm tra tồn tại quan hệ (check 2 chiều)
         Optional<Friendship> existing = friendshipRepository.findByUserIds(dto.getRequesterId(), dto.getRecipientId());
         if (existing.isPresent()) {
-            throw new DuplicateResourceException("Quan hệ hoặc lời mời kết bạn giữa hai người đã tồn tại!");
+            throw new DuplicateResourceException("Lời mời hoặc quan hệ bạn bè đã tồn tại!");
         }
 
-        Friendship friendship = new Friendship();
-        friendship.setRequesterId(dto.getRequesterId());
-        friendship.setRecipientId(dto.getRecipientId());
-        friendship.setGreetingMessage(dto.getGreetingMessage());
-        friendship.setStatus(FriendshipStatus.PENDING);
+        // 2. Lưu lời mời mới
+        Friendship friendship = Friendship.builder()
 
-        Friendship savedFriendship = friendshipRepository.save(friendship);
-        return mapToDTO(savedFriendship);
+                .requesterId(dto.getRequesterId())
+                .recipientId(dto.getRecipientId())
+                .greetingMessage(dto.getGreetingMessage())
+                .status(FriendshipStatus.PENDING)
+                .build();
+
+        Friendship saved = friendshipRepository.save(friendship);
+
+        // 3. Làm giàu dữ liệu để trả về UI ngay lập tức
+        List<UserDTO> users = userClient.getUsersByIds(List.of(dto.getRequesterId(), dto.getRecipientId())).getData();
+        FriendshipResponseDTO responseDTO = mapToDTO(saved);
+
+        users.stream()
+                .filter(u -> u.getId().equals(dto.getRequesterId()))
+                .findFirst()
+                .ifPresent(u -> {
+                    responseDTO.setRequesterName(u.getFullName());
+                    responseDTO.setRequesterAvatar(u.getAvatar());
+                });
+
+        return responseDTO;
     }
 
     @Override
     public List<FriendshipResponseDTO> getPendingRequests(String userId) {
-        return friendshipRepository.findByRecipientIdAndStatus(userId, FriendshipStatus.PENDING)
-                .stream()
-                .map(this::mapToDTO)
+        List<Friendship> requests = friendshipRepository.findByRecipientIdAndStatus(userId, FriendshipStatus.PENDING);
+        if (requests.isEmpty()) return List.of();
+
+        List<String> requesterIds = requests.stream()
+                .map(Friendship::getRequesterId)
                 .collect(Collectors.toList());
+
+        List<UserDTO> userInfos = userClient.getUsersByIds(requesterIds).getData();
+
+        return requests.stream().map(req -> {
+            FriendshipResponseDTO dto = mapToDTO(req);
+            userInfos.stream()
+                    .filter(u -> u.getId().equals(req.getRequesterId()))
+                    .findFirst()
+                    .ifPresent(u -> {
+                        dto.setRequesterName(u.getFullName());
+                        dto.setRequesterAvatar(u.getAvatar()); // Fix: Đồng bộ getAvatar()
+                    });
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     @Override
     public List<FriendshipResponseDTO> getFriendsList(String userId) {
-        return friendshipRepository.findFriendsByUserId(userId)
-                .stream()
-                .map(this::mapToDTO)
+        List<Friendship> friends = friendshipRepository.findFriendsByUserId(userId);
+        if (friends.isEmpty()) return List.of();
+
+        // Lấy ID của đối phương
+        List<String> friendIds = friends.stream()
+                .map(f -> f.getRequesterId().equals(userId) ? f.getRecipientId() : f.getRequesterId())
                 .collect(Collectors.toList());
+
+        List<UserDTO> userInfos = userClient.getUsersByIds(friendIds).getData();
+
+        return friends.stream().map(f -> {
+            FriendshipResponseDTO dto = mapToDTO(f);
+            String targetId = f.getRequesterId().equals(userId) ? f.getRecipientId() : f.getRequesterId();
+
+            userInfos.stream()
+                    .filter(u -> u.getId().equals(targetId))
+                    .findFirst()
+                    .ifPresent(u -> {
+                        dto.setRequesterName(u.getFullName());
+                        dto.setRequesterAvatar(u.getAvatar()); // Fix: Đồng bộ getAvatar()
+                    });
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     @Override
+    @Transactional
     public FriendshipResponseDTO acceptRequest(String friendshipId, String userId) {
         Friendship friendship = friendshipRepository.findById(friendshipId)
-                .orElseThrow(() -> new ResourceNotFoundException("Lời mời kết bạn", "id", friendshipId));
+                .orElseThrow(() -> new ResourceNotFoundException("Lời mời", "id", friendshipId));
 
         if (!friendship.getRecipientId().equals(userId)) {
-            throw new ForbiddenException("Bạn không có quyền đồng ý lời mời này!");
+            throw new ForbiddenException("Bạn không có quyền chấp nhận lời mời này!");
         }
 
         friendship.setStatus(FriendshipStatus.ACCEPTED);
@@ -105,17 +171,17 @@ public class ContactServiceImpl implements ContactService {
     }
 
     @Override
+    @Transactional
     public void declineRequest(String friendshipId, String userId) {
         Friendship friendship = friendshipRepository.findById(friendshipId)
-                .orElseThrow(() -> new ResourceNotFoundException("Lời mời kết bạn", "id", friendshipId));
+                .orElseThrow(() -> new ResourceNotFoundException("Lời mời", "id", friendshipId));
 
         if (!friendship.getRecipientId().equals(userId)) {
             throw new ForbiddenException("Bạn không có quyền từ chối lời mời này!");
         }
 
-        // Tùy ông, có thể đổi status thành DECLINED hoặc xóa luôn record (friendshipRepository.delete(friendship))
-        friendship.setStatus(FriendshipStatus.valueOf("DECLINED")); // Giả định enum của ông có chữ DECLINED
-        friendshipRepository.save(friendship);
+        // Xóa để người dùng có thể gửi lại lời mời sau này
+        friendshipRepository.delete(friendship);
     }
 
     private FriendshipResponseDTO mapToDTO(Friendship friendship) {
@@ -124,7 +190,7 @@ public class ContactServiceImpl implements ContactService {
                 .requesterId(friendship.getRequesterId())
                 .recipientId(friendship.getRecipientId())
                 .greetingMessage(friendship.getGreetingMessage())
-                .status(friendship.getStatus())
+                .status(friendship.getStatus().toString())
                 .build();
     }
 }

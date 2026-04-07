@@ -10,10 +10,14 @@ import {
   ScrollView, // Thêm ScrollView
   KeyboardAvoidingView, // Thêm để đẩy giao diện khi hiện bàn phím
   Platform,
+  Modal,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, AntDesign, FontAwesome } from "@expo/vector-icons";
+import * as Device from 'expo-device';
 import api from "../services/api";
 
 export default function LoginScreen() {
@@ -24,6 +28,55 @@ export default function LoginScreen() {
 
   const router = useRouter();
 
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotStep, setForgotStep] = useState(1);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+
+  const handleSendForgotOtp = async () => {
+    if (!forgotEmail) {
+      Alert.alert("Lỗi", "Vui lòng nhập email");
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      await api.post("/auth/forgot-password/send-otp", { email: forgotEmail });
+      Alert.alert("Thành công", "Mã xác thực đã được gửi đến email của bạn");
+      setForgotStep(2);
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Không thể gửi OTP");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!forgotOtp || !forgotNewPassword) {
+      Alert.alert("Lỗi", "Vui lòng nhập OTP và mật khẩu mới");
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      await api.post("/auth/forgot-password/reset", { 
+        email: forgotEmail, 
+        otp: forgotOtp, 
+        newPassword: forgotNewPassword 
+      });
+      Alert.alert("Thành công", "Mật khẩu đã được đặt lại thành công. Bạn có thể đăng nhập ngay bây giờ.");
+      setShowForgotModal(false);
+      setForgotStep(1);
+      setForgotEmail("");
+      setForgotOtp("");
+      setForgotNewPassword("");
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.response?.data?.message || "Đặt lại mật khẩu thất bại");
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert("Lỗi", "Vui lòng nhập đầy đủ email và mật khẩu");
@@ -31,12 +84,19 @@ export default function LoginScreen() {
     }
     setLoading(true);
     try {
-      const res = await api.post("/auth/login", {
+      let deviceName = "Unknown Device";
+      if (Platform.OS === 'web') {
+        deviceName = "Trình duyệt Web";
+      } else {
+        deviceName = `${Device.brand || 'Máy'} ${Device.modelName || 'Không xác định'} (${Platform.OS})`;
+      }
+
+      const res: any = await api.post("/auth/login", {
         email,
         password,
-        deviceId: "Mobile_App",
+        deviceId: deviceName,
       });
-      await AsyncStorage.setItem("accessToken", res.data.accessToken);
+      await AsyncStorage.setItem("accessToken", res.accessToken);
       router.replace("/(tabs)");
     } catch (error: any) {
       const msg =
@@ -115,7 +175,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.forgotPass}>
+          <TouchableOpacity style={styles.forgotPass} onPress={() => setShowForgotModal(true)}>
             <Text style={styles.forgotText}>Quên mật khẩu?</Text>
           </TouchableOpacity>
         </View>
@@ -165,6 +225,95 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showForgotModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowForgotModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View className="flex-1 justify-end bg-black/50">
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+              <View className="bg-white rounded-t-3xl p-6 pb-20">
+                <View className="flex-row justify-between items-center mb-2 border-b border-gray-100 pb-4">
+                  <Text className="text-xl font-bold text-gray-900">
+                    Khôi phục mật khẩu
+                  </Text>
+                  <TouchableOpacity onPress={() => setShowForgotModal(false)} className="p-2">
+                    <Text className="text-red-500 font-bold">Thoát</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {forgotStep === 1 ? (
+                  <View>
+                    <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider mt-4">EMAIL ĐĂNG KÝ</Text>
+                    <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-6 border-[1px] border-gray-200">
+                      <TextInput 
+                        value={forgotEmail}
+                        onChangeText={setForgotEmail}
+                        className="text-base text-gray-900"
+                        placeholder="example@email.com"
+                        autoCapitalize="none"
+                        placeholderTextColor="#9ca3af"
+                      />
+                    </View>
+                    <TouchableOpacity 
+                      disabled={forgotLoading}
+                      onPress={handleSendForgotOtp}
+                      className="bg-gray-900 py-4 rounded-full items-center justify-center flex-row shadow-sm mt-2"
+                    >
+                      {forgotLoading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text className="text-white font-bold text-base">Gửi Mã Xác Nhận</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View>
+                    <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider mt-4">MÃ OTP (6 SỐ TỪ EMAIL)</Text>
+                    <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-4 border-[1px] border-gray-200">
+                      <TextInput 
+                        value={forgotOtp}
+                        onChangeText={setForgotOtp}
+                        keyboardType="number-pad"
+                        className="text-base text-gray-900 tracking-[0.5em] text-center"
+                        placeholder="••••••"
+                        maxLength={6}
+                        placeholderTextColor="#9ca3af"
+                      />
+                    </View>
+                    <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">MẬT KHẨU MỚI</Text>
+                    <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-8 border-[1px] border-gray-200">
+                      <TextInput 
+                        secureTextEntry
+                        value={forgotNewPassword}
+                        onChangeText={setForgotNewPassword}
+                        className="text-base text-gray-900"
+                        placeholder="••••••••"
+                        placeholderTextColor="#9ca3af"
+                      />
+                    </View>
+                    <TouchableOpacity 
+                      disabled={forgotLoading}
+                      onPress={handleResetPassword}
+                      className="bg-gray-900 py-4 rounded-full items-center justify-center flex-row shadow-sm"
+                    >
+                      {forgotLoading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text className="text-white font-bold text-base">Cập Nhật Mật Khẩu</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </KeyboardAvoidingView>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
     </KeyboardAvoidingView>
   );
 }

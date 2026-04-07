@@ -1,5 +1,5 @@
 import { useState } from "react";
-import axios from "axios";
+import axiosClient from "../../config/axiosClient";
 import { NavLink } from "react-router-dom";
 import {
   MagnifyingGlassIcon,
@@ -11,16 +11,13 @@ import {
 
 export default function ContactSidebar() {
   const [searchPhone, setSearchPhone] = useState("");
-  const token = localStorage.getItem("accessToken");
+
 
   const handleSearch = async (e: any) => {
     if (e.key === "Enter" && searchPhone) {
       try {
-        const res = await axios.get(
-          `http://localhost:8888/api-gateway/contact-service/api/contacts/search?phone=${searchPhone}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        const userFound = res.data.data;
+        const res: any = await axiosClient.get(`/contacts/search?phone=${searchPhone}`);
+        const userFound = res;
         if (userFound) {
           alert(
             `Tìm thấy: ${userFound.fullName}. Giờ ông code thêm cái modal hiện ra để bấm kết bạn nhé!`,
