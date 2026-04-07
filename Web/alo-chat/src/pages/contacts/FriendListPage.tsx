@@ -8,6 +8,7 @@ import {
   ArrowsUpDownIcon,
   AdjustmentsHorizontalIcon,
 } from "@heroicons/react/24/outline";
+import FriendProfileModal from "@/components/ui/FriendProfileModal";
 
 export default function FriendListPage() {
   const [friends, setFriends] = useState<any[]>([]);
@@ -15,13 +16,23 @@ export default function FriendListPage() {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
-
+  const handleOpenProfile = (friend: any) => {
+    // SỬA LỖI 3: Chờ ông thêm targetId ở Backend thì nó sẽ lấy chuẩn.
+    // Tạm thời fallback để code không gãy.
+    const idToOpen = friend.targetId || friend.recipientId;
+    setSelectedUserId(idToOpen);
+    setProfileModalOpen(true);
+  };
 
   const fetchFriends = async () => {
     try {
       const res: any = await axiosClient.get("/contacts/friends");
-      setFriends(res || []);
+      // SỬA LỖI 2: Rút trích data an toàn xuyên qua các lớp ApiResponse
+      const friendData = res?.data?.data || res?.data || res || [];
+      setFriends(Array.isArray(friendData) ? friendData : []);
     } catch (err) {
       console.error("Lỗi lấy danh sách bạn bè:", err);
     } finally {
@@ -37,10 +48,8 @@ export default function FriendListPage() {
     setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
   };
 
-  // Logic Lọc, Sắp xếp và Nhóm (Dùng requesterName đã enrich từ Backend)
   const groupedFriends = useMemo(() => {
     const filtered = friends.filter((f) => {
-      // Dùng requesterName vì Backend đã map tên bạn vào đây
       const name = f.requesterName || "Người dùng Alo";
       return name.toLowerCase().includes(searchQuery.toLowerCase());
     });
@@ -82,7 +91,7 @@ export default function FriendListPage() {
 
   return (
     <div className="flex-1 h-screen bg-[#fafafa] p-4 md:p-8 overflow-y-auto text-black font-sans">
-      {/* HEADER */}
+      {/* HEADER (Giữ nguyên) */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-black rounded-xl text-white">
@@ -115,7 +124,7 @@ export default function FriendListPage() {
         BẠN BÈ HIỆN TẠI ({friends.length})
       </p>
 
-      {/* SEARCH & SORT */}
+      {/* SEARCH & SORT (Giữ nguyên) */}
       <div className="flex flex-col sm:flex-row items-center gap-4 mb-10">
         <div className="flex-1 w-full flex items-center gap-3 bg-white border border-gray-100 px-5 py-3.5 rounded-[20px] shadow-sm focus-within:ring-2 focus-within:ring-black transition-all">
           <MagnifyingGlassIcon className="w-5 h-5 text-gray-400" />
@@ -162,9 +171,9 @@ export default function FriendListPage() {
                 {groupedFriends[letter].map((friend: any) => (
                   <div
                     key={friend.id}
+                    onClick={() => handleOpenProfile(friend)} // SỬA LỖI 1: Bọc onClick ở thẻ ngoài cùng này
                     className="flex items-center gap-4 p-4 bg-white rounded-[24px] border border-transparent hover:border-gray-100 hover:shadow-md transition-all cursor-pointer group"
                   >
-                    {/* Avatar thật từ Backend */}
                     <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-gray-50 shrink-0 shadow-inner">
                       <img
                         src={
@@ -194,6 +203,13 @@ export default function FriendListPage() {
           ))
         )}
       </div>
+      <FriendProfileModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        userId={selectedUserId}
+        relationStatus="ACCEPTED"
+      />
     </div>
+  
   );
 }
