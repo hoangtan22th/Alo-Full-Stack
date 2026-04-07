@@ -141,14 +141,23 @@ public class FriendshipServiceImpl implements FriendshipService {
 
         return friends.stream().map(f -> {
             FriendshipResponseDTO dto = mapToDTO(f);
+            // targetId là ID của người bạn (không phải mình)
             String targetId = f.getRequesterId().equals(userId) ? f.getRecipientId() : f.getRequesterId();
 
             userInfos.stream()
                     .filter(u -> u.getId().equals(targetId))
                     .findFirst()
                     .ifPresent(u -> {
-                        dto.setRequesterName(u.getFullName());
-                        dto.setRequesterAvatar(u.getAvatar()); // Fix: Đồng bộ getAvatar()
+                        // SỬA LẠI ĐOẠN NÀY: Bỏ đúng người, đúng chỗ
+                        if (targetId.equals(f.getRequesterId())) {
+                            // Nếu bạn bè là người gửi
+                            dto.setRequesterName(u.getFullName());
+                            dto.setRequesterAvatar(u.getAvatar());
+                        } else {
+                            // Nếu bạn bè là người nhận
+                            dto.setRecipientName(u.getFullName());
+                            dto.setRecipientAvatar(u.getAvatar());
+                        }
                     });
             return dto;
         }).collect(Collectors.toList());
