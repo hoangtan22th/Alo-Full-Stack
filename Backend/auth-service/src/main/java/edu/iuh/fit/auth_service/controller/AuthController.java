@@ -37,8 +37,24 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<Map<String, String>>> login(@RequestBody LoginRequest request,
             HttpServletResponse response) {
-        String accessToken = authService.login(request, response);
-        return ResponseEntity.ok(ApiResponse.success(Map.of("accessToken", accessToken)));
+        Map<String, String> tokens = authService.login(request, response);
+        return ResponseEntity.ok(ApiResponse.success(tokens));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<Map<String, String>>> refreshToken(
+            @CookieValue(name = "refreshToken", required = false) String cookieRefreshToken,
+            @RequestBody(required = false) Map<String, String> body) {
+        // Ưu tiên lấy từ Cookie, nếu không có thì lấy từ body (cho Mobile)
+        String refreshToken = cookieRefreshToken;
+        if (refreshToken == null && body != null) {
+            refreshToken = body.get("refreshToken");
+        }
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return ResponseEntity.status(401).body(ApiResponse.error(401, "Không tìm thấy Refresh Token"));
+        }
+        String newAccessToken = authService.refreshAccessToken(refreshToken);
+        return ResponseEntity.ok(ApiResponse.success(Map.of("accessToken", newAccessToken)));
     }
 
     @PostMapping("/forgot-password/send-otp")
