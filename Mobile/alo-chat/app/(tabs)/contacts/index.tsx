@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -52,9 +52,11 @@ export default function ContactsScreen() {
   const [alphabet, setAlphabet] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchFriends();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchFriends();
+    }, []),
+  );
 
   const fetchFriends = async () => {
     setLoading(true);
