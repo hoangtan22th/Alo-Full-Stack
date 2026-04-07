@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { UserIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 import { QRCodeSVG } from "qrcode.react";
 import axiosClient from "../../config/axiosClient";
+import { toast } from "sonner";
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
@@ -49,7 +50,7 @@ const LoginPage = () => {
             } else { 
               console.error("Không tìm thấy token trong response", data); 
             }
-            alert("Đăng nhập bằng mã QR thành công!");
+            toast.success("Đăng nhập bằng mã QR thành công!");
             navigate("/contacts");
           } else if (data.status === "EXPIRED") {
             clearInterval(interval);
@@ -75,7 +76,7 @@ const LoginPage = () => {
       } else { 
         console.error("Không tìm thấy token trong response", res); 
       }
-      alert("Đăng nhập thành công!");
+       toast.success("Đăng nhập thành công!");
       navigate("/contacts");
     } catch (err: any) {
       setError(err.response?.data?.message || "Đăng nhập thất bại");

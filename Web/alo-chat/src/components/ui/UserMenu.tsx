@@ -1,5 +1,6 @@
 // Popup khi nhấn vào avatar
 import { UserIcon as UserOutline } from '@heroicons/react/24/outline';
+import Swal from "sweetalert2";
 
 interface UserMenuProps {
   onOpenProfile: () => void;
@@ -8,6 +9,26 @@ interface UserMenuProps {
 
 export default function UserMenu({ onOpenProfile, onLogout }: UserMenuProps) {
     const handleLogout = async () => {
+         const result = await Swal.fire({
+            title: "Xác nhận đăng xuất?",
+            text: "Bạn sẽ cần đăng nhập lại",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Đăng xuất",
+            cancelButtonText: "Hủy",
+
+            // 🔥 QUAN TRỌNG
+            buttonsStyling: false,
+
+                customClass: {
+                    confirmButton:
+                    "bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded-lg",
+                    cancelButton:
+                    "bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-2 rounded-lg ml-2",
+                },
+        });
+
+    if (!result.isConfirmed) return;
     try {
         await fetch("http://localhost:8888/api/v1/auth/logout", {
         method: "POST",
@@ -48,6 +69,13 @@ export default function UserMenu({ onOpenProfile, onLogout }: UserMenuProps) {
           </svg>
           Đăng xuất
         </button>
+
+        
+
+
+
+
+        
       </div>
     </div>
   );

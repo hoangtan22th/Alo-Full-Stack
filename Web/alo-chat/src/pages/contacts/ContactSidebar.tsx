@@ -12,12 +12,14 @@ import {
 export default function ContactSidebar() {
   const [searchPhone, setSearchPhone] = useState("");
 
-
   const handleSearch = async (e: any) => {
     if (e.key === "Enter" && searchPhone) {
       try {
-        const res: any = await axiosClient.get(`/contacts/search?phone=${searchPhone}`);
-        const userFound = res;
+        // CẬP NHẬT: axiosClient tự bóc data, trả về thẳng object user
+        const userFound: any = await axiosClient.get(
+          `/contacts/search?phone=${searchPhone}`,
+        );
+
         if (userFound) {
           alert(
             `Tìm thấy: ${userFound.fullName}. Giờ ông code thêm cái modal hiện ra để bấm kết bạn nhé!`,
@@ -63,7 +65,7 @@ export default function ContactSidebar() {
           Danh sách bạn bè
         </NavLink>
 
-        {/* Nút 2: Danh sách nhóm (Để tạm url groups để sau này ông code) */}
+        {/* Nút 2: Danh sách nhóm */}
         <NavLink to="/contacts/groups" className={navItemClass}>
           <UserGroupIcon className="w-6 h-6" />
           Danh sách nhóm
@@ -75,7 +77,7 @@ export default function ContactSidebar() {
           Lời mời kết bạn
         </NavLink>
 
-        {/* Nút 4: Lời mời vào nhóm (Để tạm url group-invites) */}
+        {/* Nút 4: Lời mời vào nhóm */}
         <NavLink to="/contacts/group-invites" className={navItemClass}>
           <EnvelopeIcon className="w-6 h-6" />
           Lời mời vào nhóm

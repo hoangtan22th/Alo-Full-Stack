@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserIcon, PhoneIcon, EnvelopeIcon, LockClosedIcon, SparklesIcon } from '@heroicons/react/24/outline';
+import { UserIcon, PhoneIcon, EnvelopeIcon, LockClosedIcon, SparklesIcon, KeyIcon } from '@heroicons/react/24/outline';
 import axiosClient from "../../config/axiosClient";
+import { toast } from 'sonner';
 
 const RegisterPage = () => {
     const [formData, setFormData] = useState({
@@ -9,13 +10,38 @@ const RegisterPage = () => {
         phoneNumber: '',
         email: '',
         password: '',
-        confirmPassword: ''
+        confirmPassword: '',
+        otp: '' // Thêm state lưu mã OTP
     });
     const [error, setError] = useState('');
+    const [isSendingOtp, setIsSendingOtp] = useState(false);
+    const [otpSent, setOtpSent] = useState(false);
     const navigate = useNavigate();
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
+
+    // Hàm gọi API Gửi OTP
+    const handleSendOtp = async () => {
+        if (!formData.email) {
+            setError('Vui lòng nhập email trước khi gửi mã OTP');
+            return;
+        }
+        setIsSendingOtp(true);
+        setError('');
+        try {
+            await axiosClient.post('/auth/send-otp', { email: formData.email });
+            setOtpSent(true);
+            toast.success("Mã xác nhận đã được gửi!", {
+                description: `Vui lòng kiểm tra hộp thư ${formData.email}`,
+                duration: 7000, // Hiển thị trong 7 giây
+            });
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Lỗi khi gửi OTP');
+        } finally {
+            setIsSendingOtp(false);
+        }
     };
 
     const handleRegister = async (e: React.FormEvent) => {
@@ -26,15 +52,23 @@ const RegisterPage = () => {
             setError('Mật khẩu nhập lại không khớp');
             return;
         }
+        if (!formData.otp) {
+            setError('Vui lòng nhập mã OTP');
+            return;
+        }
 
         try {
+            // Đã bổ sung phoneNumber và otp gửi lên Backend
             await axiosClient.post('/auth/register', {
                 fullName: formData.fullName,
                 email: formData.email,
+                phoneNumber: formData.phoneNumber, 
                 password: formData.password,
+                otp: formData.otp 
             });
-
-            alert("Đăng ký thành công! Hãy đăng nhập.");
+            toast.success("Đăng ký thành công!", {
+                description: "Hãy đăng nhập",
+            });
             navigate('/login');
         } catch (err: any) {
             setError(err.response?.data?.message || 'Đăng ký thất bại');
@@ -42,9 +76,7 @@ const RegisterPage = () => {
     };
 
     return (
-        /* Nền ngoài cùng màu F3F3F4 */
         <div className="min-h-screen flex items-center justify-center bg-[#F3F3F4] p-6 font-sans">
-            
             <div className="bg-white border border-gray-100 rounded-[40px] shadow-2xl max-w-[480px] w-full p-8 md:p-12 space-y-6">
                 
                 {/* Logo & Header */}
@@ -68,14 +100,7 @@ const RegisterPage = () => {
                         <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 ml-1 tracking-widest">Tên đầy đủ</label>
                         <div className="relative">
                             <UserIcon className="absolute left-4 top-3 text-gray-400 w-5 h-5 stroke-[1.5px]" />
-                            <input 
-                                name="fullName"
-                                type="text" 
-                                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:bg-white transition-all text-sm"
-                                placeholder="Nguyễn Văn A"
-                                onChange={handleChange}
-                                required
-                            />
+                            <input name="fullName" type="text" className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:bg-white transition-all text-sm" placeholder="Nguyễn Văn A" onChange={handleChange} required />
                         </div>
                     </div>
 
@@ -84,85 +109,65 @@ const RegisterPage = () => {
                         <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 ml-1 tracking-widest">Số điện thoại</label>
                         <div className="relative">
                             <PhoneIcon className="absolute left-4 top-3 text-gray-400 w-5 h-5 stroke-[1.5px]" />
-                            <input 
-                                name="phoneNumber"
-                                type="text" 
-                                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:bg-white transition-all text-sm"
-                                placeholder="0123 456 789"
-                                onChange={handleChange}
-                                required
-                            />
+                            <input name="phoneNumber" type="text" className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:bg-white transition-all text-sm" placeholder="0123 456 789" onChange={handleChange} required />
                         </div>
                     </div>
 
-                    {/* Email */}
+                    {/* Email & Nút Gửi OTP */}
                     <div>
                         <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 ml-1 tracking-widest">Email</label>
-                        <div className="relative">
-                            <EnvelopeIcon className="absolute left-4 top-3 text-gray-400 w-5 h-5 stroke-[1.5px]" />
-                            <input 
-                                name="email"
-                                type="email" 
-                                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:bg-white transition-all text-sm"
-                                placeholder="name@example.com"
-                                onChange={handleChange}
-                                required
-                            />
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <EnvelopeIcon className="absolute left-4 top-3 text-gray-400 w-5 h-5 stroke-[1.5px]" />
+                                <input name="email" type="email" className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:bg-white transition-all text-sm" placeholder="name@example.com" onChange={handleChange} required />
+                            </div>
+                            <button 
+                                type="button" 
+                                onClick={handleSendOtp}
+                                disabled={isSendingOtp}
+                                className="bg-black text-white px-4 rounded-2xl font-bold text-xs hover:bg-gray-800 transition active:scale-95 whitespace-nowrap"
+                            >
+                                {isSendingOtp ? "Đang gửi..." : (otpSent ? "Gửi lại" : "Gửi OTP")}
+                            </button>
                         </div>
                     </div>
 
-                    {/* Mật khẩu & Nhập lại mật khẩu (Dùng Grid để thu ngắn form) */}
+                    {/* Ô nhập OTP */}
+                    {otpSent && (
+                        <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 ml-1 tracking-widest">Mã xác nhận (OTP)</label>
+                            <div className="relative">
+                                <KeyIcon className="absolute left-4 top-3 text-gray-400 w-5 h-5 stroke-[1.5px]" />
+                                <input name="otp" type="text" maxLength={6} className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:bg-white transition-all text-sm tracking-widest font-bold" placeholder="123456" onChange={handleChange} required />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Mật khẩu & Nhập lại mật khẩu */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 ml-1 tracking-widest">Mật khẩu</label>
                             <div className="relative">
                                 <LockClosedIcon className="absolute left-4 top-3 text-gray-400 w-5 h-5 stroke-[1.5px]" />
-                                <input 
-                                    name="password"
-                                    type="password" 
-                                    className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:bg-white transition-all text-sm"
-                                    placeholder="••••••••"
-                                    onChange={handleChange}
-                                    required
-                                />
+                                <input name="password" type="password" className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:bg-white transition-all text-sm" placeholder="••••••••" onChange={handleChange} required />
                             </div>
                         </div>
                         <div>
                             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 ml-1 tracking-widest">Nhập lại</label>
                             <div className="relative">
                                 <LockClosedIcon className="absolute left-4 top-3 text-gray-400 w-5 h-5 stroke-[1.5px]" />
-                                <input 
-                                    name="confirmPassword"
-                                    type="password" 
-                                    className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:bg-white transition-all text-sm"
-                                    placeholder="••••••••"
-                                    onChange={handleChange}
-                                    required
-                                />
+                                <input name="confirmPassword" type="password" className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-transparent rounded-2xl focus:outline-none focus:ring-2 focus:ring-black focus:bg-white transition-all text-sm" placeholder="••••••••" onChange={handleChange} required />
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 px-1 py-2">
-                        <input type="checkbox" className="w-4 h-4 rounded border-gray-300 accent-black" required />
-                        <span className="text-[11px] text-gray-400 font-medium">Tôi đồng ý với các điều khoản dịch vụ</span>
-                    </div>
-
-                    <button 
-                        type="submit" 
-                        className="w-full bg-black text-white py-4 rounded-full font-bold hover:bg-gray-800 transition-all shadow-lg active:scale-[0.98]"
-                    >
+                    <button type="submit" className="w-full bg-black text-white py-4 mt-2 rounded-full font-bold hover:bg-gray-800 transition-all shadow-lg active:scale-[0.98]">
                         Đăng ký ngay
                     </button>
                 </form>
 
                 <p className="text-sm text-gray-500 text-center font-medium">
-                    Đã có tài khoản? <span 
-                        onClick={() => navigate('/login')} 
-                        className="text-black font-bold cursor-pointer hover:underline underline-offset-4"
-                    >
-                        Đăng nhập ngay
-                    </span>
+                    Đã có tài khoản? <span onClick={() => navigate('/login')} className="text-black font-bold cursor-pointer hover:underline underline-offset-4">Đăng nhập ngay</span>
                 </p>
             </div>
         </div>

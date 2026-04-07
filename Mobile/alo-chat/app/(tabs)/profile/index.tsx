@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter, useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
+import { useAuth } from "../../../contexts/AuthContext";
 import {
   Alert,
   Image,
@@ -19,6 +19,8 @@ export default function MainProfileScreen() {
   const insets = useSafeAreaInsets();
   const [user, setUser] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  const { signOut } = useAuth();
 
   useFocusEffect(
     useCallback(() => {
@@ -51,8 +53,8 @@ export default function MainProfileScreen() {
           try {
             await api.post("/auth/logout");
           } catch (e) {}
-          await AsyncStorage.removeItem("accessToken");
-          router.replace("/login");
+          // signOut() sẽ xóa token + cập nhật trạng thái -> _layout.tsx tự chuyển về Login
+          await signOut();
         },
       },
     ]);

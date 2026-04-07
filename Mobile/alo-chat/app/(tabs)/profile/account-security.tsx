@@ -55,7 +55,7 @@ export default function AccountSecurityScreen() {
 
   // States Đổi Mật Khẩu
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({ oldPassword: "", newPassword: "" });
+  const [passwordForm, setPasswordForm] = useState({ oldPassword: "", newPassword: "", confirmNewPassword: "" });
   const [changingPass, setChangingPass] = useState(false);
 
   // States Quản Lý Thiết Bị
@@ -95,16 +95,24 @@ export default function AccountSecurityScreen() {
   };
 
   const handleChangePassword = async () => {
-    if (!passwordForm.oldPassword || !passwordForm.newPassword) {
+    if (!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmNewPassword) {
       Alert.alert("Lỗi", "Vui lòng nhập đầy đủ thông tin");
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmNewPassword) {
+      Alert.alert("Lỗi", "Mật khẩu xác nhận không khớp");
       return;
     }
     try {
       setChangingPass(true);
-      await api.post("/auth/change-password", passwordForm);
+      // Chỉ gửi oldPassword và newPassword lên Backend
+      await api.post("/auth/change-password", {
+        oldPassword: passwordForm.oldPassword,
+        newPassword: passwordForm.newPassword,
+      });
       Alert.alert("Thành công", "Đổi mật khẩu thành công. Thông báo đã được gửi về email của bạn.");
       setShowChangePasswordModal(false);
-      setPasswordForm({ oldPassword: "", newPassword: "" });
+      setPasswordForm({ oldPassword: "", newPassword: "", confirmNewPassword: "" });
     } catch (err: any) {
       const msg = err.response?.data?.message || "Đổi mật khẩu thất bại";
       Alert.alert("Lỗi", msg);
@@ -495,7 +503,7 @@ export default function AccountSecurityScreen() {
                   </View>
 
                   <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">MẬT KHẨU MỚI</Text>
-                  <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-8 border-[1px] border-gray-200">
+                  <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-5 border-[1px] border-gray-200">
                     <TextInput 
                       secureTextEntry
                       value={passwordForm.newPassword}
@@ -505,6 +513,21 @@ export default function AccountSecurityScreen() {
                       placeholderTextColor="#9ca3af"
                     />
                   </View>
+
+                  <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">XÁC NHẬN MẬT KHẨU MỚI</Text>
+                  <View className={`bg-gray-100 rounded-2xl px-4 py-4 mb-8 border-[1px] ${passwordForm.confirmNewPassword && passwordForm.newPassword !== passwordForm.confirmNewPassword ? 'border-red-400' : 'border-gray-200'}`}>
+                    <TextInput 
+                      secureTextEntry
+                      value={passwordForm.confirmNewPassword}
+                      onChangeText={(val) => setPasswordForm({...passwordForm, confirmNewPassword: val})}
+                      className="text-base text-gray-900"
+                      placeholder="••••••••"
+                      placeholderTextColor="#9ca3af"
+                    />
+                  </View>
+                  {passwordForm.confirmNewPassword !== "" && passwordForm.newPassword !== passwordForm.confirmNewPassword && (
+                    <Text className="text-red-500 text-xs font-medium -mt-6 mb-6 px-2">Mật khẩu xác nhận không khớp</Text>
+                  )}
 
                   <TouchableOpacity 
                     disabled={changingPass}

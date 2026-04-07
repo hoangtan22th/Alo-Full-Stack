@@ -15,7 +15,7 @@ import {
   Keyboard,
 } from "react-native";
 import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "../contexts/AuthContext";
 import { Ionicons, AntDesign, FontAwesome } from "@expo/vector-icons";
 import * as Device from 'expo-device';
 import api from "../services/api";
@@ -27,6 +27,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
+  const { signIn } = useAuth();
 
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotStep, setForgotStep] = useState(1);
@@ -96,8 +97,8 @@ export default function LoginScreen() {
         password,
         deviceId: deviceName,
       });
-      await AsyncStorage.setItem("accessToken", res.accessToken);
-      router.replace("/(tabs)");
+      // signIn() lưu cả 2 token + cập nhật trạng thái -> _layout.tsx tự chuyển vào Tabs
+      await signIn(res.accessToken, res.refreshToken);
     } catch (error: any) {
       const msg =
         error.response?.data?.message || "Sai tài khoản hoặc mật khẩu";

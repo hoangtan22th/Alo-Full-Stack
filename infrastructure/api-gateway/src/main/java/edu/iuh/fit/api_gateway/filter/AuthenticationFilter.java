@@ -1,28 +1,33 @@
 package edu.iuh.fit.api_gateway.filter;
 
 import edu.iuh.fit.api_gateway.config.JwtUtils;
-import edu.iuh.fit.api_gateway.config.RouteValidator; // Import con validator vào
+import edu.iuh.fit.api_gateway.config.RouteValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+
+import java.nio.charset.StandardCharsets;
 
 @Component
 @RequiredArgsConstructor
 public class AuthenticationFilter implements GlobalFilter {
 
     private final JwtUtils jwtUtils;
-    private final RouteValidator validator; // Tiêm con validator vào đây
+    private final RouteValidator validator;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
-        // CHÈN ĐOÀN NÀY VÀO ĐẦU TIÊN: Chấp nhận mọi request OPTIONS để fix lỗi CORS Preflight
+        // Chấp nhận mọi request OPTIONS để fix lỗi CORS Preflight
         if (request.getMethod().name().equals("OPTIONS")) {
             return chain.filter(exchange);
         }
@@ -34,8 +39,7 @@ public class AuthenticationFilter implements GlobalFilter {
 
             // 3. Nếu không có Token mà vào route bảo mật -> Chặn ngay (Trả về 401)
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-                return exchange.getResponse().setComplete();
+                return unauthorizedResponse(exchange, "Thiếu Access Token");
             }
 
             try {
@@ -52,12 +56,24 @@ public class AuthenticationFilter implements GlobalFilter {
 
             } catch (Exception e) {
                 System.out.println("Lỗi xác thực Token: " + e.getMessage());
-                exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-                return exchange.getResponse().setComplete();
+                return unauthorizedResponse(exchange, "Token không hợp lệ hoặc đã hết hạn");
             }
         }
 
         // Nếu là route công khai (Login/Register) thì cho qua luôn
         return chain.filter(exchange);
+    }
+
+    /**
+     * Trả về response 401 kèm body JSON cho Frontend dễ dàng bắt lỗi
+     */
+    private Mono<Void> unauthorizedResponse(ServerWebExchange exchange, String message) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(HttpStatus.UNAUTHORIZED);
+        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+
+        String body = "{\"status\":401,\"message\":\"" + message + "\"}";
+        DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
+        return response.writeWith(Mono.just(buffer));
     }
 }

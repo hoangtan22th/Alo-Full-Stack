@@ -1,12 +1,48 @@
-import { Stack } from "expo-router";
+import { View, ActivityIndicator } from "react-native";
+import { Stack, useRouter, useSegments } from "expo-router";
+import { useEffect } from "react";
+import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import "../global.css";
+
+function RootLayoutNav() {
+  const { isAuthenticated, isReady } = useAuth();
+  const router = useRouter();
+  const segments = useSegments();
+
+  useEffect(() => {
+    if (!isReady) return;
+
+    const inTabsGroup = segments[0] === "(tabs)";
+
+    if (isAuthenticated && !inTabsGroup) {
+      router.replace("/(tabs)");
+    } else if (!isAuthenticated && inTabsGroup) {
+      router.replace("/login");
+    }
+  }, [isReady, isAuthenticated, segments]);
+
+  if (!isReady) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" }}>
+        <ActivityIndicator size="large" color="#000" />
+      </View>
+    );
+  }
+
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="login" />
+      <Stack.Screen name="register" />
+      <Stack.Screen name="(tabs)" />
+    </Stack>
+  );
+}
 
 export default function RootLayout() {
   return (
-    <Stack>
-      <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen name="register" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-    </Stack>
+    <AuthProvider>
+      <RootLayoutNav />
+    </AuthProvider>
   );
 }
