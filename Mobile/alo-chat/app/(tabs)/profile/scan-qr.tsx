@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Camera, CameraView } from "expo-camera";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ export default function QrScannerScreen() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
+  const scannedRef = useRef(false);
 
   useEffect(() => {
     const getCameraPermissions = async () => {
@@ -36,6 +37,8 @@ export default function QrScannerScreen() {
     type: string;
     data: string;
   }) => {
+    if (scannedRef.current) return;
+    scannedRef.current = true;
     setScanned(true);
 
     // Validate that the QR code is from our login system
@@ -44,7 +47,15 @@ export default function QrScannerScreen() {
       Alert.alert(
         "Lỗi",
         "Mã QR không hợp lệ, vui lòng quét lại mã đăng nhập của Alo-Chat.",
-        [{ text: "Quét lại", onPress: () => setScanned(false) }],
+        [
+          {
+            text: "Quét lại",
+            onPress: () => {
+              scannedRef.current = false;
+              setScanned(false);
+            },
+          },
+        ],
       );
       return;
     }
@@ -52,7 +63,13 @@ export default function QrScannerScreen() {
     const qrToken = data.split("token=")[1];
     if (!qrToken) {
       Alert.alert("Lỗi", "Mã QR đã hỏng hoặc không đúng định dạng.", [
-        { text: "Quét lại", onPress: () => setScanned(false) },
+        {
+          text: "Quét lại",
+          onPress: () => {
+            scannedRef.current = false;
+            setScanned(false);
+          },
+        },
       ]);
       return;
     }
@@ -75,7 +92,13 @@ export default function QrScannerScreen() {
         error.response?.data?.message ||
         "Đã có lỗi xảy ra hoặc mã QR đã hết hạn.";
       Alert.alert("Đăng nhập thất bại", msg, [
-        { text: "Thử lại", onPress: () => setScanned(false) },
+        {
+          text: "Thử lại",
+          onPress: () => {
+            scannedRef.current = false;
+            setScanned(false);
+          },
+        },
         { text: "Đóng", style: "cancel", onPress: () => router.back() },
       ]);
     } finally {
