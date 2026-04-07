@@ -1,3 +1,30 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    /* ... giữ nguyên các biến oklch của bạn ở đây ... */
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --radius: 0.625rem;
+  }
+
+  /* Thay đổi đoạn * này */
+  * {
+    border-color: var(--border);
+  }
+  
+  /* Nếu bạn muốn có cái vòng ring khi focus như shadcn muốn: */
+  *:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

@@ -1,6 +1,7 @@
 // src/components/Sidebar/ProfileModal.tsx
 import { XMarkIcon, CameraIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
 import { useState, useRef, useEffect, type ChangeEvent } from 'react';
+import { toast } from 'sonner';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -163,14 +164,16 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         });
       }
 
-      alert("Cập nhật hồ sơ thành công!");
+      toast.success("Cập nhật hồ sơ thành công!", {
+        description: "Thông tin cá nhân của bạn đã được lưu lại.",
+      });
       setIsEditing(false);
       setAvatarFile(null);
       setCoverFile(null);
 
     } catch (error) {
       console.error("Update error:", error);
-      alert("Có lỗi xảy ra khi lưu!");
+    toast.error("Có lỗi xảy ra khi cập nhật!");
     } finally {
       setLoading(false);
     }

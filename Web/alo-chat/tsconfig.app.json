@@ -7,10 +7,9 @@
     "module": "ESNext",
     "types": ["vite/client"],
     "skipLibCheck": true,
-  /* Cấu hình Path Alias */
-    "baseUrl": ".",
+  /* Cấu hình Path Alias để dùng sonner tạo thông báo */
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
     /* Bundler mode */
     "moduleResolution": "bundler",
