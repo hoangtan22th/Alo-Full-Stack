@@ -15,14 +15,14 @@ public interface FriendshipRepository extends JpaRepository<Friendship, String> 
 
     boolean existsByRequesterIdAndRecipientId(String requesterId, String recipientId);
 
-    // 1. Lấy danh sách những người gửi lời mời cho mình (PENDING)
     List<Friendship> findByRecipientIdAndStatus(String recipientId, FriendshipStatus status);
 
-    // 2. Lấy danh sách bạn bè chính thức (ACCEPTED)
     @Query("SELECT f FROM Friendship f WHERE (f.requesterId = :userId OR f.recipientId = :userId) AND f.status = 'ACCEPTED'")
     List<Friendship> findFriendsByUserId(@Param("userId") String userId);
 
-    // 3. Kiểm tra quan hệ 2 người bất kỳ (Dùng cho tính năng Tìm kiếm)
-    @Query("SELECT f FROM Friendship f WHERE (f.requesterId = :id1 AND f.recipientId = :id2) OR (f.requesterId = :id2 AND f.recipientId = :id1)")
+    // Gộp thành một hàm duy nhất để tìm quan hệ 2 chiều
+    @Query("SELECT f FROM Friendship f WHERE " +
+            "(f.requesterId = :id1 AND f.recipientId = :id2) OR " +
+            "(f.requesterId = :id2 AND f.recipientId = :id1)")
     Optional<Friendship> findByUserIds(@Param("id1") String id1, @Param("id2") String id2);
 }
