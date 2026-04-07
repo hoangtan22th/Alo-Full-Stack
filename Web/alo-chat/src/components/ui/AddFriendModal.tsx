@@ -5,17 +5,25 @@ import {
   XMarkIcon,
   MagnifyingGlassIcon,
   ArrowRightIcon,
+  ClockIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
 import FriendProfileModal from "./FriendProfileModal";
+import { toast } from "sonner";
 
 const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
   const [phone, setPhone] = useState("");
   const [foundUser, setFoundUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
 
-  // UX: Bắt phím ESC và Khóa cuộn trang
   useEffect(() => {
+    const savedHistory = localStorage.getItem("search_phone_history");
+    if (savedHistory) {
+      setSearchHistory(JSON.parse(savedHistory));
+    }
+
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -27,97 +35,171 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
     };
   }, [onClose]);
 
-  const handleSearch = async () => {
-    if (!phone) return;
+  const saveToHistory = (phoneNumber: string) => {
+    const updatedHistory = [
+      phoneNumber,
+      ...searchHistory.filter((h) => h !== phoneNumber),
+    ].slice(0, 5);
+
+    setSearchHistory(updatedHistory);
+    localStorage.setItem(
+      "search_phone_history",
+      JSON.stringify(updatedHistory),
+    );
+  };
+
+  const handleSearch = async (phoneToSearch?: string) => {
+    const targetPhone = phoneToSearch || phone;
+    if (!targetPhone) return;
+
     setLoading(true);
-    // Không setFoundUser(null) ở đây để tránh giao diện bị giật khi refresh dữ liệu
     try {
-      const res: any = await axiosClient.get(`/contacts/search?phone=${phone}`);
+      const res: any = await axiosClient.get(
+        `/contacts/search?phone=${targetPhone}`,
+      );
       const data = res?.data?.data || res?.data || res;
+
       setFoundUser(data);
+      saveToHistory(targetPhone);
+      if (phoneToSearch) setPhone(targetPhone);
     } catch (err) {
       setFoundUser(null);
-      alert("Số điện thoại chưa đăng kí hoặc không cho phép tìm kiếm");
+      toast.error("Không tìm thấy người dùng này!");
     } finally {
       setLoading(false);
     }
   };
 
+  const clearHistory = () => {
+    setSearchHistory([]);
+    localStorage.removeItem("search_phone_history");
+    toast.info("Đã xóa lịch sử tìm kiếm");
+  };
+
   return (
     <>
-      {/* Click Outside: Bấm vào lớp phủ để đóng */}
       <div
         onClick={onClose}
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 font-sans animate-in fade-in duration-200"
+        className="fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
       >
+        {/* FIX: Đổi h-[92vh] thành h-auto max-h-[92vh] để modal tự co dãn */}
         <div
           onClick={(e) => e.stopPropagation()}
-          className="bg-white rounded-[40px] p-8 max-w-[480px] w-full relative shadow-2xl text-black animate-in zoom-in-95 duration-200"
+          className="bg-white rounded-[28px] w-full max-w-[400px] h-auto max-h-[92vh] flex flex-col shadow-2xl relative animate-in slide-in-from-bottom-10 transition-all duration-300"
         >
-          <button
-            onClick={onClose}
-            className="absolute top-6 right-8 text-gray-400 hover:text-black transition-colors"
-          >
-            <XMarkIcon className="w-7 h-7 stroke-2" />
-          </button>
-
-          <h1 className="text-[22px] font-extrabold text-gray-900 mb-6">
-            Thêm bạn mới
-          </h1>
-
-          <div className="flex gap-3 mb-8">
-            <div className="relative flex-1">
-              <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Nhập số điện thoại..."
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="w-full bg-[#f3f3f3] border-none rounded-2xl pl-12 pr-4 py-3.5 text-[15px] focus:ring-2 focus:ring-black outline-none"
-              />
-            </div>
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+            <h2 className="text-[17px] font-black text-gray-900">
+              Thêm bạn mới
+            </h2>
             <button
-              onClick={handleSearch}
-              disabled={loading}
-              className="bg-black text-white px-8 py-3.5 rounded-2xl font-bold hover:bg-gray-800 transition-all active:scale-95"
+              onClick={onClose}
+              className="p-1 hover:bg-gray-100 rounded-full"
             >
-              {loading ? "..." : "Tìm"}
+              <XMarkIcon className="w-6 h-6 stroke-2 text-gray-500" />
             </button>
           </div>
 
-          {foundUser && (
-            <div className="bg-[#f9f9f9] rounded-[28px] p-5 border border-gray-100 flex items-center justify-between shadow-sm animate-in slide-in-from-bottom-2">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-white rounded-full overflow-hidden border border-gray-100">
-                  <img
-                    src={
-                      foundUser.avatarUrl ||
-                      `https://api.dicebear.com/7.x/initials/svg?seed=${foundUser.fullName}`
-                    }
-                    alt="avatar"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div>
-                  <h3 className="font-bold text-[16px] text-gray-900">
-                    {foundUser.fullName}
-                  </h3>
-                  <p className="text-[12px] text-gray-500">{foundUser.phone}</p>
-                </div>
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+            {/* Input tìm kiếm */}
+            <div className="space-y-4">
+              <div className="relative">
+                <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Nhập số điện thoại..."
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  className="w-full bg-gray-50 border-2 border-transparent rounded-2xl pl-12 pr-4 py-4 text-[15px] font-bold outline-none focus:border-black focus:bg-white transition-all"
+                />
               </div>
               <button
-                onClick={() => setShowProfile(true)}
-                className="p-3 bg-white border border-gray-200 rounded-full hover:bg-black hover:text-white transition-all shadow-sm active:scale-90"
+                onClick={() => handleSearch()}
+                disabled={loading}
+                className="w-full bg-black text-white py-4 rounded-2xl font-black text-[15px] hover:bg-gray-800 transition shadow-lg active:scale-95"
               >
-                <ArrowRightIcon className="w-5 h-5 stroke-2" />
+                {loading ? "Đang tìm..." : "Tìm kiếm ngay"}
               </button>
             </div>
-          )}
+
+            {/* Lịch sử tìm kiếm: Chỉ hiện và làm dài modal khi có data */}
+            {searchHistory.length > 0 && (
+              <div className="mt-10 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center justify-between mb-4 px-1">
+                  <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.15em]">
+                    Tìm kiếm gần đây
+                  </h3>
+                  <button
+                    onClick={clearHistory}
+                    className="p-1.5 hover:bg-red-50 rounded-lg group transition-colors"
+                  >
+                    <TrashIcon className="w-4 h-4 text-gray-300 group-hover:text-red-500" />
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {searchHistory.map((item, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleSearch(item)}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 hover:bg-black hover:text-white border border-gray-100 rounded-full text-[13px] font-bold text-gray-600 transition-all active:scale-90"
+                    >
+                      <ClockIcon className="w-4 h-4 opacity-50" />
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Kẻ ngang: Chỉ hiện khi có kết quả hoặc lịch sử để không bị dư thừa */}
+            {(searchHistory.length > 0 || foundUser) && (
+              <div className="h-[1px] bg-gray-50 my-10" />
+            )}
+
+            {/* Kết quả tìm kiếm */}
+            {foundUser ? (
+              <div
+                className="p-5 bg-black text-white rounded-[24px] flex items-center justify-between shadow-xl animate-in zoom-in-95 cursor-pointer hover:bg-gray-900 transition-all mb-2"
+                onClick={() => setShowProfile(true)}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-white/20 shrink-0 shadow-inner bg-neutral-800">
+                    <img
+                      src={foundUser.avatarUrl || "/avt-mac-dinh.jpg"}
+                      onError={(e) =>
+                        (e.currentTarget.src = "/avt-mac-dinh.jpg")
+                      }
+                      className="w-full h-full object-cover"
+                      alt=""
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-black text-[16px] leading-tight">
+                      {foundUser.fullName}
+                    </span>
+                    <span className="text-[12px] text-gray-400 font-bold mt-0.5">
+                      {foundUser.phone}
+                    </span>
+                  </div>
+                </div>
+                <div className="p-2 bg-white/10 rounded-full">
+                  <ArrowRightIcon className="w-5 h-5" />
+                </div>
+              </div>
+            ) : (
+              !searchHistory.length && (
+                <div className="py-12 text-center">
+                  <p className="text-gray-300 text-sm font-medium italic">
+                    Nhập số điện thoại để tìm bạn mới
+                  </p>
+                </div>
+              )
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Truyền handleSearch xuống để con có thể báo hiệu refresh dữ liệu */}
       <FriendProfileModal
         isOpen={showProfile}
         onClose={() => setShowProfile(false)}

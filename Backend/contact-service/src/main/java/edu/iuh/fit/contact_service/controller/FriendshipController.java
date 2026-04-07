@@ -68,7 +68,7 @@ import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import edu.iuh.fit.contact_service.dto.response.FriendshipResponseDTO;
 import edu.iuh.fit.contact_service.dto.request.FriendRequestDTO;
 import edu.iuh.fit.contact_service.dto.response.SearchFriendResponseDTO;
-import edu.iuh.fit.contact_service.service.ContactService;
+import edu.iuh.fit.contact_service.service.FriendshipService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -78,9 +78,9 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/contacts")
 @RequiredArgsConstructor
-public class ContactController {
+public class FriendshipController {
 
-    private final ContactService contactService;
+    private final FriendshipService contactService;
 
     // Tìm kiếm: Lấy currentUserId từ Header do Gateway dập mộc
     @GetMapping("/search")
@@ -137,5 +137,13 @@ public class ContactController {
 
         contactService.revokeRequest(requesterId, recipientId);
         return ResponseEntity.ok(ApiResponse.success("Đã thu hồi lời mời kết bạn thành công"));
+    }
+    @DeleteMapping("/friend/{friendId}")
+    public ResponseEntity<ApiResponse<String>> removeFriend(
+            @PathVariable String friendId,
+            @RequestHeader("X-User-Id") String userId) {
+        // Tấn dùng chung logic xóa record trong DB giống như decline/revoke nhé
+        contactService.removeFriend(userId, friendId);
+        return ResponseEntity.ok(ApiResponse.success("Đã xóa bạn bè thành công"));
     }
 }

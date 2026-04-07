@@ -25,7 +25,7 @@ export default function ContactSidebar() {
             `Tìm thấy: ${userFound.fullName}. Giờ ông code thêm cái modal hiện ra để bấm kết bạn nhé!`,
           );
         } else {
-          alert("Không tìm thấy số này Tấn ơi!");
+          alert("Không tìm thấy số này");
         }
       } catch (err) {
         alert("Lỗi tìm kiếm rồi!");
@@ -45,7 +45,7 @@ export default function ContactSidebar() {
     <div className="w-80 h-screen bg-white border-r border-gray-100 flex flex-col shrink-0">
       <div className="p-6 pb-4">
         <h2 className="text-[22px] font-bold mb-5">Danh bạ</h2>
-        <div className="bg-gray-100/80 rounded-full px-4 py-2.5 flex items-center gap-2">
+        {/* <div className="bg-gray-100/80 rounded-full px-4 py-2.5 flex items-center gap-2">
           <MagnifyingGlassIcon className="w-5 h-5 text-gray-400" />
           <input
             type="text"
@@ -55,7 +55,7 @@ export default function ContactSidebar() {
             onKeyDown={handleSearch}
             className="bg-transparent w-full outline-none text-[15px] placeholder-gray-400"
           />
-        </div>
+        </div> */}
       </div>
 
       <div className="flex-1 px-4 space-y-1">
