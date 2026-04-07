@@ -1,6 +1,5 @@
 package edu.iuh.fit.contact_service.dto.response;
 
-import edu.iuh.fit.contact_service.enums.FriendshipStatus;
 import lombok.Builder;
 import lombok.Data;
 
@@ -15,4 +14,8 @@ public class FriendshipResponseDTO {
 
     private String requesterName;
     private String requesterAvatar;
+
+    // THÊM 2 TRƯỜNG NÀY VÀO ĐÂY NHÉ
+    private String recipientName;
+    private String recipientAvatar;
 }
