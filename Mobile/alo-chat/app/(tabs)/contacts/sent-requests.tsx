@@ -125,17 +125,17 @@ function RequestItem({
       <View className="flex-row items-center flex-1 pr-4">
         <Image
           source={
-            request.requesterAvatar
-              ? { uri: request.requesterAvatar }
+            request.recipientAvatar
+              ? { uri: request.recipientAvatar }
               : {
-                  uri: `https://api.dicebear.com/7.x/initials/svg?seed=${request.requesterName}`,
+                  uri: `https://api.dicebear.com/7.x/initials/svg?seed=${request.recipientName || "Unknown"}`,
                 }
           }
           className="w-14 h-14 rounded-full bg-gray-200"
         />
         <View className="ml-4 flex-1 justify-center">
           <Text className="text-[17px] font-semibold text-gray-900 mb-0.5">
-            {request.requesterName}
+            {request.recipientName || "Người dùng ẩn danh"}
           </Text>
           <Text className="text-[13px] text-gray-500" numberOfLines={1}>
             {request.greetingMessage || "Từ số điện thoại"}
