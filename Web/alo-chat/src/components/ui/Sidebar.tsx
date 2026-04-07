@@ -23,6 +23,7 @@ export default function Sidebar() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
+
   // Hàm kiểm tra active link
   const isActive = (path: string) => location.pathname.includes(path);
 
@@ -39,6 +40,38 @@ export default function Sidebar() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+
+  // Xử lý avatar trên sidebar
+  const BASE_URL = "http://localhost:8888/api/v1/auth";
+  const [avatarUrl, setAvatarUrl] = useState('https://i.pravatar.cc/150?u=default');
+
+   useEffect(() => {
+      fetchUserData();
+  }, []);
+
+  const fetchUserData = async () => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${BASE_URL}/me`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const result = await response.json(); 
+      // ✅ TRUY CẬP VÀO result.data
+      const userData = result.data; 
+
+      if (userData) {
+        setAvatarUrl(userData.avatar || 'https://i.pravatar.cc/150?u=default');
+      }
+    } catch (error) {
+      console.error("Fetch profile error:", error);
+    }
+  };
+
 
   
 
@@ -84,7 +117,7 @@ export default function Sidebar() {
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="w-10 h-10 mt-2 cursor-pointer rounded-full overflow-hidden border border-gray-300 active:scale-90 transition-transform"
           >
-            <img src="https://i.pravatar.cc/150?img=11" alt="Avatar" className="w-full h-full object-cover" />
+            <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
           </div>
 
           {/* Render UserMenu nhỏ */}
