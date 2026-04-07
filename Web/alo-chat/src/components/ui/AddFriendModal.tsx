@@ -1,5 +1,5 @@
 // src/components/ui/AddFriendModal.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axiosClient from "../../config/axiosClient";
 import {
   XMarkIcon,
@@ -12,20 +12,31 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
   const [phone, setPhone] = useState("");
   const [foundUser, setFoundUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showProfile, setShowProfile] = useState(false); // State mở Profile chi tiết
+  const [showProfile, setShowProfile] = useState(false);
+
+  // UX: Bắt phím ESC và Khóa cuộn trang
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleEsc);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", handleEsc);
+      document.body.style.overflow = "unset";
+    };
+  }, [onClose]);
 
   const handleSearch = async () => {
     if (!phone) return;
     setLoading(true);
-    setFoundUser(null);
+    // Không setFoundUser(null) ở đây để tránh giao diện bị giật khi refresh dữ liệu
     try {
-      // ✅ QUAN TRỌNG: Gọi sang Contact Service để lấy relationStatus
       const res: any = await axiosClient.get(`/contacts/search?phone=${phone}`);
-
-      // Dữ liệu từ Contact Service trả về SearchFriendResponseDTO
       const data = res?.data?.data || res?.data || res;
       setFoundUser(data);
     } catch (err) {
+      setFoundUser(null);
       alert("Số điện thoại chưa đăng kí hoặc không cho phép tìm kiếm");
     } finally {
       setLoading(false);
@@ -34,8 +45,15 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 font-sans">
-        <div className="bg-white rounded-[40px] p-8 max-w-[480px] w-full relative shadow-2xl text-black">
+      {/* Click Outside: Bấm vào lớp phủ để đóng */}
+      <div
+        onClick={onClose}
+        className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 font-sans animate-in fade-in duration-200"
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white rounded-[40px] p-8 max-w-[480px] w-full relative shadow-2xl text-black animate-in zoom-in-95 duration-200"
+        >
           <button
             onClick={onClose}
             className="absolute top-6 right-8 text-gray-400 hover:text-black transition-colors"
@@ -68,9 +86,8 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
             </button>
           </div>
 
-          {/* HIỂN THỊ RÚT GỌN KHI TÌM THẤY */}
           {foundUser && (
-            <div className="bg-[#f9f9f9] rounded-[28px] p-5 border border-gray-100 flex items-center justify-between shadow-sm">
+            <div className="bg-[#f9f9f9] rounded-[28px] p-5 border border-gray-100 flex items-center justify-between shadow-sm animate-in slide-in-from-bottom-2">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 bg-white rounded-full overflow-hidden border border-gray-100">
                   <img
@@ -89,8 +106,6 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
                   <p className="text-[12px] text-gray-500">{foundUser.phone}</p>
                 </div>
               </div>
-
-              {/* NÚT CHUYỂN TIẾP: Bấm vào để mở Profile chi tiết */}
               <button
                 onClick={() => setShowProfile(true)}
                 className="p-3 bg-white border border-gray-200 rounded-full hover:bg-black hover:text-white transition-all shadow-sm active:scale-90"
@@ -102,12 +117,13 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
         </div>
       </div>
 
-      {/* MODAL PROFILE CHI TIẾT (Có logic Kết bạn / Nhắn tin / Gọi điện) */}
+      {/* Truyền handleSearch xuống để con có thể báo hiệu refresh dữ liệu */}
       <FriendProfileModal
         isOpen={showProfile}
         onClose={() => setShowProfile(false)}
-        userId={foundUser?.userId} // Truyền userId từ SearchFriendResponseDTO
-        relationStatus={foundUser?.relationStatus} // Truyền status chuẩn từ Backend
+        userId={foundUser?.userId}
+        relationStatus={foundUser?.relationStatus}
+        onActionSuccess={handleSearch}
       />
     </>
   );

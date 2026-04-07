@@ -193,4 +193,23 @@ public class ContactServiceImpl implements ContactService {
                 .status(friendship.getStatus().toString())
                 .build();
     }
+    @Override
+    @Transactional
+    public void revokeRequest(String requesterId, String recipientId) {
+        // Tìm kiếm lời mời dựa trên cặp người gửi và người nhận
+        Friendship friendship = friendshipRepository.findByUserIds(requesterId, recipientId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lời mời kết bạn nào!"));
+
+        // Kiểm tra bảo mật: Chỉ cho phép người GỬI (Requester) được thu hồi
+        if (!friendship.getRequesterId().equals(requesterId)) {
+            throw new ForbiddenException("Ông không phải người gửi lời mời này, không được thu hồi!");
+        }
+
+        // Nếu lời mời đã được chấp nhận (ACCEPTED) thì không cho thu hồi kiểu này (phải dùng chức năng Hủy kết bạn)
+        if (friendship.getStatus() != FriendshipStatus.PENDING) {
+            throw new AppException(400, "Lời mời đã được xử lý, không thể thu hồi");
+        }
+
+        friendshipRepository.delete(friendship);
+    }
 }

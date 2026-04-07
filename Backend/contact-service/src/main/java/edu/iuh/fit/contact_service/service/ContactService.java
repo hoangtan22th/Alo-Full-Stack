@@ -14,6 +14,6 @@ public interface ContactService {
     FriendshipResponseDTO acceptRequest(String friendshipId, String userId); // Đồng ý
     void declineRequest(String friendshipId, String userId);
     SearchFriendResponseDTO searchUserByPhone(String phone, String currentUserId);// Từ chối
-
+    void revokeRequest(String requesterId, String recipientId);
 
 }

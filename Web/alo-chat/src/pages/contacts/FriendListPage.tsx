@@ -20,14 +20,15 @@ export default function FriendListPage() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const handleOpenProfile = (friend: any) => {
-    const idToOpen = friend.targetId || friend.recipientId;
+    // Lấy ID đối phương tùy thuộc vào việc mình là người gửi hay người nhận
+    const idToOpen =
+      friend.targetId || friend.recipientId || friend.requesterId;
     setSelectedUserId(idToOpen);
     setProfileModalOpen(true);
   };
 
   const fetchFriends = async () => {
     try {
-      // CẬP NHẬT: Không cần lột vỏ dư thừa nữa, nhận thẳng mảng
       const friendData: any = await axiosClient.get("/contacts/friends");
       setFriends(Array.isArray(friendData) ? friendData : []);
     } catch (err) {
@@ -168,12 +169,18 @@ export default function FriendListPage() {
                     onClick={() => handleOpenProfile(friend)}
                     className="flex items-center gap-4 p-4 bg-white rounded-[24px] border border-transparent hover:border-gray-100 hover:shadow-md transition-all cursor-pointer group"
                   >
-                    <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-gray-50 shrink-0 shadow-inner">
+                    {/* FIX: Avatar nền đen và fallback ảnh mặc định */}
+                    <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-gray-50 shrink-0 shadow-inner bg-black">
                       <img
                         src={
-                          friend.requesterAvatar ||
-                          `https://api.dicebear.com/7.x/initials/svg?seed=${friend.requesterName}`
+                          friend.requesterAvatar &&
+                          friend.requesterAvatar.trim() !== ""
+                            ? friend.requesterAvatar
+                            : "/avt-mac-dinh.jpg"
                         }
+                        onError={(e) => {
+                          e.currentTarget.src = "/avt-mac-dinh.jpg";
+                        }}
                         alt="avatar"
                         className="w-full h-full object-cover"
                       />
@@ -202,6 +209,7 @@ export default function FriendListPage() {
         onClose={() => setProfileModalOpen(false)}
         userId={selectedUserId}
         relationStatus="ACCEPTED"
+        onActionSuccess={fetchFriends} // Refresh danh sách khi có thay đổi (vd: hủy kết bạn)
       />
     </div>
   );
