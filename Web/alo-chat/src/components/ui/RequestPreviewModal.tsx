@@ -1,4 +1,4 @@
-// src/components/ui/RequestPreviewModal.tsx
+import { useEffect } from "react";
 import {
   XMarkIcon,
   UserCircleIcon,
@@ -12,11 +12,31 @@ export default function RequestPreviewModal({
   onDecline,
   onViewProfile,
 }: any) {
+  useEffect(() => {
+    if (request) {
+      const handleEsc = (e: KeyboardEvent) => {
+        if (e.key === "Escape") onClose();
+      };
+      window.addEventListener("keydown", handleEsc);
+      document.body.style.overflow = "hidden";
+      return () => {
+        window.removeEventListener("keydown", handleEsc);
+        document.body.style.overflow = "unset";
+      };
+    }
+  }, [request, onClose]);
+
   if (!request) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 font-sans">
-      <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-2xl relative flex flex-col items-center text-center">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-300"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-2xl relative flex flex-col items-center text-center animate-in zoom-in-95 duration-200"
+      >
         <button
           onClick={onClose}
           className="absolute top-5 right-5 text-gray-400 hover:text-black"
@@ -47,7 +67,7 @@ export default function RequestPreviewModal({
           >
             <UserCircleIcon className="w-4 h-4" /> Xem hồ sơ
           </button>
-          <button className="flex-1 flex justify-center items-center gap-2 bg-black-50 text-blue-600 py-2.5 rounded-xl font-bold text-[13px] hover:bg-blue-100 transition">
+          <button className="flex-1 flex justify-center items-center gap-2 bg-blue-50 text-blue-600 py-2.5 rounded-xl font-bold text-[13px] hover:bg-blue-100 transition">
             <ChatBubbleLeftIcon className="w-4 h-4" /> Nhắn tin
           </button>
         </div>
