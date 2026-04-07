@@ -44,6 +44,13 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(tokens));
     }
 
+    @PostMapping("/google")
+    public ResponseEntity<ApiResponse<Map<String, String>>> loginWithGoogle(@RequestBody GoogleLoginRequest request,
+            HttpServletResponse response) {
+        Map<String, String> tokens = authService.loginWithGoogle(request, response);
+        return ResponseEntity.ok(ApiResponse.success(tokens));
+    }
+
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<Map<String, String>>> refreshToken(
             @CookieValue(name = "refreshToken", required = false) String cookieRefreshToken,
