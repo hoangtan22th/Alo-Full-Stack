@@ -13,20 +13,18 @@ import edu.iuh.fit.contact_service.dto.response.UserDTO;
 import edu.iuh.fit.contact_service.entity.Friendship;
 import edu.iuh.fit.contact_service.enums.FriendshipStatus;
 import edu.iuh.fit.contact_service.repository.FriendshipRepository;
-import edu.iuh.fit.contact_service.service.ContactService;
+import edu.iuh.fit.contact_service.service.FriendshipService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class ContactServiceImpl implements ContactService {
+public class FriendshipServiceImpl implements FriendshipService {
     private final UserClient userClient;
     private final FriendshipRepository friendshipRepository;
 
@@ -123,7 +121,7 @@ public class ContactServiceImpl implements ContactService {
                     .findFirst()
                     .ifPresent(u -> {
                         dto.setRequesterName(u.getFullName());
-                        dto.setRequesterAvatar(u.getAvatar()); // Fix: Đồng bộ getAvatar()
+                        dto.setRequesterAvatar(u.getAvatar());
                     });
             return dto;
         }).collect(Collectors.toList());
@@ -208,6 +206,18 @@ public class ContactServiceImpl implements ContactService {
         // Nếu lời mời đã được chấp nhận (ACCEPTED) thì không cho thu hồi kiểu này (phải dùng chức năng Hủy kết bạn)
         if (friendship.getStatus() != FriendshipStatus.PENDING) {
             throw new AppException(400, "Lời mời đã được xử lý, không thể thu hồi");
+        }
+
+        friendshipRepository.delete(friendship);
+    }
+    @Override
+    @Transactional
+    public void removeFriend(String userId, String friendId) {
+        Friendship friendship = friendshipRepository.findByUserIds(userId, friendId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mối quan hệ bạn bè không tồn tại!"));
+
+        if (friendship.getStatus() != FriendshipStatus.ACCEPTED) {
+            throw new AppException(400, "Hai người hiện chưa là bạn bè, không thể thực hiện thao tác xóa!");
         }
 
         friendshipRepository.delete(friendship);

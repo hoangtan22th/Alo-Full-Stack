@@ -39,7 +39,7 @@ export default function FriendRequestPage() {
       setRequests((prev) => prev.filter((req) => req.id !== requestId));
       setSelectedRequest(null);
     } catch (err) {
-      alert("Thao tác thất bại, Tấn kiểm tra lại log nhé!");
+      alert("Thao tác thất bại, kiểm tra lại log nhé!");
     }
   };
 
@@ -71,7 +71,7 @@ export default function FriendRequestPage() {
       {requests.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-[32px] border-2 border-dashed border-gray-200">
           <p className="text-gray-400 font-medium">
-            Hiện không có lời mời nào mới, Tấn ơi!
+            HIỆN KHÔNG CÓ LỜI MỜI NÀO MỚI HẾT NHA CON CHÓ
           </p>
         </div>
       ) : (

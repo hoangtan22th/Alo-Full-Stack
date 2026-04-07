@@ -152,7 +152,7 @@ export default function FriendListPage() {
         {groupKeys.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-[32px] border-2 border-dashed border-gray-100">
             <p className="text-gray-400 font-medium italic">
-              Không tìm thấy ai trong danh sách này, Tấn ơi!
+              MÀY CÔ ĐƠN ĐÉO CÓ AI LÀM BẠN À ? TRANG CỦA MÀY ĐÂU ?
             </p>
           </div>
         ) : (
