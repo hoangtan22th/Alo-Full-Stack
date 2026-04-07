@@ -1,31 +1,31 @@
 package edu.iuh.fit.auth_service.entity;
 
 import edu.iuh.fit.auth_service.enums.QrAuthStatus;
-import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.redis.core.RedisHash;
+import org.springframework.data.redis.core.TimeToLive;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "qr_sessions")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class QrSession {
+@RedisHash("QrSession")
+public class QrSession implements Serializable {
     @Id
     private String qrToken;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private QrAuthStatus status;
 
     // Sẽ được cập nhật khi quét thành công
     private String userId;
     private String deviceId;
 
-    @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
-
-    @Column(name = "expires_at")
+    
+    // Lưu ý: với Redis ta thường dùng TTL định định thời gian tồn tại thay vì expiresAt để kiểm tra.
     private LocalDateTime expiresAt;
+
+    @TimeToLive
+    private Long timeToLive; 
 }

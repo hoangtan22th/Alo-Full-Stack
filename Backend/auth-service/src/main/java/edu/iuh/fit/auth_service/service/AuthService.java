@@ -91,6 +91,8 @@ public class AuthService {
                 .fullName(request.fullName())
                 .authProvider(User.AuthProvider.LOCAL)
                 .gender(2)
+                .avatar("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/user_avt.png")
+                .coverImage("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/default-cover-img.jpg")
                 .build();
         userRepository.save(user);
     }

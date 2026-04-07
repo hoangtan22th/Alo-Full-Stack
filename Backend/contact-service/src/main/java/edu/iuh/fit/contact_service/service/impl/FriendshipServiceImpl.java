@@ -13,20 +13,18 @@ import edu.iuh.fit.contact_service.dto.response.UserDTO;
 import edu.iuh.fit.contact_service.entity.Friendship;
 import edu.iuh.fit.contact_service.enums.FriendshipStatus;
 import edu.iuh.fit.contact_service.repository.FriendshipRepository;
-import edu.iuh.fit.contact_service.service.ContactService;
+import edu.iuh.fit.contact_service.service.FriendshipService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class ContactServiceImpl implements ContactService {
+public class FriendshipServiceImpl implements FriendshipService {
     private final UserClient userClient;
     private final FriendshipRepository friendshipRepository;
 
@@ -123,7 +121,31 @@ public class ContactServiceImpl implements ContactService {
                     .findFirst()
                     .ifPresent(u -> {
                         dto.setRequesterName(u.getFullName());
-                        dto.setRequesterAvatar(u.getAvatar()); // Fix: Đồng bộ getAvatar()
+                        dto.setRequesterAvatar(u.getAvatar());
+                    });
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<FriendshipResponseDTO> getSentRequests(String userId) {
+        List<Friendship> requests = friendshipRepository.findByRequesterIdAndStatus(userId, FriendshipStatus.PENDING);
+        if (requests.isEmpty()) return List.of();
+
+        List<String> recipientIds = requests.stream()
+                .map(Friendship::getRecipientId)
+                .collect(Collectors.toList());
+
+        List<UserDTO> userInfos = userClient.getUsersByIds(recipientIds).getData();
+
+        return requests.stream().map(req -> {
+            FriendshipResponseDTO dto = mapToDTO(req);
+            userInfos.stream()
+                    .filter(u -> u.getId().equals(req.getRecipientId()))
+                    .findFirst()
+                    .ifPresent(u -> {
+                        dto.setRequesterName(u.getFullName()); // map cho dễ dùng phía FE
+                        dto.setRequesterAvatar(u.getAvatar());
                     });
             return dto;
         }).collect(Collectors.toList());
@@ -143,14 +165,23 @@ public class ContactServiceImpl implements ContactService {
 
         return friends.stream().map(f -> {
             FriendshipResponseDTO dto = mapToDTO(f);
+            // targetId là ID của người bạn (không phải mình)
             String targetId = f.getRequesterId().equals(userId) ? f.getRecipientId() : f.getRequesterId();
 
             userInfos.stream()
                     .filter(u -> u.getId().equals(targetId))
                     .findFirst()
                     .ifPresent(u -> {
-                        dto.setRequesterName(u.getFullName());
-                        dto.setRequesterAvatar(u.getAvatar()); // Fix: Đồng bộ getAvatar()
+                        // SỬA LẠI ĐOẠN NÀY: Bỏ đúng người, đúng chỗ
+                        if (targetId.equals(f.getRequesterId())) {
+                            // Nếu bạn bè là người gửi
+                            dto.setRequesterName(u.getFullName());
+                            dto.setRequesterAvatar(u.getAvatar());
+                        } else {
+                            // Nếu bạn bè là người nhận
+                            dto.setRecipientName(u.getFullName());
+                            dto.setRecipientAvatar(u.getAvatar());
+                        }
                     });
             return dto;
         }).collect(Collectors.toList());
@@ -208,6 +239,18 @@ public class ContactServiceImpl implements ContactService {
         // Nếu lời mời đã được chấp nhận (ACCEPTED) thì không cho thu hồi kiểu này (phải dùng chức năng Hủy kết bạn)
         if (friendship.getStatus() != FriendshipStatus.PENDING) {
             throw new AppException(400, "Lời mời đã được xử lý, không thể thu hồi");
+        }
+
+        friendshipRepository.delete(friendship);
+    }
+    @Override
+    @Transactional
+    public void removeFriend(String userId, String friendId) {
+        Friendship friendship = friendshipRepository.findByUserIds(userId, friendId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mối quan hệ bạn bè không tồn tại!"));
+
+        if (friendship.getStatus() != FriendshipStatus.ACCEPTED) {
+            throw new AppException(400, "Hai người hiện chưa là bạn bè, không thể thực hiện thao tác xóa!");
         }
 
         friendshipRepository.delete(friendship);
