@@ -16,11 +16,11 @@ export interface FriendshipResponseDTO {
 }
 
 export interface SearchFriendResponseDTO {
-  id: string;
+  userId: string;
   phone: string;
   fullName: string;
-  avatar?: string;
-  friendshipStatus?: string;
+  avatarUrl?: string;
+  relationStatus?: string;
 }
 
 export const contactService = {
