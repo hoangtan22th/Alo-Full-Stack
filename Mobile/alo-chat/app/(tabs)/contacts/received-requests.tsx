@@ -134,8 +134,26 @@ function RequestCard({
   onAccept: () => void;
   onDecline: () => void;
 }) {
+  const router = useRouter();
+
   return (
-    <View className="bg-white p-5 rounded-[28px] mb-4 border border-gray-100 shadow-sm">
+    <TouchableOpacity
+      className="bg-white p-5 rounded-[28px] mb-4 border border-gray-100 shadow-sm"
+      onPress={() =>
+        router.push({
+          pathname: "/contacts/send-request",
+          params: {
+            userId: request.requesterId,
+            fullName: request.requesterName,
+            phone: "Ẩn", // Hoặc request.requesterPhone nếu có
+            avatarUrl: request.requesterAvatar,
+            relationStatus: "THEY_SENT_REQUEST",
+            requestId: request.id,
+            greetingMessage: request.greetingMessage || "",
+          },
+        })
+      }
+    >
       {/* Info Row: Avatar, Name, Source, Time */}
       <View className="flex-row items-start mb-3">
         <Image
@@ -187,6 +205,6 @@ function RequestCard({
           <Text className="text-gray-900 text-[15px] font-bold">Từ chối</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }

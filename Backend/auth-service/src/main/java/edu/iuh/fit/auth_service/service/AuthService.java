@@ -431,13 +431,14 @@ public class AuthService {
 
             // 5. Sinh JWT nội bộ & Quản lý Session (Giữ nguyên chuẩn của Alo-Full-Stack)
             String deviceId = (request.deviceId() == null) ? "Unknown Device" : request.deviceId();
+            String sessionId = UUID.randomUUID().toString();
 
-            String accessToken = tokenService.generateAccessToken(user);
+            String accessToken = tokenService.generateAccessToken(user, sessionId);
             String refreshToken = tokenService.generateRefreshToken(user, deviceId);
             String tokenId = tokenService.getTokenIdFromJWT(refreshToken);
 
             UserSession session = UserSession.builder()
-                    .id(UUID.randomUUID().toString())
+                    .id(sessionId)
                     .user(user)
                     .deviceId(deviceId)
                     .refreshTokenId(tokenId)
