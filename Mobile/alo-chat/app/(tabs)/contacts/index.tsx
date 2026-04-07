@@ -20,6 +20,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { contactService } from "../../../services/contactService";
 
+import api from "../../../services/api";
+
 // Helper lấy chữ cái đầu của tên (ví dụ: "Nguyễn Văn A" -> "A")
 function getFirstLetter(name: string) {
   if (!name) return "#";
@@ -61,13 +63,29 @@ export default function ContactsScreen() {
   const fetchFriends = async () => {
     setLoading(true);
     try {
+      const meRes: any = await api.get("/auth/me");
+      const myId = meRes?.id || meRes?._id;
+
       const friends = await contactService.getFriendsList();
 
       // Nhóm theo chữ cái đầu
       const groups: Record<string, any[]> = {};
       friends.forEach((friend) => {
-        const name = friend.requesterName || "Unknown";
-        const letter = getFirstLetter(name);
+        const isMeRequester = friend.requesterId === myId;
+
+        const friendId = isMeRequester
+          ? friend.recipientId
+          : friend.requesterId;
+        const name = isMeRequester
+          ? friend.recipientName
+          : friend.requesterName;
+        const avatar = isMeRequester
+          ? friend.recipientAvatar
+          : friend.requesterAvatar;
+
+        const finalName = name || "Unknown";
+
+        const letter = getFirstLetter(finalName);
 
         if (!groups[letter]) {
           groups[letter] = [];
@@ -75,10 +93,11 @@ export default function ContactsScreen() {
 
         groups[letter].push({
           id: friend.id,
-          name: name,
-          status: friend.greetingMessage || "Offline", // Tạm dùng greeting message làm status hoặc "Offline"
-          avatar: friend.requesterAvatar,
-          initials: getInitials(name),
+          userId: friendId, // ID chính xác của người bạn
+          name: finalName,
+          status: friend.greetingMessage || "Offline", // Tạm dùng greeting message
+          avatar: avatar,
+          initials: getInitials(finalName),
           isOnline: false, // Dữ liệu thật sẽ cần socket/status API
         });
       });
@@ -218,8 +237,25 @@ function ActionItem({
 
 // Component Từng người liên hệ
 function ContactItem({ contact }: { contact: any }) {
+  const router = useRouter();
+
   return (
-    <TouchableOpacity className="flex-row items-center px-5 py-3">
+    <TouchableOpacity
+      className="flex-row items-center px-5 py-3"
+      onPress={() => {
+        router.push({
+          pathname: "/contacts/send-request",
+          params: {
+            userId: contact.userId,
+            fullName: contact.name,
+            phone: "Số điện thoại bị ẩn", // Theo đề bài, thông tin chưa có hoặc muốn lấy full API thì có thể fetch tiếp ở màn kia
+            avatarUrl: contact.avatar,
+            relationStatus: "ACCEPTED",
+            requestId: contact.id,
+          },
+        });
+      }}
+    >
       {/* Avatar */}
       {contact.avatar ? (
         <Image

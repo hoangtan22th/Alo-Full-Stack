@@ -144,8 +144,8 @@ public class FriendshipServiceImpl implements FriendshipService {
                     .filter(u -> u.getId().equals(req.getRecipientId()))
                     .findFirst()
                     .ifPresent(u -> {
-                        dto.setRequesterName(u.getFullName()); // map cho dễ dùng phía FE
-                        dto.setRequesterAvatar(u.getAvatar());
+                        dto.setRecipientName(u.getFullName());
+                        dto.setRecipientAvatar(u.getAvatar());
                     });
             return dto;
         }).collect(Collectors.toList());
