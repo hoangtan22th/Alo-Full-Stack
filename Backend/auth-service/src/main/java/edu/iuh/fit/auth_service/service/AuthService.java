@@ -1,5 +1,9 @@
 package edu.iuh.fit.auth_service.service;
 
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
 import edu.iuh.fit.auth_service.dto.request.*;
 import edu.iuh.fit.auth_service.dto.response.UserResponse;
 import edu.iuh.fit.auth_service.dto.response.UserSessionResponse;
@@ -12,13 +16,19 @@ import edu.iuh.fit.common_service.exception.ResourceNotFoundException;
 import edu.iuh.fit.common_service.exception.UnauthorizedException;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,6 +46,9 @@ public class AuthService {
     // Hằng số cho Brute-Force
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final long LOCK_TIME_DURATION = 15; // 15 Phút
+
+    @Value("${google.client-id:YOUR_GOOGLE_CLIENT_ID_HERE}")
+    protected String GOOGLE_CLIENT_ID;
     
     @Transactional
     public void sendRegistrationOtp(String email) {
@@ -43,11 +56,11 @@ public class AuthService {
             throw new RuntimeException("Email đã được đăng ký");
         }
 
-        java.security.SecureRandom random = new java.security.SecureRandom();
+        SecureRandom random = new SecureRandom();
         String otp = String.format("%06d", random.nextInt(1000000));
 
         String redisKey = "OTP_REG:" + email;
-        stringRedisTemplate.opsForValue().set(redisKey, otp, 5, java.util.concurrent.TimeUnit.MINUTES);
+        stringRedisTemplate.opsForValue().set(redisKey, otp, 5, TimeUnit.MINUTES);
 
         String subject = "Mã xác nhận đăng ký tài khoản ALO";
         String text = "Xin chào,\n\nMã OTP xác nhận đăng ký tài khoản của bạn là: " + otp + "\nMã này sẽ hết hạn trong vòng 5 phút.\n\nTrân trọng,\nĐội ngũ ALO";
@@ -84,7 +97,7 @@ public class AuthService {
 
     // Trong AuthService.java
 
-    public java.util.Map<String, String> login(LoginRequest request, HttpServletResponse response) {
+    public Map<String, String> login(LoginRequest request, HttpServletResponse response) {
         // request.email() ở đây có thể là email hoặc số điện thoại
         User user = userRepository.findByEmailOrPhoneNumber(request.email(), request.email())
                 .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
@@ -102,13 +115,13 @@ public class AuthService {
             Long attempts = stringRedisTemplate.opsForValue().increment(attemptsKey);
             if (attempts != null && attempts >= MAX_FAILED_ATTEMPTS) {
                 // Đạt ngưỡng cửa cấm: Set khóa cờ 15 phút
-                stringRedisTemplate.opsForValue().set(lockKey, "LOCKED", LOCK_TIME_DURATION, java.util.concurrent.TimeUnit.MINUTES);
+                stringRedisTemplate.opsForValue().set(lockKey, "LOCKED", LOCK_TIME_DURATION, TimeUnit.MINUTES);
                 stringRedisTemplate.delete(attemptsKey); // Đếm lại từ đầu sau khi hết khóa
                 throw new UnauthorizedException("Bạn đã nhập sai 5 lần. Tài khoản bị khóa 15 phút bảo vệ.");
             }
             // Cho thời gian sống chu kỳ đếm sai là 1 Tiếng
             if (attempts != null && attempts == 1) {
-                 stringRedisTemplate.expire(attemptsKey, 1, java.util.concurrent.TimeUnit.HOURS);
+                 stringRedisTemplate.expire(attemptsKey, 1, TimeUnit.HOURS);
             }
             throw new UnauthorizedException("Sai mật khẩu. Bạn còn " + (Math.max(0, MAX_FAILED_ATTEMPTS - (attempts != null ? attempts : 1))) + " lần thử.");
         }
@@ -141,7 +154,7 @@ public class AuthService {
         cookieUtil.createHttpOnlyCookie(response, "refreshToken", refreshToken, 604800);
 
         // Trả về cả 2 token (refreshToken cho Mobile lưu vào AsyncStorage)
-        return java.util.Map.of("accessToken", accessToken, "refreshToken", refreshToken);
+        return Map.of("accessToken", accessToken, "refreshToken", refreshToken);
     }
 
     // 1. API: Lấy Profile (Dựa trên userId từ JWT)
@@ -284,11 +297,11 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Email không tồn tại trong hệ thống"));
 
-        java.security.SecureRandom random = new java.security.SecureRandom();
+        SecureRandom random = new SecureRandom();
         String otp = String.format("%06d", random.nextInt(1000000));
 
         String redisKey = "OTP_FORGOT:" + email;
-        stringRedisTemplate.opsForValue().set(redisKey, otp, 5, java.util.concurrent.TimeUnit.MINUTES);
+        stringRedisTemplate.opsForValue().set(redisKey, otp, 5, TimeUnit.MINUTES);
 
         String subject = "Mã xác thực Khôi phục mật khẩu ALO";
         String text = "Xin chào " + user.getFullName() + ",\n\n"
@@ -341,5 +354,80 @@ public class AuthService {
                 + "Nếu bạn không thực hiện hành động này, vui lòng thực hiện Khôi phục mật khẩu ngay lập tức.\n\n"
                 + "Trân trọng,\nĐội ngũ ALO";
         emailService.sendTextEmail(user.getEmail(), subject, text);
+    }
+
+    @Transactional
+    public Map<String, String> loginWithGoogle(GoogleLoginRequest request, HttpServletResponse response) {
+        try {
+            // 1. Cấu hình máy quét Token chính chủ của Google
+            GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
+                    .setAudience(Collections.singletonList(GOOGLE_CLIENT_ID))
+                    .build();
+
+            // 2. Kiểm tra token có chuẩn của Google không
+            GoogleIdToken idToken = verifier.verify(request.idToken());
+            if (idToken == null) {
+                throw new UnauthorizedException("Token Google không hợp lệ hoặc đã hết hạn");
+            }
+
+            // 3. Lấy thông tin User từ Google
+            GoogleIdToken.Payload payload = idToken.getPayload();
+            String email = payload.getEmail();
+            String name = (String) payload.get("name");
+            String pictureUrl = (String) payload.get("picture");
+
+            if (email == null) {
+                throw new UnauthorizedException("Không thể lấy email từ tài khoản Google này");
+            }
+
+            // 4. Kiểm tra User có trong DB chưa
+            User user = userRepository.findByEmail(email).orElse(null);
+
+            if (user == null) {
+                // NẾU CHƯA CÓ: Tự động tạo tài khoản mới
+                user = User.builder()
+                        .id(UUID.randomUUID().toString())
+                        .email(email)
+                        .fullName(name)
+                        .avatar(pictureUrl)
+                        .authProvider(User.AuthProvider.GOOGLE)
+                        .password(passwordEncoder.encode(UUID.randomUUID().toString())) // Mật khẩu rác ngẫu nhiên
+                        .gender(2) // Mặc định là 'Khác'
+                        .build();
+                user = userRepository.save(user);
+            } else {
+                // NẾU ĐÃ CÓ: Cập nhật lại provider nếu trước đó họ đăng ký tay (Account Linking)
+                if (user.getAuthProvider() == null || user.getAuthProvider() == User.AuthProvider.LOCAL) {
+                    user.setAuthProvider(User.AuthProvider.GOOGLE);
+                    userRepository.save(user);
+                }
+            }
+
+            // 5. Sinh JWT nội bộ & Quản lý Session (Giữ nguyên chuẩn của Alo-Full-Stack)
+            String deviceId = (request.deviceId() == null) ? "Unknown Device" : request.deviceId();
+
+            String accessToken = tokenService.generateAccessToken(user);
+            String refreshToken = tokenService.generateRefreshToken(user, deviceId);
+            String tokenId = tokenService.getTokenIdFromJWT(refreshToken);
+
+            UserSession session = UserSession.builder()
+                    .id(UUID.randomUUID().toString())
+                    .user(user)
+                    .deviceId(deviceId)
+                    .refreshTokenId(tokenId)
+                    .ipAddress("127.0.0.1") // Frontend có thể truyền thêm IP nếu cần
+                    .expiresAt(LocalDateTime.now().plusDays(7))
+                    .build();
+            sessionRepository.save(session);
+
+            // Set Cookie
+            cookieUtil.createHttpOnlyCookie(response, "refreshToken", refreshToken, 604800);
+
+            // 6. Nhả Token của hệ thống mình cho Frontend xài
+            return Map.of("accessToken", accessToken, "refreshToken", refreshToken);
+
+        } catch (Exception e) {
+            throw new UnauthorizedException("Xác thực Google thất bại: " + e.getMessage());
+        }
     }
 }
