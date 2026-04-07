@@ -129,4 +129,13 @@ public class ContactController {
         contactService.declineRequest(friendshipId, userId);
         return ResponseEntity.ok(ApiResponse.success("Đã từ chối lời mời kết bạn"));
     }
+
+    @DeleteMapping("/request/revoke/{recipientId}")
+    public ResponseEntity<ApiResponse<String>> revokeFriendRequest(
+            @PathVariable String recipientId,
+            @RequestHeader("X-User-Id") String requesterId) {
+
+        contactService.revokeRequest(requesterId, recipientId);
+        return ResponseEntity.ok(ApiResponse.success("Đã thu hồi lời mời kết bạn thành công"));
+    }
 }

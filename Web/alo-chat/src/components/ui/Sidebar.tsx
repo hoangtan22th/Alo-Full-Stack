@@ -13,15 +13,30 @@ import {
 } from '@heroicons/react/24/solid';
 import { useEffect, useRef, useState } from 'react';
 
+// 1. Thêm dòng này vào Interface của bạn
+interface SettingsMenuProps {
+  onClose: () => void;
+  onOpenGeneralSettings: () => void; // <--- THÊM DÒNG NÀY VÀO
+}
+
 // Import 2 component mới tách
 import UserMenu from './UserMenu'; 
 import ProfileModal from './ProfileModal';
+import SettingsMenu from './SettingsMenu';
+import SettingsModal from './SettingsModal';
 
 export default function Sidebar() {
   const location = useLocation();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+
+  //Khi bấm nào nút cài đặt trong Setting Menu, nó sẽ quản lý việc bật cái Setting model
+  // Nếu để cái này ở Setting menu thì khi menu tắt cái model không biết dựa vào đâu
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false); 
+
   const menuRef = useRef<HTMLDivElement>(null);
+  const settingsRef = useRef<HTMLDivElement>(null); // Ref mới cho nút cài đặt 
 
 
   // Hàm kiểm tra active link
@@ -33,8 +48,12 @@ export default function Sidebar() {
     không nằm trong vùng không gian của Menu.*/
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (menuRef.current && !menuRef.current.contains(target)) {
         setShowUserMenu(false);
+      }
+      if (settingsRef.current && !settingsRef.current.contains(target)) {
+        setShowSettingsMenu(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -107,9 +126,25 @@ export default function Sidebar() {
           <QuestionMarkCircleIcon className="w-6 h-6" />
         </button>
 
-        <button className="text-gray-600 hover:text-black transition-colors">
-          <Cog8ToothIcon className="w-6 h-6" />
-        </button>
+      
+
+        {/* KHU VỰC RĂNG CƯA */}
+        <div className="relative" ref={settingsRef}>
+          <button 
+            onClick={() => setShowSettingsMenu(!showSettingsMenu)}
+            className={`transition-colors ${showSettingsMenu ? 'text-black' : 'text-gray-600 hover:text-black'}`}
+          >
+            <Cog8ToothIcon className="w-6 h-6" />
+          </button>
+
+          {/* Render SettingsMenu */}
+          {showSettingsMenu && (
+            <SettingsMenu 
+              onClose={() => setShowSettingsMenu(false)} 
+              onOpenGeneralSettings={() => setIsSettingsModalOpen(true)}
+            />
+)}
+        </div>
 
         {/* KHU VỰC AVATAR */}
         <div className="relative" ref={menuRef}>
@@ -133,11 +168,24 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {/* Cơ chế "Truyền tin" ngược dòng? */}
+      {/* Cha đưa cho Con nhỏ một cái nút bấm điều khiển (onOpenGeneralSettings).
+      Con nhỏ nhấn nút đó.
+      Hành động nhấn nút chạy ngược lên Cha, làm thay đổi biến isSettingsModalOpen thành true.
+      Cha thấy biến thay đổi, liền bảo Con lớn (SettingsModal đang đứng đợi ở cuối file): "Này, đến lúc hiển thị rồi!". */}
+      <SettingsModal 
+        isOpen={isSettingsModalOpen} 
+        onClose={() => setIsSettingsModalOpen(false)} 
+      />
+
       {/* ProfileModal nên để ở cuối, ngoài các div flex để tránh lỗi hiển thị */}
       <ProfileModal 
         isOpen={isProfileOpen} 
         onClose={() => setIsProfileOpen(false)} 
       />
     </div> 
+
+
+
   );
 }
