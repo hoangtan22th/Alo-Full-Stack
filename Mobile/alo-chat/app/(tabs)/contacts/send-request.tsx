@@ -325,6 +325,13 @@ export default function UserProfileScreen() {
                     Đã gửi lời mời kết bạn
                   </Text>
                 </View>
+                {greetingMessage ? (
+                  <View className="bg-[#f4f5f7] px-4 py-4 rounded-xl mb-3 w-full items-center">
+                    <Text className="text-gray-700 text-[14px] italic text-center">
+                      "{greetingMessage}"
+                    </Text>
+                  </View>
+                ) : null}
                 <TouchableOpacity
                   className="w-full bg-gray-200 rounded-full py-4 items-center justify-center"
                   onPress={handleRevokeRequest}
