@@ -4,6 +4,7 @@ import { UserIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 import { QRCodeSVG } from "qrcode.react";
 import axiosClient from "../../config/axiosClient";
 import { toast } from "sonner";
+import { GoogleLogin } from "@react-oauth/google";
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
@@ -45,10 +46,10 @@ const LoginPage = () => {
           if (data.status === "CONFIRMED") {
             clearInterval(interval);
             const token = data.accessToken;
-            if (token) { 
-              localStorage.setItem("accessToken", token); 
-            } else { 
-              console.error("Không tìm thấy token trong response", data); 
+            if (token) {
+              localStorage.setItem("accessToken", token);
+            } else {
+              console.error("Không tìm thấy token trong response", data);
             }
             toast.success("Đăng nhập bằng mã QR thành công!");
             navigate("/contacts");
@@ -69,18 +70,43 @@ const LoginPage = () => {
     setError("");
 
     try {
-      const res: any = await axiosClient.post("/auth/login", { email, password });
+      const res: any = await axiosClient.post("/auth/login", {
+        email,
+        password,
+      });
       const token = res.accessToken;
-      if (token) { 
-        localStorage.setItem("accessToken", token); 
-      } else { 
-        console.error("Không tìm thấy token trong response", res); 
+      if (token) {
+        localStorage.setItem("accessToken", token);
+      } else {
+        console.error("Không tìm thấy token trong response", res);
       }
-       toast.success("Đăng nhập thành công!");
+      toast.success("Đăng nhập thành công!");
       navigate("/contacts");
     } catch (err: any) {
       setError(err.response?.data?.message || "Đăng nhập thất bại");
     }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse: any) => {
+    setError("");
+    try {
+      const idToken = credentialResponse.credential;
+      const res: any = await axiosClient.post("/auth/google", { idToken });
+      const token = res.accessToken;
+      if (token) {
+        localStorage.setItem("accessToken", token);
+      } else {
+        console.error("Không tìm thấy token trong response", res);
+      }
+      toast.success("Đăng nhập bằng Google thành công!");
+      navigate("/contacts");
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Đăng nhập Google thất bại");
+    }
+  };
+
+  const handleGoogleError = () => {
+    setError("Hủy đăng nhập Google hoặc có lỗi xảy ra");
   };
 
   return (
@@ -162,12 +188,17 @@ const LoginPage = () => {
             </span>
           </div>
 
-          <button className="w-full flex items-center justify-center gap-3 py-3.5 border border-gray-100 rounded-full hover:bg-gray-50 transition-all font-semibold text-gray-700">
-            <span className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-[10px] font-black">
-              G
-            </span>
-            Tiếp tục với Google
-          </button>
+          <div className="w-full flex justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={handleGoogleError}
+              useOneTap
+              shape="pill"
+              theme="outline"
+              size="large"
+              text="continue_with"
+            />
+          </div>
         </div>
 
         {/* Cột bên phải: QR Code */}
