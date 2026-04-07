@@ -106,6 +106,12 @@ public class FriendshipController {
         return ResponseEntity.ok(ApiResponse.success(contactService.getPendingRequests(userId)));
     }
 
+    @GetMapping("/sent")
+    public ResponseEntity<ApiResponse<List<FriendshipResponseDTO>>> getSentRequests(
+            @RequestHeader("X-User-Id") String userId) {
+        return ResponseEntity.ok(ApiResponse.success(contactService.getSentRequests(userId)));
+    }
+
     @GetMapping("/friends")
     public ResponseEntity<ApiResponse<List<FriendshipResponseDTO>>> getFriendsList(
             @RequestHeader("X-User-Id") String userId) {

@@ -128,6 +128,30 @@ public class FriendshipServiceImpl implements FriendshipService {
     }
 
     @Override
+    public List<FriendshipResponseDTO> getSentRequests(String userId) {
+        List<Friendship> requests = friendshipRepository.findByRequesterIdAndStatus(userId, FriendshipStatus.PENDING);
+        if (requests.isEmpty()) return List.of();
+
+        List<String> recipientIds = requests.stream()
+                .map(Friendship::getRecipientId)
+                .collect(Collectors.toList());
+
+        List<UserDTO> userInfos = userClient.getUsersByIds(recipientIds).getData();
+
+        return requests.stream().map(req -> {
+            FriendshipResponseDTO dto = mapToDTO(req);
+            userInfos.stream()
+                    .filter(u -> u.getId().equals(req.getRecipientId()))
+                    .findFirst()
+                    .ifPresent(u -> {
+                        dto.setRequesterName(u.getFullName()); // map cho dễ dùng phía FE
+                        dto.setRequesterAvatar(u.getAvatar());
+                    });
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    @Override
     public List<FriendshipResponseDTO> getFriendsList(String userId) {
         List<Friendship> friends = friendshipRepository.findFriendsByUserId(userId);
         if (friends.isEmpty()) return List.of();
