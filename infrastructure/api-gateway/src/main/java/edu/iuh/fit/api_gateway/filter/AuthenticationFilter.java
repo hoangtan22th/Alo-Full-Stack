@@ -23,6 +23,7 @@ public class AuthenticationFilter implements GlobalFilter {
 
     private final JwtUtils jwtUtils;
     private final RouteValidator validator;
+    private final org.springframework.data.redis.core.ReactiveStringRedisTemplate redisTemplate;
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -44,12 +45,31 @@ public class AuthenticationFilter implements GlobalFilter {
 
             try {
                 String token = authHeader.substring(7);
-                // 4. Giải mã lấy userId
+                // 4. Giải mã lấy userId và sessionId
                 String userId = jwtUtils.extractUserId(token);
+                String sessionId = jwtUtils.extractSessionId(token);
+
+                // Kiểm tra xem sessionId có nằm trong Blacklist của Redis không
+                if (sessionId != null) {
+                    return redisTemplate.hasKey("BLACKLIST_SESSION:" + sessionId)
+                            .flatMap(isBlacklisted -> {
+                                if (Boolean.TRUE.equals(isBlacklisted)) {
+                                    return unauthorizedResponse(exchange, "Phiên đăng nhập đã bị vô hiệu hóa.");
+                                }
+                                
+                                // Nếu không bị blacklist thì đi tiếp
+                                ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
+                                        .header("X-User-Id", userId)
+                                        .header("X-Session-Id", sessionId)
+                                        .build();
+                                return chain.filter(exchange.mutate().request(modifiedRequest).build());
+                            });
+                }
 
                 // 5. "Dập mộc" X-User-Id vào Header để gửi xuống các service con
                 ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
                         .header("X-User-Id", userId)
+                        .header("X-Session-Id", sessionId)
                         .build();
 
                 return chain.filter(exchange.mutate().request(modifiedRequest).build());
