@@ -114,12 +114,13 @@ public class QrAuthService {
                     .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại"));
 
             // --- Logic Tạo Token giống hệt AuthService.login ---
-            String accessToken = tokenService.generateAccessToken(user);
+            String sessionId = UUID.randomUUID().toString();
+            String accessToken = tokenService.generateAccessToken(user, sessionId);
             String refreshToken = tokenService.generateRefreshToken(user, qrSession.getDeviceId());
             String tokenId = tokenService.getTokenIdFromJWT(refreshToken);
 
             UserSession session = UserSession.builder()
-                    .id(UUID.randomUUID().toString())
+                    .id(sessionId)
                     .user(user)
                     .deviceId(qrSession.getDeviceId())
                     .refreshTokenId(tokenId)

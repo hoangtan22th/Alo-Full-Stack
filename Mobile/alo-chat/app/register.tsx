@@ -23,16 +23,76 @@ export default function RegisterScreen() {
     password: "",
     confirmPassword: "",
   });
+  const [errors, setErrors] = useState({
+    fullName: "",
+    phoneNumber: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState(1); // Bước 1: Điền thông tin | Bước 2: Nhập OTP
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // Regex tĩnh
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // Bắt đầu bằng 0, có 10 chữ số, các đầu số mạng phổ biến VN
+  const phoneRegex = /^0[35789]\d{8}$/;
+  // Format password: Ít nhất 8 ký tự, có xét chữ Hoa, chữ Thường và Số
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+
+  const handleTextChange = (field: string, value: string) => {
+    setForm({ ...form, [field]: value });
+    let errorMsg = "";
+
+    if (value.trim() === "") {
+      errorMsg = "Không được để trống";
+    } else {
+      if (field === "email" && !emailRegex.test(value)) {
+        errorMsg = "Email không đúng định dạng";
+      } else if (field === "phoneNumber" && !phoneRegex.test(value)) {
+        errorMsg = "Số điện thoại không hợp lệ (10 số, bắt đầu bằng 0)";
+      } else if (field === "password" && !passwordRegex.test(value)) {
+        errorMsg = "Mật khẩu phải >= 8 ký tự, gồm chữ Hoa, chữ Thường và Số";
+      } else if (field === "confirmPassword" && value !== form.password) {
+        errorMsg = "Mật khẩu xác nhận không khớp";
+      }
+    }
+
+    setErrors((prev) => {
+      const newErrors = { ...prev, [field]: errorMsg };
+      // Kéo theo validate lại confirmPassword khi pw thay đổi
+      if (field === "password" && form.confirmPassword) {
+        newErrors.confirmPassword = value !== form.confirmPassword ? "Mật khẩu xác nhận không khớp" : "";
+      }
+      return newErrors;
+    });
+  };
+
   // Hàm gọi API Gửi OTP
   const handleSendOtp = async () => {
     if (!form.fullName || !form.email || !form.password || !form.phoneNumber) {
       Alert.alert("Thông báo", "Vui lòng nhập đầy đủ thông tin");
+      return;
+    }
+
+    if (!emailRegex.test(form.email)) {
+      Alert.alert("Lỗi", "Vui lòng nhập đúng định dạng Email");
+      return;
+    }
+
+    if (!phoneRegex.test(form.phoneNumber)) {
+      Alert.alert("Lỗi", "Số điện thoại không hợp lệ. Vui lòng nhập số điện thoại Việt Nam (10 số).");
+      return;
+    }
+
+    if (!passwordRegex.test(form.password)) {
+      Alert.alert(
+        "Lỗi mật khẩu",
+        "Mật khẩu phải dài ít nhất 8 ký tự, bao gồm ít nhất một chữ Hoa, một chữ Thường và một chữ Số."
+      );
       return;
     }
 
@@ -47,8 +107,19 @@ export default function RegisterScreen() {
       Alert.alert("Thành công", "Mã OTP 6 số đã được gửi tới email của bạn!");
       setStep(2); // Chuyển sang màn hình nhập OTP
     } catch (error: any) {
-      const errorMsg = error.response?.data?.message || "Không thể gửi OTP. Vui lòng thử lại.";
-      Alert.alert("Lỗi", errorMsg);
+      if (!error.response) {
+        Alert.alert("Lỗi Kết Nối", "Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng hoặc địa chỉ IP.");
+      } else {
+        const payloadData = error.response?.data?.data;
+        let detailedError = "";
+        if (payloadData && typeof payloadData === "object") {
+           // Lấy lỗi đầu tiên từ object validation errors
+           detailedError = Object.values(payloadData)[0] as string;
+        }
+
+        const errorMsg = detailedError || error.response?.data?.message || "Không thể gửi OTP. Vui lòng thử lại.";
+        Alert.alert("Lỗi", errorMsg);
+      }
     } finally {
       setLoading(false);
     }
@@ -75,8 +146,19 @@ export default function RegisterScreen() {
         { text: "Đăng nhập ngay", onPress: () => router.replace("/login") },
       ]);
     } catch (error: any) {
-      const errorMsg = error.response?.data?.message || "Đăng ký thất bại. Kiểm tra lại OTP.";
-      Alert.alert("Lỗi", errorMsg);
+      if (!error.response) {
+        Alert.alert("Lỗi Kết Nối", "Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng hoặc địa chỉ IP.");
+      } else {
+        const payloadData = error.response?.data?.data;
+        let detailedError = "";
+        if (payloadData && typeof payloadData === "object") {
+           // Lấy lỗi đầu tiên từ object validation errors
+           detailedError = Object.values(payloadData)[0] as string;
+        }
+        
+        const errorMsg = detailedError || error.response?.data?.message || "Đăng ký thất bại. Kiểm tra lại thông tin.";
+        Alert.alert("Lỗi", errorMsg);
+      }
     } finally {
       setLoading(false);
     }
@@ -125,49 +207,52 @@ export default function RegisterScreen() {
               <>
                 {/* Form Bước 1 */}
                 <Text style={styles.inputLabel}>HỌ VÀ TÊN</Text>
-                <View style={styles.inputWrapper}>
+                <View style={[styles.inputWrapper, errors.fullName ? styles.inputError : null]}>
                   <TextInput
                     placeholder="Nguyễn Văn A"
                     style={styles.input}
                     value={form.fullName}
-                    onChangeText={(val) => setForm({ ...form, fullName: val })}
+                    onChangeText={(val) => handleTextChange("fullName", val)}
                     placeholderTextColor="#aaa"
                   />
                 </View>
+                {errors.fullName ? <Text style={styles.errorText}>{errors.fullName}</Text> : null}
 
                 <Text style={styles.inputLabel}>SỐ ĐIỆN THOẠI</Text>
-                <View style={styles.inputWrapper}>
+                <View style={[styles.inputWrapper, errors.phoneNumber ? styles.inputError : null]}>
                   <TextInput
                     placeholder="090 123 4567"
                     style={styles.input}
                     keyboardType="phone-pad"
                     value={form.phoneNumber}
-                    onChangeText={(val) => setForm({ ...form, phoneNumber: val })}
+                    onChangeText={(val) => handleTextChange("phoneNumber", val)}
                     placeholderTextColor="#aaa"
                   />
                 </View>
+                {errors.phoneNumber ? <Text style={styles.errorText}>{errors.phoneNumber}</Text> : null}
 
                 <Text style={styles.inputLabel}>EMAIL</Text>
-                <View style={styles.inputWrapper}>
+                <View style={[styles.inputWrapper, errors.email ? styles.inputError : null]}>
                   <TextInput
                     placeholder="example@email.com"
                     style={styles.input}
                     autoCapitalize="none"
                     keyboardType="email-address"
                     value={form.email}
-                    onChangeText={(val) => setForm({ ...form, email: val })}
+                    onChangeText={(val) => handleTextChange("email", val)}
                     placeholderTextColor="#aaa"
                   />
                 </View>
+                {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
 
                 <Text style={styles.inputLabel}>MẬT KHẨU</Text>
-                <View style={styles.inputWrapper}>
+                <View style={[styles.inputWrapper, errors.password ? styles.inputError : null]}>
                   <TextInput
                     placeholder="........"
                     style={[styles.input, { flex: 1 }]}
                     secureTextEntry={!showPassword}
                     value={form.password}
-                    onChangeText={(val) => setForm({ ...form, password: val })}
+                    onChangeText={(val) => handleTextChange("password", val)}
                     placeholderTextColor="#aaa"
                   />
                   <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
@@ -178,18 +263,20 @@ export default function RegisterScreen() {
                     />
                   </TouchableOpacity>
                 </View>
+                {errors.password ? <Text style={styles.errorText}>{errors.password}</Text> : null}
 
                 <Text style={styles.inputLabel}>XÁC NHẬN MẬT KHẨU</Text>
-                <View style={styles.inputWrapper}>
+                <View style={[styles.inputWrapper, errors.confirmPassword ? styles.inputError : null]}>
                   <TextInput
                     placeholder="........"
                     style={styles.input}
                     secureTextEntry={!showPassword}
                     value={form.confirmPassword}
-                    onChangeText={(val) => setForm({ ...form, confirmPassword: val })}
+                    onChangeText={(val) => handleTextChange("confirmPassword", val)}
                     placeholderTextColor="#aaa"
                   />
                 </View>
+                {errors.confirmPassword ? <Text style={styles.errorText}>{errors.confirmPassword}</Text> : null}
               </>
             ) : (
               <>
@@ -308,8 +395,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#f2f2f2",
     borderRadius: 25,
     paddingHorizontal: 20,
-    marginBottom: 15,
+    marginBottom: 5,
     height: 55,
+  },
+  inputError: {
+    borderWidth: 1,
+    borderColor: "#ef4444",
+  },
+  errorText: {
+    color: "#ef4444",
+    fontSize: 12,
+    marginLeft: 15,
+    marginBottom: 15,
   },
   input: {
     flex: 1,

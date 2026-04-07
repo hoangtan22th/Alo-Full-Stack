@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { DeviceEventEmitter } from "react-native";
 
 type AuthContextType = {
   isAuthenticated: boolean;
@@ -35,6 +36,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
     checkToken();
+
+    // Lắng nghe sự kiện force_logout từ api.ts (khi token hết hạn mà không refresh được)
+    const subscription = DeviceEventEmitter.addListener('force_logout', () => {
+      setIsAuthenticated(false);
+    });
+
+    return () => subscription.remove();
   }, []);
 
   const signIn = async (accessToken: string, refreshToken: string) => {

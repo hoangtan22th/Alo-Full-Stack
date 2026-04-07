@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.validation.Valid;
+
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
@@ -23,13 +25,13 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/send-otp")
-    public ResponseEntity<ApiResponse<String>> sendOtp(@RequestBody SendOtpRequest request) {
+    public ResponseEntity<ApiResponse<String>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
         authService.sendRegistrationOtp(request.email());
         return ResponseEntity.ok(ApiResponse.success("Mã xác nhận đã được gửi đến email của bạn"));
     }
 
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<String>> register(@RequestBody RegisterRequest request) {
+    public ResponseEntity<ApiResponse<String>> register(@Valid @RequestBody RegisterRequest request) {
         authService.register(request);
         return ResponseEntity.ok(ApiResponse.success("Đăng ký thành công"));
     }
@@ -84,8 +86,9 @@ public class AuthController {
     // Lấy danh sách thiết bị đăng nhập
     @GetMapping("/sessions")
     public ResponseEntity<ApiResponse<List<UserSessionResponse>>> getMySessions(
-            @RequestHeader("X-User-Id") String userId) {
-        return ResponseEntity.ok(ApiResponse.success(authService.getActiveSessions(userId)));
+            @RequestHeader("X-User-Id") String userId,
+            @RequestHeader(value = "X-Session-Id", required = false) String currentSessionId) {
+        return ResponseEntity.ok(ApiResponse.success(authService.getActiveSessions(userId, currentSessionId)));
     }
 
     // Đăng xuất từ xa
@@ -94,6 +97,15 @@ public class AuthController {
             @PathVariable String id) {
         authService.terminateSession(userId, id);
         return ResponseEntity.ok(ApiResponse.success("Đã đăng xuất thiết bị thành công"));
+    }
+
+    // Đăng xuất tất cả thiết bị KHÁC thiết bị hiện tại
+    @DeleteMapping("/sessions/others")
+    public ResponseEntity<ApiResponse<String>> logoutAllOtherDevices(
+            @RequestHeader("X-User-Id") String userId,
+            @RequestHeader("X-Session-Id") String currentSessionId) {
+        authService.terminateAllOtherSessions(userId, currentSessionId);
+        return ResponseEntity.ok(ApiResponse.success("Đã đăng xuất tất cả các thiết bị khác"));
     }
 
     // Đăng xuất hiện tại

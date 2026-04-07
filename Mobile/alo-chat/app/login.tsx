@@ -100,9 +100,12 @@ export default function LoginScreen() {
       // signIn() lưu cả 2 token + cập nhật trạng thái -> _layout.tsx tự chuyển vào Tabs
       await signIn(res.accessToken, res.refreshToken);
     } catch (error: any) {
-      const msg =
-        error.response?.data?.message || "Sai tài khoản hoặc mật khẩu";
-      Alert.alert("Lỗi Đăng Nhập", msg);
+      if (!error.response) {
+        Alert.alert("Lỗi Kết Nối", "Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng hoặc địa chỉ IP.");
+      } else {
+        const msg = error.response?.data?.message || "Sai tài khoản hoặc mật khẩu";
+        Alert.alert("Lỗi Đăng Nhập", msg);
+      }
     } finally {
       setLoading(false);
     }
