@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import axios from "axios";
+import axiosClient from "../../config/axiosClient";
 import AddFriendModal from "../../components/ui/AddFriendModal";
 import {
   UserPlusIcon,
@@ -16,18 +16,12 @@ export default function FriendListPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
-  const token = localStorage.getItem("accessToken");
+
 
   const fetchFriends = async () => {
     try {
-      const res = await axios.get(
-        "http://localhost:8888/api-gateway/contact-service/api/contacts/friends",
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-      // Backend trả về ApiResponse nên phải lấy data.data
-      setFriends(res.data.data || []);
+      const res: any = await axiosClient.get("/contacts/friends");
+      setFriends(res || []);
     } catch (err) {
       console.error("Lỗi lấy danh sách bạn bè:", err);
     } finally {

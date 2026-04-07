@@ -12,6 +12,9 @@ import {
   TouchableOpacity,
   View,
   RefreshControl,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
@@ -50,6 +53,66 @@ export default function AccountSecurityScreen() {
 
   const [refreshing, setRefreshing] = useState(false);
 
+  // States Đổi Mật Khẩu
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ oldPassword: "", newPassword: "" });
+  const [changingPass, setChangingPass] = useState(false);
+
+  // States Quản Lý Thiết Bị
+  const [showDevicesModal, setShowDevicesModal] = useState(false);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+
+  const fetchActiveSessions = async () => {
+    try {
+      setLoadingSessions(true);
+      const res: any = await api.get("/auth/sessions");
+      setSessions(res);
+    } catch (err) {
+      console.log("Lỗi tải danh sách thiết bị", err);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
+  const handleRevokeSession = (sessionId: string) => {
+    Alert.alert("Xác nhận", "Bạn có chắc muốn đăng xuất thiết bị này?", [
+      { text: "Hủy", style: "cancel" },
+      { 
+        text: "Đăng xuất", 
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await api.delete(`/auth/sessions/${sessionId}`);
+            setSessions(prev => prev.filter((s) => s.id !== sessionId));
+            Alert.alert("Thành công", "Đã buộc thiết bị đăng xuất");
+          } catch(err) {
+            Alert.alert("Lỗi", "Không thể đăng xuất. Vui lòng thử lại");
+          }
+        }
+      }
+    ]);
+  };
+
+  const handleChangePassword = async () => {
+    if (!passwordForm.oldPassword || !passwordForm.newPassword) {
+      Alert.alert("Lỗi", "Vui lòng nhập đầy đủ thông tin");
+      return;
+    }
+    try {
+      setChangingPass(true);
+      await api.post("/auth/change-password", passwordForm);
+      Alert.alert("Thành công", "Đổi mật khẩu thành công. Thông báo đã được gửi về email của bạn.");
+      setShowChangePasswordModal(false);
+      setPasswordForm({ oldPassword: "", newPassword: "" });
+    } catch (err: any) {
+      const msg = err.response?.data?.message || "Đổi mật khẩu thất bại";
+      Alert.alert("Lỗi", msg);
+    } finally {
+      setChangingPass(false);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchProfile();
@@ -58,8 +121,8 @@ export default function AccountSecurityScreen() {
 
   const fetchProfile = async () => {
     try {
-      const res = await api.get("/auth/me");
-      const user = res.data;
+      const res: any = await api.get("/auth/me");
+      const user = res;
 
       const initialDate = user.dateOfBirth
         ? new Date(user.dateOfBirth)
@@ -347,6 +410,119 @@ export default function AccountSecurityScreen() {
           </TouchableOpacity>
         </Modal>
 
+        {/* Modal Quản Lý Thiết Bị */}
+        <Modal
+          visible={showDevicesModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowDevicesModal(false)}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View className="flex-1 justify-end bg-black/50">
+              <View className="bg-white rounded-t-3xl p-6 pb-20 h-3/4">
+                <View className="flex-row justify-between items-center mb-6 border-b border-gray-100 pb-4">
+                  <Text className="text-xl font-bold text-gray-900">Tính năng Quản lý máy</Text>
+                  <TouchableOpacity onPress={() => setShowDevicesModal(false)} className="p-2">
+                    <Text className="text-red-500 font-bold">Thoát</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {loadingSessions ? (
+                  <View className="flex-1 justify-center items-center">
+                    <ActivityIndicator size="large" color="#000" />
+                    <Text className="mt-4 text-gray-500 font-bold">Đang tải danh sách thiết bị...</Text>
+                  </View>
+                ) : (
+                  <ScrollView showsVerticalScrollIndicator={false}>
+                    {sessions.map((item, index) => {
+                      const loginDate = new Date(item.createdAt).toLocaleString("vi-VN");
+                      return (
+                        <View key={index} className="bg-gray-50 rounded-2xl p-4 mb-4 border border-gray-200 flex-row items-center justify-between">
+                          <View className="flex-1">
+                            <Text className="font-bold text-base text-gray-900 mb-1">{item.deviceId}</Text>
+                            <Text className="text-xs text-gray-500 mb-1">Thời gian: {loginDate}</Text>
+                            <Text className="text-xs text-gray-400">IP: {item.ipAddress}</Text>
+                          </View>
+                          <TouchableOpacity 
+                            onPress={() => handleRevokeSession(item.id)}
+                            className="bg-red-50 p-3 rounded-full ml-2"
+                          >
+                            <TrashIcon size={20} color="#dc2626" />
+                          </TouchableOpacity>
+                        </View>
+                      )
+                    })}
+                    {sessions.length === 0 && (
+                       <Text className="text-center text-gray-500 mt-10">Không tìm thấy phiên đăng nhập nào.</Text>
+                    )}
+                  </ScrollView>
+                )}
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+
+        {/* Modal Đổi mật khẩu */}
+        <Modal
+          visible={showChangePasswordModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowChangePasswordModal(false)}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View className="flex-1 justify-end bg-black/50">
+              <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+                <View className="bg-white rounded-t-3xl p-6 pb-20">
+                  <View className="flex-row justify-between items-center mb-6 border-b border-gray-100 pb-4">
+                    <Text className="text-xl font-bold text-gray-900">
+                      Đổi mật khẩu
+                    </Text>
+                    <TouchableOpacity onPress={() => setShowChangePasswordModal(false)} className="p-2">
+                      <Text className="text-red-500 font-bold">Thoát</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">MẬT KHẨU HIỆN TẠI</Text>
+                  <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-5 border-[1px] border-gray-200">
+                    <TextInput 
+                      secureTextEntry
+                      value={passwordForm.oldPassword}
+                      onChangeText={(val) => setPasswordForm({...passwordForm, oldPassword: val})}
+                      className="text-base text-gray-900"
+                      placeholder="••••••••"
+                      placeholderTextColor="#9ca3af"
+                    />
+                  </View>
+
+                  <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">MẬT KHẨU MỚI</Text>
+                  <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-8 border-[1px] border-gray-200">
+                    <TextInput 
+                      secureTextEntry
+                      value={passwordForm.newPassword}
+                      onChangeText={(val) => setPasswordForm({...passwordForm, newPassword: val})}
+                      className="text-base text-gray-900"
+                      placeholder="••••••••"
+                      placeholderTextColor="#9ca3af"
+                    />
+                  </View>
+
+                  <TouchableOpacity 
+                    disabled={changingPass}
+                    onPress={handleChangePassword}
+                    className="bg-gray-900 py-4 rounded-full items-center justify-center flex-row shadow-sm"
+                  >
+                    {changingPass ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text className="text-white font-bold text-base">Xác nhận Đổi Mật Khẩu</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </KeyboardAvoidingView>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+
         {/* Section 2: BẢO MẬT */}
         <View className="mb-6">
           <Text className="text-[11px] font-bold text-gray-400 tracking-wider mb-4 px-1">
@@ -381,10 +557,15 @@ export default function AccountSecurityScreen() {
               icon={<ComputerDesktopIcon size={20} color="#6b7280" />}
               title="Quản lý thiết bị"
               showBorder
+              onPress={() => {
+                setShowDevicesModal(true);
+                fetchActiveSessions();
+              }}
             />
             <MenuItem
               icon={<KeyIcon size={20} color="#6b7280" />}
               title="Mật khẩu"
+              onPress={() => setShowChangePasswordModal(true)}
             />
           </View>
         </View>
@@ -453,13 +634,16 @@ function MenuItem({
   icon,
   title,
   showBorder = false,
+  onPress,
 }: {
   icon: any;
   title: string;
   showBorder?: boolean;
+  onPress?: () => void;
 }) {
   return (
     <TouchableOpacity
+      onPress={onPress}
       className={`flex-row items-center justify-between p-4 bg-white ${showBorder ? "border-b border-gray-100" : ""}`}
     >
       <View className="flex-row items-center">

@@ -10,6 +10,8 @@ import edu.iuh.fit.auth_service.repository.QrSessionRepository;
 import edu.iuh.fit.auth_service.repository.UserRepository;
 import edu.iuh.fit.auth_service.repository.UserSessionRepository;
 import edu.iuh.fit.auth_service.util.CookieUtil;
+import edu.iuh.fit.common_service.exception.AppException;
+import edu.iuh.fit.common_service.exception.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -56,16 +58,16 @@ public class QrAuthService {
     @Transactional
     public void confirmQrCode(String qrToken, String userId, String deviceId) {
         QrSession qrSession = qrSessionRepository.findByQrToken(qrToken)
-                .orElseThrow(() -> new RuntimeException("Mã QR không tồn tại."));
+                .orElseThrow(() -> new ResourceNotFoundException("Mã QR không tồn tại."));
         
         if (qrSession.getExpiresAt().isBefore(LocalDateTime.now())) {
             qrSession.setStatus(QrAuthStatus.EXPIRED);
             qrSessionRepository.save(qrSession);
-            throw new RuntimeException("Mã QR đã hết hạn.");
+            throw new AppException(410, "Mã QR đã hết hạn.");
         }
 
         if (qrSession.getStatus() != QrAuthStatus.PENDING && qrSession.getStatus() != QrAuthStatus.SCANNED) {
-            throw new RuntimeException("Mã QR này đã được xử lý hoặc hết hạn.");
+            throw new AppException(410, "Mã QR này đã được xử lý hoặc hết hạn.");
         }
 
         qrSession.setStatus(QrAuthStatus.CONFIRMED);
@@ -109,7 +111,7 @@ public class QrAuthService {
         // Đã CONFIRMED
         if (qrSession.getStatus() == QrAuthStatus.CONFIRMED) {
             User user = userRepository.findById(qrSession.getUserId())
-                    .orElseThrow(() -> new RuntimeException("User không tồn tại"));
+                    .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại"));
 
             // --- Logic Tạo Token giống hệt AuthService.login ---
             String accessToken = tokenService.generateAccessToken(user);

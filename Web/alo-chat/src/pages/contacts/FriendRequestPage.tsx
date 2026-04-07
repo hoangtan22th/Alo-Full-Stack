@@ -1,21 +1,16 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import axiosClient from "../../config/axiosClient";
 import { UserPlusIcon, CheckBadgeIcon } from "@heroicons/react/24/outline";
 
 export default function FriendRequestPage() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const token = localStorage.getItem("accessToken");
+
 
   const fetchRequests = async () => {
     try {
-      const res = await axios.get(
-        "http://localhost:8888/api-gateway/contact-service/api/contacts/pending",
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      // Backend trả về ApiResponse<List<FriendshipResponseDTO>>
-      // nên phải lấy res.data.data
-      setRequests(res.data.data || []);
+      const res: any = await axiosClient.get("/contacts/pending");
+      setRequests(res || []);
     } catch (err) {
       console.error("Lỗi lấy danh sách lời mời:", err);
     } finally {
@@ -28,17 +23,11 @@ export default function FriendRequestPage() {
     actionType: "ACCEPT" | "DECLINE",
   ) => {
     try {
-      const baseUrl = `http://localhost:8888/api-gateway/contact-service/api/contacts/${requestId}`;
+      const baseUrl = `/contacts/${requestId}`;
       if (actionType === "ACCEPT") {
-        await axios.put(
-          `${baseUrl}/accept`,
-          {},
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
+        await axiosClient.put(`${baseUrl}/accept`);
       } else {
-        await axios.delete(`${baseUrl}/decline`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await axiosClient.delete(`${baseUrl}/decline`);
       }
       setRequests((prev) => prev.filter((req) => req.id !== requestId));
     } catch (err) {

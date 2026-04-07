@@ -1,7 +1,6 @@
 server:
   port: 8084
-  servlet:
-    context-path: /notification-service
+
 
 spring:
   application:

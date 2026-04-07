@@ -1,6 +1,7 @@
 package edu.iuh.fit.contact_service.service.impl;
 
 import edu.iuh.fit.common_service.dto.response.ApiResponse;
+import edu.iuh.fit.common_service.exception.AppException;
 import edu.iuh.fit.common_service.exception.DuplicateResourceException;
 import edu.iuh.fit.common_service.exception.ForbiddenException;
 import edu.iuh.fit.common_service.exception.ResourceNotFoundException;
@@ -33,14 +34,14 @@ public class ContactServiceImpl implements ContactService {
     public SearchFriendResponseDTO searchUserByPhone(String phone, String currentUserId) {
         ApiResponse<UserDTO> userResponse = userClient.getUserByPhone(phone);
         if (userResponse == null || userResponse.getData() == null) {
-            throw new RuntimeException("Không tìm thấy người dùng!");
+            throw new ResourceNotFoundException("Không tìm thấy người dùng!");
         }
 
         UserDTO foundUser = userResponse.getData();
         String foundUserId = foundUser.getId();
 
         if (foundUserId.equals(currentUserId)) {
-            throw new RuntimeException("Bạn không thể tự tìm chính mình!");
+            throw new AppException(400, "Bạn không thể tự tìm chính mình!");
         }
 
         // Kiểm tra quan hệ 2 chiều từ Database
@@ -90,7 +91,7 @@ public class ContactServiceImpl implements ContactService {
         Friendship saved = friendshipRepository.save(friendship);
 
         // 3. Làm giàu dữ liệu để trả về UI ngay lập tức
-        List<UserDTO> users = userClient.getUsersByIds(List.of(dto.getRequesterId(), dto.getRecipientId()));
+        List<UserDTO> users = userClient.getUsersByIds(List.of(dto.getRequesterId(), dto.getRecipientId())).getData();
         FriendshipResponseDTO responseDTO = mapToDTO(saved);
 
         users.stream()
@@ -113,7 +114,7 @@ public class ContactServiceImpl implements ContactService {
                 .map(Friendship::getRequesterId)
                 .collect(Collectors.toList());
 
-        List<UserDTO> userInfos = userClient.getUsersByIds(requesterIds);
+        List<UserDTO> userInfos = userClient.getUsersByIds(requesterIds).getData();
 
         return requests.stream().map(req -> {
             FriendshipResponseDTO dto = mapToDTO(req);
@@ -138,7 +139,7 @@ public class ContactServiceImpl implements ContactService {
                 .map(f -> f.getRequesterId().equals(userId) ? f.getRecipientId() : f.getRequesterId())
                 .collect(Collectors.toList());
 
-        List<UserDTO> userInfos = userClient.getUsersByIds(friendIds);
+        List<UserDTO> userInfos = userClient.getUsersByIds(friendIds).getData();
 
         return friends.stream().map(f -> {
             FriendshipResponseDTO dto = mapToDTO(f);

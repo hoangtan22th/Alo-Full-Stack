@@ -31,8 +31,8 @@ export default function EditProfileScreen() {
 
   const fetchProfile = async () => {
     try {
-      const res = await api.get("/auth/me");
-      setUser(res.data);
+      const res: any = await api.get("/auth/me");
+      setUser(res);
     } catch (err) {
       console.log("Lỗi tải profile:", err);
     } finally {
@@ -58,10 +58,10 @@ export default function EditProfileScreen() {
       formData.append("file", { uri, name: filename, type });
 
       const endpoint = isAvatar ? "/auth/me/avatar" : "/auth/me/cover";
-      const res = await api.post(endpoint, formData, {
+      const res: any = await api.post(endpoint, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setUser(res.data);
+      setUser(res);
       Alert.alert(
         "Thành công",
         `Cập nhật ${isAvatar ? "ảnh đại diện" : "ảnh bìa"} thành công!`,
