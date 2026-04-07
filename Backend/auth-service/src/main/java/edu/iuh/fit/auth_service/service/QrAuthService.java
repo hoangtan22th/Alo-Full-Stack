@@ -14,6 +14,8 @@ import edu.iuh.fit.common_service.exception.AppException;
 import edu.iuh.fit.common_service.exception.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +24,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class QrAuthService {
 
     private final TokenService tokenService;
@@ -38,11 +41,13 @@ public class QrAuthService {
     public QrSessionResponse generateQrToken() {
         String qrToken = UUID.randomUUID().toString();
         
-        // Lưu vào MySQL thay vì Redis
+        // Lưu vào Redis với TTL
         QrSession qrSession = QrSession.builder()
                 .qrToken(qrToken)
                 .status(QrAuthStatus.PENDING)
+                .createdAt(LocalDateTime.now())
                 .expiresAt(LocalDateTime.now().plusMinutes(QR_TTL_MINUTES))
+                .timeToLive(QR_TTL_MINUTES * 60) // TTL tính bằng giây
                 .build();
         qrSessionRepository.save(qrSession);
 
@@ -58,14 +63,9 @@ public class QrAuthService {
     @Transactional
     public void confirmQrCode(String qrToken, String userId, String deviceId) {
         QrSession qrSession = qrSessionRepository.findByQrToken(qrToken)
-                .orElseThrow(() -> new ResourceNotFoundException("Mã QR không tồn tại."));
+                .orElseThrow(() -> new ResourceNotFoundException("Mã QR không tồn tại hoặc đã hết hạn."));
         
-        if (qrSession.getExpiresAt().isBefore(LocalDateTime.now())) {
-            qrSession.setStatus(QrAuthStatus.EXPIRED);
-            qrSessionRepository.save(qrSession);
-            throw new AppException(410, "Mã QR đã hết hạn.");
-        }
-
+        // Không cần check expiresAt nữa vì Redis đã tự xóa bằng TTL
         if (qrSession.getStatus() != QrAuthStatus.PENDING && qrSession.getStatus() != QrAuthStatus.SCANNED) {
             throw new AppException(410, "Mã QR này đã được xử lý hoặc hết hạn.");
         }
@@ -87,17 +87,7 @@ public class QrAuthService {
         if (qrSession == null) {
             return QrSessionResponse.builder()
                     .qrToken(qrToken)
-                    .status(QrAuthStatus.EXPIRED)
-                    .build();
-        }
-
-        // Kiểm tra logic hết hạn
-        if (qrSession.getExpiresAt().isBefore(LocalDateTime.now()) && qrSession.getStatus() != QrAuthStatus.CONFIRMED) {
-             qrSession.setStatus(QrAuthStatus.EXPIRED);
-             qrSessionRepository.save(qrSession);
-             return QrSessionResponse.builder()
-                    .qrToken(qrToken)
-                    .status(QrAuthStatus.EXPIRED)
+                    .status(QrAuthStatus.EXPIRED) // Nếu Redis không còn -> Hết hạn
                     .build();
         }
 
