@@ -57,19 +57,19 @@ export default function AccountSecurityScreen() {
   const handleRevokeSession = (sessionId: string) => {
     Alert.alert("Xác nhận", "Bạn có chắc muốn đăng xuất thiết bị này?", [
       { text: "Hủy", style: "cancel" },
-      { 
-        text: "Đăng xuất", 
+      {
+        text: "Đăng xuất",
         style: "destructive",
         onPress: async () => {
-           // Đảm bảo không cho tự kick trên giao diện
-           const session = sessions.find(s => s.id === sessionId);
-           if (session?.isCurrent) return;
+          // Đảm bảo không cho tự kick trên giao diện
+          const session = sessions.find(s => s.id === sessionId);
+          if (session?.isCurrent) return;
 
           try {
             await api.delete(`/auth/sessions/${sessionId}`);
             setSessions(prev => prev.filter((s) => s.id !== sessionId));
             Alert.alert("Thành công", "Đã buộc thiết bị đăng xuất");
-          } catch(err) {
+          } catch (err) {
             Alert.alert("Lỗi", "Không thể đăng xuất. Vui lòng thử lại");
           }
         }
@@ -80,8 +80,8 @@ export default function AccountSecurityScreen() {
   const handleRevokeOtherSessions = () => {
     Alert.alert("Đăng xuất tất cả", "Bạn có chắc chắn muốn đăng xuất TẤT CẢ các thiết bị khác trừ thiết bị này?", [
       { text: "Hủy", style: "cancel" },
-      { 
-        text: "Xác nhận", 
+      {
+        text: "Xác nhận",
         style: "destructive",
         onPress: async () => {
           try {
@@ -89,7 +89,7 @@ export default function AccountSecurityScreen() {
             const currentSession = sessions.find(s => s.isCurrent);
             setSessions(currentSession ? [currentSession] : []);
             Alert.alert("Thành công", "Đã đăng xuất tất cả các thiết bị khác");
-          } catch(err) {
+          } catch (err) {
             Alert.alert("Lỗi", "Không thể thực hiện đăng xuất tất cả. Vui lòng thử lại");
           }
         }
@@ -190,7 +190,7 @@ export default function AccountSecurityScreen() {
                             <Text className="text-xs text-gray-400">IP: {item.ipAddress}</Text>
                           </View>
                           {!item.isCurrent && (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                               onPress={() => handleRevokeSession(item.id)}
                               className="bg-red-50 p-3 rounded-full ml-2"
                             >
@@ -201,11 +201,11 @@ export default function AccountSecurityScreen() {
                       )
                     })}
                     {sessions.length === 0 && (
-                       <Text className="text-center text-gray-500 mt-10">Không tìm thấy phiên đăng nhập nào.</Text>
+                      <Text className="text-center text-gray-500 mt-10">Không tìm thấy phiên đăng nhập nào.</Text>
                     )}
 
                     {sessions.length > 1 && (
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         onPress={handleRevokeOtherSessions}
                         className="bg-red-500 py-3 rounded-full mt-4 flex-row justify-center items-center"
                       >
@@ -241,10 +241,10 @@ export default function AccountSecurityScreen() {
 
                   <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">MẬT KHẨU HIỆN TẠI</Text>
                   <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-5 border-[1px] border-gray-200">
-                    <TextInput 
+                    <TextInput
                       secureTextEntry
                       value={passwordForm.oldPassword}
-                      onChangeText={(val) => setPasswordForm({...passwordForm, oldPassword: val})}
+                      onChangeText={(val) => setPasswordForm({ ...passwordForm, oldPassword: val })}
                       className="text-base text-gray-900"
                       placeholder="••••••••"
                       placeholderTextColor="#9ca3af"
@@ -253,10 +253,10 @@ export default function AccountSecurityScreen() {
 
                   <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">MẬT KHẨU MỚI</Text>
                   <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-5 border-[1px] border-gray-200">
-                    <TextInput 
+                    <TextInput
                       secureTextEntry
                       value={passwordForm.newPassword}
-                      onChangeText={(val) => setPasswordForm({...passwordForm, newPassword: val})}
+                      onChangeText={(val) => setPasswordForm({ ...passwordForm, newPassword: val })}
                       className="text-base text-gray-900"
                       placeholder="••••••••"
                       placeholderTextColor="#9ca3af"
@@ -265,10 +265,10 @@ export default function AccountSecurityScreen() {
 
                   <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">XÁC NHẬN MẬT KHẨU MỚI</Text>
                   <View className={`bg-gray-100 rounded-2xl px-4 py-4 mb-8 border-[1px] ${passwordForm.confirmNewPassword && passwordForm.newPassword !== passwordForm.confirmNewPassword ? 'border-red-400' : 'border-gray-200'}`}>
-                    <TextInput 
+                    <TextInput
                       secureTextEntry
                       value={passwordForm.confirmNewPassword}
-                      onChangeText={(val) => setPasswordForm({...passwordForm, confirmNewPassword: val})}
+                      onChangeText={(val) => setPasswordForm({ ...passwordForm, confirmNewPassword: val })}
                       className="text-base text-gray-900"
                       placeholder="••••••••"
                       placeholderTextColor="#9ca3af"
@@ -278,7 +278,7 @@ export default function AccountSecurityScreen() {
                     <Text className="text-red-500 text-xs font-medium -mt-6 mb-6 px-2">Mật khẩu xác nhận không khớp</Text>
                   )}
 
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     disabled={changingPass}
                     onPress={handleChangePassword}
                     className="bg-gray-900 py-4 rounded-full items-center justify-center flex-row shadow-sm"
@@ -343,18 +343,18 @@ export default function AccountSecurityScreen() {
         </View>
 
         {/* Nút Xóa tài khoản */}
-        <TouchableOpacity className="bg-red-50 py-4 rounded-2xl flex-row justify-center items-center mt-4">
+        {/* <TouchableOpacity className="bg-red-50 py-4 rounded-2xl flex-row justify-center items-center mt-4">
           <TrashIcon size={18} color="#dc2626" />
           <Text className="text-red-600 font-bold text-base ml-2">
             Xóa tài khoản
           </Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         {/* Cảnh báo xóa tài khoản */}
-        <Text className="text-xs text-gray-400 text-center mt-4 mb-10 px-6 leading-5">
+        {/* <Text className="text-xs text-gray-400 text-center mt-4 mb-10 px-6 leading-5">
           Hành động này không thể hoàn tác. Mọi dữ liệu liên quan đến tài khoản
           này sẽ bị xóa vĩnh viễn khỏi hệ thống.
-        </Text>
+        </Text> */}
 
         <View className="h-32" />
       </ScrollView>
