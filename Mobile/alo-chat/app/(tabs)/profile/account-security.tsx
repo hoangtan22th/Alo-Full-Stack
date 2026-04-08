@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -25,12 +25,43 @@ import {
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import api from "../../../services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as LocalAuthentication from "expo-local-authentication";
 
 export default function AccountSecurityScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const [isAppLocked, setIsAppLocked] = useState(false);
+
+  useEffect(() => {
+    const fetchLockSetting = async () => {
+      const locked = await AsyncStorage.getItem("appLocked");
+      setIsAppLocked(locked === "true");
+    };
+    fetchLockSetting();
+  }, []);
+
+  const handleToggleAppLock = async (value: boolean) => {
+    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+    if (!hasHardware || !isEnrolled) {
+      Alert.alert("Lỗi", "Thiết bị không hỗ trợ hoặc chưa cài đặt vân tay/khuôn mặt.");
+      return;
+    }
+
+    const { success } = await LocalAuthentication.authenticateAsync({
+      promptMessage: value ? "Bật Khóa Ứng Dụng" : "Tắt Khóa Ứng Dụng",
+      fallbackLabel: "Dùng mật khẩu",
+    });
+
+    if (success) {
+      setIsAppLocked(value);
+      await AsyncStorage.setItem("appLocked", value ? "true" : "false");
+      Alert.alert("Thành công", value ? "Đã bật khóa ứng dụng." : "Đã tắt khóa ứng dụng.");
+    }
+  };
 
   // States Đổi Mật Khẩu
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
@@ -172,8 +203,9 @@ export default function AccountSecurityScreen() {
           animationType="slide"
           onRequestClose={() => setShowDevicesModal(false)}
         >
-          <View className="flex-1 justify-end bg-black/50">
-            <View className="bg-white rounded-t-3xl  pb-20 h-3/4">
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View className="flex-1 justify-end bg-black/50">
+              <View className="bg-white rounded-t-3xl  pb-20 h-3/4">
               <View className="flex-row justify-between items-center p-6 border-b border-gray-100 pb-4">
                 <Text className="text-xl font-bold text-gray-900">
                   Tính năng Quản lý thiết bị
@@ -345,7 +377,7 @@ export default function AccountSecurityScreen() {
             trackColor={{ false: "#d1d5db", true: "#111827" }}
             thumbColor={"#f4f3f4"}
             ios_backgroundColor="#d1d5db"
-            onValueChange={() => setIsAppLocked(!isAppLocked)}
+            onValueChange={handleToggleAppLock}
             value={isAppLocked}
           />
         </View>
