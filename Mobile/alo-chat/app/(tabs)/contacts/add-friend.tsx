@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import React, { useState, useCallback } from "react";
 import {
   Image,
   ScrollView,
@@ -20,6 +20,7 @@ import {
   UserPlusIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import api from "../../../services/api";
 import {
   contactService,
   SearchFriendResponseDTO,
@@ -30,6 +31,21 @@ export default function AddFriendScreen() {
   const insets = useSafeAreaInsets();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<any>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      const fetchProfile = async () => {
+        try {
+          const res: any = await api.get("/auth/me");
+          setUser(res);
+        } catch (err) {
+          console.log("Lỗi tải profile:", err);
+        }
+      };
+      fetchProfile();
+    }, []),
+  );
 
   const handleSearch = async () => {
     if (!phoneNumber.trim()) {
@@ -87,14 +103,16 @@ export default function AddFriendScreen() {
           <View className="w-[60px] h-[60px] rounded-full border-2 border-white shadow-sm mb-3">
             <Image
               source={{
-                uri: "https://api.dicebear.com/7.x/avataaars/svg?seed=Duy",
+                uri:
+                  user?.avatar ||
+                  "https://api.dicebear.com/7.x/avataaars/svg?seed=Duy",
               }} // Thay bằng avatar thật
               className="w-full h-full rounded-full bg-gray-200"
             />
           </View>
 
           <Text className="text-lg font-bold text-gray-900 mb-1">
-            Phan Tấn Duy
+            {user?.fullName || "Đang tải..."}
           </Text>
           <Text className="text-sm text-gray-500 mb-6">
             Quét mã để thêm bạn Alo với tôi
@@ -103,9 +121,9 @@ export default function AddFriendScreen() {
           {/* QR Code */}
           <View className="bg-white p-4 rounded-3xl shadow-sm">
             <Image
-              // Dùng API tạo mã QR giả lập
+              // Dùng API tạo mã QR cho số điện thoại của user
               source={{
-                uri: "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PhanTanDuy",
+                uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${user?.phone || user?.userId || "AloApp"}`,
               }}
               className="w-40 h-40"
             />
