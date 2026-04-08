@@ -147,8 +147,12 @@ export default function LoginScreen() {
         return;
       }
 
-      if (response.type === "success") {
-        const idToken = response.data.idToken;
+      if (response.type === "success" && response.data as any) {
+        const idToken = (response.data as any).idToken; // Use casting in case types act weird or it defaults to a certain structure
+        if(!idToken) {
+           Alert.alert("Lỗi", "Không nhận được ID token từ Google.");
+           return;
+        }
 
         let deviceName = "Unknown Device";
         if (Platform.OS === "web") {
