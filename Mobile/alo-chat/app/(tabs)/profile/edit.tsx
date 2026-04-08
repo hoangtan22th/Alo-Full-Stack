@@ -187,7 +187,7 @@ export default function EditProfileScreen() {
         <View className="mt-6 px-4">
           <TouchableOpacity
             className="bg-[#050505] flex-row h-[50px] rounded-full justify-center items-center w-full"
-            onPress={() => router.push("/profile/account-security")}
+            onPress={() => router.push("/profile/personal-info")}
           >
             <Feather
               name="edit-2"

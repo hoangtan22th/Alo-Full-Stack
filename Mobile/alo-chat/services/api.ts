@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
+import { DeviceEventEmitter } from "react-native";
 
 const IP_ADDRESS = process.env.EXPO_PUBLIC_IP_ADDRESS;
 
@@ -117,9 +118,10 @@ api.interceptors.response.use(
         console.log("❌ [REFRESH] THẤT BẠI:", refreshError?.message || refreshError?.response?.status || refreshError);
         processQueue(refreshError, null);
 
-        // Xóa hết token -> AuthContext sẽ đá văng ra Login
+        // Xóa hết token -> Phát sự kiện force_logout để AuthContext cập nhật state
         await AsyncStorage.removeItem("accessToken");
         await AsyncStorage.removeItem("refreshToken");
+        DeviceEventEmitter.emit('force_logout');
 
         return Promise.reject(refreshError);
       } finally {

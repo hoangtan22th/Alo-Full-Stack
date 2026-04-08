@@ -2,6 +2,7 @@ import { View, ActivityIndicator } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
+import AppLockWrapper from "./components/AppLockWrapper";
 import "../global.css";
 
 function RootLayoutNav() {
@@ -42,7 +43,9 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <RootLayoutNav />
+      <AppLockWrapper>
+        <RootLayoutNav />
+      </AppLockWrapper>
     </AuthProvider>
   );
 }

@@ -85,3 +85,5 @@ cloud:
     s3:
       bucket: ${AWS_S3_BUCKET:btl-alo-chat}
 
+google:
+  client-id: ${GOOGLE_CLIENT_ID}

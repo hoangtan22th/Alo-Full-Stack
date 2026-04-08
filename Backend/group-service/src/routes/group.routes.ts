@@ -8,10 +8,16 @@ const router = Router();
 router.post("/", groupController.createGroup);
 
 // Quản lý thành viên trong nhóm
-router.post("/:groupId/members", groupController.addMember);
-router.delete("/:groupId/members/:userId", groupController.removeMember);
-router.put("/:groupId/members/:userId/role", groupController.updateRole);
-router.delete("/:groupId", groupController.deleteGroup);
-router.post("/assign-leader", groupController.assignNewLeader);
+router.post("/api/v1/groups/:groupId/members", groupController.addMember);
+router.delete(
+  "/api/v1/groups/:groupId/members/:userId",
+  groupController.removeMember,
+);
+router.put(
+  "/api/v1/groups/:groupId/members/:userId/role",
+  groupController.updateRole,
+);
+router.delete("/api/v1/groups/:groupId", groupController.deleteGroup);
+router.post("/api/v1/groups/assign-leader", groupController.assignNewLeader);
 
 export default router;

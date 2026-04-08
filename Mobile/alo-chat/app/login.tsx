@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -19,12 +19,20 @@ import { useAuth } from "../contexts/AuthContext";
 import { Ionicons, AntDesign, FontAwesome } from "@expo/vector-icons";
 import * as Device from "expo-device";
 import api from "../services/api";
+// import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // GoogleSignin.configure({
+    //   webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+    //   iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    // });
+  }, []);
 
   const router = useRouter();
   const { signIn } = useAuth();
@@ -58,6 +66,16 @@ export default function LoginScreen() {
       Alert.alert("Lỗi", "Vui lòng nhập OTP và mật khẩu mới");
       return;
     }
+
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!passwordRegex.test(forgotNewPassword)) {
+      Alert.alert(
+        "Lỗi mật khẩu",
+        "Mật khẩu phải dài ít nhất 8 ký tự, bao gồm ít nhất một chữ Hoa, một chữ Thường và một chữ Số."
+      );
+      return;
+    }
+
     setForgotLoading(true);
     try {
       await api.post("/auth/forgot-password/reset", {
@@ -106,12 +124,55 @@ export default function LoginScreen() {
       // signIn() lưu cả 2 token + cập nhật trạng thái -> _layout.tsx tự chuyển vào Tabs
       await signIn(res.accessToken, res.refreshToken);
     } catch (error: any) {
-      const msg =
-        error.response?.data?.message || "Sai tài khoản hoặc mật khẩu";
-      Alert.alert("Lỗi Đăng Nhập", msg);
+      if (!error.response) {
+        Alert.alert("Lỗi Kết Nối", "Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng hoặc địa chỉ IP.");
+      } else {
+        const msg = error.response?.data?.message || "Sai tài khoản hoặc mật khẩu";
+        Alert.alert("Lỗi Đăng Nhập", msg);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGoogleLogin = async () => {
+    Alert.alert("Thông báo", "Tính năng Google Login đang được build APK. Anh em tạm thời dùng form Email/Mật khẩu để đăng nhập test giao diện nhé!");
+    /*
+    try {
+      setLoading(true);
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+
+      if (response.type === "cancelled") {
+        return;
+      }
+
+      if (response.type === "success" && response.data as any) {
+        const idToken = (response.data as any).idToken; // Use casting in case types act weird or it defaults to a certain structure
+        if(!idToken) {
+           Alert.alert("Lỗi", "Không nhận được ID token từ Google.");
+           return;
+        }
+
+        let deviceName = "Unknown Device";
+        if (Platform.OS === "web") {
+          deviceName = "Trình duyệt Web";
+        } else {
+          deviceName = `${Device.brand || "Máy"} ${Device.modelName || "Không xác định"} (${Platform.OS})`;
+        }
+
+        const res: any = await api.post("/auth/google", {
+          idToken,
+          deviceId: deviceName,
+        });
+        await signIn(res.accessToken, res.refreshToken);
+      }
+    } catch (error: any) {
+      Alert.alert("Lỗi Đăng Nhập Google", error.message || "Đăng nhập Google thất bại");
+    } finally {
+      setLoading(false);
+    }
+    */
   };
 
   return (
@@ -214,10 +275,14 @@ export default function LoginScreen() {
         <View style={styles.divider}>
           <View style={styles.line} />
           <Text style={styles.dividerText}>HOẶC</Text>
-          <View style={styles.line} />
+          <View className="line" />
         </View>
 
-        <TouchableOpacity style={styles.googleButton}>
+        <TouchableOpacity
+          style={styles.googleButton}
+          onPress={handleGoogleLogin}
+          disabled={loading}
+        >
           <FontAwesome
             name="google"
             size={20}

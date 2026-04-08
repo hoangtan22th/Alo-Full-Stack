@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import React, { useState, useCallback } from "react";
 import {
   Image,
   ScrollView,
@@ -20,6 +20,7 @@ import {
   UserPlusIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import api from "../../../services/api";
 import {
   contactService,
   SearchFriendResponseDTO,
@@ -29,12 +30,22 @@ export default function AddFriendScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [greetingMessage, setGreetingMessage] = useState(
-    "Xin chào, mình kết bạn nhé!",
-  );
   const [loading, setLoading] = useState(false);
-  const [searchResult, setSearchResult] =
-    useState<SearchFriendResponseDTO | null>(null);
+  const [user, setUser] = useState<any>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      const fetchProfile = async () => {
+        try {
+          const res: any = await api.get("/auth/me");
+          setUser(res);
+        } catch (err) {
+          console.log("Lỗi tải profile:", err);
+        }
+      };
+      fetchProfile();
+    }, []),
+  );
 
   const handleSearch = async () => {
     if (!phoneNumber.trim()) {
@@ -42,11 +53,19 @@ export default function AddFriendScreen() {
       return;
     }
     setLoading(true);
-    setSearchResult(null);
     try {
       const result = await contactService.searchUserByPhone(phoneNumber);
       if (result) {
-        setSearchResult(result);
+        router.push({
+          pathname: "/contacts/send-request",
+          params: {
+            userId: result.userId,
+            fullName: result.fullName,
+            phone: result.phone,
+            avatarUrl: result.avatarUrl || "",
+            relationStatus: result.relationStatus || "NOT_FRIEND",
+          },
+        });
       } else {
         Alert.alert(
           "Thông báo",
@@ -57,31 +76,6 @@ export default function AddFriendScreen() {
       Alert.alert("Lỗi", "Đã xảy ra lỗi khi tìm kiếm");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSendRequest = async (recipientId: string) => {
-    try {
-      const response = await contactService.sendFriendRequest(
-        recipientId,
-        greetingMessage,
-      );
-      if (response) {
-        Alert.alert("Thành công", "Đã gửi lời mời kết bạn");
-        setSearchResult((prev) =>
-          prev
-            ? {
-                ...prev,
-                relationStatus: "PENDING",
-                friendshipStatus: undefined,
-              }
-            : null,
-        );
-      } else {
-        Alert.alert("Lỗi", "Gửi lời mời thất bại");
-      }
-    } catch (error) {
-      Alert.alert("Lỗi", "Đã xảy ra lỗi khi gửi lời mời");
     }
   };
 
@@ -109,14 +103,16 @@ export default function AddFriendScreen() {
           <View className="w-[60px] h-[60px] rounded-full border-2 border-white shadow-sm mb-3">
             <Image
               source={{
-                uri: "https://api.dicebear.com/7.x/avataaars/svg?seed=Duy",
+                uri:
+                  user?.avatar ||
+                  "https://api.dicebear.com/7.x/avataaars/svg?seed=Duy",
               }} // Thay bằng avatar thật
               className="w-full h-full rounded-full bg-gray-200"
             />
           </View>
 
           <Text className="text-lg font-bold text-gray-900 mb-1">
-            Phan Tấn Duy
+            {user?.fullName || "Đang tải..."}
           </Text>
           <Text className="text-sm text-gray-500 mb-6">
             Quét mã để thêm bạn Alo với tôi
@@ -125,9 +121,9 @@ export default function AddFriendScreen() {
           {/* QR Code */}
           <View className="bg-white p-4 rounded-3xl shadow-sm">
             <Image
-              // Dùng API tạo mã QR giả lập
+              // Dùng API tạo mã QR cho số điện thoại của user
               source={{
-                uri: "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=PhanTanDuy",
+                uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${user?.phone || user?.userId || "AloApp"}`,
               }}
               className="w-40 h-40"
             />
@@ -170,92 +166,6 @@ export default function AddFriendScreen() {
             )}
           </TouchableOpacity>
         </View>
-
-        {/* --- Kết quả Tìm kiếm --- */}
-        {searchResult && (
-          <View className="bg-[#f9fafb] p-4 rounded-3xl mb-8 shadow-sm">
-            <View className="flex-row items-center justify-between mb-4">
-              <View className="flex-row items-center flex-1">
-                <Image
-                  source={
-                    searchResult.avatarUrl
-                      ? { uri: searchResult.avatarUrl }
-                      : {
-                          uri: `https://api.dicebear.com/7.x/initials/svg?seed=${searchResult.fullName}`,
-                        }
-                  }
-                  className="w-14 h-14 rounded-full bg-gray-200"
-                />
-                <View className="ml-3 flex-1">
-                  <Text
-                    className="text-base font-bold text-gray-900 mb-1"
-                    numberOfLines={1}
-                  >
-                    {searchResult.fullName}
-                  </Text>
-                  <Text className="text-sm text-gray-500">
-                    {searchResult.phone}
-                  </Text>
-                </View>
-              </View>
-
-              <View className="ml-2">
-                {searchResult.relationStatus === "NOT_FRIEND" ||
-                !searchResult.relationStatus ? (
-                  <TouchableOpacity
-                    className="bg-black px-4 py-2 rounded-full"
-                    onPress={() => handleSendRequest(searchResult.userId)}
-                  >
-                    <Text className="text-white font-medium text-sm">
-                      Kết bạn
-                    </Text>
-                  </TouchableOpacity>
-                ) : searchResult.relationStatus === "PENDING" ||
-                  searchResult.relationStatus === "YOU_SENT_REQUEST" ? (
-                  <View className="bg-gray-200 px-4 py-2 rounded-full">
-                    <Text className="text-gray-600 font-medium text-sm">
-                      Đã gửi
-                    </Text>
-                  </View>
-                ) : searchResult.relationStatus === "THEY_SENT_REQUEST" ? (
-                  <View className="bg-gray-200 px-4 py-2 rounded-full">
-                    <Text className="text-gray-600 font-medium text-sm">
-                      Đã nhận lời mời
-                    </Text>
-                  </View>
-                ) : searchResult.relationStatus === "ACCEPTED" ? (
-                  <View className="bg-gray-200 px-4 py-2 rounded-full">
-                    <Text className="text-gray-600 font-medium text-sm">
-                      Bạn bè
-                    </Text>
-                  </View>
-                ) : (
-                  <View className="bg-gray-200 px-4 py-2 rounded-full">
-                    <Text className="text-gray-600 font-medium text-sm">
-                      {searchResult.relationStatus}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-
-            {/* Ô nhập lời mời kết bạn (chỉ hiện khi chưa là bạn) */}
-            {(searchResult.relationStatus === "NOT_FRIEND" ||
-              !searchResult.relationStatus) && (
-              <View className="bg-white rounded-xl px-4 py-2 border border-gray-100">
-                <TextInput
-                  className="text-sm text-gray-800"
-                  placeholder="Nhập lời mời kết bạn..."
-                  placeholderTextColor="#9ca3af"
-                  value={greetingMessage}
-                  onChangeText={setGreetingMessage}
-                  multiline
-                  maxLength={100}
-                />
-              </View>
-            )}
-          </View>
-        )}
 
         {/* 4. Các menu chức năng khác */}
         <View className="px-2">

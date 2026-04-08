@@ -13,6 +13,8 @@ export interface FriendshipResponseDTO {
   greetingMessage?: string;
   requesterName?: string;
   requesterAvatar?: string;
+  recipientName?: string;
+  recipientAvatar?: string;
 }
 
 export interface SearchFriendResponseDTO {

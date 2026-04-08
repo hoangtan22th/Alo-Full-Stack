@@ -101,8 +101,8 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         setCoverImageUrl(userData.coverImage || "/black.jpg");
 
         const genderMap: Record<number, Gender> = {
-          0: "Nam",
-          1: "Nữ",
+          1: "Nam",
+          0: "Nữ",
           2: "Khác",
         };
         setGender(genderMap[userData.gender] || "Nam");
