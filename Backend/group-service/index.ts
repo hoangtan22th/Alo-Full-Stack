@@ -28,7 +28,8 @@ app.get("/health", (req: Request, res: Response) => {
 });
 
 // Gắn Route nghiệp vụ
-app.use("/api/v1/groups", groupRoutes);
+// app.use("/api/v1/groups", groupRoutes);
+app.use("/", groupRoutes);
 
 // Khởi động Server
 // Ép kiểu PORT về dạng number cho chuẩn type
