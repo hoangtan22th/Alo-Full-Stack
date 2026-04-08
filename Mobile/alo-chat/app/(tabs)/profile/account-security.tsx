@@ -1,8 +1,10 @@
-import { useRouter, useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -10,10 +12,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  KeyboardAvoidingView,
   TouchableWithoutFeedback,
-  Keyboard,
+  View,
 } from "react-native";
 import {
   ArrowLeftIcon,
@@ -34,7 +34,11 @@ export default function AccountSecurityScreen() {
 
   // States Đổi Mật Khẩu
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({ oldPassword: "", newPassword: "", confirmNewPassword: "" });
+  const [passwordForm, setPasswordForm] = useState({
+    oldPassword: "",
+    newPassword: "",
+    confirmNewPassword: "",
+  });
   const [changingPass, setChangingPass] = useState(false);
 
   // States Quản Lý Thiết Bị
@@ -67,13 +71,13 @@ export default function AccountSecurityScreen() {
 
           try {
             await api.delete(`/auth/sessions/${sessionId}`);
-            setSessions(prev => prev.filter((s) => s.id !== sessionId));
+            setSessions((prev) => prev.filter((s) => s.id !== sessionId));
             Alert.alert("Thành công", "Đã buộc thiết bị đăng xuất");
           } catch (err) {
             Alert.alert("Lỗi", "Không thể đăng xuất. Vui lòng thử lại");
           }
-        }
-      }
+        },
+      },
     ]);
   };
 
@@ -98,7 +102,11 @@ export default function AccountSecurityScreen() {
   };
 
   const handleChangePassword = async () => {
-    if (!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmNewPassword) {
+    if (
+      !passwordForm.oldPassword ||
+      !passwordForm.newPassword ||
+      !passwordForm.confirmNewPassword
+    ) {
       Alert.alert("Lỗi", "Vui lòng nhập đầy đủ thông tin");
       return;
     }
@@ -111,7 +119,7 @@ export default function AccountSecurityScreen() {
     if (!passwordRegex.test(passwordForm.newPassword)) {
       Alert.alert(
         "Lỗi mật khẩu",
-        "Mật khẩu phải dài ít nhất 8 ký tự, bao gồm ít nhất một chữ Hoa, một chữ Thường và một chữ Số."
+        "Mật khẩu phải dài ít nhất 8 ký tự, bao gồm ít nhất một chữ Hoa, một chữ Thường và một chữ Số.",
       );
       return;
     }
@@ -121,9 +129,16 @@ export default function AccountSecurityScreen() {
         oldPassword: passwordForm.oldPassword,
         newPassword: passwordForm.newPassword,
       });
-      Alert.alert("Thành công", "Đổi mật khẩu thành công. Thông báo đã được gửi về email của bạn.");
+      Alert.alert(
+        "Thành công",
+        "Đổi mật khẩu thành công. Thông báo đã được gửi về email của bạn.",
+      );
       setShowChangePasswordModal(false);
-      setPasswordForm({ oldPassword: "", newPassword: "", confirmNewPassword: "" });
+      setPasswordForm({
+        oldPassword: "",
+        newPassword: "",
+        confirmNewPassword: "",
+      });
     } catch (err: any) {
       const msg = err.response?.data?.message || "Đổi mật khẩu thất bại";
       Alert.alert("Lỗi", msg);
@@ -150,7 +165,6 @@ export default function AccountSecurityScreen() {
         showsVerticalScrollIndicator={false}
         className="flex-1 px-4 bg-[#fafafa]"
       >
-
         {/* Modal Quản Lý Thiết Bị */}
         <Modal
           visible={showDevicesModal}
@@ -158,207 +172,226 @@ export default function AccountSecurityScreen() {
           animationType="slide"
           onRequestClose={() => setShowDevicesModal(false)}
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View className="flex-1 justify-end bg-black/50">
-              <View className="bg-white rounded-t-3xl p-6 pb-20 h-3/4">
+          <View className="flex-1 justify-end bg-black/50">
+            <View className="bg-white rounded-t-3xl  pb-20 h-3/4">
+              <View className="flex-row justify-between items-center p-6 border-b border-gray-100 pb-4">
+                <Text className="text-xl font-bold text-gray-900">
+                  Tính năng Quản lý thiết bị
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowDevicesModal(false)}
+                  className="p-2"
+                >
+                  <Text className="text-red-500 font-bold">Thoát</Text>
+                </TouchableOpacity>
+              </View>
+
+              {loadingSessions ? (
+                <View className="flex-1 justify-center items-center">
+                  <ActivityIndicator size="large" color="#000" />
+                  <Text className="mt-4 text-gray-500 font-bold">Đang tải danh sách thiết bị...</Text>
+                </View>
+              ) : (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {sessions.map((item, index) => {
+                    const loginDate = new Date(item.createdAt).toLocaleString("vi-VN");
+                    return (
+                      <View key={index} className="bg-gray-50 rounded-2xl p-4 mb-4 border border-gray-200 flex-row items-center justify-between">
+                        <View className="flex-1">
+                          <Text className="font-bold text-base text-gray-900 mb-1">
+                            {item.deviceId}
+                            {item.isCurrent && (
+                              <Text className="text-blue-600 font-bold text-xs ml-2"> (Thiết bị này)</Text>
+                            )}
+                          </Text>
+                          <Text className="text-xs text-gray-500 mb-1">Thời gian: {loginDate}</Text>
+                          <Text className="text-xs text-gray-400">IP: {item.ipAddress}</Text>
+                        </View>
+                        {!item.isCurrent && (
+                          <TouchableOpacity
+                            onPress={() => handleRevokeSession(item.id)}
+                            className="bg-red-50 p-3 rounded-full ml-2"
+                          >
+                            <TrashIcon size={20} color="#dc2626" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )
+                  })}
+                  {sessions.length === 0 && (
+                    <Text className="text-center text-gray-500 mt-10">Không tìm thấy phiên đăng nhập nào.</Text>
+                  )}
+
+                  {sessions.length > 1 && (
+                    <TouchableOpacity
+                      onPress={handleRevokeOtherSessions}
+                      className="bg-red-500 py-3 rounded-full mt-4 flex-row justify-center items-center"
+                    >
+                      <Text className="text-white font-bold text-base">Đăng xuất tất cả thiết bị khác</Text>
+                    </TouchableOpacity>
+                  )}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* Modal Đổi mật khẩu */}
+      <Modal
+        visible={showChangePasswordModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowChangePasswordModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View className="flex-1 justify-end bg-black/50">
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+            >
+              <View className="bg-white rounded-t-3xl p-6 pb-20">
                 <View className="flex-row justify-between items-center mb-6 border-b border-gray-100 pb-4">
-                  <Text className="text-xl font-bold text-gray-900">Tính năng Quản lý thiết bị</Text>
-                  <TouchableOpacity onPress={() => setShowDevicesModal(false)} className="p-2">
+                  <Text className="text-xl font-bold text-gray-900">
+                    Đổi mật khẩu
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowChangePasswordModal(false)}
+                    className="p-2"
+                  >
                     <Text className="text-red-500 font-bold">Thoát</Text>
                   </TouchableOpacity>
                 </View>
 
-                {loadingSessions ? (
-                  <View className="flex-1 justify-center items-center">
-                    <ActivityIndicator size="large" color="#000" />
-                    <Text className="mt-4 text-gray-500 font-bold">Đang tải danh sách thiết bị...</Text>
-                  </View>
-                ) : (
-                  <ScrollView showsVerticalScrollIndicator={false}>
-                    {sessions.map((item, index) => {
-                      const loginDate = new Date(item.createdAt).toLocaleString("vi-VN");
-                      return (
-                        <View key={index} className="bg-gray-50 rounded-2xl p-4 mb-4 border border-gray-200 flex-row items-center justify-between">
-                          <View className="flex-1">
-                            <Text className="font-bold text-base text-gray-900 mb-1">
-                              {item.deviceId}
-                              {item.isCurrent && (
-                                <Text className="text-blue-600 font-bold text-xs ml-2"> (Thiết bị này)</Text>
-                              )}
-                            </Text>
-                            <Text className="text-xs text-gray-500 mb-1">Thời gian: {loginDate}</Text>
-                            <Text className="text-xs text-gray-400">IP: {item.ipAddress}</Text>
-                          </View>
-                          {!item.isCurrent && (
-                            <TouchableOpacity
-                              onPress={() => handleRevokeSession(item.id)}
-                              className="bg-red-50 p-3 rounded-full ml-2"
-                            >
-                              <TrashIcon size={20} color="#dc2626" />
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      )
-                    })}
-                    {sessions.length === 0 && (
-                      <Text className="text-center text-gray-500 mt-10">Không tìm thấy phiên đăng nhập nào.</Text>
-                    )}
+                <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">
+                  MẬT KHẨU HIỆN TẠI
+                </Text>
+                <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-5 border-[1px] border-gray-200">
+                  <TextInput
+                    secureTextEntry
+                    value={passwordForm.oldPassword}
+                    onChangeText={(val) => setPasswordForm({ ...passwordForm, oldPassword: val })}
+                    className="text-base text-gray-900"
+                    placeholder="••••••••"
+                    placeholderTextColor="#9ca3af"
+                  />
+                </View>
 
-                    {sessions.length > 1 && (
-                      <TouchableOpacity
-                        onPress={handleRevokeOtherSessions}
-                        className="bg-red-500 py-3 rounded-full mt-4 flex-row justify-center items-center"
-                      >
-                        <Text className="text-white font-bold text-base">Đăng xuất tất cả thiết bị khác</Text>
-                      </TouchableOpacity>
-                    )}
-                  </ScrollView>
-                )}
-              </View>
-            </View>
-          </TouchableWithoutFeedback>
-        </Modal>
+                <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">
+                  MẬT KHẨU MỚI
+                </Text>
+                <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-5 border-[1px] border-gray-200">
+                  <TextInput
+                    secureTextEntry
+                    value={passwordForm.newPassword}
+                    onChangeText={(val) => setPasswordForm({ ...passwordForm, newPassword: val })}
+                    className="text-base text-gray-900"
+                    placeholder="••••••••"
+                    placeholderTextColor="#9ca3af"
+                  />
+                </View>
 
-        {/* Modal Đổi mật khẩu */}
-        <Modal
-          visible={showChangePasswordModal}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowChangePasswordModal(false)}
-        >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View className="flex-1 justify-end bg-black/50">
-              <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
-                <View className="bg-white rounded-t-3xl p-6 pb-20">
-                  <View className="flex-row justify-between items-center mb-6 border-b border-gray-100 pb-4">
-                    <Text className="text-xl font-bold text-gray-900">
-                      Đổi mật khẩu
+                <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">XÁC NHẬN MẬT KHẨU MỚI</Text>
+                <View className={`bg-gray-100 rounded-2xl px-4 py-4 mb-8 border-[1px] ${passwordForm.confirmNewPassword && passwordForm.newPassword !== passwordForm.confirmNewPassword ? 'border-red-400' : 'border-gray-200'}`}>
+                  <TextInput
+                    secureTextEntry
+                    value={passwordForm.confirmNewPassword}
+                    onChangeText={(val) => setPasswordForm({ ...passwordForm, confirmNewPassword: val })}
+                    className="text-base text-gray-900"
+                    placeholder="••••••••"
+                    placeholderTextColor="#9ca3af"
+                  />
+                </View>
+                {passwordForm.confirmNewPassword !== "" &&
+                  passwordForm.newPassword !==
+                  passwordForm.confirmNewPassword && (
+                    <Text className="text-red-500 text-xs font-medium -mt-6 mb-6 px-2">
+                      Mật khẩu xác nhận không khớp
                     </Text>
-                    <TouchableOpacity onPress={() => setShowChangePasswordModal(false)} className="p-2">
-                      <Text className="text-red-500 font-bold">Thoát</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">MẬT KHẨU HIỆN TẠI</Text>
-                  <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-5 border-[1px] border-gray-200">
-                    <TextInput
-                      secureTextEntry
-                      value={passwordForm.oldPassword}
-                      onChangeText={(val) => setPasswordForm({ ...passwordForm, oldPassword: val })}
-                      className="text-base text-gray-900"
-                      placeholder="••••••••"
-                      placeholderTextColor="#9ca3af"
-                    />
-                  </View>
-
-                  <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">MẬT KHẨU MỚI</Text>
-                  <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-5 border-[1px] border-gray-200">
-                    <TextInput
-                      secureTextEntry
-                      value={passwordForm.newPassword}
-                      onChangeText={(val) => setPasswordForm({ ...passwordForm, newPassword: val })}
-                      className="text-base text-gray-900"
-                      placeholder="••••••••"
-                      placeholderTextColor="#9ca3af"
-                    />
-                  </View>
-
-                  <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">XÁC NHẬN MẬT KHẨU MỚI</Text>
-                  <View className={`bg-gray-100 rounded-2xl px-4 py-4 mb-8 border-[1px] ${passwordForm.confirmNewPassword && passwordForm.newPassword !== passwordForm.confirmNewPassword ? 'border-red-400' : 'border-gray-200'}`}>
-                    <TextInput
-                      secureTextEntry
-                      value={passwordForm.confirmNewPassword}
-                      onChangeText={(val) => setPasswordForm({ ...passwordForm, confirmNewPassword: val })}
-                      className="text-base text-gray-900"
-                      placeholder="••••••••"
-                      placeholderTextColor="#9ca3af"
-                    />
-                  </View>
-                  {passwordForm.confirmNewPassword !== "" && passwordForm.newPassword !== passwordForm.confirmNewPassword && (
-                    <Text className="text-red-500 text-xs font-medium -mt-6 mb-6 px-2">Mật khẩu xác nhận không khớp</Text>
                   )}
 
-                  <TouchableOpacity
-                    disabled={changingPass}
-                    onPress={handleChangePassword}
-                    className="bg-gray-900 py-4 rounded-full items-center justify-center flex-row shadow-sm"
-                  >
-                    {changingPass ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text className="text-white font-bold text-base">Xác nhận Đổi Mật Khẩu</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </KeyboardAvoidingView>
-            </View>
-          </TouchableWithoutFeedback>
-        </Modal>
-
-        {/* Section 2: BẢO MẬT */}
-        <View className="mt-6 mb-6">
-          <Text className="text-[11px] font-bold text-gray-400 tracking-wider mb-4 px-1">
-            MỞ KHÓA BẰNG VÂN TAY/FACE ID
-          </Text>
-
-          <View className="bg-white p-4 rounded-2xl flex-row items-center justify-between border-[1px] border-gray-200">
-            <View className="flex-row items-center">
-              <LockClosedIcon size={20} color="#6b7280" />
-              <Text className="text-base font-medium text-gray-900 ml-3">
-                Khóa ứng dụng
-              </Text>
-            </View>
-            <Switch
-              trackColor={{ false: "#d1d5db", true: "#111827" }}
-              thumbColor={"#f4f3f4"}
-              ios_backgroundColor="#d1d5db"
-              onValueChange={() => setIsAppLocked(!isAppLocked)}
-              value={isAppLocked}
-            />
+                <TouchableOpacity
+                  disabled={changingPass}
+                  onPress={handleChangePassword}
+                  className="bg-gray-900 py-4 rounded-full items-center justify-center flex-row shadow-sm"
+                >
+                  {changingPass ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text className="text-white font-bold text-base">
+                      Xác nhận Đổi Mật Khẩu
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
-        {/* Section 3: ĐĂNG NHẬP */}
-        <View className="mb-6">
-          <Text className="text-[11px] font-bold text-gray-400 tracking-wider mb-4 px-1">
-            ĐĂNG NHẬP
-          </Text>
+      {/* Section 2: BẢO MẬT */}
+      <View className="mt-6 mb-6">
+        <Text className="text-[11px] font-bold text-gray-400 tracking-wider mb-4 px-1">
+          MỞ KHÓA BẰNG VÂN TAY/FACE ID
+        </Text>
 
-          <View className="bg-white rounded-2xl border-[1px] border-gray-200 overflow-hidden">
-            <MenuItem
-              icon={<ComputerDesktopIcon size={20} color="#6b7280" />}
-              title="Quản lý thiết bị"
-              showBorder
-              onPress={() => {
-                setShowDevicesModal(true);
-                fetchActiveSessions();
-              }}
-            />
-            <MenuItem
-              icon={<KeyIcon size={20} color="#6b7280" />}
-              title="Mật khẩu"
-              onPress={() => setShowChangePasswordModal(true)}
-            />
+        <View className="bg-white p-4 rounded-2xl flex-row items-center justify-between border-[1px] border-gray-200">
+          <View className="flex-row items-center">
+            <LockClosedIcon size={20} color="#6b7280" />
+            <Text className="text-base font-medium text-gray-900 ml-3">
+              Khóa ứng dụng
+            </Text>
           </View>
+          <Switch
+            trackColor={{ false: "#d1d5db", true: "#111827" }}
+            thumbColor={"#f4f3f4"}
+            ios_backgroundColor="#d1d5db"
+            onValueChange={() => setIsAppLocked(!isAppLocked)}
+            value={isAppLocked}
+          />
         </View>
+      </View>
 
-        {/* Nút Xóa tài khoản */}
-        {/* <TouchableOpacity className="bg-red-50 py-4 rounded-2xl flex-row justify-center items-center mt-4">
+      {/* Section 3: ĐĂNG NHẬP */}
+      <View className="mb-6">
+        <Text className="text-[11px] font-bold text-gray-400 tracking-wider mb-4 px-1">
+          ĐĂNG NHẬP
+        </Text>
+
+        <View className="bg-white rounded-2xl border-[1px] border-gray-200 overflow-hidden">
+          <MenuItem
+            icon={<ComputerDesktopIcon size={20} color="#6b7280" />}
+            title="Quản lý thiết bị"
+            showBorder
+            onPress={() => {
+              setShowDevicesModal(true);
+              fetchActiveSessions();
+            }}
+          />
+          <MenuItem
+            icon={<KeyIcon size={20} color="#6b7280" />}
+            title="Mật khẩu"
+            onPress={() => setShowChangePasswordModal(true)}
+          />
+        </View>
+      </View>
+
+      {/* Nút Xóa tài khoản */}
+      {/* <TouchableOpacity className="bg-red-50 py-4 rounded-2xl flex-row justify-center items-center mt-4">
           <TrashIcon size={18} color="#dc2626" />
           <Text className="text-red-600 font-bold text-base ml-2">
             Xóa tài khoản
           </Text>
         </TouchableOpacity> */}
 
-        {/* Cảnh báo xóa tài khoản */}
-        {/* <Text className="text-xs text-gray-400 text-center mt-4 mb-10 px-6 leading-5">
+      {/* Cảnh báo xóa tài khoản */}
+      {/* <Text className="text-xs text-gray-400 text-center mt-4 mb-10 px-6 leading-5">
           Hành động này không thể hoàn tác. Mọi dữ liệu liên quan đến tài khoản
           này sẽ bị xóa vĩnh viễn khỏi hệ thống.
         </Text> */}
 
-        <View className="h-32" />
-      </ScrollView>
-    </View>
+      <View className="h-32" />
+    </ScrollView>
+    </View >
   );
 }
 
