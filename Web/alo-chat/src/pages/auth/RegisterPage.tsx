@@ -45,7 +45,10 @@ const RegisterPage = () => {
     setIsSendingOtp(true);
     setError("");
     try {
-      await axiosClient.post("/auth/send-otp", { email: formData.email });
+      await axiosClient.post("/auth/send-otp", {
+        email: formData.email,
+        phoneNumber: formData.phoneNumber,
+      });
       setOtpSent(true);
       toast.success("Mã xác nhận đã được gửi!", {
         description: `Vui lòng kiểm tra hộp thư ${formData.email}`,
