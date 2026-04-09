@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import AppLockWrapper from "./components/AppLockWrapper";
 import "../global.css";
+// import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 function RootLayoutNav() {
   const { isAuthenticated, isReady } = useAuth();
@@ -41,6 +42,13 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  useEffect(() => {
+    // GoogleSignin.configure({
+    //   webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+    //   iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    // });
+  }, []);
+
   return (
     <AuthProvider>
       <AppLockWrapper>
