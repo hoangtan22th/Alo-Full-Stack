@@ -15,6 +15,7 @@ import {
 } from "react-native-heroicons/outline";
 import { CheckIcon, PlusIcon } from "react-native-heroicons/solid";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
 import {
   contactService,
   FriendshipResponseDTO,
@@ -44,10 +45,36 @@ export default function CreateGroupScreen() {
   const [groupName, setGroupName] = useState("");
   const [friends, setFriends] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [groupAvatarUri, setGroupAvatarUri] = useState<string | null>(null);
 
   useEffect(() => {
     fetchFriends();
   }, []);
+
+  const handlePickImage = async () => {
+    // Xin quyền truy cập thư viện ảnh nếu cần (trên iOS/Android thật)
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (permissionResult.granted === false) {
+      Alert.alert(
+        "Quyền truy cập",
+        "Bạn cần cấp quyền truy cập ảnh để chọn ảnh đại diện nhóm!",
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1], // Crop hình vuông
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setGroupAvatarUri(result.assets[0].uri);
+    }
+  };
 
   const fetchFriends = async () => {
     try {
@@ -93,7 +120,11 @@ export default function CreateGroupScreen() {
 
     try {
       setIsLoading(true);
-      await groupService.createGroup(groupName.trim(), selectedContacts);
+      await groupService.createGroup(
+        groupName.trim(),
+        selectedContacts,
+        groupAvatarUri || undefined,
+      );
       Alert.alert("Thành công", "Tạo nhóm thành công!", [
         { text: "OK", onPress: () => router.back() },
       ]);
@@ -132,9 +163,20 @@ export default function CreateGroupScreen() {
 
       <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
         <View className="items-center mt-8 mb-6">
-          <TouchableOpacity className="w-24 h-24 bg-gray-100 rounded-full items-center justify-center relative">
-            <CameraIcon size={32} color="#9ca3af" />
-            <View className="absolute bottom-0 right-0 bg-black w-7 h-7 rounded-full items-center justify-center border-[3px] border-white">
+          <TouchableOpacity
+            onPress={handlePickImage}
+            className="w-24 h-24 bg-gray-100 rounded-full items-center justify-center relative overflow-hidden border-2 border-gray-200"
+          >
+            {groupAvatarUri ? (
+              <Image
+                source={{ uri: groupAvatarUri }}
+                className="w-full h-full"
+                resizeMode="cover"
+              />
+            ) : (
+              <CameraIcon size={32} color="#9ca3af" />
+            )}
+            <View className="absolute bottom-0 right-0 bg-black w-7 h-7 rounded-full items-center justify-center border-[3px] border-white z-10">
               <PlusIcon size={14} color="white" />
             </View>
           </TouchableOpacity>

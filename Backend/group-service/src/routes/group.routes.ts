@@ -1,11 +1,17 @@
 // src/routes/group.routes.ts
 import { Router } from "express";
+import multer from "multer";
 import * as groupController from "../controllers/group.controller";
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Quản lý thông tin nhóm
-router.post("/api/v1/groups", groupController.createGroup);
+router.post(
+  "/api/v1/groups",
+  upload.single("avatarFile"),
+  groupController.createGroup,
+);
 
 // Quản lý thành viên trong nhóm
 router.post("/api/v1/groups/:groupId/members", groupController.addMember);

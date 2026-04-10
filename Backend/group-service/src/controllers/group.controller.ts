@@ -1,6 +1,7 @@
 // src/controllers/group.controller.ts
 import { Request, Response } from "express";
 import Conversation from "../models/Conversation";
+import { uploadImageToS3 } from "../services/s3Service";
 
 // Helper lấy danh sách bạn bè
 async function getFriendIds(
@@ -64,8 +65,19 @@ export const createGroup = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { name, groupAvatar, userIds } = req.body; // userIds là mảng ID các thành viên muốn mời
+    // Với multipart/form-data, các trường được gửi dưới dạng string trong req.body
+    let { name, userIds } = req.body;
+    let groupAvatar = "";
     const creatorId = (req.headers["x-user-id"] || "").toString();
+
+    // Parse userIds nếu gửi dưới dạng string json
+    if (typeof userIds === "string") {
+      try {
+        userIds = JSON.parse(userIds);
+      } catch (e) {
+        userIds = userIds.split(",").map((id: string) => id.trim());
+      }
+    }
 
     // Kiểm tra số lượng: Người tạo + Danh sách mời phải >= 3
     if (!userIds || !Array.isArray(userIds) || userIds.length < 2) {
@@ -96,7 +108,24 @@ export const createGroup = async (
       });
       return;
     }
-
+    // Handle Image Upload (Nếu có)
+    if (req.file) {
+      try {
+        console.log(`[CreateGroup] Đang upload avatar nhóm lên S3...`);
+        groupAvatar = await uploadImageToS3(
+          req.file.buffer,
+          req.file.mimetype,
+          "alo_group_images",
+        );
+        console.log(`[CreateGroup] Upload thành công URL: ${groupAvatar}`);
+      } catch (uploadError) {
+        console.error(`[CreateGroup] Lỗi upload S3:`, uploadError);
+        // Có thể chọn chặn request hoặc báo lỗi, nhưng tốt nhất vẫn để nhóm được tạo và trả về message
+      }
+    } else if (req.body.groupAvatar) {
+      // Nếu chỉ truyền link URL thuần tuý
+      groupAvatar = req.body.groupAvatar;
+    }
     // Tạo danh sách members ban đầu
     const initialMembers = [
       { userId: creatorId, role: "LEADER" },
