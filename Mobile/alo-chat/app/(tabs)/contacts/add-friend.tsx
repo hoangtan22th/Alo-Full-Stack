@@ -21,6 +21,7 @@ import {
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import api from "../../../services/api";
+import { useAuth } from "../../../contexts/AuthContext";
 import {
   contactService,
   SearchFriendResponseDTO,
@@ -29,23 +30,9 @@ import {
 export default function AddFriendScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState<any>(null);
-
-  useFocusEffect(
-    useCallback(() => {
-      const fetchProfile = async () => {
-        try {
-          const res: any = await api.get("/auth/me");
-          setUser(res);
-        } catch (err) {
-          console.log("Lỗi tải profile:", err);
-        }
-      };
-      fetchProfile();
-    }, []),
-  );
 
   const handleSearch = async () => {
     if (!phoneNumber.trim()) {

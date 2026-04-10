@@ -15,9 +15,10 @@ import { ArrowLeftIcon } from "react-native-heroicons/solid";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import api from "../../../services/api";
+import { useAuth } from "../../../contexts/AuthContext";
 
 export default function EditProfileScreen() {
-  const [user, setUser] = useState<any>(null);
+  const { user, refreshUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
@@ -26,13 +27,14 @@ export default function EditProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchProfile();
-    }, []),
+    }, [user]),
   );
 
   const fetchProfile = async () => {
     try {
-      const res: any = await api.get("/auth/me");
-      setUser(res);
+      if (user) {
+        setLoading(false);
+      }
     } catch (err) {
       console.log("Lỗi tải profile:", err);
     } finally {
@@ -42,7 +44,7 @@ export default function EditProfileScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchProfile();
+    await refreshUser();
     setRefreshing(false);
   }, []);
 
@@ -58,10 +60,10 @@ export default function EditProfileScreen() {
       formData.append("file", { uri, name: filename, type });
 
       const endpoint = isAvatar ? "/auth/me/avatar" : "/auth/me/cover";
-      const res: any = await api.post(endpoint, formData, {
+      await api.post(endpoint, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      setUser(res);
+      await refreshUser();
       Alert.alert(
         "Thành công",
         `Cập nhật ${isAvatar ? "ảnh đại diện" : "ảnh bìa"} thành công!`,

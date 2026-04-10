@@ -46,9 +46,12 @@ interface ContactSection {
   data: any[];
 }
 
+import { useAuth } from "../../../contexts/AuthContext";
+
 export default function ContactsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
 
   const [contactSections, setContactSections] = useState<ContactSection[]>([]);
   const [alphabet, setAlphabet] = useState<string[]>([]);
@@ -63,8 +66,7 @@ export default function ContactsScreen() {
   const fetchFriends = async () => {
     setLoading(true);
     try {
-      const meRes: any = await api.get("/auth/me");
-      const myId = meRes?.id || meRes?._id;
+      const myId = user?.id || user?._id;
 
       const friends = await contactService.getFriendsList();
 

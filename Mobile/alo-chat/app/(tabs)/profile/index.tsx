@@ -18,29 +18,19 @@ import api from "../../../services/api";
 export default function MainProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [user, setUser] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const { signOut } = useAuth();
+  const { signOut, user, refreshUser } = useAuth();
 
   useFocusEffect(
     useCallback(() => {
-      fetchProfile();
+      refreshUser();
     }, []),
   );
 
-  const fetchProfile = async () => {
-    try {
-      const res: any = await api.get("/auth/me");
-      setUser(res);
-    } catch (err) {
-      console.log("Lỗi tải profile:", err);
-    }
-  };
-
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchProfile();
+    await refreshUser();
     setRefreshing(false);
   }, []);
 
@@ -144,9 +134,7 @@ export default function MainProfileScreen() {
             title="Quyền riêng tư"
             onPress={() => router.push("/profile/privacy")}
           />
-
         </View>
-
 
         {/* Nút Đăng xuất: Dùng mt-auto để đẩy nó xuống dưới đáy */}
         <TouchableOpacity
