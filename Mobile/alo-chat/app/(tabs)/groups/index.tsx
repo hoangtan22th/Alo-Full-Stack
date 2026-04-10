@@ -140,6 +140,17 @@ export default function GroupsScreen() {
                 <GroupItem
                   key={group.id}
                   group={group}
+                  onPress={() => {
+                    const chatId = group.id || "1";
+                    router.push({
+                      pathname: `/chat/${chatId}` as any, // Ép kiểu de bypass TS
+                      params: {
+                        name: group.name,
+                        avatar: group.avatar,
+                        membersCount: group.subtitle.replace(" thành viên", ""),
+                      },
+                    });
+                  }}
                   onLongPress={() => setSelectedGroup(group)}
                 />
               ))
@@ -183,15 +194,18 @@ function ActionItem({
 // Component con: Item nhóm
 function GroupItem({
   group,
+  onPress,
   onLongPress,
 }: {
   group: any;
+  onPress: () => void;
   onLongPress: () => void;
 }) {
   return (
     // Thêm onLongPress vào TouchableOpacity
     <TouchableOpacity
       className="flex-row items-center mb-5"
+      onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={250} // Thời gian giữ 0.25s để hiện menu
     >
