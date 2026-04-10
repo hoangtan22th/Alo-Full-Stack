@@ -262,19 +262,28 @@ export default function ContactsScreen() {
               <TouchableOpacity
                 className="flex-row items-center px-5 py-3"
                 onPress={() => {
-                  router.push({
-                    pathname: "/contacts/send-request",
-                    params: {
-                      userId: phoneSearchResult.userId,
-                      fullName: phoneSearchResult.fullName,
-                      phone: phoneSearchResult.phone || "Số điện thoại bị ẩn",
-                      avatarUrl: phoneSearchResult.avatarUrl,
-                      relationStatus: phoneSearchResult.isFriendLocal
-                        ? "ACCEPTED"
-                        : "NOT_FRIEND",
-                      requestId: "",
-                    },
-                  });
+                  if (phoneSearchResult.isFriendLocal) {
+                    router.push({
+                      pathname: "/chat/[id]",
+                      params: {
+                        id: phoneSearchResult.userId,
+                        name: phoneSearchResult.fullName,
+                        avatar: phoneSearchResult.avatarUrl || "",
+                      },
+                    });
+                  } else {
+                    router.push({
+                      pathname: "/contacts/send-request",
+                      params: {
+                        userId: phoneSearchResult.userId,
+                        fullName: phoneSearchResult.fullName,
+                        phone: phoneSearchResult.phone || "Số điện thoại bị ẩn",
+                        avatarUrl: phoneSearchResult.avatarUrl,
+                        relationStatus: "NOT_FRIEND",
+                        requestId: "",
+                      },
+                    });
+                  }
                 }}
               >
                 {phoneSearchResult.avatarUrl ? (
@@ -394,14 +403,11 @@ function ContactItem({ contact }: { contact: any }) {
       className="flex-row items-center px-5 py-3"
       onPress={() => {
         router.push({
-          pathname: "/contacts/send-request",
+          pathname: "/chat/[id]",
           params: {
-            userId: contact.userId,
-            fullName: contact.name,
-            phone: "Số điện thoại bị ẩn", // Theo đề bài, thông tin chưa có hoặc muốn lấy full API thì có thể fetch tiếp ở màn kia
-            avatarUrl: contact.avatar,
-            relationStatus: "ACCEPTED",
-            requestId: contact.id,
+            id: contact.userId,
+            name: contact.name,
+            avatar: contact.avatar || "",
           },
         });
       }}

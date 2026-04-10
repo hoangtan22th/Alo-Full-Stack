@@ -14,18 +14,29 @@ function RootLayoutNav() {
   useEffect(() => {
     if (!isReady) return;
 
-    const inTabsGroup = segments[0] === "(tabs)";
+    const authScreens = ["login", "register", "index"];
+    const inAuthGroup =
+      segments.length > 0 && authScreens.includes(segments[0]);
 
-    if (isAuthenticated && !inTabsGroup) {
+    if (isAuthenticated && inAuthGroup) {
+      // Đã đăng nhập nhưng lại vào màn hình login -> Đẩy vào app chính
       router.replace("/(tabs)");
-    } else if (!isAuthenticated && inTabsGroup) {
+    } else if (!isAuthenticated && !inAuthGroup) {
+      // Chưa đăng nhập mà truy cập màn hình trong app -> Đẩy ra login
       router.replace("/login");
     }
   }, [isReady, isAuthenticated, segments]);
 
   if (!isReady) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#fff",
+        }}
+      >
         <ActivityIndicator size="large" color="#000" />
       </View>
     );
@@ -37,6 +48,7 @@ function RootLayoutNav() {
       <Stack.Screen name="login" />
       <Stack.Screen name="register" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="chat/[id]" />
     </Stack>
   );
 }
