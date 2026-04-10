@@ -32,7 +32,8 @@ public class SecurityConfig {
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/google",
                                 "/api/v1/auth/qr/generate",
-                                "/api/v1/auth/qr/status/**"
+                                "/api/v1/auth/qr/status/**",
+                                "/api/v1/chatbot/**"
                         ).permitAll()
 
                         // 2. Với Microservices, ta tin tưởng Gateway.
