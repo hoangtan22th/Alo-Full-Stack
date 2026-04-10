@@ -222,6 +222,7 @@ public class FriendshipServiceImpl implements FriendshipService {
                 .recipientId(friendship.getRecipientId())
                 .greetingMessage(friendship.getGreetingMessage())
                 .status(friendship.getStatus().toString())
+                .createdAt(friendship.getCreateAt() != null ? friendship.getCreateAt().toString() : null)
                 .build();
     }
     @Override
