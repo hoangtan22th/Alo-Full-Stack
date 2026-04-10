@@ -121,9 +121,9 @@ export default function AddFriendScreen() {
           {/* QR Code */}
           <View className="bg-white p-4 rounded-3xl shadow-sm">
             <Image
-              // Dùng API tạo mã QR cho số điện thoại của user
+              // Dùng API tạo mã QR cho số điện thoại của user (dùng số điện thoại để quét)
               source={{
-                uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${user?.phone || user?.userId || "AloApp"}`,
+                uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${user?.phoneNumber || user?.phone || "0000000000"}`,
               }}
               className="w-40 h-40"
             />
@@ -173,6 +173,7 @@ export default function AddFriendScreen() {
             icon={<QrCodeIcon size={24} color="#3b82f6" />} // Màu xanh dương
             title="Quét mã QR"
             showBorder={true}
+            onPress={() => router.push("/contacts/scan-qr")}
           />
           <ActionMenu
             icon={<UserPlusIcon size={24} color="#f97316" />} // Màu cam
@@ -200,14 +201,17 @@ function ActionMenu({
   icon,
   title,
   showBorder,
+  onPress,
 }: {
   icon: any;
   title: string;
   showBorder: boolean;
+  onPress?: () => void;
 }) {
   return (
     <TouchableOpacity
       className={`flex-row items-center justify-between py-5 ${showBorder ? "border-b border-gray-100" : ""}`}
+      onPress={onPress}
     >
       <View className="flex-row items-center">
         <View className="w-10 items-center justify-center">{icon}</View>
