@@ -91,7 +91,7 @@ export default function GlobalChatScreen() {
       >
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
-          <View className="flex-row items-center">
+          <View className="flex-row items-center flex-1">
             <TouchableOpacity
               onPress={() => router.back()}
               className="pr-4 py-2"
@@ -99,36 +99,70 @@ export default function GlobalChatScreen() {
               <ArrowLeftIcon size={24} color="#000" />
             </TouchableOpacity>
 
-            <View className="relative">
-              {avatar ? (
-                <Image
-                  source={{ uri: avatar as string }}
-                  className="w-11 h-11 rounded-full"
-                />
-              ) : (
-                <View className="w-11 h-11 rounded-full bg-gray-900 items-center justify-center">
-                  <Text className="text-white font-bold text-lg">
-                    {((name as string) || "G").charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-              )}
-              {/* Hiện chấm xanh nếu là cá nhân không có membersCount */}
-              {!membersCount && (
-                <View className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" />
-              )}
-            </View>
+            <TouchableOpacity
+              className="flex-row items-center flex-1"
+              activeOpacity={0.7}
+              onPress={() => {
+                if (membersCount) {
+                  router.push({
+                    pathname: "/chat/info",
+                    params: {
+                      id: id,
+                      name: name,
+                      avatar: avatar,
+                      membersCount: membersCount,
+                    },
+                  });
+                } else {
+                  router.push({
+                    pathname: "/contacts/send-request",
+                    params: {
+                      userId: id,
+                      fullName: name,
+                      avatarUrl: avatar,
+                      relationStatus: "ACCEPTED",
+                      from: "chat",
+                      chatId: id,
+                      chatName: name,
+                      chatAvatar: avatar,
+                    },
+                  });
+                }
+              }}
+            >
+              <View className="relative">
+                {avatar ? (
+                  <Image
+                    source={{ uri: avatar as string }}
+                    className="w-11 h-11 rounded-full"
+                  />
+                ) : (
+                  <View className="w-11 h-11 rounded-full bg-gray-900 items-center justify-center">
+                    <Text className="text-white font-bold text-lg">
+                      {((name as string) || "G").charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                {/* Hiện chấm xanh nếu là cá nhân không có membersCount */}
+                {!membersCount && (
+                  <View className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" />
+                )}
+              </View>
 
-            <View className="ml-3">
-              <Text
-                className="text-base font-bold text-gray-900"
-                numberOfLines={1}
-              >
-                {name || `Nhóm ${id}`}
-              </Text>
-              <Text className="text-xs text-gray-500 mt-0.5">
-                {membersCount ? `${membersCount} thành viên` : "Đang hoạt động"}
-              </Text>
-            </View>
+              <View className="ml-3 flex-1 pr-2">
+                <Text
+                  className="text-base font-bold text-gray-900"
+                  numberOfLines={1}
+                >
+                  {name || `Nhóm ${id}`}
+                </Text>
+                <Text className="text-xs text-gray-500 mt-0.5">
+                  {membersCount
+                    ? `${membersCount} thành viên`
+                    : "Đang hoạt động"}
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
 
           <View className="flex-row items-center gap-5">
@@ -138,7 +172,19 @@ export default function GlobalChatScreen() {
             <TouchableOpacity>
               <VideoCameraIcon size={24} color="#374151" />
             </TouchableOpacity>
-            <TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                router.push({
+                  pathname: "/chat/info",
+                  params: {
+                    id: id,
+                    name: name,
+                    avatar: avatar,
+                    membersCount: membersCount,
+                  },
+                });
+              }}
+            >
               <InformationCircleIcon size={24} color="#374151" />
             </TouchableOpacity>
           </View>

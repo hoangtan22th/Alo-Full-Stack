@@ -37,6 +37,10 @@ export default function UserProfileScreen() {
     relationStatus,
     requestId,
     greetingMessage,
+    from,
+    chatId,
+    chatName,
+    chatAvatar,
   } = useLocalSearchParams();
 
   const [userData, setUserData] = useState<UserProfileDTO | null>(null);
@@ -206,7 +210,27 @@ export default function UserProfileScreen() {
       <TouchableOpacity
         className="absolute z-10 w-10 h-10 rounded-full bg-black/20 items-center justify-center left-4"
         style={{ top: insets.top + 10 }}
-        onPress={() => router.back()}
+        onPress={() => {
+          if (from === "chat") {
+            // Sử dụng router.dismiss() nếu có thể để ép giải phóng màn hình cuối cùng mà không làm hư stack
+            if (typeof router.dismiss === "function") {
+              router.dismiss(1);
+            } else if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace({
+                pathname: "/chat/[id]",
+                params: {
+                  id: chatId as string,
+                  name: chatName as string,
+                  avatar: chatAvatar as string,
+                },
+              });
+            }
+          } else {
+            router.back();
+          }
+        }}
       >
         <ArrowLeftIcon size={22} color="#fff" />
       </TouchableOpacity>
@@ -273,6 +297,24 @@ export default function UserProfileScreen() {
                     <ChatBubbleBottomCenterTextIcon size={22} color="#1f2937" />
                   }
                   label="NHẮN TIN"
+                  onPress={() => {
+                    if (from === "chat") {
+                      if (typeof router.dismiss === "function") {
+                        router.dismiss(1);
+                      } else {
+                        router.back();
+                      }
+                    } else {
+                      router.push({
+                        pathname: "/chat/[id]",
+                        params: {
+                          id: userId as string,
+                          name: displayFullName,
+                          avatar: displayAvatar.uri,
+                        },
+                      });
+                    }
+                  }}
                 />
                 <ActionButton
                   icon={<PhoneIcon size={22} color="#1f2937" />}
@@ -428,12 +470,21 @@ export default function UserProfileScreen() {
 }
 
 // --- Component Phụ: Nút Chức Năng Tròn ---
-function ActionButton({ icon, label }: { icon: any; label: string }) {
+function ActionButton({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: any;
+  label: string;
+  onPress?: () => void;
+}) {
   return (
     <TouchableOpacity
       className="items-center"
       style={{ width: 64 }}
       activeOpacity={0.7}
+      onPress={onPress}
     >
       <View className="w-14 h-14 bg-white rounded-full items-center justify-center mb-2 border border-gray-100 shadow-sm">
         {icon}
