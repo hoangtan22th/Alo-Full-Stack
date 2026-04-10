@@ -15,6 +15,7 @@ export interface FriendshipResponseDTO {
   requesterAvatar?: string;
   recipientName?: string;
   recipientAvatar?: string;
+  createdAt?: string;
 }
 
 export interface SearchFriendResponseDTO {
