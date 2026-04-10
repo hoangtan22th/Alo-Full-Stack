@@ -289,8 +289,10 @@ public class AuthService {
 
         User updatedUser = userRepository.save(user);
 
-        // Xóa ảnh cũ trên S3 nếu có
-        if (oldUrl != null && oldUrl.startsWith("https://")) {
+        // Xóa ảnh cũ trên S3 nếu có, và ảnh cũ không phải là ảnh mặc định
+        if (oldUrl != null && oldUrl.startsWith("https://") 
+                && !oldUrl.equals("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/user_avt.png")
+                && !oldUrl.equals("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/default-cover-img.jpg")) {
             // Chạy async hoặc try-catch để nếu lỗi xóa s3 cũng không làm gián đoạn Flow
             // chính
             try {
