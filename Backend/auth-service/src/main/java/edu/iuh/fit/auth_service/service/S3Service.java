@@ -40,8 +40,10 @@ public class S3Service {
                 .build();
     }
 
-    public String uploadFile(MultipartFile file) throws IOException {
-        String fileName = UUID.randomUUID().toString() + "_" + file.getOriginalFilename().replaceAll("\\s+", "_");
+    public String uploadFile(MultipartFile file, String folderName) throws IOException {
+        String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename().replaceAll("\\s+", "_") : "unnamed";
+        String prefix = (folderName == null || folderName.isEmpty()) ? "" : folderName + "/";
+        String fileName = prefix + UUID.randomUUID().toString() + "_" + originalFilename;
 
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(bucketName)
@@ -52,6 +54,10 @@ public class S3Service {
         s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
 
         return String.format("https://%s.s3.%s.amazonaws.com/%s", bucketName, region, fileName);
+    }
+
+    public String uploadFile(MultipartFile file) throws IOException {
+        return uploadFile(file, ""); // For backwards compatibility if used elsewhere without a folder
     }
 
     public void deleteFile(String fileUrl) {

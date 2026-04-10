@@ -98,8 +98,8 @@ public class AuthService {
                 .fullName(request.fullName())
                 .authProvider(User.AuthProvider.LOCAL)
                 .gender(2)
-                .avatar("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/user_avt.png")
-                .coverImage("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/default-cover-img.jpg")
+                .avatar("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_user_images/user_avt.png")
+                .coverImage("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg")
                 .build();
         userRepository.save(user);
     }
@@ -279,7 +279,8 @@ public class AuthService {
         // Lưu URL cũ để xóa sau khi upload mới thành công
         String oldUrl = isAvatar ? user.getAvatar() : user.getCoverImage();
 
-        String fileUrl = s3Service.uploadFile(file);
+        String folderName = isAvatar ? "alo_user_images" : "alo_cover_images";
+        String fileUrl = s3Service.uploadFile(file, folderName);
 
         if (isAvatar) {
             user.setAvatar(fileUrl);
@@ -291,8 +292,8 @@ public class AuthService {
 
         // Xóa ảnh cũ trên S3 nếu có, và ảnh cũ không phải là ảnh mặc định
         if (oldUrl != null && oldUrl.startsWith("https://") 
-                && !oldUrl.equals("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/user_avt.png")
-                && !oldUrl.equals("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/default-cover-img.jpg")) {
+                && !oldUrl.equals("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_user_images/user_avt.png")
+                && !oldUrl.equals("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg")) {
             // Chạy async hoặc try-catch để nếu lỗi xóa s3 cũng không làm gián đoạn Flow
             // chính
             try {
