@@ -56,6 +56,7 @@ export default function ContactsScreen() {
   const [contactSections, setContactSections] = useState<ContactSection[]>([]);
   const [alphabet, setAlphabet] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingCount, setPendingCount] = useState<number>(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -68,7 +69,12 @@ export default function ContactsScreen() {
     try {
       const myId = user?.id || user?._id;
 
-      const friends = await contactService.getFriendsList();
+      const [friends, pendingRequests] = await Promise.all([
+        contactService.getFriendsList(),
+        contactService.getPendingRequests(),
+      ]);
+
+      setPendingCount(pendingRequests?.length || 0);
 
       // Nhóm theo chữ cái đầu
       const groups: Record<string, any[]> = {};
@@ -151,12 +157,13 @@ export default function ContactsScreen() {
         />
         <ActionItem
           icon={<UserIcon size={24} color="#374151" />}
-          label="Lời mời kết\nbạn"
+          label={"Lời mời kết\\nbạn"}
           onPress={() => router.push("/contacts/received-requests")}
+          badgeCount={pendingCount}
         />
         <ActionItem
           icon={<PaperAirplaneIcon size={24} color="#374151" />}
-          label="Lời mời đã\ngửi"
+          label={"Lời mời đã\\ngửi"}
           onPress={() => router.push("/contacts/sent-requests")}
         />
         <ActionItem
@@ -220,15 +227,26 @@ function ActionItem({
   icon,
   label,
   onPress,
+  badgeCount,
 }: {
   icon: React.ReactNode;
   label: string;
   onPress?: () => void;
+  badgeCount?: number;
 }) {
   return (
     <TouchableOpacity className="items-center w-20" onPress={onPress}>
-      <View className="w-[52px] h-[52px] bg-[#f9fafb] rounded-full items-center justify-center mb-2">
-        {icon}
+      <View className="relative">
+        <View className="w-[52px] h-[52px] bg-[#f9fafb] rounded-full items-center justify-center mb-2">
+          {icon}
+        </View>
+        {badgeCount !== undefined && badgeCount > 0 && (
+          <View className="absolute -top-1 -right-1 bg-red-500 rounded-full min-w-[20px] h-[20px] items-center justify-center px-1 border-[1.5px] border-white">
+            <Text className="text-white text-[10px] font-bold">
+              {badgeCount > 99 ? "99+" : badgeCount}
+            </Text>
+          </View>
+        )}
       </View>
       <Text className="text-xs text-center text-gray-600 font-medium leading-4">
         {label.replace("\\n", "\n")}
