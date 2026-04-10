@@ -102,7 +102,7 @@ export default function MainProfileScreen() {
               />
               <View className="ml-4 flex-1">
                 <Text className="text-lg font-bold text-gray-900 mb-1">
-                  {user?.fullName || "Nguyễn Hoàng Tấn"}
+                  {user?.fullName || "User name"}
                 </Text>
                 <Text className="text-sm text-gray-500">Xem trang cá nhân</Text>
               </View>

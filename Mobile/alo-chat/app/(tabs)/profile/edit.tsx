@@ -1,15 +1,15 @@
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useRef } from "react";
 import {
   ActivityIndicator,
   Image,
-  ScrollView,
   Text,
   TouchableOpacity,
   View,
   Alert,
   RefreshControl,
+  Animated,
 } from "react-native";
 import { ArrowLeftIcon } from "react-native-heroicons/solid";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,6 +23,7 @@ export default function EditProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   const insets = useSafeAreaInsets(); // Lấy chiều cao vùng an toàn (tai thỏ/status bar)
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   useFocusEffect(
     useCallback(() => {
@@ -89,7 +90,7 @@ export default function EditProfileScreen() {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images, // Chỉnh theo expo-image-picker mới nhất
       allowsEditing: true,
-      aspect: isAvatar ? [1, 1] : [16, 9],
+      aspect: isAvatar ? [1, 1] : [1, 1],
       quality: 0.8,
     });
 
@@ -107,102 +108,145 @@ export default function EditProfileScreen() {
 
   return (
     <View className="flex-1 bg-white">
-      {/* Header */}
-      <View
-        className="flex-row justify-between items-center px-4 pb-4 bg-white"
-        style={{ paddingTop: insets.top + 10 }} // Tự động đẩy xuống khỏi tai thỏ
+      {/* Floating Back Button */}
+      <TouchableOpacity
+        className="absolute z-10 w-10 h-10 rounded-full bg-black/30 justify-center items-center"
+        style={{ top: insets.top + 10, left: 16 }}
+        onPress={() => router.back()}
       >
-        <TouchableOpacity onPress={() => router.back()}>
-          <ArrowLeftIcon size={24} color="#1f2937" />
-        </TouchableOpacity>
-        <Text className="text-lg font-semibold text-black">Profile</Text>
-        <TouchableOpacity>
-          <Ionicons name="ellipsis-vertical" size={24} color="#000" />
-        </TouchableOpacity>
-      </View>
+        <ArrowLeftIcon size={20} color="#fff" />
+      </TouchableOpacity>
 
-      <ScrollView
+      {/* Absolute Parallax Cover Image Background */}
+      <Animated.View
+        className="absolute top-0 left-0 right-0 w-full"
+        style={{
+          height: 300,
+          transform: [
+            {
+              translateY: scrollY.interpolate({
+                inputRange: [-250, 0, 250],
+                outputRange: [125, 0, -125],
+                extrapolate: "clamp",
+              }),
+            },
+            {
+              scale: scrollY.interpolate({
+                inputRange: [-250, 0],
+                outputRange: [2, 1],
+                extrapolateLeft: "extend",
+                extrapolateRight: "clamp",
+              }),
+            },
+          ],
+        }}
+      >
+        <Image
+          source={{
+            uri:
+              user?.coverImage ||
+              "https://images.unsplash.com/photo-1557683316-973673baf926",
+          }}
+          className="w-full h-full bg-[#111]"
+        />
+        {refreshing && (
+          <View className="absolute top-0 left-0 right-0 bottom-0 bg-black/20" />
+        )}
+      </Animated.View>
+
+      {/* Floating Refresh Spinner (Hiển thị khi đang reload) */}
+      {refreshing && (
+        <View
+          className="absolute z-50 items-center justify-center w-full"
+          style={{ top: insets.top + 40 }}
+          pointerEvents="none"
+        >
+          <ActivityIndicator size="large" color="#fff" />
+        </View>
+      )}
+
+      <Animated.ScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 50 }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true },
+        )}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={["#000"]}
-            tintColor="#000"
+            tintColor="transparent"
+            colors={["transparent"]}
+            progressBackgroundColor="transparent"
           />
         }
       >
-        {/* Banner & Avatar Wrapper */}
-        <View className="items-center">
-          {/* Cover Image */}
-          <View className="w-full h-[200px] relative">
-            <Image
-              source={{
-                uri:
-                  user?.coverImage ||
-                  "https://images.unsplash.com/photo-1557683316-973673baf926",
-              }}
-              className="w-full h-full bg-[#111]"
-            />
-            {/* Nút Camera cho ảnh bìa */}
-            <TouchableOpacity
-              className="absolute bottom-3 right-3 bg-[#e4e6eb] w-9 h-9 rounded-full justify-center items-center"
-              onPress={() => pickImage(false)}
-            >
-              <Feather name="camera" size={18} color="#000" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Avatar (Kéo lên đè vào ảnh bìa nhờ -mt-[65px]) */}
-          <View className="-mt-[65px] w-[130px] h-[130px] rounded-full border-4 border-white bg-white relative">
-            <Image
-              source={{
-                uri:
-                  user?.avatar ||
-                  `https://api.dicebear.com/7.x/avataaars/png?seed=${user?.email || "Felix"}`,
-              }}
-              className="w-full h-full rounded-full"
-            />
-            {/* Nút Camera cho Avatar */}
-            <TouchableOpacity
-              className="absolute bottom-0 right-0 bg-[#e4e6eb] w-8 h-8 rounded-full justify-center items-center border-[3px] border-white"
-              onPress={() => pickImage(true)}
-            >
-              <Feather name="camera" size={14} color="#000" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Thông tin User */}
-        <View className="items-center mt-4 px-5">
-          <Text className="text-2xl font-bold text-black text-center">
-            {user?.fullName || "Nguyễn Hoàng Tấn"}
-          </Text>
-          <Text className="text-[15px] text-[#65676b] mt-1.5 text-center">
-            Học hỏi là việc cả đời
-          </Text>
-        </View>
-
-        {/* Nút Chỉnh sửa trang cá nhân */}
-        <View className="mt-6 px-4">
+        {/* Cover Image Spacer */}
+        <View className="w-full relative" style={{ height: 300 }}>
+          {/* Nút Camera cho ảnh bìa */}
           <TouchableOpacity
-            className="bg-[#050505] flex-row h-[50px] rounded-full justify-center items-center w-full"
-            onPress={() => router.push("/profile/personal-info")}
+            className="absolute bottom-3 right-3 bg-[#e4e6eb] w-9 h-9 rounded-full justify-center items-center"
+            onPress={() => pickImage(false)}
           >
-            <Feather
-              name="edit-2"
-              size={16}
-              color="#fff"
-              style={{ marginRight: 8 }}
-            />
-            <Text className="text-white text-[15px] font-semibold">
-              Chỉnh sửa thông tin cá nhân
-            </Text>
+            <Feather name="camera" size={18} color="#000" />
           </TouchableOpacity>
         </View>
-      </ScrollView>
+
+        {/* Content Wrapper below Cover Image - prevents image bleed when scrolling up */}
+        <View className="bg-white w-full flex-1">
+          {/* Avatar Group */}
+          <View className="items-center">
+            <View className="-mt-[65px] w-[130px] h-[130px] rounded-full border-4 border-white bg-white relative">
+              <Image
+                source={{
+                  uri:
+                    user?.avatar ||
+                    `https://api.dicebear.com/7.x/avataaars/png?seed=${user?.email || "Felix"}`,
+                }}
+                className="w-full h-full rounded-full"
+              />
+              {/* Nút Camera cho Avatar */}
+              <TouchableOpacity
+                className="absolute bottom-0 right-0 bg-[#e4e6eb] w-8 h-8 rounded-full justify-center items-center border-[3px] border-white"
+                onPress={() => pickImage(true)}
+              >
+                <Feather name="camera" size={14} color="#000" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Thông tin User */}
+          <View className="items-center mt-4 px-5">
+            <Text className="text-2xl font-bold text-black text-center">
+              {user?.fullName || "Nguyễn Hoàng Tấn"}
+            </Text>
+            <Text className="text-[15px] text-[#65676b] mt-1.5 text-center">
+              Học hỏi là việc cả đời
+            </Text>
+          </View>
+
+          {/* Nút Chỉnh sửa trang cá nhân */}
+          <View className="mt-6 px-4">
+            <TouchableOpacity
+              className="bg-[#050505] flex-row h-[50px] rounded-full justify-center items-center w-full"
+              onPress={() => router.push("/profile/personal-info")}
+            >
+              <Feather
+                name="edit-2"
+                size={16}
+                color="#fff"
+                style={{ marginRight: 8 }}
+              />
+              <Text className="text-white text-[15px] font-semibold">
+                Chỉnh sửa thông tin cá nhân
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Animated.ScrollView>
     </View>
   );
 }
