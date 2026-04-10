@@ -78,7 +78,7 @@ export default function ReceivedRequestsScreen() {
   return (
     <View className="flex-1 bg-[#fafafa]" style={{ paddingTop: insets.top }}>
       {/* Header */}
-      <View className="flex-row justify-between items-center px-4 py-3 bg-[#fafafa]">
+      <View className="flex-row justify-between items-center px-4 py-3 bg-[#fafafa] border-b-[1px] border-gray-200">
         <TouchableOpacity onPress={() => router.back()}>
           <ArrowLeftIcon size={24} color="#1f2937" />
         </TouchableOpacity>
@@ -138,7 +138,7 @@ function RequestCard({
 
   return (
     <TouchableOpacity
-      className="bg-white p-5 rounded-[28px] mb-4 border border-gray-100 shadow-sm"
+      className="bg-white p-5 rounded-[28px] mb-4 border-[1px] border-gray-200"
       onPress={() =>
         router.push({
           pathname: "/contacts/send-request",
