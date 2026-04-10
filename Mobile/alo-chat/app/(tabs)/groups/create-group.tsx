@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Image,
   ScrollView,
@@ -7,6 +7,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Alert,
 } from "react-native";
 import {
   CameraIcon,
@@ -14,6 +15,12 @@ import {
 } from "react-native-heroicons/outline";
 import { CheckIcon, PlusIcon } from "react-native-heroicons/solid";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  contactService,
+  FriendshipResponseDTO,
+} from "../../../services/contactService";
+import { groupService } from "../../../services/groupService";
+import { useAuth } from "../../../contexts/AuthContext";
 
 type Contact = {
   id: string;
@@ -28,55 +35,74 @@ type ContactSection = {
   data: Contact[];
 };
 
-const CONTACT_SECTIONS: ContactSection[] = [
-  {
-    title: "SUGGESTED",
-    data: [
-      {
-        id: "1",
-        name: "Elena Thorne",
-        status: "Online",
-        avatar:
-          "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200",
-      },
-      {
-        id: "2",
-        name: "Marcus Aris",
-        status: "last seen 2h ago",
-        avatar:
-          "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=200",
-      },
-      {
-        id: "3",
-        name: "Julian Vance",
-        status: "Available",
-        avatar:
-          "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?q=80&w=200",
-      },
-    ],
-  },
-  {
-    title: "B",
-    data: [
-      {
-        id: "4",
-        name: "Beatrix Kiddo",
-        status: "Away",
-        avatar: null,
-        initials: "B",
-      },
-    ],
-  },
-];
-
 export default function CreateGroupScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [selectedContacts, setSelectedContacts] = useState<string[]>([
-    "2",
-    "4",
-  ]);
+  const { user } = useAuth();
+
+  const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [groupName, setGroupName] = useState("");
+  const [friends, setFriends] = useState<Contact[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    fetchFriends();
+  }, []);
+
+  const fetchFriends = async () => {
+    try {
+      const data = await contactService.getFriendsList();
+      const formattedFriends = data.map((f) => {
+        const isRequester = f.requesterId === user?.id;
+        const friendId = isRequester ? f.recipientId : f.requesterId;
+        const friendName = isRequester ? f.recipientName : f.requesterName;
+        const friendAvatar = isRequester
+          ? f.recipientAvatar
+          : f.requesterAvatar;
+
+        return {
+          id: friendId,
+          name: friendName || "Người dùng",
+          status: "Bạn bè",
+          avatar: friendAvatar || null,
+          initials: friendName ? friendName.charAt(0).toUpperCase() : "U",
+        };
+      });
+      setFriends(formattedFriends);
+    } catch (error) {
+      console.error("Lỗi tải bạn bè:", error);
+    }
+  };
+
+  const CONTACT_SECTIONS: ContactSection[] = [
+    {
+      title: "BẠN BÈ",
+      data: friends,
+    },
+  ];
+
+  const handleCreateGroup = async () => {
+    if (!groupName.trim()) {
+      Alert.alert("Lỗi", "Vui lòng nhập tên nhóm");
+      return;
+    }
+    if (selectedContacts.length < 2) {
+      Alert.alert("Lỗi", "Nhóm phải có ít nhất 3 thành viên (bao gồm bạn)");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await groupService.createGroup(groupName.trim(), selectedContacts);
+      Alert.alert("Thành công", "Tạo nhóm thành công!", [
+        { text: "OK", onPress: () => router.back() },
+      ]);
+    } catch (error) {
+      Alert.alert("Lỗi", "Đã xảy ra lỗi khi tạo nhóm");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const toggleContact = (id: string) => {
     if (selectedContacts.includes(id)) {
@@ -95,8 +121,12 @@ export default function CreateGroupScreen() {
           <Text className="text-base text-gray-500">Trở về</Text>
         </TouchableOpacity>
         <Text className="text-base font-bold text-gray-900">Tạo nhóm mới</Text>
-        <TouchableOpacity>
-          <Text className="text-base font-bold text-gray-900">Tạo</Text>
+        <TouchableOpacity onPress={handleCreateGroup} disabled={isLoading}>
+          <Text
+            className={`text-base font-bold ${isLoading ? "text-gray-400" : "text-gray-900"}`}
+          >
+            Tạo
+          </Text>
         </TouchableOpacity>
       </View>
 

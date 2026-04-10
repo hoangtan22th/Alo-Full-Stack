@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import React, { useState, useCallback } from "react";
 import {
   Image,
   Modal,
@@ -9,6 +9,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from "react-native";
 import {
   AdjustmentsHorizontalIcon,
@@ -26,75 +27,53 @@ import {
   UserPlusIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { groupService } from "../../../services/groupService";
 
-// Mock data cho danh sách nhóm
-const COMMUNITY_GROUPS = [
-  {
-    id: "1",
-    name: "Thiết kế Sáng tạo Việt",
-    avatar:
-      "https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=200&auto=format&fit=crop",
-    subtitle: "852 thành viên • 2 tin nhắn mới",
-  },
-  {
-    id: "2",
-    name: "Startup Founders",
-    avatar:
-      "https://images.unsplash.com/photo-1556761175-4b46a572b786?q=80&w=200&auto=format&fit=crop",
-    subtitle: "3.2k thành viên • Minh: Chào cả nhà, mình tên là Phan Tấn Duy",
-  },
-];
-
-const PRIVATE_GROUPS = [
-  {
-    id: "3",
-    name: "Team Leo Núi ⛰️",
-    avatar:
-      "https://images.unsplash.com/photo-1506869640319-ce1a44f07e59?q=80&w=200&auto=format&fit=crop",
-    subtitle:
-      "6 thành viên • Bạn: Đã chốt lịch cho hành trình vào tuần tới chưa?",
-  },
-  {
-    id: "4",
-    name: "Gia đình ❤️",
-    avatar: null,
-    initials: "GH",
-    subtitle: "4 thành viên • Mẹ: Tối về ăn cơm nha",
-  },
-  {
-    id: "5",
-    name: "Dự án Q3-2024",
-    avatar:
-      "https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=200&auto=format&fit=crop",
-    subtitle: "12 thành viên • Hùng đã gửi 1 tệp.",
-  },
-  {
-    id: "6",
-    name: "Dự án Q3-2024",
-    avatar:
-      "https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=200&auto=format&fit=crop",
-    subtitle: "12 thành viên • Hùng đã gửi 1 tệp.",
-  },
-  {
-    id: "7",
-    name: "Dự án Q3-2024",
-    avatar:
-      "https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=200&auto=format&fit=crop",
-    subtitle: "12 thành viên • Hùng đã gửi 1 tệp.",
-  },
-  {
-    id: "8",
-    name: "Dự án Q3-2024",
-    avatar:
-      "https://images.unsplash.com/photo-1497215728101-856f4ea42174?q=80&w=200&auto=format&fit=crop",
-    subtitle: "12 thành viên • Hùng đã gửi 1 tệp.",
-  },
-];
+// Mock data cho danh sách nhóm (Đã chuyển lên server)
 
 export default function GroupsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [selectedGroup, setSelectedGroup] = useState<any>(null);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchGroups();
+    }, []),
+  );
+
+  const fetchGroups = async () => {
+    try {
+      setIsLoading(true);
+      const data = await groupService.getMyGroups();
+
+      // Xử lý lấy array data bọc qua nhiều lớp (axios -> API response -> custom Nodejs data)
+      let groupList: any[] = [];
+      if (Array.isArray(data)) {
+        groupList = data;
+      } else if (data?.data && Array.isArray(data.data)) {
+        groupList = data.data;
+      } else if (data?.data?.data && Array.isArray(data.data.data)) {
+        groupList = data.data.data;
+      }
+
+      // Map về format UI cần dùng
+      const formattedGroups = groupList.map((g: any) => ({
+        id: g._id,
+        name: g.name || "Nhóm không tên",
+        avatar: g.groupAvatar || null,
+        initials: (g.name || "N").charAt(0).toUpperCase(),
+        subtitle: `${g.members?.length || 0} thành viên`,
+      }));
+      setGroups(formattedGroups);
+    } catch (error) {
+      console.error("Lỗi lấy danh sách nhóm", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     // Sử dụng insets.top để tự động đẩy nội dung xuống dưới tai thỏ
@@ -140,39 +119,33 @@ export default function GroupsScreen() {
 
         {/* Tiêu đề danh sách Nhóm & Nút Filter */}
         <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-lg font-bold text-gray-900">Nhóm (12)</Text>
+          <Text className="text-lg font-bold text-gray-900">
+            {isLoading ? "Đang tải..." : `Nhóm (${groups.length})`}
+          </Text>
           <TouchableOpacity>
             <AdjustmentsHorizontalIcon size={24} color="#6b7280" />
           </TouchableOpacity>
         </View>
 
-        {/* Section: Cộng đồng */}
-        <View className="mb-6">
-          <Text className="text-xs font-bold text-gray-400 tracking-wider mb-4">
-            CỘNG ĐỒNG
-          </Text>
-          {COMMUNITY_GROUPS.map((group) => (
-            <GroupItem
-              key={group.id}
-              group={group}
-              onLongPress={() => setSelectedGroup(group)}
-            />
-          ))}
-        </View>
-
-        {/* Section: Nhóm riêng */}
-        <View className="pb-32">
-          <Text className="text-xs font-bold text-gray-400 tracking-wider mb-4">
-            NHÓM RIÊNG
-          </Text>
-          {PRIVATE_GROUPS.map((group) => (
-            <GroupItem
-              key={group.id}
-              group={group}
-              onLongPress={() => setSelectedGroup(group)}
-            />
-          ))}
-        </View>
+        {isLoading ? (
+          <ActivityIndicator size="large" color="#000000" />
+        ) : (
+          <View className="pb-32">
+            {groups.length === 0 ? (
+              <Text className="text-center text-gray-500 mt-4">
+                Chưa có nhóm nào. Hãy tạo nhóm mới.
+              </Text>
+            ) : (
+              groups.map((group) => (
+                <GroupItem
+                  key={group.id}
+                  group={group}
+                  onLongPress={() => setSelectedGroup(group)}
+                />
+              ))
+            )}
+          </View>
+        )}
       </ScrollView>
 
       {/* Popup Menu khi bấm giữ */}

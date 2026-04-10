@@ -2,6 +2,62 @@
 import { Request, Response } from "express";
 import Conversation from "../models/Conversation";
 
+// Helper lấy danh sách bạn bè
+async function getFriendIds(
+  userId: string,
+  authHeader?: string,
+): Promise<string[]> {
+  try {
+    // Ép IPv4 127.0.0.1 để tránh Node.js dùng IPv6 (::1) mặc định đụng Java Spring Boot
+    const gatewayUrl = process.env.GATEWAY_URL || "http://127.0.0.1:8888";
+
+    // API contact-service/api-gateway thường check security với Authorization JWT Token. Phải pass theo header X-User-Id hoặc Authorization.
+    const headers: any = {
+      "X-User-Id": userId || "",
+      "Content-Type": "application/json",
+    };
+
+    if (authHeader) {
+      headers["Authorization"] = authHeader;
+    }
+
+    const response = await fetch(`${gatewayUrl}/api/v1/contacts/friends`, {
+      method: "GET",
+      headers,
+    });
+
+    if (!response.ok) {
+      console.log(
+        `[getFriendIds] Call API Contact thất bại với HTTP status: ${response.status}`,
+      );
+      return [];
+    }
+
+    const result = await response.json();
+    console.log(
+      `[getFriendIds] Raw response:`,
+      JSON.stringify(result).substring(0, 150),
+    );
+
+    // API Spring Boot trả về format ApiResponse { code: x, message: "...", data: [...] }
+    const data = result.data;
+    const friendIds: string[] = [];
+    if (Array.isArray(data)) {
+      for (const f of data) {
+        const id = f.requesterId === userId ? f.recipientId : f.requesterId;
+        if (id) friendIds.push(id.toString()); // Đảm bảo string ID
+      }
+    }
+    console.log(
+      `[getFriendIds] Thành công tải ${friendIds.length} bạn bè của ${userId}`,
+    );
+    return friendIds;
+  } catch (error) {
+    console.error(`[getFriendIds] Call API Contact lỗi ngoại lệ:`, error);
+    return [];
+  }
+}
+
 // 1. Tạo Nhóm mới (Tạo nhóm từ 3 người)
 export const createGroup = async (
   req: Request,
@@ -9,12 +65,34 @@ export const createGroup = async (
 ): Promise<void> => {
   try {
     const { name, groupAvatar, userIds } = req.body; // userIds là mảng ID các thành viên muốn mời
-    const creatorId = req.headers["x-user-id"] as string;
+    const creatorId = (req.headers["x-user-id"] || "").toString();
 
     // Kiểm tra số lượng: Người tạo + Danh sách mời phải >= 3
     if (!userIds || !Array.isArray(userIds) || userIds.length < 2) {
       res.status(400).json({
         error: "Nhóm phải có ít nhất 3 thành viên (bao gồm người tạo)",
+      });
+      return;
+    }
+
+    // Lấy danh sách bạn bè của người tạo nhóm
+    console.log(`[CreateGroup] Check danh sách userIds truyền vào:`, userIds);
+    // Bổ sung truyền header Authorization JWT qua Request Fetch nội bộ
+    const authHeader = req.headers.authorization;
+    const friendIds = await getFriendIds(creatorId, authHeader);
+
+    // So sánh dạng string thuần tuý do Node & Java có thể chênh lệch Object ID
+    const normalizedFriendIds = friendIds.map((f) => f.toString());
+    const nonFriends = userIds.filter(
+      (id) => !normalizedFriendIds.includes(id.toString()),
+    );
+
+    if (nonFriends.length > 0) {
+      console.log(
+        `[CreateGroup] Từ chối! Phát hiện users chưa kết bạn: ${nonFriends.join(", ")}`,
+      );
+      res.status(403).json({
+        error: "Chỉ được phép mời người đã kết bạn vào nhóm",
       });
       return;
     }
@@ -43,6 +121,7 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
   try {
     const { groupId } = req.params;
     const { newUserId } = req.body;
+    const requesterId = (req.headers["x-user-id"] || "").toString();
 
     // Tìm nhóm và kiểm tra xem user đã tồn tại chưa
     const group = await Conversation.findById(groupId);
@@ -51,11 +130,25 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const isExist = group.members.some((m) => m.userId === newUserId);
+    const isExist = group.members.some(
+      (m) => m.userId.toString() === newUserId.toString(),
+    );
     if (isExist) {
       res
         .status(400)
         .json({ error: "Người dùng này đã là thành viên của nhóm" });
+      return;
+    }
+
+    // Kiểm tra đã kết bạn chưa
+    const authHeader = req.headers.authorization;
+    const friendIds = await getFriendIds(requesterId, authHeader);
+    const normalizedFriendIds = friendIds.map((f) => f.toString());
+
+    if (!normalizedFriendIds.includes(newUserId.toString())) {
+      res
+        .status(403)
+        .json({ error: "Chỉ có thể thêm người đã kết bạn vào nhóm" });
       return;
     }
 
@@ -237,6 +330,25 @@ export const deleteGroup = async (
 
     await Conversation.findByIdAndDelete(groupId);
     res.status(200).json({ message: "Nhóm đã được giải tán vĩnh viễn" });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 6. Lấy danh sách nhóm của User hiện tại
+export const getMyGroups = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const currentUserId = req.headers["x-user-id"] as string;
+
+    const groups = await Conversation.find({
+      isGroup: true,
+      "members.userId": currentUserId,
+    }).sort({ updatedAt: -1 });
+
+    res.status(200).json({ data: groups });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
