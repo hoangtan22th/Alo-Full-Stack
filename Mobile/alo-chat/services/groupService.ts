@@ -59,7 +59,9 @@ export const groupService = {
 
   addMember: async (groupId: string, newUserId: string) => {
     try {
-      const data = await api.post<any, any>(`/groups/${groupId}/members`, { newUserId });
+      const data = await api.post<any, any>(`/groups/${groupId}/members`, {
+        newUserId,
+      });
       return data;
     } catch (error) {
       console.error("Lỗi thêm thành viên:", error);
@@ -69,7 +71,9 @@ export const groupService = {
 
   removeMember: async (groupId: string, userId: string) => {
     try {
-      const data = await api.delete<any, any>(`/groups/${groupId}/members/${userId}`);
+      const data = await api.delete<any, any>(
+        `/groups/${groupId}/members/${userId}`,
+      );
       return data;
     } catch (error) {
       console.error("Lỗi xoá thành viên:", error);
@@ -79,7 +83,10 @@ export const groupService = {
 
   updateRole: async (groupId: string, userId: string, newRole: string) => {
     try {
-      const data = await api.put<any, any>(`/groups/${groupId}/members/${userId}/role`, { newRole });
+      const data = await api.put<any, any>(
+        `/groups/${groupId}/members/${userId}/role`,
+        { newRole },
+      );
       return data;
     } catch (error) {
       console.error("Lỗi cập nhật quyền:", error);
@@ -89,7 +96,10 @@ export const groupService = {
 
   assignLeader: async (groupId: string, newLeaderId: string) => {
     try {
-      const data = await api.post<any, any>(`/groups/assign-leader`, { groupId, newLeaderId });
+      const data = await api.post<any, any>(`/groups/assign-leader`, {
+        groupId,
+        newLeaderId,
+      });
       return data;
     } catch (error) {
       console.error("Lỗi chuyển nhóm trưởng:", error);
@@ -129,7 +139,9 @@ export const groupService = {
 
   approveJoinRequest: async (groupId: string, userId: string) => {
     try {
-      const data = await api.post<any, any>(`/groups/${groupId}/join-requests/${userId}/approve`);
+      const data = await api.post<any, any>(
+        `/groups/${groupId}/join-requests/${userId}/approve`,
+      );
       return data;
     } catch (error) {
       console.error("Lỗi duyệt yêu cầu:", error);
@@ -139,7 +151,9 @@ export const groupService = {
 
   rejectJoinRequest: async (groupId: string, userId: string) => {
     try {
-      const data = await api.delete<any, any>(`/groups/${groupId}/join-requests/${userId}/reject`);
+      const data = await api.delete<any, any>(
+        `/groups/${groupId}/join-requests/${userId}/reject`,
+      );
       return data;
     } catch (error) {
       console.error("Lỗi từ chối yêu cầu:", error);
@@ -147,9 +161,15 @@ export const groupService = {
     }
   },
 
-  updateApprovalSetting: async (groupId: string, isApprovalRequired: boolean) => {
+  updateApprovalSetting: async (
+    groupId: string,
+    isApprovalRequired: boolean,
+  ) => {
     try {
-      const data = await api.put<any, any>(`/groups/${groupId}/approval-setting`, { isApprovalRequired });
+      const data = await api.put<any, any>(
+        `/groups/${groupId}/approval-setting`,
+        { isApprovalRequired },
+      );
       return data;
     } catch (error) {
       console.error("Lỗi cập nhật cấu hình duyệt:", error);
