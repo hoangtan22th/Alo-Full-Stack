@@ -729,3 +729,40 @@ export const updateGroup = async (
     res.status(500).json({ error: error.message });
   }
 };
+
+export const getOrCreateDirectConversation = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { targetUserId } = req.body;
+    const currentUserId = (req.headers["x-user-id"] || "").toString();
+
+    const existingConversation = await Conversation.findOne({
+      isGroup: false,
+      $and: [
+        { "members.userId": currentUserId },
+        { "members.userId": targetUserId },
+      ],
+    });
+
+    if (existingConversation) {
+      res.status(200).json(existingConversation);
+      return;
+    }
+
+    const newConversation = new Conversation({
+      name: "Direct Chat",
+      isGroup: false,
+      members: [
+        { userId: currentUserId, role: "MEMBER" },
+        { userId: targetUserId, role: "MEMBER" },
+      ],
+    });
+
+    await newConversation.save();
+    res.status(201).json(newConversation);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};

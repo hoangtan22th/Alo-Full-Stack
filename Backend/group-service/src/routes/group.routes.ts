@@ -57,4 +57,10 @@ router.put(
   groupController.updateApprovalSetting,
 );
 
+// Lấy hoặc tạo hội thoại 1-1
+router.post(
+  "/api/v1/groups/direct",
+  groupController.getOrCreateDirectConversation,
+);
+
 export default router;
