@@ -21,7 +21,7 @@ import {
   EyeSlashIcon,
   MagnifyingGlassIcon,
   MapPinIcon,
-  PaperAirplaneIcon,
+  QrCodeIcon,
   StarIcon,
   TrashIcon,
   UserPlusIcon,
@@ -108,8 +108,9 @@ export default function GroupsScreen() {
             label="Lời mời vào nhóm"
           />
           <ActionItem
-            icon={<PaperAirplaneIcon size={24} color="#374151" />}
-            label="Lời mời đã gửi"
+            icon={<QrCodeIcon size={24} color="#374151" />}
+            label="Quét mã tham gia"
+            onPress={() => router.push("/(tabs)/groups/scan-qr")}
           />
           <ActionItem
             icon={<StarIcon size={24} color="#374151" />}

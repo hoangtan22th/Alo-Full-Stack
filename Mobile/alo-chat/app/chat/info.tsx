@@ -33,6 +33,7 @@ import {
   XMarkIcon,
   PencilIcon,
   CameraIcon,
+  LinkIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -54,6 +55,7 @@ export default function ChatInfoScreen() {
   const [selectedNewLeaderId, setSelectedNewLeaderId] = useState<string | null>(
     null,
   );
+  const [isLinkEnabled, setIsLinkEnabled] = useState(false);
 
   const fetchGroupDetails = async () => {
     try {
@@ -73,6 +75,9 @@ export default function ChatInfoScreen() {
       }
       if (groupData?.groupAvatar) {
         setGroupAvatar(groupData.groupAvatar);
+      }
+      if (typeof groupData?.isLinkEnabled === "boolean") {
+        setIsLinkEnabled(groupData.isLinkEnabled);
       }
 
       if (groupData && groupData.members) {
@@ -415,6 +420,31 @@ export default function ChatInfoScreen() {
             />
           </View>
         </View>
+
+        {/* SECTION: THÔNG TIN KHÁC */}
+        {isGroup && (
+          <View className="mt-10 px-5">
+            <Text className="text-[11px] font-bold text-gray-500 uppercase tracking-[1px] mb-4">
+              Thông tin khác
+            </Text>
+
+            <View className="bg-[#f5f6f8] rounded-[24px]">
+              <SettingItem
+                icon={<LinkIcon size={24} color="#4b5563" />}
+                title="Link tham gia nhóm"
+                onPress={() =>
+                  router.push(
+                    `/chat/link?id=${id}&name=${encodeURIComponent(
+                      (groupName as string) || "",
+                    )}&avatar=${encodeURIComponent(
+                      (groupAvatar as string) || "",
+                    )}&isLinkEnabled=${isLinkEnabled}`,
+                  )
+                }
+              />
+            </View>
+          </View>
+        )}
 
         {/* SECTION: THIẾT LẬP BẢO MẬT */}
         <View className="mt-10 px-5 pb-8">

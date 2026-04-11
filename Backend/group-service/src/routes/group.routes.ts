@@ -57,6 +57,12 @@ router.put(
   groupController.updateApprovalSetting,
 );
 
+// Cài đặt tham gia bằng link
+router.put(
+  "/api/v1/groups/:groupId/link-setting",
+  groupController.updateLinkSetting,
+);
+
 // Lấy hoặc tạo hội thoại 1-1
 router.post(
   "/api/v1/groups/direct",

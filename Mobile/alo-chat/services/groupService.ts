@@ -203,4 +203,16 @@ export const groupService = {
       throw error;
     }
   },
+
+  updateLinkSetting: async (groupId: string, isLinkEnabled: boolean) => {
+    try {
+      const data = await api.put<any, any>(`/groups/${groupId}/link-setting`, {
+        isLinkEnabled,
+      });
+      return data;
+    } catch (error) {
+      console.error("Lỗi cập nhật cấu hình link:", error);
+      throw error;
+    }
+  },
 };

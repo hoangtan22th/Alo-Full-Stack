@@ -458,7 +458,12 @@ export const requestJoinGroup = async (
       (m) => m.userId.toString() === requesterId,
     );
     if (isMember) {
-      res.status(400).json({ error: "Bạn đã là thành viên của nhóm" });
+      res.status(200).json({
+        message: "Bạn đã là thành viên của nhóm",
+        joined: true,
+        alreadyMember: true,
+        data: group,
+      });
       return;
     }
 
@@ -471,6 +476,30 @@ export const requestJoinGroup = async (
       return;
     }
 
+    // Nếu nhóm không bật phê duyệt thì cho tham gia trực tiếp
+    if (!group.isApprovalRequired) {
+      group.members.push({
+        userId: requesterId,
+        role: "MEMBER",
+        joinedAt: new Date(),
+      });
+
+      // Xoá join requests nếu lỡ có trễ (ví dụ họ đã từng gửi trước khi nhóm tắt phê duyệt)
+      if (group.joinRequests) {
+        group.joinRequests = group.joinRequests.filter(
+          (r) => r.userId.toString() !== requesterId,
+        );
+      }
+
+      await group.save();
+      res.status(200).json({
+        message: "Đã tham gia nhóm thành công",
+        joined: true,
+        data: group,
+      });
+      return;
+    }
+
     if (!group.joinRequests) {
       group.joinRequests = [];
     }
@@ -480,7 +509,11 @@ export const requestJoinGroup = async (
 
     res
       .status(200)
-      .json({ message: "Đã gửi yêu cầu tham gia", data: group.joinRequests });
+      .json({
+        message: "Đã gửi yêu cầu tham gia, vui lòng chờ duyệt",
+        joined: false,
+        data: group.joinRequests,
+      });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -661,6 +694,48 @@ export const updateApprovalSetting = async (
     res
       .status(200)
       .json({ message: "Cập nhật cài đặt thành công", data: group });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const updateLinkSetting = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { groupId } = req.params;
+    const { isLinkEnabled } = req.body;
+    const requesterId = (req.headers["x-user-id"] || "").toString();
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    const member = group.members.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (!member || (member.role !== "LEADER" && member.role !== "DEPUTY")) {
+      res.status(403).json({
+        error:
+          "Chỉ Trưởng nhóm hoặc Phó nhóm mới có quyền thay đổi cài đặt này",
+      });
+      return;
+    }
+
+    if (typeof isLinkEnabled !== "boolean") {
+      res.status(400).json({ error: "Tham số isLinkEnabled không hợp lệ" });
+      return;
+    }
+
+    group.isLinkEnabled = isLinkEnabled;
+    await group.save();
+
+    res
+      .status(200)
+      .json({ message: "Cập nhật link nhóm thành công", data: group });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
