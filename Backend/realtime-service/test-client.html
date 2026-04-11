@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket.IO Test Client</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        #messages { border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 10px; margin-bottom: 10px; }
+        .log { margin: 5px 0; padding: 5px; background: #f0f0f0; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h2>Test Realtime Client (User ID: 123)</h2>
+    <div id="status" style="color: red; font-weight: bold;">Disconnected</div>
+    <div id="messages"></div>
+
+    <script>
+        // MOCK JWT TOKEN: In production, generate this from auth-service. 
+        // For this test, we disabled token verification temporarily OR you need a valid token.
+        // If your JWT_SECRET is "your_jwt_secret_key_from_auth_service", a valid token for userId "123" is required.
+        // NOTE: For debugging easily right now, I'll assume you haven't strictly enforced a real JWT signature yet,
+        // so we'll just connect and wait. If it fails auth, check your server logs.
+        
+        const socket = io("http://localhost:3000", {
+            auth: {
+                token: "MOCK_TOKEN_HERE" // Change this if you have a real token
+            }
+        });
+
+        const statusDiv = document.getElementById('status');
+        const messagesDiv = document.getElementById('messages');
+
+        function addLog(text) {
+            const div = document.createElement('div');
+            div.className = 'log';
+            div.innerText = `[${new Date().toLocaleTimeString()}] ${text}`;
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        socket.on("connect", () => {
+            statusDiv.innerText = "Connected! Socket ID: " + socket.id;
+            statusDiv.style.color = "green";
+            addLog("🔗 Connected to server!");
+        });
+
+        socket.on("disconnect", () => {
+            statusDiv.innerText = "Disconnected";
+            statusDiv.style.color = "red";
+            addLog("❌ Disconnected from server!");
+        });
+
+        socket.on("connect_error", (err) => {
+            addLog("⚠️ Connection Error: " + err.message);
+        });
+
+        // Listen for NEW_MESSAGE events (from RabbitMQ)
+        socket.on("NEW_MESSAGE", (data) => {
+            addLog("📩 Nhận tin nhắn mới: " + JSON.stringify(data));
+        });
+
+        // Listen for status changes
+        socket.on("user_status_changed", (data) => {
+            addLog("👤 Trạng thái User: " + JSON.stringify(data));
+        });
+    </script>
+</body>
+</html>
