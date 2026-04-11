@@ -18,9 +18,9 @@ const server = http.createServer(app);
 // 1. Default Socket Server Setup
 const io = new Server(server, {
   cors: {
-    origin: "*", 
-    methods: ["GET", "POST"]
-  }
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
 });
 
 // 2. Auth Middleware
@@ -40,15 +40,18 @@ async function startServer() {
 
     const PORT = process.env.PORT || 3000;
     server.listen(PORT, () => {
-      console.log(`?? Real-time service is running on port ${PORT}`);      
+      console.log(`?? Real-time service is running on port ${PORT}`);
       // 6. Connect to Eureka Discovery Service
       eurekaClient.start((error) => {
         if (error) {
           console.error("❌ Error starting Eureka Client", error);
         } else {
-          console.log("✅ Registered with Eureka Discovery Service as REALTIME-SERVICE");
+          console.log(
+            "✅ Registered with Eureka Discovery Service as REALTIME-SERVICE",
+          );
         }
-      });    });
+      });
+    });
   } catch (error) {
     console.error("? Failed to start server:", error);
     process.exit(1);

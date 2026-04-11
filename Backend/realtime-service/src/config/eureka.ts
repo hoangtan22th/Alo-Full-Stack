@@ -1,32 +1,32 @@
-import { Eureka } from 'eureka-js-client';
-import dotenv from 'dotenv';
+import { Eureka } from "eureka-js-client";
+import dotenv from "dotenv";
 dotenv.config();
 
-const port = parseInt(process.env.PORT || '3000', 10);
-const hostName = process.env.HOSTNAME || 'localhost';
-const ipAddr = process.env.IP_ADDR || '127.0.0.1';
+const port = parseInt(process.env.PORT || "3000", 10);
+const hostName = process.env.HOSTNAME || "localhost";
+const ipAddr = process.env.IP_ADDR || "127.0.0.1";
 
 export const eurekaClient = new Eureka({
   instance: {
-    app: 'REALTIME-SERVICE',
+    app: "REALTIME-SERVICE",
     instanceId: `realtime-service:${port}`,
     hostName: hostName,
     ipAddr: ipAddr,
     statusPageUrl: `http://${hostName}:${port}`,
     port: {
-      '$': port,
-      '@enabled': true,
+      $: port,
+      "@enabled": true,
     },
-    vipAddress: 'REALTIME-SERVICE',
+    vipAddress: "REALTIME-SERVICE",
     dataCenterInfo: {
-      '@class': 'com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo',
-      name: 'MyOwn',
+      "@class": "com.netflix.appinfo.InstanceInfo$DefaultDataCenterInfo",
+      name: "MyOwn",
     },
   },
   eureka: {
-    host: process.env.EUREKA_HOST || 'localhost',
-    port: parseInt(process.env.EUREKA_PORT || '8761', 10),
-    servicePath: '/eureka/apps/',
+    host: process.env.EUREKA_HOST || "localhost",
+    port: parseInt(process.env.EUREKA_PORT || "8761", 10),
+    servicePath: "/eureka/apps/",
     maxRetries: 10,
     requestRetryDelay: 2000,
   },
