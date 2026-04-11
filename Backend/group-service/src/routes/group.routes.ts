@@ -12,6 +12,11 @@ router.post(
   upload.single("avatarFile"),
   groupController.createGroup,
 );
+router.put(
+  "/api/v1/groups/:groupId",
+  upload.single("avatarFile"),
+  groupController.updateGroup,
+);
 
 // Quản lý thành viên trong nhóm
 router.post("/api/v1/groups/:groupId/members", groupController.addMember);

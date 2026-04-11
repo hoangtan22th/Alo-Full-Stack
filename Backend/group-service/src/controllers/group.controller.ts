@@ -1,7 +1,7 @@
 // src/controllers/group.controller.ts
 import { Request, Response } from "express";
 import Conversation from "../models/Conversation";
-import { uploadImageToS3 } from "../services/s3Service";
+import { uploadImageToS3, deleteImageFromS3 } from "../services/s3Service";
 
 // Helper lấy danh sách bạn bè
 async function getFriendIds(
@@ -198,12 +198,10 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
         group.joinRequests.push({ userId: newUserId, requestedAt: new Date() });
         await group.save();
       }
-      res
-        .status(200)
-        .json({
-          message: "Yêu cầu tham gia đã gửi và đang chờ duyệt",
-          data: group,
-        });
+      res.status(200).json({
+        message: "Yêu cầu tham gia đã gửi và đang chờ duyệt",
+        data: group,
+      });
       return;
     }
 
@@ -381,6 +379,10 @@ export const deleteGroup = async (
         .status(403)
         .json({ error: "Chỉ Trưởng nhóm mới có quyền giải tán nhóm" });
       return;
+    }
+
+    if (group.groupAvatar) {
+      await deleteImageFromS3(group.groupAvatar);
     }
 
     await Conversation.findByIdAndDelete(groupId);
@@ -660,6 +662,70 @@ export const updateApprovalSetting = async (
       .status(200)
       .json({ message: "Cập nhật cài đặt thành công", data: group });
   } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const updateGroup = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { groupId } = req.params;
+    const { name } = req.body;
+    const currentUserId = (req.headers["x-user-id"] || "").toString();
+
+    const group = await Conversation.findById(groupId);
+
+    if (!group || !group.isGroup) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    const currentMember = group.members.find(
+      (m: any) => m.userId.toString() === currentUserId,
+    );
+
+    if (
+      !currentMember ||
+      (currentMember.role !== "LEADER" && currentMember.role !== "DEPUTY")
+    ) {
+      res.status(403).json({
+        error:
+          "Chỉ trưởng nhóm hoặc phó nhóm mới có quyền cập nhật thông tin nhóm",
+      });
+      return;
+    }
+
+    if (name) {
+      group.name = name;
+    }
+
+    if (req.file) {
+      console.log(`[UpdateGroup] Đang upload avatar nhóm lên S3...`);
+      const groupAvatarUrl = await uploadImageToS3(
+        req.file.buffer,
+        req.file.mimetype,
+        "alo_group_images",
+      );
+
+      // Xoá ảnh cũ (nếu có) trên S3 trước khi gán link mới
+      if (group.groupAvatar) {
+        await deleteImageFromS3(group.groupAvatar);
+      }
+
+      console.log(`[UpdateGroup] Upload thành công URL: ${groupAvatarUrl}`);
+      group.groupAvatar = groupAvatarUrl;
+    }
+
+    await group.save();
+
+    res.status(200).json({
+      message: "Cập nhật thông tin nhóm thành công",
+      data: group,
+    });
+  } catch (error: any) {
+    console.error("[UpdateGroup] Error:", error);
     res.status(500).json({ error: error.message });
   }
 };

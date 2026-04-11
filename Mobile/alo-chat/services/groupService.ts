@@ -1,6 +1,33 @@
 import api from "./api";
 
 export const groupService = {
+  updateGroup: async (groupId: string, name?: string, imageUri?: string) => {
+    try {
+      const formData = new FormData();
+      if (name) {
+        formData.append("name", name);
+      }
+      if (imageUri) {
+        const filename = imageUri.split("/").pop() || "avatar.jpg";
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : `image/jpeg`;
+        formData.append("avatarFile", {
+          uri: imageUri,
+          name: filename,
+          type,
+        } as any);
+      }
+      return await api.put<any, any>(`/groups/${groupId}`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+    } catch (error) {
+      console.error("Lỗi cập nhật nhóm:", error);
+      throw error;
+    }
+  },
+
   createGroup: async (name: string, userIds: string[], imageUri?: string) => {
     try {
       if (imageUri) {

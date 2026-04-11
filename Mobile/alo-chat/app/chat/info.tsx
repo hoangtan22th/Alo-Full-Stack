@@ -31,8 +31,11 @@ import {
   UserPlusIcon,
   ArrowRightOnRectangleIcon,
   XMarkIcon,
+  PencilIcon,
+  CameraIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
 
 export default function ChatInfoScreen() {
   const router = useRouter();
@@ -44,6 +47,8 @@ export default function ChatInfoScreen() {
   const isGroup = !!membersCount;
 
   const [members, setMembers] = useState<any[]>([]);
+  const [groupName, setGroupName] = useState<string>(name as string);
+  const [groupAvatar, setGroupAvatar] = useState<string>(avatar as string);
   const [isTransferLeaderModalVisible, setIsTransferLeaderModalVisible] =
     useState(false);
   const [selectedNewLeaderId, setSelectedNewLeaderId] = useState<string | null>(
@@ -61,6 +66,13 @@ export default function ChatInfoScreen() {
         groupData = res.data.data;
       } else if (res?.data) {
         groupData = res.data;
+      }
+
+      if (groupData?.name) {
+        setGroupName(groupData.name);
+      }
+      if (groupData?.groupAvatar) {
+        setGroupAvatar(groupData.groupAvatar);
       }
 
       if (groupData && groupData.members) {
@@ -147,6 +159,68 @@ export default function ChatInfoScreen() {
     }
   };
 
+  const handleChangeAvatar = async () => {
+    if (!isAdmin && !isDeputy) {
+      Alert.alert(
+        "Thông báo",
+        "Chỉ trưởng nhóm và phó nhóm mới có quyền đổi ảnh.",
+      );
+      return;
+    }
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const imageUri = result.assets[0].uri;
+        await groupService.updateGroup(id as string, undefined, imageUri);
+        Alert.alert("Thành công", "Đã cập nhật ảnh đại diện nhóm");
+        fetchGroupDetails();
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Lỗi", "Không thể cập nhật ảnh đại diện.");
+    }
+  };
+
+  const handleEditName = () => {
+    if (!isAdmin && !isDeputy) {
+      Alert.alert(
+        "Thông báo",
+        "Chỉ trưởng nhóm và phó nhóm mới có quyền đổi tên nhóm.",
+      );
+      return;
+    }
+    Alert.prompt(
+      "Đổi tên nhóm",
+      "Nhập tên nhóm mới:",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Lưu",
+          onPress: async (newName?: string) => {
+            const trimmedName = newName?.trim();
+            if (!trimmedName) return;
+            try {
+              await groupService.updateGroup(id as string, trimmedName);
+              Alert.alert("Thành công", "Đã cập nhật tên nhóm");
+              fetchGroupDetails();
+            } catch (error) {
+              console.error(error);
+              Alert.alert("Lỗi", "Không thể cập nhật tên nhóm.");
+            }
+          },
+        },
+      ],
+      "plain-text",
+      groupName,
+    );
+  };
+
   const handleDisbandGroup = () => {
     Alert.alert(
       "Giải tán nhóm",
@@ -198,27 +272,51 @@ export default function ChatInfoScreen() {
         {/* Profile Info */}
         <View className="items-center mt-6">
           <View className="relative">
-            {avatar ? (
-              <Image
-                source={{ uri: avatar as string }}
-                className="w-[100px] h-[100px] rounded-full bg-gray-200"
-              />
+            <TouchableOpacity
+              disabled={!isGroup || (!isAdmin && !isDeputy)}
+              activeOpacity={0.7}
+              onPress={handleChangeAvatar}
+            >
+              {groupAvatar ? (
+                <Image
+                  source={{ uri: groupAvatar as string }}
+                  className="w-[100px] h-[100px] rounded-full bg-gray-200"
+                />
+              ) : (
+                <View className="w-[100px] h-[100px] rounded-full bg-gray-800 items-center justify-center">
+                  <Text className="text-white font-bold text-3xl">
+                    {((groupName as string) || "G").charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {isGroup ? (
+              <TouchableOpacity
+                onPress={handleChangeAvatar}
+                disabled={!isAdmin && !isDeputy}
+                className="absolute bottom-0 right-0 w-8 h-8 bg-[#f5f6f8] border-[3px] border-white rounded-full items-center justify-center shadow-sm"
+              >
+                <CameraIcon size={16} color="#4b5563" />
+              </TouchableOpacity>
             ) : (
-              <View className="w-[100px] h-[100px] rounded-full bg-gray-800 items-center justify-center">
-                <Text className="text-white font-bold text-3xl">
-                  {((name as string) || "G").charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            )}
-            {/* Online Indicator */}
-            {!membersCount && (
-              <View className="absolute bottom-1 right-2 w-[18px] h-[18px] bg-green-500 border-[3px] border-white rounded-full" />
+              !membersCount && (
+                <View className="absolute bottom-1 right-2 w-[18px] h-[18px] bg-green-500 border-[3px] border-white rounded-full" />
+              )
             )}
           </View>
 
-          <Text className="text-[22px] font-extrabold text-gray-900 mt-4 mb-1">
-            {name || `Nhóm ${id}`}
-          </Text>
+          <View className="flex-row items-center mt-4 mb-1">
+            <Text className="text-[22px] font-extrabold text-gray-900">
+              {groupName || `Nhóm ${id}`}
+            </Text>
+            {isGroup && (isAdmin || isDeputy) && (
+              <TouchableOpacity className="ml-2 p-1" onPress={handleEditName}>
+                <PencilIcon size={20} color="#6b7280" />
+              </TouchableOpacity>
+            )}
+          </View>
+
           <Text className="text-[13px] text-gray-500 font-medium">
             {membersCount ? `${membersCount} thành viên` : "Đang hoạt động"}
           </Text>
