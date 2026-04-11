@@ -1,0 +1,24 @@
+// src/constants/events.ts
+export const SOCKET_EVENTS = {
+  // Chat
+  RECEIVE_MESSAGE: "RECEIVE_MESSAGE",
+  MESSAGE_DELIVERED: "MESSAGE_DELIVERED",
+  MESSAGE_READ: "MESSAGE_READ",
+  TYPING: "TYPING",
+  STOP_TYPING: "STOP_TYPING",
+
+  // Presence
+  USER_ONLINE: "USER_ONLINE",
+  USER_OFFLINE: "USER_OFFLINE",
+
+  // Group / Contacts
+  NEW_GROUP_INVITE: "NEW_GROUP_INVITE",
+  NEW_FRIEND_REQUEST: "NEW_FRIEND_REQUEST",
+
+  // Errors
+  ERROR: "ERROR",
+};
+
+export const RABBITMQ_QUEUES = {
+  REALTIME_EVENTS: "realtime_events",
+};

@@ -22,6 +22,7 @@ import {
 } from "react-native-heroicons/outline";
 import { PaperAirplaneIcon } from "react-native-heroicons/solid";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSocket } from "../../contexts/SocketContext";
 
 interface Message {
   id: string;
@@ -36,8 +37,15 @@ export default function GlobalChatScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
+  const { socket } = useSocket();
   const [inputText, setInputText] = useState("");
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const isGroupChat = Boolean(
+    membersCount && membersCount !== "undefined" && membersCount !== "null",
+  );
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -62,8 +70,59 @@ export default function GlobalChatScreen() {
     },
   ]);
 
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleTyping = (data: { roomId: string; actorId: string }) => {
+      if (data.roomId === id) {
+        setTypingUsers((prev) => {
+          if (!prev.includes(data.actorId)) return [...prev, data.actorId];
+          return prev;
+        });
+      }
+    };
+
+    const handleStopTyping = (data: { roomId: string; actorId: string }) => {
+      if (data.roomId === id) {
+        setTypingUsers((prev) => prev.filter((uid) => uid !== data.actorId));
+      }
+    };
+
+    socket.on("TYPING", handleTyping);
+    socket.on("STOP_TYPING", handleStopTyping);
+
+    return () => {
+      socket.off("TYPING", handleTyping);
+      socket.off("STOP_TYPING", handleStopTyping);
+    };
+  }, [socket, id]);
+
+  const handleInputChange = (text: string) => {
+    setInputText(text);
+
+    if (!socket) return;
+    socket.emit("TYPING", { target: id, isGroup: isGroupChat });
+
+    // Clear the existing timeout so we don't prematurely stop typing
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set a new timeout to stop typing after 2 seconds
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit("STOP_TYPING", { target: id, isGroup: isGroupChat });
+    }, 2000);
+  };
+
   const sendMessage = () => {
     if (inputText.trim().length === 0) return;
+
+    if (socket) {
+      socket.emit("STOP_TYPING", { target: id, isGroup: isGroupChat });
+    }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
 
     const newMessage: Message = {
       id: Date.now().toString(),
@@ -275,6 +334,16 @@ export default function GlobalChatScreen() {
                 </View>
               </View>
             ))}
+
+            {typingUsers.length > 0 && (
+              <View className="mb-6 self-start flex-row items-center px-5 py-3 shadow-sm bg-white rounded-3xl rounded-bl-lg">
+                <Text className="text-gray-500 italic text-sm">
+                  {typingUsers.length === 1
+                    ? "Có người đang nhắn tin..."
+                    : "Nhiều người đang nhắn tin..."}
+                </Text>
+              </View>
+            )}
           </ScrollView>
         </View>
 
@@ -298,7 +367,7 @@ export default function GlobalChatScreen() {
                 placeholderTextColor="#9ca3af"
                 multiline
                 value={inputText}
-                onChangeText={setInputText}
+                onChangeText={handleInputChange}
               />
               <TouchableOpacity className="p-2">
                 <FaceSmileIcon size={24} color="#6b7280" />

@@ -2,6 +2,7 @@ import { View, ActivityIndicator } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
+import { SocketProvider } from "../contexts/SocketContext";
 import AppLockWrapper from "./components/AppLockWrapper";
 import "../global.css";
 // import { GoogleSignin } from "@react-native-google-signin/google-signin";
@@ -63,9 +64,11 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <AppLockWrapper>
-        <RootLayoutNav />
-      </AppLockWrapper>
+      <SocketProvider>
+        <AppLockWrapper>
+          <RootLayoutNav />
+        </AppLockWrapper>
+      </SocketProvider>
     </AuthProvider>
   );
 }
