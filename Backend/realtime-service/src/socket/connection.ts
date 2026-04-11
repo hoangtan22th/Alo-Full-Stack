@@ -2,51 +2,79 @@ import { Server, Socket } from "socket.io";
 import { presenceClient } from "../config/redis";
 import { SOCKET_EVENTS } from "../constants/events";
 
+// Mock fetch groups from group-service
+async function fetchUserGroups(userId: string): Promise<string[]> {
+  // TODO: use axios to call http://group-service:8080/api/groups/user/ + userId
+  return ["group_001", "group_002"];
+}
+
 export function initSocketConnection(io: Server) {
   io.on("connection", async (socket: Socket) => {
     const userId = socket.data.userId;
     console.log(`User connected: ${userId} with socket ID: ${socket.id}`);
 
-    // 1. Join Personal Room để nhận event Push từ các service khác qua RabbitMQ
+    // 1. Join Personal Room for 1v1 messages
     socket.join(`user_${userId}`);
 
-    // *TODO: Vị trí chèn logic lấy Group IDs từ Database (hoặc API group-service) sau này*
-    // socket.join("room_groupId_abc");
+    // 2. Auto join all Group Chat rooms
+    try {
+      const gIds = await fetchUserGroups(userId);
+      gIds.forEach(groupId => {
+        socket.join(`room_${groupId}`);
+      });
+      console.log(`User ${userId} joined groups:`, gIds);
+    } catch (error) {
+      console.error(`Error fetching groups for user ${userId}:`, error);
+    }
 
-    // 2. Đánh dấu trạng thái Online trên Redis
-    await presenceClient.hSet(
-      `presence:users`,
-      userId,
-      JSON.stringify({
-        status: "online",
-        last_active: Date.now(),
-        socket_id: socket.id,
-      }),
-    );
+    // 3. Mark user as Online in Redis
+    await presenceClient.hSet(`presence:users`, userId, JSON.stringify({
+      status: "online",
+      last_active: Date.now(),
+      socket_id: socket.id
+    }));
 
-    // Bắn broadcast (hoặc bắn cho bạn bè) trạng thái Online
-    io.emit(SOCKET_EVENTS.USER_ONLINE, { userId, status: "online" });
+    // Broadcast Online status
+    socket.broadcast.emit(SOCKET_EVENTS.USER_ONLINE, { userId, status: "online" });
 
-    // 3. Lắng nghe các event từ Client gửi LÊN server
-    // (Ví dụ: Typing Indicator, Message Read, ...)
-    socket.on(SOCKET_EVENTS.TYPING, (data) => {
-      // { roomId: "abc", isTyping: true }
-      // Khi client gõ, mình tìm xem cái room đó bắn phát cho tất cả
-      socket.to(`room_${data.roomId}`).emit(SOCKET_EVENTS.TYPING, {
-        userId,
-        isTyping: data.isTyping,
+    // ============================================
+    // REAL-TIME INTERACTION EVENTS (< 10ms)
+    // ============================================
+
+    // 4. Handle Typing Event
+    socket.on(SOCKET_EVENTS.TYPING, (data: { target: string, isGroup: boolean }) => {
+      const emitTarget = data.isGroup ? `room_${data.target}` : `user_${data.target}`;
+      
+      socket.to(emitTarget).emit(SOCKET_EVENTS.TYPING, {
+        actorId: userId,  // Who is typing
+        roomId: data.target // Target room/user
       });
     });
 
-    // 4. Ngắt kết nối
+    // 5. Handle Stop Typing Event
+    socket.on(SOCKET_EVENTS.STOP_TYPING, (data: { target: string, isGroup: boolean }) => {
+      const emitTarget = data.isGroup ? `room_${data.target}` : `user_${data.target}`;
+      
+      socket.to(emitTarget).emit(SOCKET_EVENTS.STOP_TYPING, {
+        actorId: userId,
+        roomId: data.target
+      });
+    });
+
+    // ============================================
+    // CONNECTION MANAGEMENT (DISCONNECT)
+    // ============================================
     socket.on("disconnect", async () => {
       console.log(`User disconnected: ${userId}`);
+      
+      // Remove presence
       await presenceClient.hDel(`presence:users`, userId);
-      // Bắn broadcast Offline
-      io.emit(SOCKET_EVENTS.USER_OFFLINE, {
-        userId,
-        status: "offline",
-        last_active: Date.now(),
+      
+      // Broadcast Offline status
+      socket.broadcast.emit(SOCKET_EVENTS.USER_OFFLINE, { 
+        userId, 
+        status: "offline", 
+        last_active: Date.now() 
       });
     });
   });
