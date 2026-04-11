@@ -160,13 +160,6 @@ export default function ChatInfoScreen() {
   };
 
   const handleChangeAvatar = async () => {
-    if (!isAdmin && !isDeputy) {
-      Alert.alert(
-        "Thông báo",
-        "Chỉ trưởng nhóm và phó nhóm mới có quyền đổi ảnh.",
-      );
-      return;
-    }
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -188,13 +181,6 @@ export default function ChatInfoScreen() {
   };
 
   const handleEditName = () => {
-    if (!isAdmin && !isDeputy) {
-      Alert.alert(
-        "Thông báo",
-        "Chỉ trưởng nhóm và phó nhóm mới có quyền đổi tên nhóm.",
-      );
-      return;
-    }
     Alert.prompt(
       "Đổi tên nhóm",
       "Nhập tên nhóm mới:",
@@ -273,7 +259,7 @@ export default function ChatInfoScreen() {
         <View className="items-center mt-6">
           <View className="relative">
             <TouchableOpacity
-              disabled={!isGroup || (!isAdmin && !isDeputy)}
+              disabled={!isGroup}
               activeOpacity={0.7}
               onPress={handleChangeAvatar}
             >
@@ -294,7 +280,6 @@ export default function ChatInfoScreen() {
             {isGroup ? (
               <TouchableOpacity
                 onPress={handleChangeAvatar}
-                disabled={!isAdmin && !isDeputy}
                 className="absolute bottom-0 right-0 w-8 h-8 bg-[#f5f6f8] border-[3px] border-white rounded-full items-center justify-center shadow-sm"
               >
                 <CameraIcon size={16} color="#4b5563" />
@@ -306,12 +291,16 @@ export default function ChatInfoScreen() {
             )}
           </View>
 
-          <View className="flex-row items-center mt-4 mb-1">
-            <Text className="text-[22px] font-extrabold text-gray-900">
+          <View className="flex-row items-center justify-center mt-4 mb-1">
+            {isGroup && <View className="w-8" />}
+            <Text className="text-[22px] font-extrabold text-gray-900 text-center">
               {groupName || `Nhóm ${id}`}
             </Text>
-            {isGroup && (isAdmin || isDeputy) && (
-              <TouchableOpacity className="ml-2 p-1" onPress={handleEditName}>
+            {isGroup && (
+              <TouchableOpacity
+                className="ml-2 p-1 w-6 items-start"
+                onPress={handleEditName}
+              >
                 <PencilIcon size={20} color="#6b7280" />
               </TouchableOpacity>
             )}

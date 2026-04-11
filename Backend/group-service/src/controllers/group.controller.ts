@@ -686,13 +686,9 @@ export const updateGroup = async (
       (m: any) => m.userId.toString() === currentUserId,
     );
 
-    if (
-      !currentMember ||
-      (currentMember.role !== "LEADER" && currentMember.role !== "DEPUTY")
-    ) {
+    if (!currentMember) {
       res.status(403).json({
-        error:
-          "Chỉ trưởng nhóm hoặc phó nhóm mới có quyền cập nhật thông tin nhóm",
+        error: "Bạn không có quyền cập nhật thông tin nhóm này",
       });
       return;
     }
