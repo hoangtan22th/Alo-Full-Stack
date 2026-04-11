@@ -85,7 +85,7 @@ export function initSocketConnection(io: Server) {
 
         socket.to(emitTarget).emit(SOCKET_EVENTS.TYPING, {
           actorId: userId, // Who is typing
-          roomId: data.target, // Target room/user
+          roomId: data.isGroup ? data.target : userId, // Target room/user (For 1-1 chat, the roomId for the recipient is the sender's ID)
         });
       },
     );
@@ -100,7 +100,7 @@ export function initSocketConnection(io: Server) {
 
         socket.to(emitTarget).emit(SOCKET_EVENTS.STOP_TYPING, {
           actorId: userId,
-          roomId: data.target,
+          roomId: data.isGroup ? data.target : userId,
         });
       },
     );
