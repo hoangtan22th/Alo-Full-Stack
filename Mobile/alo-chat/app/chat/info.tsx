@@ -1,5 +1,9 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { groupService } from "../../services/groupService";
+import { userService } from "../../services/userService";
+import { contactService } from "../../services/contactService";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   View,
   Text,
@@ -7,6 +11,9 @@ import {
   ScrollView,
   Image,
   Platform,
+  Alert,
+  Modal,
+  TextInput,
 } from "react-native";
 import {
   ArrowLeftIcon,
@@ -21,6 +28,9 @@ import {
   EyeSlashIcon,
   TrashIcon,
   ChevronRightIcon,
+  UserPlusIcon,
+  ArrowRightOnRectangleIcon,
+  XMarkIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -28,8 +38,140 @@ export default function ChatInfoScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id, name, avatar, membersCount } = useLocalSearchParams();
+  const { user } = useAuth();
+  const currentUserId = user?.id || user?._id || user?.userId || null;
 
-  // Dummy images based on the design
+  const isGroup = !!membersCount;
+
+  const [members, setMembers] = useState<any[]>([]);
+  const [isTransferLeaderModalVisible, setIsTransferLeaderModalVisible] =
+    useState(false);
+  const [selectedNewLeaderId, setSelectedNewLeaderId] = useState<string | null>(
+    null,
+  );
+
+  const fetchGroupDetails = async () => {
+    try {
+      if (!isGroup || !id) return;
+      const res = await groupService.getGroupById(id as string);
+
+      // Xử lý dữ liệu trả về từ API (Axios response)
+      let groupData = res;
+      if (res?.data?.data) {
+        groupData = res.data.data;
+      } else if (res?.data) {
+        groupData = res.data;
+      }
+
+      if (groupData && groupData.members) {
+        const memberPromises = groupData.members.map(async (m: any) => {
+          const userRes = await userService.getUserById(m.userId);
+          const userData =
+            userRes && (userRes as any).data ? (userRes as any).data : userRes;
+          return {
+            id: m.userId,
+            name: userData?.fullName || "Người dùng",
+            role: m.role.toLowerCase(), // "leader", "deputy", "member"
+            avatar: userData?.avatar || "",
+          };
+        });
+        const membersList = await Promise.all(memberPromises);
+        setMembers(membersList);
+      }
+    } catch (error) {
+      console.error("Lỗi lấy chi tiết nhóm:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchGroupDetails();
+  }, [id]);
+
+  const currentUserRole = members.find((m) => m.id === currentUserId)?.role;
+  const isAdmin = currentUserRole === "leader";
+  const isDeputy = currentUserRole === "deputy";
+
+  const handleLeaveGroup = () => {
+    if (isAdmin) {
+      const otherMembers = members.filter((m) => m.id !== currentUserId);
+      if (otherMembers.length === 0) {
+        Alert.alert(
+          "Nhóm không còn ai",
+          "Bạn là thành viên duy nhất. Vui lòng giải tán nhóm.",
+        );
+        return;
+      }
+      setIsTransferLeaderModalVisible(true);
+      return;
+    }
+
+    Alert.alert("Rời nhóm", "Bạn có chắc chắn muốn rời khỏi nhóm này?", [
+      { text: "Hủy", style: "cancel" },
+      {
+        text: "Rời nhóm",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            if (!currentUserId) return;
+            await groupService.removeMember(id as string, currentUserId);
+            Alert.alert("Thành công", "Đã rời nhóm.");
+            router.replace("/(tabs)");
+          } catch (error) {
+            Alert.alert(
+              "Lỗi",
+              typeof error === "string" ? error : "Không thể rời nhóm",
+            );
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleTransferAndLeave = async () => {
+    if (!selectedNewLeaderId || !currentUserId) {
+      Alert.alert("Lỗi", "Vui lòng chọn trưởng nhóm mới");
+      return;
+    }
+    try {
+      await groupService.assignLeader(id as string, selectedNewLeaderId);
+      await groupService.removeMember(id as string, currentUserId);
+      setIsTransferLeaderModalVisible(false);
+      Alert.alert("Thành công", "Đã chuyển quyền trưởng nhóm và rời nhóm.");
+      router.replace("/(tabs)");
+    } catch (error) {
+      console.error(error);
+      Alert.alert(
+        "Lỗi",
+        typeof error === "string" ? error : "Không thể thực hiện tao tác.",
+      );
+    }
+  };
+
+  const handleDisbandGroup = () => {
+    Alert.alert(
+      "Giải tán nhóm",
+      "Bạn có chắc chắn muốn giải tán nhóm này? Hành động này không thể hoàn tác.",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Giải tán",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await groupService.deleteGroup(id as string);
+              Alert.alert("Thành công", "Nhóm đã bị giải tán.");
+              router.back();
+              router.back();
+            } catch (error) {
+              Alert.alert("Lỗi", "Không thể giải tán nhóm.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // Dummy images... (Keep the rest of the file)
   const images = [
     "https://images.unsplash.com/photo-1541698444083-023c97d3f4b6?q=80&w=400",
     "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=400",
@@ -108,6 +250,7 @@ export default function ChatInfoScreen() {
                 <UserGroupIcon size={24} color="#374151" strokeWidth={1.5} />
               }
               label="Thành viên"
+              onPress={() => router.push(`/chat/members?id=${id}`)}
             />
           ) : (
             <ActionButton
@@ -187,7 +330,7 @@ export default function ChatInfoScreen() {
         </View>
 
         {/* SECTION: THIẾT LẬP BẢO MẬT */}
-        <View className="mt-10 px-5 pb-12">
+        <View className="mt-10 px-5 pb-8">
           <Text className="text-[11px] font-bold text-gray-500 uppercase tracking-[1px] mb-4">
             Thiết lập bảo mật
           </Text>
@@ -211,7 +354,97 @@ export default function ChatInfoScreen() {
             />
           </View>
         </View>
+
+        {isGroup && (
+          <>
+            {/* SECTION: RỜI / GIẢI TÁN NHÓM */}
+            <View className="px-5 mt-10 pb-12">
+              <View className="bg-[#fef2f2] rounded-[24px]">
+                <SettingItem
+                  icon={<ArrowRightOnRectangleIcon size={24} color="#ef4444" />}
+                  title="Rời khỏi nhóm"
+                  isDestructive
+                  onPress={handleLeaveGroup}
+                />
+                {isAdmin && (
+                  <>
+                    <View className="h-[1px] bg-white w-full" />
+                    <SettingItem
+                      icon={<XMarkIcon size={24} color="#ef4444" />}
+                      title="Giải tán nhóm"
+                      isDestructive
+                      onPress={handleDisbandGroup}
+                    />
+                  </>
+                )}
+              </View>
+            </View>
+          </>
+        )}
       </ScrollView>
+
+      {/* Modal Chuyển quyền trưởng nhóm */}
+      <Modal
+        visible={isTransferLeaderModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsTransferLeaderModalVisible(false)}
+      >
+        <View className="flex-1 justify-end bg-black/50">
+          <View className="bg-white rounded-t-3xl min-h-[50%] p-5">
+            <View className="flex-row justify-between items-center mb-4">
+              <Text className="text-lg font-bold">Chọn trưởng nhóm mới</Text>
+              <TouchableOpacity
+                onPress={() => setIsTransferLeaderModalVisible(false)}
+              >
+                <XMarkIcon size={24} color="#000" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView className="mb-4 flex-1">
+              {members
+                .filter((m) => m.id !== currentUserId)
+                .map((m) => (
+                  <TouchableOpacity
+                    key={m.id}
+                    className={`flex-row items-center p-3 rounded-xl mb-2 border ${
+                      selectedNewLeaderId === m.id
+                        ? "border-[#007AFF] bg-[#007AFF]/10"
+                        : "border-gray-200"
+                    }`}
+                    onPress={() => setSelectedNewLeaderId(m.id)}
+                  >
+                    <Image
+                      source={{
+                        uri: m.avatar || "https://i.pravatar.cc/150",
+                      }}
+                      className="w-10 h-10 rounded-full"
+                    />
+                    <Text className="ml-3 text-base flex-1">{m.name}</Text>
+                    <View
+                      className={`w-5 h-5 rounded-full border items-center justify-center ${
+                        selectedNewLeaderId === m.id
+                          ? "border-[#007AFF]"
+                          : "border-gray-400"
+                      }`}
+                    >
+                      {selectedNewLeaderId === m.id && (
+                        <View className="w-3 h-3 rounded-full bg-[#007AFF]" />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
+            <TouchableOpacity
+              className="bg-red-500 rounded-xl py-4 items-center mb-4"
+              onPress={handleTransferAndLeave}
+            >
+              <Text className="text-white font-bold text-base">
+                Chuyển quyền và rời nhóm
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -221,12 +454,18 @@ export default function ChatInfoScreen() {
 function ActionButton({
   icon,
   label,
+  onPress,
 }: {
   icon: React.ReactNode;
   label: string;
+  onPress?: () => void;
 }) {
   return (
-    <TouchableOpacity className="items-center w-[72px]" activeOpacity={0.7}>
+    <TouchableOpacity
+      className="items-center w-[72px]"
+      activeOpacity={0.7}
+      onPress={onPress}
+    >
       <View className="w-14 h-14 bg-[#f5f6f8] rounded-full items-center justify-center mb-2">
         {icon}
       </View>
@@ -273,16 +512,19 @@ function SettingItem({
   title,
   value,
   isDestructive,
+  onPress,
 }: {
   icon: React.ReactNode;
   title: string;
   value?: string;
   isDestructive?: boolean;
+  onPress?: () => void;
 }) {
   return (
     <TouchableOpacity
       className="flex-row items-center p-4 px-5"
       activeOpacity={0.7}
+      onPress={onPress}
     >
       <View
         className={`w-11 h-11 rounded-full items-center justify-center bg-white shadow-sm border border-gray-50`}

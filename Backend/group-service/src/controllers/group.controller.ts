@@ -181,6 +181,32 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const requester = group.members.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    const requesterRole = requester?.role;
+
+    if (
+      group.isApprovalRequired &&
+      requesterRole !== "LEADER" &&
+      requesterRole !== "DEPUTY"
+    ) {
+      const alreadyRequested = group.joinRequests.some(
+        (request) => request.userId.toString() === newUserId.toString(),
+      );
+      if (!alreadyRequested) {
+        group.joinRequests.push({ userId: newUserId, requestedAt: new Date() });
+        await group.save();
+      }
+      res
+        .status(200)
+        .json({
+          message: "Yêu cầu tham gia đã gửi và đang chờ duyệt",
+          data: group,
+        });
+      return;
+    }
+
     group.members.push({
       userId: newUserId,
       role: "MEMBER",
@@ -378,6 +404,261 @@ export const getMyGroups = async (
     }).sort({ updatedAt: -1 });
 
     res.status(200).json({ data: groups });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getGroupById = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { groupId } = req.params;
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+    res.status(200).json({ data: group });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 8. Yêu cầu tham gia nhóm
+export const requestJoinGroup = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { groupId } = req.params;
+    const requesterId = (req.headers["x-user-id"] || "").toString();
+
+    if (!requesterId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    if (!group.isGroup) {
+      res.status(400).json({ error: "Đây không phải là một nhóm" });
+      return;
+    }
+
+    // Checking if already a member
+    const isMember = group.members.some(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (isMember) {
+      res.status(400).json({ error: "Bạn đã là thành viên của nhóm" });
+      return;
+    }
+
+    // Checking if already requested
+    const hasRequested = group.joinRequests?.some(
+      (r) => r.userId.toString() === requesterId,
+    );
+    if (hasRequested) {
+      res.status(400).json({ error: "Bạn đã gửi yêu cầu tham gia rồi" });
+      return;
+    }
+
+    if (!group.joinRequests) {
+      group.joinRequests = [];
+    }
+
+    group.joinRequests.push({ userId: requesterId, requestedAt: new Date() });
+    await group.save();
+
+    res
+      .status(200)
+      .json({ message: "Đã gửi yêu cầu tham gia", data: group.joinRequests });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 9. Lấy danh sách yêu cầu tham gia (Chỉ LEADER/DEPUTY)
+export const getJoinRequests = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { groupId } = req.params;
+    const requesterId = (req.headers["x-user-id"] || "").toString();
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    // Check permissions
+    const member = group.members.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (!member || (member.role !== "LEADER" && member.role !== "DEPUTY")) {
+      res
+        .status(403)
+        .json({ error: "Bạn không có quyền xem yêu cầu tham gia" });
+      return;
+    }
+
+    res.status(200).json({ data: group.joinRequests || [] });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 10. Phê duyệt yêu cầu tham gia (Chỉ LEADER/DEPUTY)
+export const approveJoinRequest = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { groupId, userId } = req.params;
+    const requesterId = (req.headers["x-user-id"] || "").toString();
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    const member = group.members.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (!member || (member.role !== "LEADER" && member.role !== "DEPUTY")) {
+      res.status(403).json({ error: "Bạn không có quyền phê duyệt" });
+      return;
+    }
+
+    const requests = group.joinRequests || [];
+    const requestIndex = requests.findIndex(
+      (r) => r.userId.toString() === String(userId),
+    );
+    if (requestIndex === -1) {
+      res
+        .status(404)
+        .json({ error: "Không tìm thấy yêu cầu tham gia của người dùng này" });
+      return;
+    }
+
+    // Remove from joinRequests
+    requests.splice(requestIndex, 1);
+    group.joinRequests = requests;
+
+    // Add to members if not already
+    const isMember = group.members.some(
+      (m) => m.userId.toString() === String(userId),
+    );
+    if (!isMember && userId) {
+      group.members.push({
+        userId: String(userId),
+        role: "MEMBER",
+        joinedAt: new Date(),
+      });
+    }
+
+    await group.save();
+    res.status(200).json({ message: "Đã phê duyệt yêu cầu", data: group });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 11. Từ chối yêu cầu tham gia (Chỉ LEADER/DEPUTY)
+export const rejectJoinRequest = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { groupId, userId } = req.params;
+    const requesterId = (req.headers["x-user-id"] || "").toString();
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    const member = group.members.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (!member || (member.role !== "LEADER" && member.role !== "DEPUTY")) {
+      res.status(403).json({ error: "Bạn không có quyền từ chối" });
+      return;
+    }
+
+    const requests = group.joinRequests || [];
+    const requestIndex = requests.findIndex(
+      (r) => r.userId.toString() === String(userId),
+    );
+    if (requestIndex === -1) {
+      res
+        .status(404)
+        .json({ error: "Không tìm thấy yêu cầu tham gia của người dùng này" });
+      return;
+    }
+
+    // Remove from joinRequests
+    requests.splice(requestIndex, 1);
+    group.joinRequests = requests;
+
+    await group.save();
+
+    res.status(200).json({ message: "Đã từ chối yêu cầu", data: group });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 12. Cập nhật cài đặt phê duyệt tham gia nhóm (Chỉ LEADER/DEPUTY)
+export const updateApprovalSetting = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { groupId } = req.params;
+    const { isApprovalRequired } = req.body;
+    const requesterId = (req.headers["x-user-id"] || "").toString();
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    const member = group.members.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (!member || (member.role !== "LEADER" && member.role !== "DEPUTY")) {
+      res.status(403).json({
+        error:
+          "Chỉ Trưởng nhóm hoặc Phó nhóm mới có quyền thay đổi cài đặt này",
+      });
+      return;
+    }
+
+    if (typeof isApprovalRequired !== "boolean") {
+      res
+        .status(400)
+        .json({ error: "Tham số isApprovalRequired không hợp lệ" });
+      return;
+    }
+
+    group.isApprovalRequired = isApprovalRequired;
+    await group.save();
+
+    res
+      .status(200)
+      .json({ message: "Cập nhật cài đặt thành công", data: group });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
