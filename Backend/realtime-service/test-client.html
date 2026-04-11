@@ -37,10 +37,11 @@
       // NOTE: For debugging easily right now, I'll assume you haven't strictly enforced a real JWT signature yet,
       // so we'll just connect and wait. If it fails auth, check your server logs.
 
-      const socket = io("http://localhost:3000", {
+      const socket = io("http://localhost:8888", {
         auth: {
           token: "MOCK_TOKEN_HERE", // Change this if you have a real token
         },
+        transports: ["websocket"], // Ép dùng thẳng WebSocket để vượt qua Gateway dễ dàng
       });
 
       const statusDiv = document.getElementById("status");
