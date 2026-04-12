@@ -6,6 +6,8 @@ import {
   TextInput,
   ScrollView,
   TouchableOpacity,
+  Modal,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -13,6 +15,7 @@ import {
   PlusIcon,
   MagnifyingGlassIcon,
   EllipsisHorizontalIcon,
+  QrCodeIcon,
 } from "react-native-heroicons/outline";
 import { UserGroupIcon } from "react-native-heroicons/outline"; // Thêm biểu tượng cho nhóm
 import { useRouter } from "expo-router";
@@ -30,6 +33,7 @@ export default function MessagesScreen() {
 
   const [activeUsers, setActiveUsers] = useState(activeUsersData);
   const [conversations, setConversations] = useState<any[]>(conversationsData);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
 
   useEffect(() => {
     const fetchGroups = async () => {
@@ -118,7 +122,7 @@ export default function MessagesScreen() {
       style={{ flex: 1, backgroundColor: "white", paddingTop: insets.top + 10 }}
     >
       {/* Header */}
-      <View className="flex-row items-center justify-between px-4 mb-6">
+      <View className="flex-row items-center justify-between px-4 mb-6 z-50">
         <View className="flex-row items-center">
           <TouchableOpacity>
             <Bars3Icon size={28} color="#000" />
@@ -126,19 +130,61 @@ export default function MessagesScreen() {
           <Text className="text-2xl font-bold ml-4">Messages</Text>
         </View>
         <View className="flex-row items-center gap-4">
-          <TouchableOpacity>
-            <PlusIcon size={24} color="#000" />
+          <TouchableOpacity onPress={() => router.push("/scan-qr" as any)}>
+            <QrCodeIcon size={28} color="#000" />
           </TouchableOpacity>
-          <TouchableOpacity>
-            <Image
-              source={{
-                uri: "https://i.pravatar.cc/150?u=a042581f4e29026704d",
-              }}
-              className="w-10 h-10 rounded-full"
-            />
+          <TouchableOpacity onPress={() => setShowPlusMenu(true)}>
+            <PlusIcon size={28} color="#000" />
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Plus Menu Modal */}
+      <Modal visible={showPlusMenu} transparent={true} animationType="fade">
+        <TouchableWithoutFeedback onPress={() => setShowPlusMenu(false)}>
+          <View className="flex-1 bg-black/20" />
+        </TouchableWithoutFeedback>
+        <View className="absolute top-24 right-4 bg-white rounded-lg shadow-lg py-2 min-w-[220px] elevation-5">
+          <TouchableOpacity
+            className="px-4 py-3 border-b border-gray-100"
+            onPress={() => {
+              setShowPlusMenu(false);
+              router.push("/(tabs)/contacts/add-friend" as any);
+            }}
+          >
+            <Text className="text-base text-gray-800">Thêm bạn</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="px-4 py-3 border-b border-gray-100"
+            onPress={() => {
+              setShowPlusMenu(false);
+              router.push("/(tabs)/contacts" as any);
+            }}
+          >
+            <Text className="text-base text-gray-800">Tạo đoạn chat mới</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="px-4 py-3 border-b border-gray-100"
+            onPress={() => {
+              setShowPlusMenu(false);
+              router.push("/(tabs)/groups/create-group" as any);
+            }}
+          >
+            <Text className="text-base text-gray-800">Tạo nhóm chat mới</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="px-4 py-3"
+            onPress={() => {
+              setShowPlusMenu(false);
+              router.push("/(tabs)/profile/account-security" as any);
+            }}
+          >
+            <Text className="text-base text-gray-800">
+              Quản lý thiết bị đăng nhập
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
 
       {/* Search Bar */}
       <View className="px-4 mb-6">

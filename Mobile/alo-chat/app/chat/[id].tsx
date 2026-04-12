@@ -308,32 +308,17 @@ export default function GlobalChatScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
-                if (isGroupChat) {
-                  router.push({
-                    pathname: "/chat/info",
-                    params: {
-                      id: id,
-                      name: name,
-                      avatar: avatar,
-                      membersCount: membersCount,
-                      isGroup: "true",
-                    },
-                  });
-                } else {
-                  router.push({
-                    pathname: "/contacts/send-request",
-                    params: {
-                      userId: targetUserId,
-                      fullName: name,
-                      avatarUrl: avatar,
-                      relationStatus: "ACCEPTED",
-                      from: "chat",
-                      chatId: id,
-                      chatName: name,
-                      chatAvatar: avatar,
-                    },
-                  });
-                }
+                router.push({
+                  pathname: "/chat/info",
+                  params: {
+                    id: id,
+                    name: name,
+                    avatar: avatar,
+                    membersCount: membersCount,
+                    isGroup: isGroupChat ? "true" : "false",
+                    targetUserId: targetUserId,
+                  },
+                });
               }}
             >
               <InformationCircleIcon size={24} color="#374151" />
