@@ -41,7 +41,11 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => {
     // Unwrap ApiResponse
-    if (response.data && response.data.status !== undefined && response.data.data !== undefined) {
+    if (
+      response.data &&
+      response.data.status !== undefined &&
+      response.data.data !== undefined
+    ) {
       return response.data.data;
     }
     return response;
@@ -50,7 +54,12 @@ api.interceptors.response.use(
     const originalRequest = error.config;
 
     // Nếu gặp lỗi 401 (Token hết hạn) VÀ chưa từng thử refresh request này
-    console.log("⚡ [API] Lỗi", error.response?.status, "từ:", originalRequest.url);
+    console.log(
+      "⚡ [API] Lỗi",
+      error.response?.status,
+      "từ:",
+      originalRequest.url,
+    );
     if (error.response?.status === 401 && !originalRequest._retry) {
       console.log("🔄 [REFRESH] Phát hiện 401 → Bắt đầu refresh token...");
       // Không refresh cho chính API login hoặc refresh (tránh vòng lặp vô tận)
@@ -85,10 +94,13 @@ api.interceptors.response.use(
         // Gọi API refresh bằng axios gốc (KHÔNG qua interceptor của api)
         const response = await axios.post(
           `http://${IP_ADDRESS}:8888/api/v1/auth/refresh`,
-          { refreshToken }
+          { refreshToken },
         );
 
-        console.log("✅ [REFRESH] API refresh trả về:", JSON.stringify(response.data).substring(0, 100));
+        console.log(
+          "✅ [REFRESH] API refresh trả về:",
+          JSON.stringify(response.data).substring(0, 100),
+        );
         const newAccessToken = response.data?.data?.accessToken;
         if (!newAccessToken) {
           console.log("❌ [REFRESH] Không tìm thấy accessToken trong response");
@@ -98,6 +110,7 @@ api.interceptors.response.use(
 
         // Lưu Access Token mới
         await AsyncStorage.setItem("accessToken", newAccessToken);
+        DeviceEventEmitter.emit("token_refreshed");
 
         // Giải phóng hàng đợi với token mới
         processQueue(null, newAccessToken);
@@ -106,22 +119,34 @@ api.interceptors.response.use(
         // (để tránh bị interceptor unwrap 2 lần)
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         const retryResponse = await axios(originalRequest);
-        console.log("✅ [RETRY] Request gốc thành công! Status:", retryResponse.status);
+        console.log(
+          "✅ [RETRY] Request gốc thành công! Status:",
+          retryResponse.status,
+        );
 
         // Tự unwrap ApiResponse cho request retry
-        if (retryResponse.data && retryResponse.data.status !== undefined && retryResponse.data.data !== undefined) {
+        if (
+          retryResponse.data &&
+          retryResponse.data.status !== undefined &&
+          retryResponse.data.data !== undefined
+        ) {
           console.log("✅ [RETRY] Data unwrapped thành công");
           return retryResponse.data.data;
         }
         return retryResponse;
       } catch (refreshError: any) {
-        console.log("❌ [REFRESH] THẤT BẠI:", refreshError?.message || refreshError?.response?.status || refreshError);
+        console.log(
+          "❌ [REFRESH] THẤT BẠI:",
+          refreshError?.message ||
+            refreshError?.response?.status ||
+            refreshError,
+        );
         processQueue(refreshError, null);
 
         // Xóa hết token -> Phát sự kiện force_logout để AuthContext cập nhật state
         await AsyncStorage.removeItem("accessToken");
         await AsyncStorage.removeItem("refreshToken");
-        DeviceEventEmitter.emit('force_logout');
+        DeviceEventEmitter.emit("force_logout");
 
         return Promise.reject(refreshError);
       } finally {
@@ -130,7 +155,7 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;

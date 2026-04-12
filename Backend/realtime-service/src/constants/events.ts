@@ -1,4 +1,3 @@
-// src/constants/events.ts
 export const SOCKET_EVENTS = {
   // Chat
   RECEIVE_MESSAGE: "RECEIVE_MESSAGE",
