@@ -99,18 +99,20 @@ export default function GlobalChatScreen() {
 
   const handleInputChange = (text: string) => {
     setInputText(text);
-
     if (!socket) return;
-    socket.emit("TYPING", { target: id, isGroup: isGroupChat });
 
-    // Clear the existing timeout so we don't prematurely stop typing
-    if (typingTimeoutRef.current) {
+    // TỐI ƯU: Chỉ bắn sự kiện TYPING khi trước đó chưa gõ (chưa có khoảng chờ)
+    if (!typingTimeoutRef.current) {
+      socket.emit("TYPING", { target: id, isGroup: isGroupChat });
+    } else {
+      // Nếu đang gõ liên tục thì hủy việc đếm ngược STOP_TYPING cũ
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Set a new timeout to stop typing after 2 seconds
+    // Đặt bộ đếm: Sau 2 giây kể từ ký tự CUỐI CÙNG được gõ thì mới báo ngừng gõ
     typingTimeoutRef.current = setTimeout(() => {
       socket.emit("STOP_TYPING", { target: id, isGroup: isGroupChat });
+      typingTimeoutRef.current = null; // Reset lại cờ để lần chạm phím sau sẽ tiếp tục báo TYPING
     }, 2000);
   };
 

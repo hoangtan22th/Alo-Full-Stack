@@ -60,13 +60,15 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           const tokenRefreshListener = DeviceEventEmitter.addListener(
             "token_refreshed",
             async () => {
-              console.log("🔄 SocketContext detected token refresh -> Reconnecting Socket");
+              console.log(
+                "🔄 SocketContext detected token refresh -> Reconnecting Socket",
+              );
               const newToken = await AsyncStorage.getItem("accessToken");
               if (newSocket && newToken) {
                 newSocket.auth = { token: newToken };
                 newSocket.disconnect().connect();
               }
-            }
+            },
           );
 
           setSocket(newSocket);
