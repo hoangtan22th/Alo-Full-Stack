@@ -105,6 +105,26 @@ export function initSocketConnection(io: Server) {
       },
     );
 
+    // 6. Check User Status
+    socket.on("CHECK_USER_STATUS", async (targetUserId: string) => {
+      try {
+        const presenceStr = await presenceClient.hGet(
+          `presence:users`,
+          targetUserId,
+        );
+        if (presenceStr) {
+          const presence = JSON.parse(presenceStr);
+          socket.emit("USER_STATUS_RESULT", {
+            userId: targetUserId,
+            status: presence.status,
+            last_active: presence.last_active,
+          });
+        }
+      } catch (error) {
+        console.error("Error checking user status", error);
+      }
+    });
+
     // ============================================
     // CONNECTION MANAGEMENT (DISCONNECT)
     // ============================================

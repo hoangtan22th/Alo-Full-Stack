@@ -37,7 +37,7 @@ export default function GlobalChatScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
-  const { socket } = useSocket();
+  const { socket, onlineUsers } = useSocket();
   const [inputText, setInputText] = useState("");
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -46,6 +46,21 @@ export default function GlobalChatScreen() {
   const isGroupChat = Boolean(
     membersCount && membersCount !== "undefined" && membersCount !== "null",
   );
+
+  const targetUserId = typeof id === "string" ? id : (id as string[])?.[0];
+  const userStatus =
+    !isGroupChat && targetUserId ? onlineUsers[targetUserId] : null;
+  const isOnline = userStatus?.status === "online";
+
+  const getOfflineText = (lastActive?: number) => {
+    if (!lastActive) return "Chưa truy cập";
+    const diff = Math.floor((Date.now() - lastActive) / 60000);
+    if (diff < 1) return "Vừa mới truy cập";
+    if (diff < 60) return `Hoạt động ${diff} phút trước`;
+    const hours = Math.floor(diff / 60);
+    if (hours < 24) return `Hoạt động ${hours} giờ trước`;
+    return `Hoạt động ${Math.floor(hours / 24)} ngày trước`;
+  };
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -96,6 +111,13 @@ export default function GlobalChatScreen() {
       socket.off("STOP_TYPING", handleStopTyping);
     };
   }, [socket, id]);
+
+  // Yêu cầu kiểm tra trạng thái online của user này khi mới vào màn hình
+  useEffect(() => {
+    if (!socket || isGroupChat || !targetUserId) return;
+
+    socket.emit("CHECK_USER_STATUS", targetUserId);
+  }, [socket, isGroupChat, targetUserId]);
 
   const handleInputChange = (text: string) => {
     setInputText(text);
@@ -230,7 +252,7 @@ export default function GlobalChatScreen() {
                     </Text>
                   </View>
                 )}
-                {!membersCount && (
+                {!isGroupChat && isOnline && (
                   <View className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" />
                 )}
               </View>
@@ -243,9 +265,11 @@ export default function GlobalChatScreen() {
                   {name || `Nhóm ${id}`}
                 </Text>
                 <Text className="text-xs text-gray-500 mt-0.5">
-                  {membersCount
+                  {isGroupChat
                     ? `${membersCount} thành viên`
-                    : "Đang hoạt động"}
+                    : isOnline
+                      ? "Đang hoạt động"
+                      : getOfflineText(userStatus?.last_active)}
                 </Text>
               </View>
             </TouchableOpacity>
