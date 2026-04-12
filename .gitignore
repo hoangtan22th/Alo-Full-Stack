@@ -30,7 +30,6 @@ $RECYCLE.BIN/
 ### Cấu hình IDE của thư mục gốc ###
 .idea/
 *.iml
-.vscode/
 
 ### Chặn tuyệt đối biến môi trường ở mọi nơi ###
 .env

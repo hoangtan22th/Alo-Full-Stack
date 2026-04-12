@@ -227,9 +227,6 @@ export default function UserProfileScreen() {
                 },
               });
             }
-          } else if (from === "qr") {
-            router.push("/(tabs)/" as any);
-            router.dismiss(2);
           } else {
             router.back();
           }
