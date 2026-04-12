@@ -64,12 +64,14 @@ export const groupService = {
     }
   },
 
-  getMyGroups: async () => {
+  getMyGroups: async (type?: string) => {
     try {
-      const data = await api.get<any, any>(`/groups/me`);
+      const data = await api.get<any, any>(`/groups/me`, {
+        params: type ? { type } : undefined,
+      });
       return data;
     } catch (error) {
-      console.error("Lỗi lấy danh sách nhóm:", error);
+      console.error("Lỗi lấy danh sách cuộc trò chuyện:", error);
       return [];
     }
   },

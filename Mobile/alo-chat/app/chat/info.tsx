@@ -41,11 +41,17 @@ import * as ImagePicker from "expo-image-picker";
 export default function ChatInfoScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id, name, avatar, membersCount } = useLocalSearchParams();
+  const {
+    id,
+    name,
+    avatar,
+    membersCount,
+    isGroup: paramsIsGroup,
+  } = useLocalSearchParams();
   const { user } = useAuth();
   const currentUserId = user?.id || user?._id || user?.userId || null;
 
-  const isGroup = !!membersCount;
+  const isGroup = paramsIsGroup === "true";
 
   const [members, setMembers] = useState<any[]>([]);
   const [groupName, setGroupName] = useState<string>(name as string);
@@ -290,7 +296,7 @@ export default function ChatInfoScreen() {
                 <CameraIcon size={16} color="#4b5563" />
               </TouchableOpacity>
             ) : (
-              !membersCount && (
+              !isGroup && (
                 <View className="absolute bottom-1 right-2 w-[18px] h-[18px] bg-green-500 border-[3px] border-white rounded-full" />
               )
             )}
@@ -299,7 +305,7 @@ export default function ChatInfoScreen() {
           <View className="flex-row items-center justify-center mt-4 mb-1">
             {isGroup && <View className="w-8" />}
             <Text className="text-[22px] font-extrabold text-gray-900 text-center">
-              {groupName || `Nhóm ${id}`}
+              {groupName || (isGroup ? `Nhóm ${id}` : "Nhắn tin")}
             </Text>
             {isGroup && (
               <TouchableOpacity
@@ -312,7 +318,7 @@ export default function ChatInfoScreen() {
           </View>
 
           <Text className="text-[13px] text-gray-500 font-medium">
-            {membersCount ? `${membersCount} thành viên` : "Đang hoạt động"}
+            {isGroup ? `${membersCount || ""} thành viên` : "Đang hoạt động"}
           </Text>
         </View>
 
@@ -336,7 +342,7 @@ export default function ChatInfoScreen() {
             }
             label="Tìm kiếm"
           />
-          {membersCount ? (
+          {isGroup ? (
             <ActionButton
               icon={
                 <UserGroupIcon size={24} color="#374151" strokeWidth={1.5} />
