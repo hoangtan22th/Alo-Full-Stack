@@ -10,6 +10,22 @@ spring:
       port: ${REDIS_PORT:6379}
   cloud:
     gateway:
+      # --- BẮT ĐẦU PHẦN BỔ SUNG CORS ---
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "https://against-behavioral-engage-modems.trycloudflare.com" # Link FE Cloudflare
+              - "http://localhost:5173" # Để test ở local vẫn chạy được
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+      # --- KẾT THÚC PHẦN BỔ SUNG ---
       server:
         webflux:
           routes:
@@ -47,7 +63,7 @@ spring:
               uri: lb://CHATBOT-SERVICE
               predicates:
                 - Path=/api/v1/chatbot/**
-                
+
             - id: realtime-service
               uri: lb:ws://REALTIME-SERVICE
               predicates:
