@@ -25,6 +25,7 @@ import {
   StarIcon,
   TrashIcon,
   UserPlusIcon,
+  XMarkIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { groupService } from "../../../services/groupService";
@@ -37,6 +38,11 @@ export default function GroupsScreen() {
   const [selectedGroup, setSelectedGroup] = useState<any>(null);
   const [groups, setGroups] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredGroups = groups.filter((group) =>
+    group.name.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -88,7 +94,17 @@ export default function GroupsScreen() {
             placeholder="Tìm kiếm nhóm..."
             className="flex-1 ml-2 text-base text-gray-800"
             placeholderTextColor="#9ca3af"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery("")}
+              className="p-1"
+            >
+              <XMarkIcon size={20} color="#9ca3af" />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -121,7 +137,7 @@ export default function GroupsScreen() {
         {/* Tiêu đề danh sách Nhóm & Nút Filter */}
         <View className="flex-row items-center justify-between mb-4">
           <Text className="text-lg font-bold text-gray-900">
-            {isLoading ? "Đang tải..." : `Nhóm (${groups.length})`}
+            {isLoading ? "Đang tải..." : `Nhóm (${filteredGroups.length})`}
           </Text>
           <TouchableOpacity>
             <AdjustmentsHorizontalIcon size={24} color="#6b7280" />
@@ -132,12 +148,14 @@ export default function GroupsScreen() {
           <ActivityIndicator size="large" color="#000000" />
         ) : (
           <View className="pb-32">
-            {groups.length === 0 ? (
+            {filteredGroups.length === 0 ? (
               <Text className="text-center text-gray-500 mt-4">
-                Chưa có nhóm nào. Hãy tạo nhóm mới.
+                {searchQuery
+                  ? "Không tìm thấy nhóm phù hợp."
+                  : "Chưa có nhóm nào. Hãy tạo nhóm mới."}
               </Text>
             ) : (
-              groups.map((group) => (
+              filteredGroups.map((group) => (
                 <GroupItem
                   key={group.id}
                   group={group}
