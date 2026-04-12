@@ -11,16 +11,10 @@ import axiosClient from "../../config/axiosClient";
 import { toast } from "sonner";
 import { GoogleLogin } from "@react-oauth/google";
 
-// IMPORT ZUSTAND STORE VÀO ĐÂY (Nhớ check lại đường dẫn nếu máy ông để khác nhé)
-import { useAuthStore } from "../../store/useAuthStore";
-
 // Định nghĩa các bước hiển thị cho Form bên trái
 type ViewState = "LOGIN" | "FORGOT_EMAIL" | "FORGOT_RESET";
 
 const LoginPage = () => {
-  // LẤY HÀM SET TOKEN TỪ ZUSTAND ĐỂ ĐỒNG BỘ AUTH
-  const setToken = useAuthStore((state) => state.setToken);
-
   // --- STATE CHO LOGIN ---
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -73,14 +67,14 @@ const LoginPage = () => {
 
           if (data.status === "CONFIRMED") {
             clearInterval(interval);
-            const token = data.accessToken || data; // Fix hờ phòng trường hợp backend trả thẳng token
+            const token = data.accessToken;
             if (token) {
-              setToken(token); // XÀI ZUSTAND Ở ĐÂY
-              toast.success("Đăng nhập bằng mã QR thành công!");
-              navigate("/contacts/friends");
+              localStorage.setItem("accessToken", token);
             } else {
               console.error("Không tìm thấy token trong response", data);
             }
+            toast.success("Đăng nhập bằng mã QR thành công!");
+            navigate("/contacts");
           } else if (data.status === "EXPIRED") {
             clearInterval(interval);
           }
@@ -91,7 +85,7 @@ const LoginPage = () => {
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [qrToken, qrStatus, navigate, setToken]);
+  }, [qrToken, qrStatus, navigate]);
 
   // --- HANDLERS CHO LOGIN ---
   const handleLogin = async (e: React.FormEvent) => {
@@ -102,33 +96,33 @@ const LoginPage = () => {
         email,
         password,
       });
-      const token = res.accessToken || res; // Fix hờ phòng trường hợp backend trả thẳng token
+      const token = res.accessToken;
       if (token) {
-        setToken(token); // XÀI ZUSTAND Ở ĐÂY
-        toast.success("Đăng nhập thành công!");
-        navigate("/contacts/friends");
+        localStorage.setItem("accessToken", token);
       } else {
         console.error("Không tìm thấy token trong response", res);
       }
+      toast.success("Đăng nhập thành công!");
+      navigate("/contacts");
     } catch (err: any) {
       setError(err.response?.data?.message || "Đăng nhập thất bại");
     }
   };
 
-  // --- HANDLERS CHO GOOGLE LOGIN ---
+  // --- HANDLERS CHO GOOGLE LOGIN (Của Bạn) ---
   const handleGoogleSuccess = async (credentialResponse: any) => {
     setError("");
     try {
       const idToken = credentialResponse.credential;
       const res: any = await axiosClient.post("/auth/google", { idToken });
-      const token = res.accessToken || res;
+      const token = res.accessToken;
       if (token) {
-        setToken(token); // XÀI ZUSTAND Ở ĐÂY
-        toast.success("Đăng nhập bằng Google thành công!");
-        navigate("/contacts/friends");
+        localStorage.setItem("accessToken", token);
       } else {
         console.error("Không tìm thấy token trong response", res);
       }
+      toast.success("Đăng nhập bằng Google thành công!");
+      navigate("/contacts");
     } catch (err: any) {
       setError(err.response?.data?.message || "Đăng nhập Google thất bại");
     }

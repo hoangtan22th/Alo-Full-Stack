@@ -19,9 +19,7 @@ public class CorsConfig {
         config.setAllowedOrigins(List.of(
                 "http://localhost:5173",   // React Vite dev
                 "http://localhost:3000",   // React CRA dev (nếu dùng)
-                "http://localhost:19006",
-                "https://daughters-build-seats-upc.trycloudflare.com",
-                "http://localhost:5173"// Expo Mobile dev
+                "http://localhost:19006"   // Expo Mobile dev
         ));
 
         // Các HTTP method được phép
