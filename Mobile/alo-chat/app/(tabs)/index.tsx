@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,13 +16,102 @@ import {
 } from "react-native-heroicons/outline";
 import { UserGroupIcon } from "react-native-heroicons/outline"; // Thêm biểu tượng cho nhóm
 import { useRouter } from "expo-router";
+import { groupService } from "../../services/groupService";
+import { useSocket } from "../../contexts/SocketContext";
+import { useAuth } from "../../contexts/AuthContext";
+import { userService } from "../../services/userService";
 
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { onlineUsers } = useSocket();
+  const { user } = useAuth();
+  const currentUserId = user?.id || user?._id || user?.userId || null;
 
-  const activeUsers = activeUsersData;
-  const conversations = conversationsData;
+  const [activeUsers, setActiveUsers] = useState(activeUsersData);
+  const [conversations, setConversations] = useState<any[]>(conversationsData);
+
+  useEffect(() => {
+    const fetchGroups = async () => {
+      try {
+        const response = await groupService.getMyGroups("all");
+
+        let groups = response;
+        if (response?.data?.data) {
+          groups = response.data.data;
+        } else if (response?.data) {
+          groups = response.data;
+        }
+
+        if (Array.isArray(groups)) {
+          // Xử lý song song lấy thông tin người dùng cho chat 1-1
+          const formattedGroups = await Promise.all(
+            groups.map(async (g: any) => {
+              const date = new Date(g.updatedAt);
+              const timeString = date.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+
+              let chatName = g.name;
+              let chatAvatar = g.groupAvatar;
+
+              // Nếu là chat 1-1, tìm user còn lại
+              if (!g.isGroup && currentUserId && g.members) {
+                const otherMember = g.members.find(
+                  (m: any) => m.userId !== currentUserId,
+                );
+                if (otherMember) {
+                  try {
+                    const userRes = await userService.getUserById(
+                      otherMember.userId,
+                    );
+                    const otherUser =
+                      userRes && (userRes as any).data
+                        ? (userRes as any).data
+                        : userRes;
+                    if (otherUser) {
+                      chatName =
+                        otherUser.fullName ||
+                        otherUser.username ||
+                        otherUser.name ||
+                        "Người dùng";
+                      chatAvatar = otherUser.avatar || chatAvatar;
+                    }
+                  } catch (err) {
+                    console.log("Không lấy được info user", err);
+                  }
+                }
+              }
+
+              return {
+                id: g._id,
+                targetUserId:
+                  !g.isGroup && currentUserId && g.members
+                    ? g.members.find((m: any) => m.userId !== currentUserId)
+                        ?.userId
+                    : undefined,
+                name: chatName,
+                avatar: chatAvatar,
+                isGroup: g.isGroup,
+                membersCount: g.members?.length,
+                message: "Chưa có tin nhắn",
+                time: timeString,
+                unread: false,
+              };
+            }),
+          );
+
+          // Gộp dữ liệu lấy được hoặc ghi đè, ghi đè toàn bộ groups lên thôi
+          setConversations(formattedGroups);
+        }
+      } catch (error) {
+        console.error("Lỗi lấy danh sách nhóm:", error);
+      }
+    };
+
+    fetchGroups();
+  }, [currentUserId]);
 
   return (
     <View
@@ -108,7 +197,13 @@ export default function MessagesScreen() {
               onPress={() =>
                 router.push({
                   pathname: `/chat/${chat.id}` as any,
-                  params: { name: chat.name, avatar: chat.avatar },
+                  params: {
+                    name: chat.name,
+                    avatar: chat.avatar,
+                    membersCount: chat.membersCount,
+                    isGroup: chat.isGroup ? "true" : "false",
+                    targetUserId: chat.targetUserId,
+                  },
                 })
               }
             >
