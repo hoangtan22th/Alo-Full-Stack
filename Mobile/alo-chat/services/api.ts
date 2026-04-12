@@ -98,6 +98,7 @@ api.interceptors.response.use(
 
         // Lưu Access Token mới
         await AsyncStorage.setItem("accessToken", newAccessToken);
+        DeviceEventEmitter.emit('token_refreshed');
 
         // Giải phóng hàng đợi với token mới
         processQueue(null, newAccessToken);
