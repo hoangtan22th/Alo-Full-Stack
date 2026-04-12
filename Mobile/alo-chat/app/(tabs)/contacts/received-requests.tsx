@@ -78,7 +78,7 @@ export default function ReceivedRequestsScreen() {
   return (
     <View className="flex-1 bg-[#fafafa]" style={{ paddingTop: insets.top }}>
       {/* Header */}
-      <View className="flex-row justify-between items-center px-4 py-3 bg-[#fafafa]">
+      <View className="flex-row justify-between items-center px-4 py-3 bg-[#fafafa] border-b-[1px] border-gray-200">
         <TouchableOpacity onPress={() => router.back()}>
           <ArrowLeftIcon size={24} color="#1f2937" />
         </TouchableOpacity>
@@ -124,6 +124,25 @@ export default function ReceivedRequestsScreen() {
   );
 }
 
+// Hàm helper chuyển đổi thời gian sang dạng "X phút/giờ trước"
+function formatTimeAgo(dateString?: string) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return "Vừa xong";
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours} giờ trước`;
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 7) return `${diffInDays} ngày trước`;
+  if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} tuần trước`;
+  if (diffInDays < 365) return `${Math.floor(diffInDays / 30)} tháng trước`;
+  return `${Math.floor(diffInDays / 365)} năm trước`;
+}
+
 // --- Component Card hiển thị 1 Lời mời ---
 function RequestCard({
   request,
@@ -138,7 +157,7 @@ function RequestCard({
 
   return (
     <TouchableOpacity
-      className="bg-white p-5 rounded-[28px] mb-4 border border-gray-100 shadow-sm"
+      className="bg-white p-5 rounded-[28px] mb-4 border-[1px] border-gray-200"
       onPress={() =>
         router.push({
           pathname: "/contacts/send-request",
@@ -167,9 +186,16 @@ function RequestCard({
           className="w-12 h-12 rounded-full bg-gray-200"
         />
         <View className="flex-1 ml-3 justify-center pt-0.5">
-          <Text className="text-base font-bold text-gray-900 leading-tight">
-            {request.requesterName}
-          </Text>
+          <View className="flex-row items-center justify-between">
+            <Text className="text-base font-bold text-gray-900 leading-tight">
+              {request.requesterName}
+            </Text>
+            {request.createdAt && (
+              <Text className="text-xs text-gray-400">
+                {formatTimeAgo(request.createdAt)}
+              </Text>
+            )}
+          </View>
           <Text className="text-[13px] text-gray-500 mt-0.5">
             Từ số điện thoại
           </Text>

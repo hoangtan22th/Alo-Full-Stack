@@ -13,16 +13,15 @@ import {
   RefreshControl,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import {
-  ArrowLeftIcon,
-  CheckIcon,
-} from "react-native-heroicons/outline";
+import { ArrowLeftIcon, CheckIcon } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import api from "../../../services/api";
+import { useAuth } from "../../../contexts/AuthContext";
 
 export default function PersonalInfoScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user, refreshUser } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -44,14 +43,12 @@ export default function PersonalInfoScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchProfile();
-    }, []),
+    }, [user]),
   );
 
   const fetchProfile = async () => {
     try {
-      const res: any = await api.get("/auth/me");
-      const user = res;
-
+      if (!user) return;
       const initialDate = user.dateOfBirth
         ? new Date(user.dateOfBirth)
         : new Date();
@@ -65,7 +62,7 @@ export default function PersonalInfoScreen() {
         email: user.email || "",
       });
     } catch (err) {
-      console.log("Lỗi tải profile:", err);
+      console.log("Lỗi gán profile context:", err);
       Alert.alert("Lỗi", "Không thể lấy thông tin tài khoản.");
     } finally {
       setLoading(false);
@@ -74,7 +71,7 @@ export default function PersonalInfoScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchProfile();
+    await refreshUser();
     setRefreshing(false);
   }, []);
 
@@ -86,7 +83,10 @@ export default function PersonalInfoScreen() {
       Alert.alert("Lỗi", "Họ và tên không được để trống");
       return;
     }
-    if (accountInfo.fullName.trim().length < 1 || accountInfo.fullName.trim().length > 50) {
+    if (
+      accountInfo.fullName.trim().length < 1 ||
+      accountInfo.fullName.trim().length > 50
+    ) {
       Alert.alert("Lỗi", "Họ và tên nên từ 1 đến 50 ký tự");
       return;
     }
@@ -270,10 +270,14 @@ export default function PersonalInfoScreen() {
               <View className="bg-white rounded-t-3xl overflow-hidden pb-8">
                 <View className="flex-row justify-between items-center px-4 py-4 border-b border-gray-100">
                   <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                    <Text className="text-red-500 text-base font-medium">Hủy</Text>
+                    <Text className="text-red-500 text-base font-medium">
+                      Hủy
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={confirmIOSDate}>
-                    <Text className="text-blue-600 text-base font-bold">Xác nhận</Text>
+                    <Text className="text-blue-600 text-base font-bold">
+                      Xác nhận
+                    </Text>
                   </TouchableOpacity>
                 </View>
                 <View className="flex flex-col items-center justify-center pt-2">
@@ -294,7 +298,11 @@ export default function PersonalInfoScreen() {
           showDatePicker && (
             <DateTimePicker
               testID="dateTimePicker"
-              value={accountInfo.dateOfBirth ? new Date(accountInfo.dateOfBirth) : new Date()}
+              value={
+                accountInfo.dateOfBirth
+                  ? new Date(accountInfo.dateOfBirth)
+                  : new Date()
+              }
               mode="date"
               display="default"
               onChange={onChangeDate}
@@ -373,7 +381,9 @@ function InputField({
         {label}
       </Text>
       <TouchableOpacity activeOpacity={onPress ? 0.7 : 1} onPress={onPress}>
-        <View className={`bg-white px-4 py-4 rounded-2xl border-[1px] border-gray-200 ${!editable && !onPress ? "opacity-50" : ""}`}>
+        <View
+          className={`bg-white px-4 py-4 rounded-2xl border-[1px] border-gray-200 ${!editable && !onPress ? "opacity-50" : ""}`}
+        >
           <TextInput
             value={value}
             onChangeText={onChangeText}

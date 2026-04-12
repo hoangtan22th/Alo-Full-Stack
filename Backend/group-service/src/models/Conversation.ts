@@ -18,7 +18,10 @@ export interface IConversation extends Document {
   members: IMember[];
   mutedBy: string[];
   hiddenBy: string[];
+  joinRequests: { userId: string; requestedAt: Date }[];
   isBanned: boolean;
+  isApprovalRequired: boolean;
+  isLinkEnabled: boolean; // Add isLinkEnabled field
   // Các trường do timestamps tự sinh ra:
   createdAt: Date;
   updatedAt: Date;
@@ -47,6 +50,14 @@ const conversationSchema = new Schema<IConversation>(
 
     mutedBy: [{ type: String }],
     hiddenBy: [{ type: String }],
+    joinRequests: [
+      {
+        userId: { type: String, required: true },
+        requestedAt: { type: Date, default: Date.now },
+      },
+    ],
+    isApprovalRequired: { type: Boolean, default: false },
+    isLinkEnabled: { type: Boolean, default: false }, // Add isLinkEnabled schema logic
     isBanned: { type: Boolean, default: false },
   },
   {

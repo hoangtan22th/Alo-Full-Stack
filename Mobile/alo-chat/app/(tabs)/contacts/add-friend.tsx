@@ -21,31 +21,19 @@ import {
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import api from "../../../services/api";
+import { useAuth } from "../../../contexts/AuthContext";
 import {
   contactService,
   SearchFriendResponseDTO,
 } from "../../../services/contactService";
+import QRCode from "react-native-qrcode-svg";
 
 export default function AddFriendScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState<any>(null);
-
-  useFocusEffect(
-    useCallback(() => {
-      const fetchProfile = async () => {
-        try {
-          const res: any = await api.get("/auth/me");
-          setUser(res);
-        } catch (err) {
-          console.log("Lỗi tải profile:", err);
-        }
-      };
-      fetchProfile();
-    }, []),
-  );
 
   const handleSearch = async () => {
     if (!phoneNumber.trim()) {
@@ -80,7 +68,10 @@ export default function AddFriendScreen() {
   };
 
   return (
-    <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
+    <View
+      className="flex-1 bg-white"
+      style={{ paddingTop: insets.top, paddingBottom: insets.bottom + 40 }}
+    >
       {/* 1. Header */}
       <View className="flex-row justify-between items-center px-4 py-3 bg-white">
         <TouchableOpacity onPress={() => router.back()}>
@@ -119,13 +110,10 @@ export default function AddFriendScreen() {
           </Text>
 
           {/* QR Code */}
-          <View className="bg-white p-4 rounded-3xl shadow-sm">
-            <Image
-              // Dùng API tạo mã QR cho số điện thoại của user
-              source={{
-                uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${user?.phone || user?.userId || "AloApp"}`,
-              }}
-              className="w-40 h-40"
+          <View className="bg-white p-4 rounded-3xl shadow-sm items-center justify-center">
+            <QRCode
+              value={user?.phoneNumber || user?.phone || "0000000000"}
+              size={200}
             />
           </View>
         </View>
@@ -173,6 +161,7 @@ export default function AddFriendScreen() {
             icon={<QrCodeIcon size={24} color="#3b82f6" />} // Màu xanh dương
             title="Quét mã QR"
             showBorder={true}
+            onPress={() => router.push("/contacts/scan-qr")}
           />
           <ActionMenu
             icon={<UserPlusIcon size={24} color="#f97316" />} // Màu cam
@@ -200,14 +189,17 @@ function ActionMenu({
   icon,
   title,
   showBorder,
+  onPress,
 }: {
   icon: any;
   title: string;
   showBorder: boolean;
+  onPress?: () => void;
 }) {
   return (
     <TouchableOpacity
       className={`flex-row items-center justify-between py-5 ${showBorder ? "border-b border-gray-100" : ""}`}
+      onPress={onPress}
     >
       <View className="flex-row items-center">
         <View className="w-10 items-center justify-center">{icon}</View>

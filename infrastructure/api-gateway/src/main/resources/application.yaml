@@ -47,6 +47,11 @@ spring:
               uri: lb://CHATBOT-SERVICE
               predicates:
                 - Path=/api/v1/chatbot/**
+                
+            - id: realtime-service
+              uri: lb:ws://REALTIME-SERVICE
+              predicates:
+                - Path=/socket.io/**
 
 eureka:
   client:

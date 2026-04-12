@@ -18,4 +18,6 @@ public class FriendshipResponseDTO {
     // THÊM 2 TRƯỜNG NÀY VÀO ĐÂY NHÉ
     private String recipientName;
     private String recipientAvatar;
+
+    private String createdAt;
 }
