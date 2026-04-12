@@ -1,4 +1,3 @@
-// src/pages/contacts/FriendListPage.tsx
 import { useEffect, useState, useMemo } from "react";
 import axiosClient from "../../config/axiosClient";
 import AddFriendModal from "../../components/ui/AddFriendModal";
@@ -8,8 +7,13 @@ import {
   ArrowsUpDownIcon,
 } from "@heroicons/react/24/outline";
 import FriendProfileModal from "@/components/ui/FriendProfileModal";
+import { toast } from "sonner";
+import { socket } from "../../config/socketService";
 
 export default function FriendListPage() {
+  console.log(
+    "📍 [BƯỚC 4 - FriendListPage] Đã vào trang. Chuẩn bị chạy logic...",
+  );
   const [friends, setFriends] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddFriend, setShowAddFriend] = useState(false);
@@ -18,26 +22,24 @@ export default function FriendListPage() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
+  // State quản lý danh sách user đang online
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+
   const fetchFriends = async () => {
     try {
+      console.log(
+        "⏳ [BƯỚC 5 - FriendListPage] Bắt đầu gọi API lấy dữ liệu...",
+      );
       setLoading(true);
-
-      // 1. Lấy thông tin cá nhân của Tấn để xác định ID làm mốc so sánh
       const meRes: any = await axiosClient.get("/auth/me");
       const userData = meRes?.data || meRes;
       const myId = userData?.id || userData?._id;
 
-      // 2. Lấy danh sách bạn bè thô từ API
       const res: any = await axiosClient.get("/contacts/friends");
       const rawData = Array.isArray(res) ? res : res?.data || [];
 
-      // 3. Chuẩn hóa dữ liệu hiển thị:
-      // Luôn trích xuất thông tin của "đối phương" (người bạn) thay vì lấy mặc định requester
       const formattedFriends = rawData.map((f: any) => {
-        // Nếu Tấn là người gửi (requesterId trùng với myId) thì thông tin bạn bè nằm ở recipient
-        // Nếu Tấn là người nhận thì thông tin bạn bè nằm ở requester
         const isMeRequester = f.requesterId === myId;
-
         return {
           ...f,
           displayId: isMeRequester ? f.recipientId : f.requesterId,
@@ -45,27 +47,59 @@ export default function FriendListPage() {
           displayAvatar: isMeRequester ? f.recipientAvatar : f.requesterAvatar,
         };
       });
-
+      console.log(
+        "✅ [BƯỚC 6 - FriendListPage] Xử lý dữ liệu xong! Lưu vào State.",
+      );
       setFriends(formattedFriends);
     } catch (err) {
       console.error("Lỗi lấy danh sách bạn bè:", err);
     } finally {
+      console.log(
+        "🛑 [BƯỚC 7 - FriendListPage] Tắt trạng thái Loading (Loading = false).",
+      );
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    // 1. Load data
     fetchFriends();
+
+    // 2. Lắng nghe sự kiện Socket
+    if (socket) {
+      // Có người chấp nhận lời mời -> tự động chèn vào danh sách bạn bè
+      socket.on("FRIEND_ACCEPTED", (newFriendData) => {
+        setFriends((prev) => [...prev, newFriendData]);
+        toast.success(`${newFriendData.displayName} đã trở thành bạn bè!`);
+      });
+
+      // User vừa online
+      socket.on("USER_ONLINE", ({ userId }) => {
+        setOnlineUsers((prev) => [...new Set([...prev, userId])]);
+      });
+
+      // User vừa offline
+      socket.on("USER_OFFLINE", ({ userId }) => {
+        setOnlineUsers((prev) => prev.filter((id) => id !== userId));
+      });
+    }
+
+    // 3. Dọn dẹp
+    return () => {
+      if (socket) {
+        socket.off("FRIEND_ACCEPTED");
+        socket.off("USER_ONLINE");
+        socket.off("USER_OFFLINE");
+      }
+    };
   }, []);
 
   const handleOpenProfile = (friend: any) => {
-    // Luôn sử dụng displayId đã chuẩn hóa để mở đúng profile bạn bè
     setSelectedUserId(friend.displayId);
     setProfileModalOpen(true);
   };
 
   const groupedFriends = useMemo(() => {
-    // Thực hiện lọc và sắp xếp dựa trên tên đã chuẩn hóa (displayName)
     const filtered = friends.filter((f) =>
       (f.displayName || "").toLowerCase().includes(searchQuery.toLowerCase()),
     );
@@ -154,35 +188,44 @@ export default function FriendListPage() {
                   {letter} ————————
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {groupedFriends[letter].map((friend: any) => (
-                    <div
-                      key={friend.id}
-                      onClick={() => handleOpenProfile(friend)}
-                      className="flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-transparent hover:border-black hover:shadow-lg transition-all cursor-pointer group"
-                    >
-                      <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-100 bg-black shrink-0">
-                        <img
-                          src={friend.displayAvatar || "/avt-mac-dinh.jpg"}
-                          onError={(e) =>
-                            (e.currentTarget.src = "/avt-mac-dinh.jpg")
-                          }
-                          className="w-full h-full object-cover"
-                          alt=""
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-[14px] text-gray-900 truncate">
-                          {friend.displayName}
-                        </h3>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                          <p className="text-[10px] text-gray-400 font-bold uppercase">
-                            Trực tuyến
-                          </p>
+                  {groupedFriends[letter].map((friend: any) => {
+                    // Logic check online từ mảng onlineUsers của Socket
+                    const isOnline = onlineUsers.includes(friend.displayId);
+
+                    return (
+                      <div
+                        key={friend.id}
+                        onClick={() => handleOpenProfile(friend)}
+                        className="flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-transparent hover:border-black hover:shadow-lg transition-all cursor-pointer group"
+                      >
+                        <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-100 bg-black shrink-0 relative">
+                          <img
+                            src={friend.displayAvatar || "/avt-mac-dinh.jpg"}
+                            onError={(e) =>
+                              (e.currentTarget.src = "/avt-mac-dinh.jpg")
+                            }
+                            className="w-full h-full object-cover"
+                            alt=""
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-[14px] text-gray-900 truncate">
+                            {friend.displayName}
+                          </h3>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <div
+                              className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-green-500" : "bg-gray-300"}`}
+                            />
+                            <p
+                              className={`text-[10px] font-bold uppercase ${isOnline ? "text-gray-400" : "text-gray-300"}`}
+                            >
+                              {isOnline ? "Trực tuyến" : "Ngoại tuyến"}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))

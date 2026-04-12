@@ -1,45 +1,44 @@
+// src/config/axiosClient.ts
 import axios from "axios";
-import type { InternalAxiosRequestConfig, AxiosResponse } from "axios";
-import { useAuthStore } from "../store/useAuthStore"; 
+import { useAuthStore } from "../store/useAuthStore";
 
 const axiosClient = axios.create({
-  // Nhớ đổi thành link Tunnel nếu ông đang test mạng ngoài nhé
   baseURL: "http://localhost:8888/api/v1",
-  headers: {
-    "Content-Type": "application/json",
-  },
+  headers: { "Content-Type": "application/json" },
 });
 
 axiosClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    // LẤY TOKEN TỪ ZUSTAND STORE
+  (config) => {
     const token = useAuthStore.getState().token;
-
-    if (token && token.trim() !== "") {
+    if (token) {
       config.headers.set("Authorization", `Bearer ${token}`);
     }
     return config;
   },
-  (error: any) => Promise.reject(error),
+  (error) => Promise.reject(error),
 );
 
 axiosClient.interceptors.response.use(
-  (response: AxiosResponse) => {
+  (response) => {
     if (
-      response.data &&
-      response.data.status !== undefined &&
-      response.data.data !== undefined
+      response.data?.status !== undefined &&
+      response.data?.data !== undefined
     ) {
       return response.data.data;
     }
     return response;
   },
-  (error: any) => {
-    // Nếu Gateway báo lỗi 401 (Token sai hoặc hết hạn)
-    if (error.response && error.response.status === 401) {
-      console.error("Token hết hạn, bắt buộc đăng nhập lại!");
-      useAuthStore.getState().logout(); // Reset store
-      window.location.href = "/login"; // Đá văng ra trang login
+  (error) => {
+    if (error.response?.status === 401) {
+      console.error("Token invalid/expired!");
+
+      // BƯỚC QUAN TRỌNG: Xóa sạch token trong Zustand và LocalStorage
+      useAuthStore.getState().logout();
+
+      // CHỈ REDIRECT nếu không phải đang ở trang login để tránh loop
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   },
