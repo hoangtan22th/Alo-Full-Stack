@@ -20,6 +20,7 @@ import {
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { contactService } from "../../../services/contactService";
+import { useSocket } from "../../../contexts/SocketContext";
 
 import api from "../../../services/api";
 
@@ -286,18 +287,21 @@ export default function ContactsScreen() {
                   }
                 }}
               >
-                {phoneSearchResult.avatarUrl ? (
-                  <Image
-                    source={{ uri: phoneSearchResult.avatarUrl }}
-                    className="w-[52px] h-[52px] rounded-full"
-                  />
-                ) : (
-                  <View className="w-[52px] h-[52px] rounded-full bg-[#111827] items-center justify-center">
-                    <Text className="text-white font-bold text-lg tracking-widest">
-                      {getInitials(phoneSearchResult.fullName)}
-                    </Text>
-                  </View>
-                )}
+                <View className="relative">
+                  {phoneSearchResult.avatarUrl ? (
+                    <Image
+                      source={{ uri: phoneSearchResult.avatarUrl }}
+                      className="w-[52px] h-[52px] rounded-full"
+                    />
+                  ) : (
+                    <View className="w-[52px] h-[52px] rounded-full bg-[#111827] items-center justify-center">
+                      <Text className="text-white font-bold text-lg tracking-widest">
+                        {getInitials(phoneSearchResult.fullName)}
+                      </Text>
+                    </View>
+                  )}
+                  {/* Có thể lắp thêm online status sau này nếu muốn */}
+                </View>
 
                 <View className="ml-4 flex-1 justify-center">
                   <Text className="text-base font-bold text-gray-900 mb-0.5">
@@ -397,6 +401,15 @@ function ActionItem({
 // Component Từng người liên hệ
 function ContactItem({ contact }: { contact: any }) {
   const router = useRouter();
+  const { socket, onlineUsers } = useSocket();
+
+  const isOnline = onlineUsers[contact.userId]?.status === "online";
+
+  React.useEffect(() => {
+    if (socket && contact.userId && !onlineUsers[contact.userId]) {
+      socket.emit("CHECK_USER_STATUS", contact.userId);
+    }
+  }, [socket, contact.userId]);
 
   return (
     <TouchableOpacity
@@ -413,33 +426,33 @@ function ContactItem({ contact }: { contact: any }) {
       }}
     >
       {/* Avatar */}
-      {contact.avatar ? (
-        <Image
-          source={{ uri: contact.avatar }}
-          className="w-[52px] h-[52px] rounded-full"
-        />
-      ) : (
-        <View className="w-[52px] h-[52px] rounded-full bg-[#111827] items-center justify-center">
-          <Text className="text-white font-bold text-lg tracking-widest">
-            {contact.initials}
-          </Text>
-        </View>
-      )}
+      <View className="relative">
+        {contact.avatar ? (
+          <Image
+            source={{ uri: contact.avatar }}
+            className="w-[52px] h-[52px] rounded-full"
+          />
+        ) : (
+          <View className="w-[52px] h-[52px] rounded-full bg-[#111827] items-center justify-center">
+            <Text className="text-white font-bold text-lg tracking-widest">
+              {contact.initials}
+            </Text>
+          </View>
+        )}
+        {/* Dấu chấm xanh đè lên góc của Avatar nếu Online */}
+        {isOnline && (
+          <View className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full z-10" />
+        )}
+      </View>
 
       {/* Thông tin */}
       <View className="ml-4 flex-1 justify-center">
         <Text className="text-base font-bold text-gray-900 mb-0.5">
           {contact.name}
         </Text>
-        <View className="flex-row items-center">
-          {/* Dấu chấm xanh nếu đang online */}
-          {contact.isOnline && (
-            <View className="w-2 h-2 rounded-full bg-green-500 mr-1.5" />
-          )}
-          <Text className="text-[13px] text-gray-500" numberOfLines={1}>
-            {contact.status}
-          </Text>
-        </View>
+        <Text className="text-[13px] text-gray-500" numberOfLines={1}>
+          {isOnline ? "Đang hoạt động" : contact.status || "Chưa truy cập"}
+        </Text>
       </View>
     </TouchableOpacity>
   );

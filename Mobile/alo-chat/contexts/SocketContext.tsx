@@ -4,14 +4,21 @@ import { DeviceEventEmitter } from "react-native";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "./AuthContext";
 
+export type OnlineUser = {
+  status: "online" | "offline";
+  last_active?: number;
+};
+
 type SocketContextType = {
   socket: Socket | null;
   isConnected: boolean;
+  onlineUsers: Record<string, OnlineUser>;
 };
 
 const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
+  onlineUsers: {},
 });
 
 export function useSocket() {
@@ -22,6 +29,9 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<Record<string, OnlineUser>>(
+    {},
+  );
 
   useEffect(() => {
     let newSocket: Socket | null = null;
@@ -55,6 +65,51 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           newSocket.on("TYPING", (data) => {
             console.log("Có người đang gõ trong nhóm bạn tham gia: ", data);
           });
+
+          // Lắng nghe trạng thái Online/Offline chung của các User khác
+          newSocket.on(
+            "USER_ONLINE",
+            (data: { userId: string; status: "online" }) => {
+              setOnlineUsers((prev) => ({
+                ...prev,
+                [data.userId]: { status: data.status },
+              }));
+            },
+          );
+
+          newSocket.on(
+            "USER_OFFLINE",
+            (data: {
+              userId: string;
+              status: "offline";
+              last_active: number;
+            }) => {
+              setOnlineUsers((prev) => ({
+                ...prev,
+                [data.userId]: {
+                  status: data.status,
+                  last_active: data.last_active,
+                },
+              }));
+            },
+          );
+
+          newSocket.on(
+            "USER_STATUS_RESULT",
+            (data: {
+              userId: string;
+              status: "online" | "offline";
+              last_active?: number;
+            }) => {
+              setOnlineUsers((prev) => ({
+                ...prev,
+                [data.userId]: {
+                  status: data.status,
+                  last_active: data.last_active,
+                },
+              }));
+            },
+          );
 
           // Refresh Token handling
           const tokenRefreshListener = DeviceEventEmitter.addListener(
@@ -105,7 +160,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated]);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected }}>
+    <SocketContext.Provider value={{ socket, isConnected, onlineUsers }}>
       {children}
     </SocketContext.Provider>
   );
