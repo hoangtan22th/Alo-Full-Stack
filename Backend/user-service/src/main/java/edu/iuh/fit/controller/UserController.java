@@ -10,6 +10,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
@@ -21,6 +23,12 @@ public class UserController {
     @GetMapping("/{id}")
     public ResponseEntity<UserDto> getUserById(@PathVariable String id) {
         return ResponseEntity.ok(userService.getUserById(id));
+    }
+
+    // Lấy thông tin nhiều user qua IDs (Batch) để giảm tải
+    @PostMapping("/batch")
+    public ResponseEntity<List<UserDto>> getUsersByIds(@RequestBody List<String> ids) {
+        return ResponseEntity.ok(userService.getUsersByIds(ids));
     }
 
     // Cập nhật thông tin user

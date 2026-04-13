@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +23,13 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
         return UserDto.fromEntity(user);
+    }
+
+    @Override
+    public List<UserDto> getUsersByIds(List<String> ids) {
+        return userRepository.findAllById(ids).stream()
+                .map(UserDto::fromEntity)
+                .collect(Collectors.toList());
     }
 
     @Override

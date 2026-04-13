@@ -15,17 +15,14 @@ public class CorsConfig {
     public CorsWebFilter corsWebFilter() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // Cho phép Frontend React/Vite (dev) và Mobile gọi API
-        config.setAllowedOrigins(List.of(
-                "http://localhost:5173",   // React Vite dev
-                "http://localhost:3000",   // React CRA dev (nếu dùng)
-                "http://localhost:19006"   // Expo Mobile dev
-        ));
+        // Sử dụng AllowedOriginPatterns để cho phép tất cả các domain (kể cả wildcard)
+        // Điều này đặc biệt cần thiết khi allowCredentials = true
+        config.setAllowedOriginPatterns(List.of("*"));
 
         // Các HTTP method được phép
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"));
 
-        // Cho phép tất cả Header (bao gồm Authorization cho JWT)
+        // Cho phép tất cả Header (bao gồm Authorization, Content-Type, ...)
         config.setAllowedHeaders(List.of("*"));
 
         // Cho phép gửi Cookie/Credentials

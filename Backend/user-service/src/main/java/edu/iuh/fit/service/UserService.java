@@ -4,9 +4,11 @@ import edu.iuh.fit.dto.request.UserUpdateRequest;
 import edu.iuh.fit.dto.response.UserDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import java.util.List;
 
 public interface UserService {
     UserDto getUserById(String id);
+    List<UserDto> getUsersByIds(List<String> ids);
     UserDto updateUser(String id, UserUpdateRequest request);
     void deleteUser(String id); // Hard delete or ban user
     
