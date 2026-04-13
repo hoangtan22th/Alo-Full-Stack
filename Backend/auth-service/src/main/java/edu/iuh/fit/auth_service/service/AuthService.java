@@ -20,7 +20,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -34,34 +33,29 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
-    private final UserRepository userRepository;
+    private final AccountRepository accountRepository;
     private final UserSessionRepository sessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
     private final CookieUtil cookieUtil;
-    private final S3Service s3Service;
     private final org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
     private final EmailService emailService;
+    private final RabbitMQPublisher rabbitMQPublisher;
 
-    // Hằng số cho Brute-Force
     private static final int MAX_FAILED_ATTEMPTS = 5;
-    private static final long LOCK_TIME_DURATION = 15; // 15 Phút
+    private static final long LOCK_TIME_DURATION = 15;
 
     @Value("${google.client-id:YOUR_GOOGLE_CLIENT_ID_HERE}")
     protected String GOOGLE_CLIENT_ID;
-    
+
     @Transactional
-    public void sendRegistrationOtp(String email, String phoneNumber) {
-        if (userRepository.findByEmail(email).isPresent()) {
+    public void sendRegistrationOtp(String email) {
+        if (accountRepository.findByEmail(email).isPresent()) {
             throw new RuntimeException("Email đã được đăng ký");
-        }
-        if (userRepository.findByPhoneNumber(phoneNumber).isPresent()) {
-            throw new RuntimeException("Số điện thoại đã được đăng ký");
         }
 
         SecureRandom random = new SecureRandom();
         String otp = String.format("%06d", random.nextInt(1000000));
-
         String redisKey = "OTP_REG:" + email;
         stringRedisTemplate.opsForValue().set(redisKey, otp, 5, TimeUnit.MINUTES);
 
@@ -78,149 +72,144 @@ public class AuthService {
         if (savedOtp == null) {
             throw new RuntimeException("Mã OTP đã hết hạn hoặc chưa được yêu cầu");
         }
-
         if (!savedOtp.equals(request.otp())) {
             throw new RuntimeException("Mã OTP không chính xác");
         }
 
-        // Xóa Key khi đăng ký đúng để tránh bị dùng lại mã
         stringRedisTemplate.delete(redisKey);
 
-        if (userRepository.findByPhoneNumber(request.phoneNumber()).isPresent()) {
-            throw new RuntimeException("Số điện thoại đã được đăng ký");
-        }
-
-        User user = User.builder()
+        Account user = Account.builder()
                 .id(UUID.randomUUID().toString())
                 .email(request.email())
-                .phoneNumber(request.phoneNumber())
+                // Only auth fields
                 .password(passwordEncoder.encode(request.password()))
-                .fullName(request.fullName())
-                .authProvider(User.AuthProvider.LOCAL)
-                .gender(2)
-                .avatar("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_user_images/user_avt.png")
-                .coverImage("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg")
+                .authProvider(Account.AuthProvider.LOCAL)
+                .status(AccountStatus.ACTIVE)
                 .build();
-        userRepository.save(user);
+        accountRepository.save(user);
+
+        // Send RabbitMQ event to User Service so it can build UserProfile
+        rabbitMQPublisher.publishUserRegisteredEvent(
+                user.getId(), 
+                user.getEmail(), 
+                request.fullName(), 
+                null, 
+                "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_user_images/user_avt.png", 
+                "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg", 
+                2);
     }
 
-    // Trong AuthService.java
-
     public Map<String, String> login(LoginRequest request, HttpServletResponse response) {
-        // request.email() ở đây có thể là email hoặc số điện thoại
-        User user = userRepository.findByEmailOrPhoneNumber(request.email(), request.email())
+        Account user = accountRepository.findByEmailOrPhoneNumber(request.email(), request.email())
                 .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
 
         String lockKey = "USER_LOCK:" + user.getId();
         String attemptsKey = "FAILED_ATTEMPTS:" + user.getId();
 
-        // Kiểm tra xem User có đang trong thời gian phạt hay không
         if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(lockKey))) {
-            throw new UnauthorizedException("Tài khoản đang bị khóa tạm thời do sai quá nhiều lần. Vui lòng thử lại sau 15 phút.");
+            throw new UnauthorizedException("Tài khoản đang bị khóa tạm thời. Vui lòng thử lại sau 15 phút.");
+        }
+
+        if (user.getStatus() == AccountStatus.BANNED) {
+            throw new UnauthorizedException("Tài khoản này đã bị cấm khỏi hệ thống.");
         }
 
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
-            // Tăng số đếm
             Long attempts = stringRedisTemplate.opsForValue().increment(attemptsKey);
+            
+            // Also store failed attempts in DB
+            user.setFailedLoginAttempts((user.getFailedLoginAttempts() != null ? user.getFailedLoginAttempts() : 0) + 1);
+            
             if (attempts != null && attempts >= MAX_FAILED_ATTEMPTS) {
-                // Đạt ngưỡng cửa cấm: Set khóa cờ 15 phút
                 stringRedisTemplate.opsForValue().set(lockKey, "LOCKED", LOCK_TIME_DURATION, TimeUnit.MINUTES);
-                stringRedisTemplate.delete(attemptsKey); // Đếm lại từ đầu sau khi hết khóa
+                stringRedisTemplate.delete(attemptsKey);
+                
+                user.setStatus(AccountStatus.SUSPENDED);
+                user.setLockoutEnd(LocalDateTime.now().plusMinutes(LOCK_TIME_DURATION));
+                accountRepository.save(user);
+
                 throw new UnauthorizedException("Bạn đã nhập sai 5 lần. Tài khoản bị khóa 15 phút bảo vệ.");
             }
-            // Cho thời gian sống chu kỳ đếm sai là 1 Tiếng
             if (attempts != null && attempts == 1) {
                  stringRedisTemplate.expire(attemptsKey, 1, TimeUnit.HOURS);
             }
+            accountRepository.save(user);
             throw new UnauthorizedException("Sai mật khẩu. Bạn còn " + (Math.max(0, MAX_FAILED_ATTEMPTS - (attempts != null ? attempts : 1))) + " lần thử.");
         }
 
-        // Đăng nhập thành công -> Xóa hết tiền án tiền sự nhập sai
+        // Đăng nhập thành công -> Xóa attempts
         stringRedisTemplate.delete(attemptsKey);
+        user.setFailedLoginAttempts(0);
+        user.setStatus(AccountStatus.ACTIVE);
+        user.setLockoutEnd(null);
+        accountRepository.save(user);
 
         String deviceId = (request.deviceId() == null) ? "unknown" : request.deviceId();
-
         String sessionId = UUID.randomUUID().toString();
 
-        // 1. Tạo Token
         String accessToken = tokenService.generateAccessToken(user, sessionId);
         String refreshToken = tokenService.generateRefreshToken(user, deviceId);
-
-        // Lấy Token ID từ JWT để lưu vào DB (Dùng để logout sau này)
         String tokenId = tokenService.getTokenIdFromJWT(refreshToken);
 
-        // 2. Lưu Session vào MariaDB (Vì bạn đang ẩn Redis nên phải lưu vào DB để quản
-        // lý)
         UserSession session = UserSession.builder()
                 .id(sessionId)
-                .user(user)
+                .account(user)
                 .deviceId(deviceId)
                 .refreshTokenId(tokenId)
-                .ipAddress("127.0.0.1") // Có thể lấy từ request thực tế
+                .ipAddress("127.0.0.1")
                 .expiresAt(LocalDateTime.now().plusDays(7))
                 .build();
         sessionRepository.save(session);
-
-        // 3. Set Cookie
         cookieUtil.createHttpOnlyCookie(response, "refreshToken", refreshToken, 604800);
 
-        // Trả về cả 2 token (refreshToken cho Mobile lưu vào AsyncStorage)
         return Map.of("accessToken", accessToken, "refreshToken", refreshToken);
     }
 
-    // 1. API: Lấy Profile (Dựa trên userId từ JWT)
-    public User getProfile(String userId) {
-        return userRepository.findById(userId)
+    // 1. Dùng DTO fallback cho Profile vì thông tin này hằng ngày nằm trên User Service.
+    public UserResponse getProfile(String userId) {
+        Account acc = accountRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại"));
+        return UserResponse.fromEntity(acc); // Sẽ chỉ xuất những gì auth-service có.
     }
 
-    // 2. API: Logout (Xóa phiên đăng nhập hiện tại)
     @Transactional
     public void logout(String refreshTokenId) {
         sessionRepository.findByRefreshTokenId(refreshTokenId).ifPresent(session -> {
-            stringRedisTemplate.opsForValue().set("BLACKLIST_SESSION:" + session.getId(), "KICKED", 15, java.util.concurrent.TimeUnit.MINUTES);
+            stringRedisTemplate.opsForValue().set("BLACKLIST_SESSION:" + session.getId(), "KICKED", 15, TimeUnit.MINUTES);
             sessionRepository.delete(session);
         });
     }
 
-    // 3. API: Lấy danh sách thiết bị đang đăng nhập
     public List<UserSessionResponse> getActiveSessions(String userId, String currentSessionId) {
-        return sessionRepository.findByUserId(userId).stream()
+        return sessionRepository.findByAccountId(userId).stream() // Lưu ý cần đổi hàm repo
                 .map(s -> new UserSessionResponse(s.getId(), s.getDeviceId(), s.getIpAddress(), s.getCreatedAt(), s.getId().equals(currentSessionId)))
                 .collect(Collectors.toList());
     }
 
-    // 4. API: Đăng xuất từ xa (Xóa session theo ID)
     @Transactional
     public void terminateSession(String userId, String sessionId) {
         UserSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Session không tồn tại"));
 
-        if (!session.getUser().getId().equals(userId)) {
+        if (!session.getAccount().getId().equals(userId)) {
             throw new ForbiddenException("Bạn không có quyền!");
         }
-        stringRedisTemplate.opsForValue().set("BLACKLIST_SESSION:" + sessionId, "KICKED", 15, java.util.concurrent.TimeUnit.MINUTES);
+        stringRedisTemplate.opsForValue().set("BLACKLIST_SESSION:" + sessionId, "KICKED", 15, TimeUnit.MINUTES);
         sessionRepository.delete(session);
     }
 
-    // API: Đăng xuất tất cả các thiết bị KHÁC thiết bị hiện tại
     @Transactional
     public void terminateAllOtherSessions(String userId, String currentSessionId) {
-        List<UserSession> allSessions = sessionRepository.findByUserId(userId);
+        List<UserSession> allSessions = sessionRepository.findByAccountId(userId);
         for (UserSession session : allSessions) {
             if (!session.getId().equals(currentSessionId)) {
-                stringRedisTemplate.opsForValue().set("BLACKLIST_SESSION:" + session.getId(), "KICKED", 15, java.util.concurrent.TimeUnit.MINUTES);
+                stringRedisTemplate.opsForValue().set("BLACKLIST_SESSION:" + session.getId(), "KICKED", 15, TimeUnit.MINUTES);
                 sessionRepository.delete(session);
             }
         }
     }
 
-    /**
-     * Dùng Refresh Token để cấp lại Access Token mới.
-     * Kiểm tra Refresh Token còn hợp lệ và session còn tồn tại trong DB.
-     */
     public String refreshAccessToken(String refreshToken) {
-        // 1. Giải mã Refresh Token để lấy userId và tokenId
         String userId;
         String tokenId;
         try {
@@ -230,12 +219,10 @@ public class AuthService {
             throw new UnauthorizedException("Refresh Token không hợp lệ hoặc đã hết hạn");
         }
 
-        // 2. Kiểm tra session trong DB (đảm bảo chưa bị logout từ xa)
         UserSession session = sessionRepository.findByRefreshTokenId(tokenId)
                 .orElseThrow(() -> new UnauthorizedException("Phiên đăng nhập đã bị thu hồi"));
 
-        // 3. Lấy User và cấp Access Token mới
-        User user = userRepository.findById(userId)
+        Account user = accountRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
 
         return tokenService.generateAccessToken(user, session.getId());
@@ -246,94 +233,33 @@ public class AuthService {
     }
 
     public void clearSessionCookie(HttpServletResponse response) {
-        // Gọi đến CookieUtil của bạn
         cookieUtil.clearCookie(response, "refreshToken");
     }
 
-    @Transactional
-    public User updateProfile(String userId, UpdateProfileRequest request) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
-
-        // Cập nhật các thông tin (chỉ cập nhật nếu request có dữ liệu)
-        if (request.fullName() != null)
-            user.setFullName(request.fullName());
-        if (request.phoneNumber() != null)
-            user.setPhoneNumber(request.phoneNumber());
-        if (request.gender() != null)
-            user.setGender(request.gender());
-        if (request.dateOfBirth() != null)
-            user.setDateOfBirth(request.dateOfBirth());
-        if (request.email() != null && !request.email().isBlank())
-            user.setEmail(request.email());
-
-        return userRepository.save(user);
-    }
-
-    @Transactional
-    public User updateAvatarOrCover(String userId, org.springframework.web.multipart.MultipartFile file,
-            boolean isAvatar) throws java.io.IOException {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
-
-        // Lưu URL cũ để xóa sau khi upload mới thành công
-        String oldUrl = isAvatar ? user.getAvatar() : user.getCoverImage();
-
-        String folderName = isAvatar ? "alo_user_images" : "alo_cover_images";
-        String fileUrl = s3Service.uploadFile(file, folderName);
-
-        if (isAvatar) {
-            user.setAvatar(fileUrl);
-        } else {
-            user.setCoverImage(fileUrl);
-        }
-
-        User updatedUser = userRepository.save(user);
-
-        // Xóa ảnh cũ trên S3 nếu có, và ảnh cũ không phải là ảnh mặc định
-        if (oldUrl != null && oldUrl.startsWith("https://") 
-                && !oldUrl.equals("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_user_images/user_avt.png")
-                && !oldUrl.equals("https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg")) {
-            // Chạy async hoặc try-catch để nếu lỗi xóa s3 cũng không làm gián đoạn Flow
-            // chính
-            try {
-                s3Service.deleteFile(oldUrl);
-            } catch (Exception e) {
-                System.err.println("Không thể xóa ảnh cũ: " + oldUrl);
-            }
-        }
-
-        return updatedUser;
-    }
-
     public UserResponse searchByPhone(String phone) {
-        User user = userRepository.findByPhoneNumber(phone)
+        Account user = accountRepository.findByPhoneNumber(phone)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng với số điện thoại này"));
-
-        // Trả về DTO thay vì Entity User để bảo mật (không lộ password)
         return UserResponse.fromEntity(user);
     }
 
-    // Để bên Contact Service có thể lấy thông tin hàng loạt bạn bè
     public List<UserResponse> getUsersByIds(List<String> ids) {
-        return userRepository.findAllById(ids).stream()
+        return accountRepository.findAllById(ids).stream()
                 .map(UserResponse::fromEntity)
                 .collect(Collectors.toList());
     }
 
     @Transactional
     public void sendForgotPasswordOtp(String email) {
-        User user = userRepository.findByEmail(email)
+        Account user = accountRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Email không tồn tại trong hệ thống"));
 
         SecureRandom random = new SecureRandom();
         String otp = String.format("%06d", random.nextInt(1000000));
-
         String redisKey = "OTP_FORGOT:" + email;
         stringRedisTemplate.opsForValue().set(redisKey, otp, 5, TimeUnit.MINUTES);
 
         String subject = "Mã xác thực Khôi phục mật khẩu ALO";
-        String text = "Xin chào " + user.getFullName() + ",\n\n"
+        String text = "Xin chào,\n\n"
                 + "Bạn đã yêu cầu đặt lại mật khẩu. Mã OTP của bạn là: " + otp + "\n"
                 + "Mã này sẽ hết hạn trong vòng 5 phút.\n\n"
                 + "Nếu bạn không thực hiện yêu cầu này, vui lòng đổi mật khẩu càng sớm càng tốt để bảo vệ tài khoản.\n\n"
@@ -349,24 +275,21 @@ public class AuthService {
         if (savedOtp == null) {
             throw new RuntimeException("Mã OTP đã hết hạn hoặc chưa được yêu cầu");
         }
-
         if (!savedOtp.equals(request.otp())) {
             throw new RuntimeException("Mã OTP không chính xác");
         }
 
-        User user = userRepository.findByEmail(request.email())
+        Account user = accountRepository.findByEmail(request.email())
                 .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
 
         user.setPassword(passwordEncoder.encode(request.newPassword()));
-        userRepository.save(user);
-
-        // Xóa Key OTP
+        accountRepository.save(user);
         stringRedisTemplate.delete(redisKey);
     }
 
     @Transactional
     public void changePassword(String userId, ChangePasswordRequest request) {
-        User user = userRepository.findById(userId)
+        Account user = accountRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Người dùng không tồn tại"));
 
         if (!passwordEncoder.matches(request.oldPassword(), user.getPassword())) {
@@ -374,11 +297,10 @@ public class AuthService {
         }
 
         user.setPassword(passwordEncoder.encode(request.newPassword()));
-        userRepository.save(user);
+        accountRepository.save(user);
 
-        // Gửi email thông báo
         String subject = "Thông báo: Đổi mật khẩu thành công";
-        String text = "Xin chào " + user.getFullName() + ",\n\n"
+        String text = "Xin chào,\n\n"
                 + "Mật khẩu cho tài khoản ALO của bạn đã được thay đổi thành công.\n"
                 + "Nếu bạn không thực hiện hành động này, vui lòng thực hiện Khôi phục mật khẩu ngay lập tức.\n\n"
                 + "Trân trọng,\nĐội ngũ ALO";
@@ -388,18 +310,15 @@ public class AuthService {
     @Transactional
     public Map<String, String> loginWithGoogle(GoogleLoginRequest request, HttpServletResponse response) {
         try {
-            // 1. Cấu hình máy quét Token chính chủ của Google
             GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
                     .setAudience(Collections.singletonList(GOOGLE_CLIENT_ID))
                     .build();
 
-            // 2. Kiểm tra token có chuẩn của Google không
             GoogleIdToken idToken = verifier.verify(request.idToken());
             if (idToken == null) {
                 throw new UnauthorizedException("Token Google không hợp lệ hoặc đã hết hạn");
             }
 
-            // 3. Lấy thông tin User từ Google
             GoogleIdToken.Payload payload = idToken.getPayload();
             String email = payload.getEmail();
             String name = (String) payload.get("name");
@@ -409,30 +328,27 @@ public class AuthService {
                 throw new UnauthorizedException("Không thể lấy email từ tài khoản Google này");
             }
 
-            // 4. Kiểm tra User có trong DB chưa
-            User user = userRepository.findByEmail(email).orElse(null);
+            Account user = accountRepository.findByEmail(email).orElse(null);
 
             if (user == null) {
-                // NẾU CHƯA CÓ: Tự động tạo tài khoản mới
-                user = User.builder()
+                user = Account.builder()
                         .id(UUID.randomUUID().toString())
                         .email(email)
-                        .fullName(name)
-                        .avatar(pictureUrl)
-                        .authProvider(User.AuthProvider.GOOGLE)
-                        .password(passwordEncoder.encode(UUID.randomUUID().toString())) // Mật khẩu rác ngẫu nhiên
-                        .gender(2) // Mặc định là 'Khác'
+                        .authProvider(Account.AuthProvider.GOOGLE)
+                        .password(passwordEncoder.encode(UUID.randomUUID().toString()))
+                        .providerId(payload.getSubject())
                         .build();
-                user = userRepository.save(user);
+                user = accountRepository.save(user);
+                
+                rabbitMQPublisher.publishUserRegisteredEvent(user.getId(), email, name, "0000000000", pictureUrl, "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg", 2);
             } else {
-                // NẾU ĐÃ CÓ: Cập nhật lại provider nếu trước đó họ đăng ký tay (Account Linking)
-                if (user.getAuthProvider() == null || user.getAuthProvider() == User.AuthProvider.LOCAL) {
-                    user.setAuthProvider(User.AuthProvider.GOOGLE);
-                    userRepository.save(user);
+                if (user.getAuthProvider() == null || user.getAuthProvider() == Account.AuthProvider.LOCAL) {
+                    user.setAuthProvider(Account.AuthProvider.GOOGLE);
+                    user.setProviderId(payload.getSubject());
+                    accountRepository.save(user);
                 }
             }
 
-            // 5. Sinh JWT nội bộ & Quản lý Session (Giữ nguyên chuẩn của Alo-Full-Stack)
             String deviceId = (request.deviceId() == null) ? "Unknown Device" : request.deviceId();
             String sessionId = UUID.randomUUID().toString();
 
@@ -442,18 +358,15 @@ public class AuthService {
 
             UserSession session = UserSession.builder()
                     .id(sessionId)
-                    .user(user)
+                    .account(user)
                     .deviceId(deviceId)
                     .refreshTokenId(tokenId)
-                    .ipAddress("127.0.0.1") // Frontend có thể truyền thêm IP nếu cần
+                    .ipAddress("127.0.0.1")
                     .expiresAt(LocalDateTime.now().plusDays(7))
                     .build();
             sessionRepository.save(session);
-
-            // Set Cookie
             cookieUtil.createHttpOnlyCookie(response, "refreshToken", refreshToken, 604800);
 
-            // 6. Nhả Token của hệ thống mình cho Frontend xài
             return Map.of("accessToken", accessToken, "refreshToken", refreshToken);
 
         } catch (Exception e) {

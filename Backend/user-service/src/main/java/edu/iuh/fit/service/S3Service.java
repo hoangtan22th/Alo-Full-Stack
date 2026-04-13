@@ -1,4 +1,4 @@
-package edu.iuh.fit.auth_service.service;
+package edu.iuh.fit.service;
 
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
