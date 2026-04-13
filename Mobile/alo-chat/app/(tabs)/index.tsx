@@ -16,6 +16,7 @@ import {
   MagnifyingGlassIcon,
   EllipsisHorizontalIcon,
   QrCodeIcon,
+  XMarkIcon,
 } from "react-native-heroicons/outline";
 import { UserGroupIcon } from "react-native-heroicons/outline"; // Thêm biểu tượng cho nhóm
 import { useRouter } from "expo-router";
@@ -34,6 +35,11 @@ export default function MessagesScreen() {
   const [activeUsers, setActiveUsers] = useState(activeUsersData);
   const [conversations, setConversations] = useState<any[]>(conversationsData);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredConversations = conversations.filter((chat) =>
+    chat.name?.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
   useEffect(() => {
     const fetchGroups = async () => {
@@ -188,13 +194,23 @@ export default function MessagesScreen() {
 
       {/* Search Bar */}
       <View className="px-4 mb-6">
-        <View className="flex-row items-center bg-gray-100 rounded-full px-4 py-3">
+        <View className="flex-row items-center bg-gray-100 rounded-full px-4">
           <MagnifyingGlassIcon size={20} color="#9ca3af" />
           <TextInput
-            placeholder="Search conversations"
-            className="flex-1 ml-2 text-base text-gray-800"
+            placeholder="Tìm kiếm đoạn chat..."
+            className="flex-1 ml-2 text-gray-800 h-14 pt-1"
             placeholderTextColor="#9ca3af"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery("")}
+              className="pl-2 pr-1"
+            >
+              <XMarkIcon size={20} color="#9ca3af" />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -236,7 +252,7 @@ export default function MessagesScreen() {
 
         {/* Conversations List */}
         <View className="px-4 pb-32">
-          {conversations.map((chat) => (
+          {filteredConversations.map((chat) => (
             <TouchableOpacity
               key={chat.id}
               className="flex-row items-center mb-6"
