@@ -1,30 +1,59 @@
+// src/config/axiosClient.ts
 import axios from "axios";
 import type { InternalAxiosRequestConfig, AxiosResponse } from "axios";
-import { useAuthStore } from "../store/useAuthStore"; 
+
+// ✅ QUAN TRỌNG: Thay đổi baseURL nếu backend chạy port khác
+const BASE_URL = "http://localhost:8888/api/v1"; // ← Đảm bảo đúng port
 
 const axiosClient = axios.create({
-  // Nhớ đổi thành link Tunnel nếu ông đang test mạng ngoài nhé
-  baseURL: "http://localhost:8888/api/v1",
+  baseURL: BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },
+  timeout: 30000, // Tăng timeout lên 30s
+  withCredentials: false, // Tắt credentials nếu không cần
 });
 
+// Log mỗi request
 axiosClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // LẤY TOKEN TỪ ZUSTAND STORE
-    const token = useAuthStore.getState().token;
+    const token = localStorage.getItem("accessToken");
 
-    if (token && token.trim() !== "") {
+    // Log chi tiết request
+    console.log("🚀 [REQUEST]", {
+      url: config.baseURL + config.url,
+      method: config.method,
+      hasToken: !!token,
+      tokenPreview: token ? `${token.substring(0, 20)}...` : null,
+    });
+
+    if (
+      token &&
+      token !== "undefined" &&
+      token !== "null" &&
+      token.trim() !== ""
+    ) {
       config.headers.set("Authorization", `Bearer ${token}`);
     }
+
     return config;
   },
-  (error: any) => Promise.reject(error),
+  (error) => {
+    console.error("❌ Request Error:", error);
+    return Promise.reject(error);
+  },
 );
 
+// Log response chi tiết
 axiosClient.interceptors.response.use(
   (response: AxiosResponse) => {
+    console.log("✅ [RESPONSE]", {
+      url: response.config.url,
+      status: response.status,
+      data: response.data,
+    });
+
+    // Xử lý response theo cấu trúc backend của bạn
     if (
       response.data &&
       response.data.status !== undefined &&
@@ -32,15 +61,30 @@ axiosClient.interceptors.response.use(
     ) {
       return response.data.data;
     }
-    return response;
+    return response.data;
   },
   (error: any) => {
-    // Nếu Gateway báo lỗi 401 (Token sai hoặc hết hạn)
-    if (error.response && error.response.status === 401) {
-      console.error("Token hết hạn, bắt buộc đăng nhập lại!");
-      useAuthStore.getState().logout(); // Reset store
-      window.location.href = "/login"; // Đá văng ra trang login
+    // Log chi tiết lỗi
+    console.error("❌ [RESPONSE ERROR]", {
+      url: error.config?.url,
+      method: error.config?.method,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      message: error.message,
+      code: error.code,
+      data: error.response?.data,
+    });
+
+    // Xử lý các loại lỗi
+    if (error.code === "ERR_NETWORK") {
+      console.error("⚠️ KHÔNG THỂ KẾT NỐI BACKEND!");
+      console.error(`   → Đang cố gắng kết nối tới: ${BASE_URL}`);
+      console.error("   → Hãy kiểm tra:");
+      console.error("     1. Backend có đang chạy không?");
+      console.error("     2. Port có đúng không? (hiện tại: 8888)");
+      console.error("     3. Có CORS error không? (xem Console)");
     }
+
     return Promise.reject(error);
   },
 );

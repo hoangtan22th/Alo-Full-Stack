@@ -2,16 +2,13 @@
 import {
   XMarkIcon,
   UserPlusIcon,
-  ArrowPathIcon,
-  CheckIcon,
   TrashIcon,
-  ChatBubbleLeftIcon,
-  PhoneIcon,
   UserGroupIcon,
   ShareIcon,
   NoSymbolIcon,
   ExclamationTriangleIcon,
   ChevronRightIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { useState, useEffect } from "react";
 import axiosClient from "../../config/axiosClient";
@@ -30,12 +27,9 @@ export default function FriendProfileModal({
 
   useEffect(() => {
     if (isOpen && userId) {
-      const handleEsc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-      window.addEventListener("keydown", handleEsc);
-      document.body.style.overflow = "hidden";
       fetchUserData();
+      document.body.style.overflow = "hidden";
       return () => {
-        window.removeEventListener("keydown", handleEsc);
         document.body.style.overflow = "unset";
       };
     }
@@ -53,13 +47,13 @@ export default function FriendProfileModal({
     }
   };
 
-  // Logic: Kết bạn
+  // --- HÀM THAO TÁC API ---
   const handleAddFriend = async () => {
     setActionLoading(true);
     try {
       await axiosClient.post("/contacts/request", { recipientId: userId });
       toast.success("Đã gửi lời mời kết bạn!");
-      if (onActionSuccess) onActionSuccess();
+      onActionSuccess?.();
       onClose();
     } catch (err) {
       toast.error("Lỗi khi gửi lời mời");
@@ -68,53 +62,37 @@ export default function FriendProfileModal({
     }
   };
 
-  // Logic: Thu hồi lời mời
   const handleRevoke = async () => {
     setActionLoading(true);
     try {
       await axiosClient.delete(`/contacts/request/revoke/${userId}`);
       toast.success("Đã thu hồi lời mời");
-      if (onActionSuccess) onActionSuccess();
+      onActionSuccess?.();
       onClose();
     } catch (err) {
-      toast.error("Không thể thu hồi lời mời");
+      toast.error("Không thể thu hồi");
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Thực thi xóa thật (gọi API)
-  const executeRemoveFriend = async () => {
+  const handleAccept = async () => {
     setActionLoading(true);
     try {
-      await axiosClient.delete(`/contacts/friend/${userId}`);
-      toast.success("Đã xóa khỏi danh sách bạn bè");
-      if (onActionSuccess) onActionSuccess();
+      await axiosClient.put(`/contacts/${userId}/accept`);
+      toast.success("Đã trở thành bạn bè!");
+      onActionSuccess?.();
       onClose();
     } catch (err) {
-      toast.error("Lỗi khi xóa bạn bè");
+      toast.error("Lỗi khi chấp nhận");
     } finally {
       setActionLoading(false);
     }
-  };
-
-  // Gọi Toast Action của Sonner thay vì window.confirm
-  const handleRemoveFriend = () => {
-    toast("Xác nhận hủy kết bạn", {
-      description: `Bạn có chắc muốn xóa ${userData?.fullName || "người này"}?`,
-      action: {
-        label: "Xác nhận xóa",
-        onClick: () => executeRemoveFriend(),
-      },
-      cancel: {
-        label: "Đóng",
-        onClick: () => {},
-      },
-    });
   };
 
   if (!isOpen) return null;
 
+  // Component phụ cho dòng thông tin
   const InfoRow = ({ label, value }: any) => (
     <div className="flex py-2.5 border-b border-gray-50 last:border-0 text-[13px]">
       <span className="w-24 text-gray-400 font-medium">{label}</span>
@@ -122,6 +100,7 @@ export default function FriendProfileModal({
     </div>
   );
 
+  // Component phụ cho các nút tùy chọn ở dưới
   const ActionItem = ({
     icon: Icon,
     label,
@@ -151,6 +130,7 @@ export default function FriendProfileModal({
         onClick={(e) => e.stopPropagation()}
         className="bg-white w-full max-w-sm h-auto max-h-[85vh] flex flex-col rounded-[24px] shadow-2xl overflow-hidden relative animate-in slide-in-from-bottom-10"
       >
+        {/* Header */}
         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
           <h2 className="text-[14px] font-black text-gray-900 uppercase tracking-tight">
             Hồ sơ người dùng
@@ -174,7 +154,6 @@ export default function FriendProfileModal({
               <div className="w-20 h-20 rounded-full border-4 border-white overflow-hidden bg-black shadow-lg">
                 <img
                   src={userData?.avatar || "/avt-mac-dinh.jpg"}
-                  onError={(e) => (e.currentTarget.src = "/avt-mac-dinh.jpg")}
                   className="w-full h-full object-cover"
                   alt=""
                 />
@@ -187,7 +166,7 @@ export default function FriendProfileModal({
               {userData?.fullName || "Đang tải..."}
             </h1>
 
-            {/* Khu vực nút bấm chính */}
+            {/* ✅ KHU VỰC NÚT BẤM CHÍNH ĐÃ FIX LOGIC */}
             <div className="mt-4 space-y-2">
               {relationStatus === "ACCEPTED" ? (
                 <div className="flex gap-2">
@@ -198,7 +177,8 @@ export default function FriendProfileModal({
                     Nhắn tin
                   </button>
                 </div>
-              ) : relationStatus === "YOU_SENT_REQUEST" ? (
+              ) : relationStatus === "I_SENT_REQUEST" ? (
+                // ✅ HIỆN NÚT HUỶ KHI ÔNG GỬI ĐI
                 <button
                   onClick={handleRevoke}
                   disabled={actionLoading}
@@ -210,24 +190,22 @@ export default function FriendProfileModal({
                   Thu hồi lời mời
                 </button>
               ) : relationStatus === "THEY_SENT_REQUEST" ? (
-                <div className="flex flex-col gap-2">
-                  <p className="text-[11px] text-center font-bold text-blue-600 uppercase mb-1">
-                    Người này đã gửi lời mời cho bạn
-                  </p>
-                  <div className="flex gap-2">
-                    <button className="flex-1 bg-black text-white py-2 rounded-xl font-bold text-xs">
-                      Chấp nhận
-                    </button>
-                    <button className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-xl font-bold text-xs">
-                      Từ chối
-                    </button>
-                  </div>
+                // ✅ HIỆN CHẤP NHẬN/TỪ CHỐI KHI HỌ GỬI TỚI
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAccept}
+                    className="flex-1 bg-black text-white py-2.5 rounded-xl font-bold text-xs"
+                  >
+                    Chấp nhận
+                  </button>
+                  <button className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl font-bold text-xs">
+                    Từ chối
+                  </button>
                 </div>
               ) : (
                 <button
                   onClick={handleAddFriend}
-                  disabled={actionLoading}
-                  className="w-full bg-black text-white py-2.5 rounded-xl font-bold text-xs hover:bg-neutral-800 transition shadow-md flex justify-center items-center gap-2"
+                  className="w-full bg-black text-white py-2.5 rounded-xl font-bold text-xs flex justify-center items-center gap-2"
                 >
                   <UserPlusIcon className="w-4 h-4" /> Kết bạn ngay
                 </button>
@@ -236,6 +214,7 @@ export default function FriendProfileModal({
 
             <div className="h-[1px] bg-gray-50 my-6" />
 
+            {/* Thông tin cá nhân */}
             <div className="space-y-0.5">
               <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">
                 Thông tin cá nhân
@@ -257,6 +236,7 @@ export default function FriendProfileModal({
 
             <div className="h-[1px] bg-gray-50 my-6" />
 
+            {/* ✅ TẤT CẢ CÁC NÚT DƯỚI NÀY TUI ĐÃ TRẢ LẠI ĐỦ CHO ÔNG */}
             <div className="space-y-0.5">
               <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-1">
                 Tùy chọn bạn bè
@@ -266,14 +246,11 @@ export default function FriendProfileModal({
               <ActionItem icon={NoSymbolIcon} label="Chặn người này" />
               <ActionItem icon={ExclamationTriangleIcon} label="Báo xấu" />
 
-              {/* Nút Xóa bạn bè được đẩy xuống cuối cùng */}
               {relationStatus === "ACCEPTED" && (
                 <ActionItem
                   icon={TrashIcon}
                   label="Xóa khỏi danh sách bạn bè"
                   color="text-red-500"
-                  disabled={actionLoading}
-                  onClick={handleRemoveFriend}
                 />
               )}
             </div>

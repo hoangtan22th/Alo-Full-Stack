@@ -167,6 +167,7 @@ export default function GroupsScreen() {
                         name: group.name,
                         avatar: group.avatar,
                         membersCount: group.subtitle.replace(" thành viên", ""),
+                        isGroup: "true",
                       },
                     });
                   }}
