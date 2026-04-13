@@ -749,7 +749,7 @@ export default function GroupListPage() {
 
       try {
         const response: any = await axiosClient.post(
-          "/users/batch",
+          "/users/by-ids",
           missingUserIds,
         );
         const data = response?.data || response;

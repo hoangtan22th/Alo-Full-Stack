@@ -4,15 +4,24 @@ import edu.iuh.fit.dto.request.UserUpdateRequest;
 import edu.iuh.fit.dto.response.UserDto;
 import edu.iuh.fit.entity.UserProfile;
 import edu.iuh.fit.repository.UserProfileRepository;
+import edu.iuh.fit.service.S3Service;
 import edu.iuh.fit.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
+
+    private static final String DEFAULT_AVATAR_URL = "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_user_images/user_avt.png";
+    private static final String DEFAULT_COVER_URL   = "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg";
 
     private final UserProfileRepository userProfileRepository;
     private final S3Service s3Service;
@@ -22,13 +31,6 @@ public class UserServiceImpl implements UserService {
         UserProfile user = userProfileRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("UserProfile not found with id: " + id));
         return UserDto.fromEntity(user);
-    }
-
-    @Override
-    public List<UserDto> getUsersByIds(List<String> ids) {
-        return userRepository.findAllById(ids).stream()
-                .map(UserDto::fromEntity)
-                .collect(Collectors.toList());
     }
 
     @Override
@@ -84,7 +86,8 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new RuntimeException("UserProfile not found with id: " + id));
 
         String oldUrl = isAvatar ? user.getAvatarUrl() : user.getCoverUrl();
-        if (oldUrl != null && !oldUrl.isEmpty()) {
+        boolean isDefault = DEFAULT_AVATAR_URL.equals(oldUrl) || DEFAULT_COVER_URL.equals(oldUrl);
+        if (oldUrl != null && !oldUrl.isEmpty() && !isDefault) {
             s3Service.deleteFile(oldUrl);
         }
 

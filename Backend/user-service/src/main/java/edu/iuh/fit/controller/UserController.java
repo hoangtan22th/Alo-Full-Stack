@@ -27,12 +27,6 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id)));
     }
 
-    // Lấy thông tin nhiều user qua IDs (Batch) để giảm tải
-    @PostMapping("/batch")
-    public ResponseEntity<List<UserDto>> getUsersByIds(@RequestBody List<String> ids) {
-        return ResponseEntity.ok(userService.getUsersByIds(ids));
-    }
-
     // Cập nhật thông tin user
     // Lấy thông tin cá nhân của người dùng đang đăng nhập
     @GetMapping("/me")

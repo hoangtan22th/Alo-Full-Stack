@@ -223,9 +223,12 @@ export default function FriendProfileModal({
               <InfoRow
                 label="Giới tính"
                 value={
-                  { 0: "Nam", 1: "Nữ", 2: "Khác" }[
-                    userData?.gender as 0 | 1 | 2
-                  ] || "Bảo mật"
+                  ({
+                    MALE: "Nam",
+                    FEMALE: "Nữ",
+                    OTHER: "Khác",
+                    PREFER_NOT_TO_SAY: "Khác",
+                  } as Record<string, string>)[userData?.gender] || "Bảo mật"
                 }
               />
               <InfoRow label="Ngày sinh" value="••/••/••••" />

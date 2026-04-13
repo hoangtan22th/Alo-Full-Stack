@@ -4,10 +4,15 @@ import { persist } from "zustand/middleware";
 export interface User {
   id: string;
   fullName: string;
+  firstName?: string;
+  lastName?: string;
   avatar: string;
+  coverImage?: string;
   email: string;
   phoneNumber: string;
-  gender: number;
+  gender: string; // "MALE" | "FEMALE" | "OTHER" | "PREFER_NOT_TO_SAY"
+  bio?: string;
+  dateOfBirth?: string;
 }
 
 interface AuthState {
@@ -56,9 +61,10 @@ export const useAuthStore = create<AuthState>()(
       fetchProfile: async () => {
         try {
           const { default: api } = await import("../services/api");
-          const res = await api.get("/auth/me");
+          // user-service /users/me trả về đầy đủ profile (fullName, avatar, coverImage...)
+          const res = await api.get("/users/me");
           // API interceptor đã unwrap response.data.data,
-          // nên res có thể là user object trực tiếp, hoặc vẫn là { data: user }
+          // nên res có thể là user object trực tiếp
           const userData = (res as any)?.id || (res as any)?._id
             ? res  // res đã là user object
             : (res as any)?.data?.data || (res as any)?.data || res;

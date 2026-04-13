@@ -91,8 +91,8 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const fetchUserData = async () => {
     try {
       setLoading(true);
-      const res: any = await axiosClient.get("/auth/me");
-      const userData = res?.data || res;
+      // user-service trả về đầy đủ profile (fullName, avatar, coverImage, gender...)
+      const userData: any = await axiosClient.get("/users/me");
 
       if (userData) {
         setFullName(userData.fullName || "");
@@ -101,10 +101,12 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         setAvatarUrl(userData.avatar || "/avt-mac-dinh.jpg");
         setCoverImageUrl(userData.coverImage || "/black.jpg");
 
-        const genderMap: Record<number, Gender> = {
-          1: "Nam",
-          0: "Nữ",
-          2: "Khác",
+        // gender từ user-service là string enum: "MALE" | "FEMALE" | "OTHER"
+        const genderMap: Record<string, Gender> = {
+          MALE: "Nam",
+          FEMALE: "Nữ",
+          OTHER: "Khác",
+          PREFER_NOT_TO_SAY: "Khác",
         };
         setGender(genderMap[userData.gender] || "Nam");
       }
@@ -140,19 +142,19 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
     setLoading(true);
     try {
-      const genderRevMap = { Nam: 0, Nữ: 1, Khác: 2 };
+      // gender -> số nguyên theo thứ tự enum backend: MALE=0, FEMALE=1, OTHER=2
+      const genderRevMap: Record<Gender, number> = { Nam: 0, Nữ: 1, Khác: 2 };
 
-      await axiosClient.put("/auth/me", {
+      await axiosClient.put("/users/me", {
         fullName,
         gender: genderRevMap[gender],
         phoneNumber: phone,
-        email,
       });
 
       if (avatarFile) {
         const formData = new FormData();
         formData.append("file", avatarFile);
-        await axiosClient.post("/auth/me/avatar", formData, {
+        await axiosClient.post("/users/me/avatar", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
       }
@@ -160,13 +162,13 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       if (coverFile) {
         const formData = new FormData();
         formData.append("file", coverFile);
-        await axiosClient.post("/auth/me/cover", formData, {
+        await axiosClient.post("/users/me/cover", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
       }
 
       toast.success("Cập nhật thành công!", {
-        description: "Thông tin của ông đã được lưu.",
+        description: "Thông tin của bạn đã được lưu.",
       });
       setIsEditing(false);
       setAvatarFile(null);

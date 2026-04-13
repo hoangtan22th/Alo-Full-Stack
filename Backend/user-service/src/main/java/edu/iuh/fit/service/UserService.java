@@ -18,6 +18,4 @@ public interface UserService {
     Page<UserDto> searchUsersDynamic(String fullName, String email, String phoneNumber, Pageable pageable);
 
     UserDto updateAvatarOrCover(String id, org.springframework.web.multipart.MultipartFile file, boolean isAvatar) throws java.io.IOException;
-
-    List<UserDto> getUsersByIds(java.util.List<String> ids);
 }
