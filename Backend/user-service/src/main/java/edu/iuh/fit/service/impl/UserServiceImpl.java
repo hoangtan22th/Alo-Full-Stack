@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import edu.iuh.fit.service.S3Service;
 import java.io.IOException;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -79,13 +80,11 @@ public class UserServiceImpl implements UserService {
         UserProfile user = userProfileRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("UserProfile not found with id: " + id));
 
-        // Xóa ảnh cũ trên S3 (tránh tốn dung lượng)
         String oldUrl = isAvatar ? user.getAvatarUrl() : user.getCoverUrl();
         if (oldUrl != null && !oldUrl.isEmpty()) {
             s3Service.deleteFile(oldUrl);
         }
 
-        // Upload ảnh mới
         String folderName = isAvatar ? "avatars" : "covers";
         String newUrl = s3Service.uploadFile(file, folderName);
 
@@ -96,5 +95,12 @@ public class UserServiceImpl implements UserService {
         }
 
         return UserDto.fromEntity(userProfileRepository.save(user));
+    }
+
+    @Override
+    public List<UserDto> getUsersByIds(List<String> ids) {
+        return userProfileRepository.findAllById(ids).stream()
+                .map(UserDto::fromEntity)
+                .toList();
     }
 }

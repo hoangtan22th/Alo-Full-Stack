@@ -5,6 +5,8 @@ import edu.iuh.fit.dto.response.UserDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
+
 public interface UserService {
     UserDto getUserById(String id);
     UserDto updateUser(String id, UserUpdateRequest request);
@@ -14,4 +16,6 @@ public interface UserService {
     Page<UserDto> searchUsersDynamic(String fullName, String email, String phoneNumber, Pageable pageable);
 
     UserDto updateAvatarOrCover(String id, org.springframework.web.multipart.MultipartFile file, boolean isAvatar) throws java.io.IOException;
+
+    List<UserDto> getUsersByIds(java.util.List<String> ids);
 }
