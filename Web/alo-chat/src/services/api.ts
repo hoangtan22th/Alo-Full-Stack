@@ -1,7 +1,11 @@
-import axios from "axios";
-import { useAuthStore } from "../store/useAuthStore"; // Giả định bạn có store này
+import axios, { type InternalAxiosRequestConfig } from "axios";
+import { useAuthStore } from "../store/useAuthStore";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8888/api/v1";
+
+interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -13,15 +17,12 @@ const api = axios.create({
 
 // Request interceptor
 api.interceptors.request.use(
-  (config) => {
-    // 1. Lấy token từ Zustand thay vì localStorage trực tiếp (tuỳ cấu hình)
-    // const { accessToken } = useAuthStore.getState();
-
-    // Hoặc lấy từ localStorage nếu bạn persist store
-    const accessToken = localStorage.getItem("accessToken");
+  (config: CustomAxiosRequestConfig) => {
+    // Luôn lấy token mới nhất từ store
+    const { accessToken } = useAuthStore.getState();
 
     console.log("🚀 [REQUEST]", {
-      url: config.baseURL + config.url,
+      url: config.baseURL + (config.url || ""),
       method: config.method,
       hasToken: !!accessToken,
     });
@@ -45,7 +46,7 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
-    const originalRequest = error.config;
+    const originalRequest = error.config as CustomAxiosRequestConfig;
 
     // Lỗi mạng
     if (error.code === "ERR_NETWORK") {
@@ -54,11 +55,16 @@ api.interceptors.response.use(
     }
 
     // Xử lý hết hạn token (401)
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry
+    ) {
       originalRequest._retry = true;
 
       try {
-        const refreshToken = localStorage.getItem("refreshToken");
+        const { refreshToken, updateTokens, logout } = useAuthStore.getState();
+
         if (!refreshToken) {
           throw new Error("No refresh token available");
         }
@@ -71,35 +77,22 @@ api.interceptors.response.use(
         const { accessToken, refreshToken: newRefreshToken } =
           response.data?.data || response.data;
 
-        // Lưu vào localStorage
-        localStorage.setItem("accessToken", accessToken);
-        if (newRefreshToken) {
-          localStorage.setItem("refreshToken", newRefreshToken);
-        }
-
-        // Cập nhật lại vào Zustand store nếu có hàm setUser/token
-        // useAuthStore.getState().setTokens({ accessToken, refreshToken: newRefreshToken || refreshToken });
+        // Cập nhật lại vào Zustand store
+        updateTokens(accessToken, newRefreshToken || refreshToken);
 
         // Cập nhật token cho request cũ và gửi lại
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        if (originalRequest.headers) {
+          originalRequest.headers.set("Authorization", `Bearer ${accessToken}`);
+        }
         return api(originalRequest);
       } catch (refreshError) {
         console.warn(
           "⚠️ Refresh token thất bại hoặc hết hạn, vui lòng đăng nhập lại.",
         );
 
-        // Clear local storage
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-
-        // Reset Zustand store
-        const { logout } = useAuthStore.getState() as any;
-        if (typeof logout === "function") {
-          logout();
-        } else {
-          // fallback
-          window.location.href = "/login";
-        }
+        // Gọi hàm logout trong store để dọn dẹp sạch sẽ
+        useAuthStore.getState().logout();
+        window.location.href = "/login"; // Force redirect
 
         return Promise.reject(refreshError);
       }
