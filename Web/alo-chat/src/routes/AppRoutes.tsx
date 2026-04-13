@@ -12,6 +12,7 @@ import ChatPage from "@/pages/chat/ChatPage";
 // IMPORT THÊM SIDEBAR ĐỂ GẮN VÀO TRANG CHAT
 import Sidebar from "@/components/ui/Sidebar"; // Chú ý kiểm tra lại đường dẫn này cho đúng với máy ông nhé
 import GroupInvitePage from "@/pages/contacts/GroupInvitePage";
+import FriendSentRequestPage from "@/pages/contacts/FriendSentRequestPage";
 
 export default function AppRoutes() {
   return (
@@ -31,6 +32,7 @@ export default function AppRoutes() {
           <Route index element={<Navigate to="friends" replace />} />
           <Route path="friends" element={<FriendListPage />} />
           <Route path="requests" element={<FriendRequestPage />} />
+          <Route path="sent-requests" element={<FriendSentRequestPage />} />
           <Route path="groups" element={<GroupListPage />} />
           <Route path="group-invites" element={<GroupInvitePage />} />
         </Route>

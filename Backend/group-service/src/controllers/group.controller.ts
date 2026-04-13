@@ -399,17 +399,11 @@ export const getMyGroups = async (
 ): Promise<void> => {
   try {
     const currentUserId = req.headers["x-user-id"] as string;
-    const type = req.query.type as string;
 
-    const query: any = {
+    const groups = await Conversation.find({
+      isGroup: true,
       "members.userId": currentUserId,
-    };
-
-    if (type !== "all") {
-      query.isGroup = true;
-    }
-
-    const groups = await Conversation.find(query).sort({ updatedAt: -1 });
+    }).sort({ updatedAt: -1 });
 
     res.status(200).json({ data: groups });
   } catch (error: any) {
@@ -513,11 +507,13 @@ export const requestJoinGroup = async (
     group.joinRequests.push({ userId: requesterId, requestedAt: new Date() });
     await group.save();
 
-    res.status(200).json({
-      message: "Đã gửi yêu cầu tham gia, vui lòng chờ duyệt",
-      joined: false,
-      data: group.joinRequests,
-    });
+    res
+      .status(200)
+      .json({
+        message: "Đã gửi yêu cầu tham gia, vui lòng chờ duyệt",
+        joined: false,
+        data: group.joinRequests,
+      });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

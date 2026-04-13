@@ -33,14 +33,7 @@ interface Message {
 }
 
 export default function GlobalChatScreen() {
-  const {
-    id,
-    name,
-    avatar,
-    membersCount,
-    isGroup,
-    targetUserId: paramsTargetUserId,
-  } = useLocalSearchParams();
+  const { id, name, avatar, membersCount } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -48,23 +41,13 @@ export default function GlobalChatScreen() {
   const [inputText, setInputText] = useState("");
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const isGroupChat =
-    isGroup !== undefined
-      ? isGroup === "true"
-      : Boolean(
-          membersCount &&
-          membersCount !== "undefined" &&
-          membersCount !== "null",
-        );
+  const isGroupChat = Boolean(
+    membersCount && membersCount !== "undefined" && membersCount !== "null",
+  );
 
-  const targetUserId =
-    typeof paramsTargetUserId === "string"
-      ? paramsTargetUserId
-      : typeof id === "string"
-        ? id
-        : (id as string[])?.[0];
+  const targetUserId = typeof id === "string" ? id : (id as string[])?.[0];
   const userStatus =
     !isGroupChat && targetUserId ? onlineUsers[targetUserId] : null;
   const isOnline = userStatus?.status === "online";
@@ -105,10 +88,8 @@ export default function GlobalChatScreen() {
   useEffect(() => {
     if (!socket) return;
 
-    const expectedRoomId = isGroupChat ? id : targetUserId;
-
     const handleTyping = (data: { roomId: string; actorId: string }) => {
-      if (data.roomId === expectedRoomId || data.roomId === id) {
+      if (data.roomId === id) {
         setTypingUsers((prev) => {
           if (!prev.includes(data.actorId)) return [...prev, data.actorId];
           return prev;
@@ -117,7 +98,7 @@ export default function GlobalChatScreen() {
     };
 
     const handleStopTyping = (data: { roomId: string; actorId: string }) => {
-      if (data.roomId === expectedRoomId || data.roomId === id) {
+      if (data.roomId === id) {
         setTypingUsers((prev) => prev.filter((uid) => uid !== data.actorId));
       }
     };
@@ -129,7 +110,7 @@ export default function GlobalChatScreen() {
       socket.off("TYPING", handleTyping);
       socket.off("STOP_TYPING", handleStopTyping);
     };
-  }, [socket, id, isGroupChat, targetUserId]);
+  }, [socket, id]);
 
   // Yêu cầu kiểm tra trạng thái online của user này khi mới vào màn hình
   useEffect(() => {
@@ -142,11 +123,9 @@ export default function GlobalChatScreen() {
     setInputText(text);
     if (!socket) return;
 
-    const emitTarget = isGroupChat ? id : targetUserId;
-
     // TỐI ƯU: Chỉ bắn sự kiện TYPING khi trước đó chưa gõ (chưa có khoảng chờ)
     if (!typingTimeoutRef.current) {
-      socket.emit("TYPING", { target: emitTarget, isGroup: isGroupChat });
+      socket.emit("TYPING", { target: id, isGroup: isGroupChat });
     } else {
       // Nếu đang gõ liên tục thì hủy việc đếm ngược STOP_TYPING cũ
       clearTimeout(typingTimeoutRef.current);
@@ -154,7 +133,7 @@ export default function GlobalChatScreen() {
 
     // Đặt bộ đếm: Sau 2 giây kể từ ký tự CUỐI CÙNG được gõ thì mới báo ngừng gõ
     typingTimeoutRef.current = setTimeout(() => {
-      socket.emit("STOP_TYPING", { target: emitTarget, isGroup: isGroupChat });
+      socket.emit("STOP_TYPING", { target: id, isGroup: isGroupChat });
       typingTimeoutRef.current = null; // Reset lại cờ để lần chạm phím sau sẽ tiếp tục báo TYPING
     }, 2000);
   };
@@ -162,10 +141,8 @@ export default function GlobalChatScreen() {
   const sendMessage = () => {
     if (inputText.trim().length === 0) return;
 
-    const emitTarget = isGroupChat ? id : targetUserId;
-
     if (socket) {
-      socket.emit("STOP_TYPING", { target: emitTarget, isGroup: isGroupChat });
+      socket.emit("STOP_TYPING", { target: id, isGroup: isGroupChat });
     }
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
@@ -235,7 +212,7 @@ export default function GlobalChatScreen() {
               className="flex-row items-center flex-1"
               activeOpacity={0.7}
               onPress={() => {
-                if (isGroupChat) {
+                if (membersCount) {
                   router.push({
                     pathname: "/chat/info",
                     params: {
@@ -243,14 +220,13 @@ export default function GlobalChatScreen() {
                       name: name,
                       avatar: avatar,
                       membersCount: membersCount,
-                      isGroup: "true",
                     },
                   });
                 } else {
                   router.push({
                     pathname: "/contacts/send-request",
                     params: {
-                      userId: targetUserId,
+                      userId: id,
                       fullName: name,
                       avatarUrl: avatar,
                       relationStatus: "ACCEPTED",
@@ -315,8 +291,6 @@ export default function GlobalChatScreen() {
                     name: name,
                     avatar: avatar,
                     membersCount: membersCount,
-                    isGroup: isGroupChat ? "true" : "false",
-                    targetUserId: targetUserId,
                   },
                 });
               }}

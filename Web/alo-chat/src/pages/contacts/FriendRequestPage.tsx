@@ -4,13 +4,14 @@ import { UserPlusIcon } from "@heroicons/react/24/outline";
 import RequestPreviewModal from "@/components/ui/RequestPreviewModal";
 import FriendProfileModal from "@/components/ui/FriendProfileModal";
 import { toast } from "sonner";
-import { socket } from "../../config/socketService";
 
 export default function FriendRequestPage() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
-  const [profileModalUserId, setProfileModalUserId] = useState<string | null>(null);
+  const [profileModalUserId, setProfileModalUserId] = useState<string | null>(
+    null,
+  );
 
   const fetchRequests = async () => {
     try {
@@ -24,41 +25,24 @@ export default function FriendRequestPage() {
   };
 
   useEffect(() => {
-    // 1. Load data ban đầu
     fetchRequests();
-
-    // 2. Lắng nghe Real-time từ Socket
-    if (socket) {
-      socket.on("NEW_FRIEND_REQUEST", (newRequestData) => {
-        // Đẩy thẳng lời mời mới lên đầu danh sách
-        setRequests((prev) => [newRequestData, ...prev]);
-        toast.info(`Bạn có lời mời kết bạn mới từ ${newRequestData.requesterName || 'ai đó'}!`);
-      });
-
-      socket.on("CANCEL_FRIEND_REQUEST", ({ requestId }) => {
-        // Nếu người ta rút lại lời mời thì xóa khỏi danh sách
-        setRequests((prev) => prev.filter((req) => req.id !== requestId));
-      });
-    }
-
-    // 3. Dọn dẹp khi thoát trang
-    return () => {
-      if (socket) {
-        socket.off("NEW_FRIEND_REQUEST");
-        socket.off("CANCEL_FRIEND_REQUEST");
-      }
-    };
   }, []);
 
-  const handleAction = async (requestId: string, actionType: "ACCEPT" | "DECLINE") => {
+  const handleAction = async (
+    requestId: string,
+    actionType: "ACCEPT" | "DECLINE",
+  ) => {
     try {
+      // FIX: Khớp với endpoint /{friendshipId}/accept và /{friendshipId}/decline
       if (actionType === "ACCEPT")
         await axiosClient.put(`/contacts/${requestId}/accept`);
       else await axiosClient.delete(`/contacts/${requestId}/decline`);
 
       setRequests((prev) => prev.filter((req) => req.id !== requestId));
       setSelectedRequest(null);
-      toast.success(actionType === "ACCEPT" ? "Đã chấp nhận kết bạn" : "Đã từ chối lời mời");
+      toast.success(
+        actionType === "ACCEPT" ? "Đã chấp nhận kết bạn" : "Đã từ chối lời mời",
+      );
     } catch (err) {
       toast.error("Thao tác thất bại");
     }
