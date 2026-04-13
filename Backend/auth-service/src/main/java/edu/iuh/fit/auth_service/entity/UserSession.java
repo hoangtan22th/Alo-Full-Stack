@@ -16,8 +16,8 @@ public class UserSession {
     private String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @JoinColumn(name = "account_id", nullable = false)
+    private Account account;
 
     private String deviceId;
     private String refreshTokenId;

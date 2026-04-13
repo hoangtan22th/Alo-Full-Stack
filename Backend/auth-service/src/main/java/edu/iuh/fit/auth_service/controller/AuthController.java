@@ -27,7 +27,7 @@ public class AuthController {
 
     @PostMapping("/send-otp")
     public ResponseEntity<ApiResponse<String>> sendOtp(@Valid @RequestBody RegistrationOtpRequest request) {
-        authService.sendRegistrationOtp(request.email(), request.phoneNumber());
+        authService.sendRegistrationOtp(request.email());
         return ResponseEntity.ok(ApiResponse.success("Mã xác nhận đã được gửi đến email của bạn"));
     }
 
@@ -85,10 +85,9 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Đổi mật khẩu thành công"));
     }
 
-    // Lấy thông tin cá nhân (Yêu cầu Authorize JWT)
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getMyProfile(@RequestHeader("X-User-Id") String userId) {
-        return ResponseEntity.ok(ApiResponse.success(UserResponse.fromEntity(authService.getProfile(userId))));
+        return ResponseEntity.ok(ApiResponse.success(authService.getProfile(userId)));
     }
 
     // Lấy danh sách thiết bị đăng nhập
@@ -133,32 +132,10 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Đăng xuất thành công"));
     }
 
-    // Cập nhật thông tin cá nhân
-    @PutMapping("/me")
-    public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
-            @RequestHeader("X-User-Id") String userId,
-            @Valid @RequestBody UpdateProfileRequest request) {
-        return ResponseEntity
-                .ok(ApiResponse.success(UserResponse.fromEntity(authService.updateProfile(userId, request))));
-    }
-
-    // Cập nhật Avatar ảnh đại diện
-    @PostMapping(value = "/me/avatar", consumes = "multipart/form-data")
-    public ResponseEntity<ApiResponse<UserResponse>> updateAvatar(
-            @RequestHeader("X-User-Id") String userId,
-            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) throws java.io.IOException {
-        return ResponseEntity
-                .ok(ApiResponse.success(UserResponse.fromEntity(authService.updateAvatarOrCover(userId, file, true))));
-    }
-
-    // Cập nhật ảnh bìa
-    @PostMapping(value = "/me/cover", consumes = "multipart/form-data")
-    public ResponseEntity<ApiResponse<UserResponse>> updateCover(
-            @RequestHeader("X-User-Id") String userId,
-            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) throws java.io.IOException {
-        return ResponseEntity
-                .ok(ApiResponse.success(UserResponse.fromEntity(authService.updateAvatarOrCover(userId, file, false))));
-    }
+    /* 
+    // Các endpoint updateProfile, updateAvatar, updateCover được dời sang user-service 
+    // (Vì auth-service không còn quản lý UserProfile DB nữa)
+    */
 
     // API: Tìm kiếm người dùng theo số điện thoại (Dùng cho Modal Thêm Bạn)
     @GetMapping("/search")

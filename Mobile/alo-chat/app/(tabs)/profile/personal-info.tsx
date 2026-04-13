@@ -36,6 +36,7 @@ export default function PersonalInfoScreen() {
     gender: "1", // 1: Nam, 0: Nữ, 2: Khác
     phoneNumber: "",
     email: "",
+    bio: "",
   });
 
   const [refreshing, setRefreshing] = useState(false);
@@ -60,6 +61,7 @@ export default function PersonalInfoScreen() {
         gender: user.gender !== undefined ? String(user.gender) : "1",
         phoneNumber: user.phoneNumber || "",
         email: user.email || "",
+        bio: user.bio || "",
       });
     } catch (err) {
       console.log("Lỗi gán profile context:", err);
@@ -90,11 +92,7 @@ export default function PersonalInfoScreen() {
       Alert.alert("Lỗi", "Họ và tên nên từ 1 đến 50 ký tự");
       return;
     }
-    if (!accountInfo.phoneNumber) {
-      Alert.alert("Lỗi", "Số điện thoại không được để trống");
-      return;
-    }
-    if (!phoneRegex.test(accountInfo.phoneNumber)) {
+    if (accountInfo.phoneNumber && !phoneRegex.test(accountInfo.phoneNumber)) {
       Alert.alert("Lỗi", "Số điện thoại không hợp lệ (10 số, bắt đầu bằng 0)");
       return;
     }
@@ -111,9 +109,11 @@ export default function PersonalInfoScreen() {
         gender: parseInt(accountInfo.gender),
         dateOfBirth: accountInfo.dateOfBirth || null, // YYYY-MM-DD
         email: accountInfo.email || null,
+        bio: accountInfo.bio,
       };
 
-      await api.put("/auth/me", payload);
+      await api.put("/users/me", payload);
+      await refreshUser();
       Alert.alert("Thành công", "Đã cập nhật thông tin cá nhân.");
     } catch (err) {
       console.log("Lỗi cập nhật profile:", err);
@@ -248,8 +248,13 @@ export default function PersonalInfoScreen() {
             label="EMAIL"
             value={accountInfo.email}
             keyboardType="email-address"
+            editable={false}
+          />
+          <InputField
+            label="TIỂU SỬ BẢN THÂN"
+            value={accountInfo.bio}
             onChangeText={(text: string) =>
-              setAccountInfo({ ...accountInfo, email: text })
+              setAccountInfo({ ...accountInfo, bio: text })
             }
           />
         </View>

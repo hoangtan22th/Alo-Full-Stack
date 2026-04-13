@@ -7,9 +7,5 @@ import jakarta.validation.constraints.Pattern;
 public record RegistrationOtpRequest(
     @NotBlank(message = "Email không được để trống") 
     @Email(message = "Email không đúng định dạng") 
-    String email,
-
-    @NotBlank(message = "Số điện thoại không được để trống")
-    @Pattern(regexp = "^0[35789]\\d{8}$", message = "Số điện thoại không hợp lệ")
-    String phoneNumber
+    String email
 ) {}
