@@ -12,8 +12,8 @@ async function fetchUserGroups(
     // Determine the API Gateway URL or direct group-service URL
     const gatewayUrl = process.env.GATEWAY_URL || "http://localhost:8888";
 
-    // Yêu cầu nhóm của người dùng, CẦN gửi JWT header lên theo chuẩn Gateway
-    const response = await axios.get(`${gatewayUrl}/api/v1/groups/me`, {
+    // Yêu cầu lấy TẤT CẢ cuộc hội thoại (bao gồm cả chat 1-1 và Nhóm)
+    const response = await axios.get(`${gatewayUrl}/api/v1/groups/me?type=all`, {
       headers: {
         Authorization: `Bearer ${token}`, // Pass the JWT token to bypass API Gateway auth
         "X-User-Id": userId, // Pass the internal header required by group-service just in case
@@ -75,17 +75,16 @@ export function initSocketConnection(io: Server) {
     // REAL-TIME INTERACTION EVENTS (< 10ms)
     // ============================================
 
-    // 4. Handle Typing Event
+    // 4. Handle Typing Event (Simplify to always use room_)
     socket.on(
       SOCKET_EVENTS.TYPING,
       (data: { target: string; isGroup: boolean }) => {
-        const emitTarget = data.isGroup
-          ? `room_${data.target}`
-          : `user_${data.target}`;
+        // Luôn sử dụng room_ prefix vì giờ đây user đã join room cho mọi conversation
+        const emitTarget = `room_${data.target}`;
 
         socket.to(emitTarget).emit(SOCKET_EVENTS.TYPING, {
           actorId: userId, // Who is typing
-          roomId: data.isGroup ? data.target : userId, // Target room/user (For 1-1 chat, the roomId for the recipient is the sender's ID)
+          roomId: data.target, // Target room
         });
       },
     );
@@ -94,13 +93,11 @@ export function initSocketConnection(io: Server) {
     socket.on(
       SOCKET_EVENTS.STOP_TYPING,
       (data: { target: string; isGroup: boolean }) => {
-        const emitTarget = data.isGroup
-          ? `room_${data.target}`
-          : `user_${data.target}`;
+        const emitTarget = `room_${data.target}`;
 
         socket.to(emitTarget).emit(SOCKET_EVENTS.STOP_TYPING, {
           actorId: userId,
-          roomId: data.isGroup ? data.target : userId,
+          roomId: data.target,
         });
       },
     );

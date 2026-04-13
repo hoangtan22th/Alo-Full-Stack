@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import axiosClient from "../../config/axiosClient";
-import { getMessageHistory } from "../../services/message.service";
+import { 
+  getMessageHistory, 
+  sendMessage as sendMessageApi,
+  markMessagesAsRead
+} from "../../services/message.service";
+import socketService from "../../services/socket.service";
+import MessageInput from "./components/MessageInput";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -41,6 +47,7 @@ export default function ChatPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [messages, setMessages] = useState<any[]>([]);
+  const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({}); // { conversationId: [userIds] }
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -55,6 +62,82 @@ export default function ChatPage() {
     fetchGroups();
   }, []);
 
+  // Kết nối Socket và lắng nghe sự kiện
+  useEffect(() => {
+    socketService.connect();
+
+    // Lắng nghe tin nhắn mới
+    socketService.onMessageReceived((newMsg) => {
+      // Nếu tin nhắn thuộc về room đang mở, đẩy vào list
+      if (String(newMsg.conversationId) === String(activeChat)) {
+        setMessages((prev) => [...prev, newMsg]);
+        
+        // Nếu mình đang ở trong ô chat này mà nhận được tin từ người khác -> Đánh dấu đã xem luôn
+        const myId = currentUser?.id || currentUser?._id;
+        if (String(newMsg.senderId) !== String(myId)) {
+          markMessagesAsRead(activeChat).catch(console.error);
+        }
+      }
+    });
+
+    // Lắng nghe sự kiện đối phương đã đọc tin nhắn
+    socketService.onMessagesRead((data) => {
+      if (String(data.conversationId) === String(activeChat)) {
+        setMessages((prev) => prev.map(msg => ({
+          ...msg,
+          isRead: true
+        })));
+      }
+    });
+
+    // Tham gia phòng chat hiện tại
+    if (activeChat && activeChat !== "1") {
+      socketService.joinRoom(activeChat);
+    }
+
+    // Lắng nghe Typing
+    socketService.onTyping((data) => {
+      if (String(data.actorId) === String(currentUser?.id || currentUser?._id)) return;
+      
+      setTypingUsers((prev) => {
+        const currentList = prev[data.roomId] || [];
+        if (!currentList.includes(data.actorId)) {
+          return { ...prev, [data.roomId]: [...currentList, data.actorId] };
+        }
+        return prev;
+      });
+    });
+
+    socketService.onStopTyping((data) => {
+      setTypingUsers((prev) => {
+        const currentList = prev[data.roomId] || [];
+        return { ...prev, [data.roomId]: currentList.filter(id => id !== data.actorId) };
+      });
+    });
+
+    // Lắng nghe Presence
+    socketService.onUserOnline((data) => {
+      setConversations((prev) => prev.map(c => 
+        c.id === data.userId ? { ...c, online: true } : c
+      ));
+    });
+
+    socketService.onUserOffline((data) => {
+      setConversations((prev) => prev.map(c => 
+        c.id === data.userId ? { ...c, online: false } : c
+      ));
+    });
+
+    return () => {
+      socketService.off("message-received");
+      socketService.off("messages-read");
+      socketService.off("TYPING");
+      socketService.off("STOP_TYPING");
+      socketService.off("USER_ONLINE");
+      socketService.off("USER_OFFLINE");
+    };
+  }, [activeChat, currentUser]);
+
   useEffect(() => {
     if (!activeChat || activeChat === "1") {
       setMessages([]);
@@ -68,12 +151,47 @@ export default function ChatPage() {
         } else if (Array.isArray(data)) {
           setMessages(data);
         }
+        
+        // Sau khi load xong tin nhắn cũ -> đánh dấu "đã xem" luôn
+        markMessagesAsRead(activeChat).catch(console.error);
       } catch (err) {
         console.error("Lỗi lấy lịch sử tin nhắn:", err);
       }
     };
     fetchMessages();
   }, [activeChat]);
+
+  /**
+   * Xử lý gửi tin nhắn
+   */
+  const handleSendMessage = async (content: string, type: string = 'text') => {
+    if (!activeChat || activeChat === "1") return;
+
+    try {
+      // Gọi API gửi tin nhắn (REST)
+      await sendMessageApi({
+        conversationId: activeChat,
+        content,
+        type
+      });
+      // Lưu ý: Không cần setMessages ở đây vì socket sẽ bắn 'message-received' về cho chính mình
+    } catch (error) {
+      console.error("Lỗi khi gửi tin nhắn:", error);
+    }
+  };
+
+  /**
+   * Xử lý trạng thái đang gõ
+   */
+  const handleTyping = (isCurrentlyTyping: boolean) => {
+    if (!activeChat || activeChat === "1") return;
+
+    if (isCurrentlyTyping) {
+      socketService.emitTyping(activeChat, true);
+    } else {
+      socketService.emitStopTyping(activeChat, true);
+    }
+  };
 
   const fetchGroups = async () => {
     try {
@@ -287,6 +405,12 @@ export default function ChatPage() {
             <p className="text-[12px] font-bold text-gray-400 mt-0.5">
               {conversations.find((c) => String(c.id) === String(activeChat))?.online ? "Đang hoạt động" : "Ngoại tuyến"}
             </p>
+            {/* Hiển thị ai đang gõ tin nhắn */}
+            {(typingUsers[activeChat]?.length > 0) && (
+              <p className="text-[10px] text-green-500 font-bold italic animate-pulse">
+                Ai đó đang soạn tin nhắn...
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-4 text-gray-400">
             <button className="hover:text-black transition">
@@ -324,14 +448,48 @@ export default function ChatPage() {
               return (
                 <div key={msg._id || msg.id || idx} className="flex justify-end">
                   <div className="max-w-[85%] lg:max-w-[70%]">
-                    <div className="bg-black text-white p-4 rounded-2xl rounded-br-sm text-[14px] font-medium leading-relaxed shadow-md">
-                      {msg.content || msg.text}
-                    </div>
+                    {msg.type === 'image' ? (
+                      <div className="rounded-2xl overflow-hidden shadow-md border border-gray-100 bg-gray-50">
+                        <img 
+                          src={msg.content} 
+                          alt="Attachment" 
+                          className="max-w-full max-h-[300px] object-contain cursor-zoom-in hover:opacity-95 transition"
+                          onClick={() => window.open(msg.content, '_blank')}
+                        />
+                      </div>
+                    ) : msg.type === 'file' ? (
+                      <div className="bg-black text-white p-4 rounded-2xl rounded-br-sm shadow-md flex items-center gap-3 group">
+                        <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center shrink-0">
+                          <DocumentIcon className="w-6 h-6 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0 mr-2">
+                          <p className="text-[14px] font-bold truncate">{msg.metadata?.fileName || 'File đính kèm'}</p>
+                          <p className="text-[10px] text-white/60 font-medium">{(msg.metadata?.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                        <a 
+                          href={msg.content} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/30 transition shadow-inner"
+                        >
+                          <ArrowDownTrayIcon className="w-4 h-4 text-white" />
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="bg-black text-white p-4 rounded-2xl rounded-br-sm text-[14px] font-medium leading-relaxed shadow-md">
+                        {msg.content || msg.text}
+                      </div>
+                    )}
                     <div className="flex items-center justify-end gap-1 mt-1.5 mr-1">
                       <span className="text-[10px] font-bold text-gray-400">
                         {timeString}
                       </span>
-                      <span className="text-[10px] text-gray-400">✓✓</span>
+                      {/* Chỉ hiển thị tick ở tin nhắn cuối cùng của mình */}
+                      {idx === messages.length - 1 && (
+                        <span className="text-[10px] font-bold text-blue-500">
+                          {msg.isRead ? "✓✓" : "✓"}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -344,13 +502,42 @@ export default function ChatPage() {
                 <div key={msg._id || msg.id || idx} className="flex items-end gap-3 max-w-[85%] lg:max-w-[70%]">
                   <img
                     src={avatar}
-                    className="w-8 h-8 rounded-full mb-1"
+                    className="w-8 h-8 rounded-full mb-1 shrink-0"
                     alt=""
                   />
                   <div>
-                    <div className="bg-[#F5F5F5] text-gray-900 p-4 rounded-2xl rounded-bl-sm text-[14px] font-medium leading-relaxed">
-                      {msg.content || msg.text}
-                    </div>
+                    {msg.type === 'image' ? (
+                      <div className="rounded-2xl overflow-hidden shadow-md border border-gray-100 bg-gray-50">
+                        <img 
+                          src={msg.content} 
+                          alt="Attachment" 
+                          className="max-w-full max-h-[300px] object-contain cursor-zoom-in hover:opacity-95 transition"
+                          onClick={() => window.open(msg.content, '_blank')}
+                        />
+                      </div>
+                    ) : msg.type === 'file' ? (
+                      <div className="bg-[#F5F5F5] text-gray-900 p-4 rounded-2xl rounded-bl-sm shadow-sm flex items-center gap-3 group">
+                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shrink-0 border border-gray-200">
+                          <DocumentIcon className="w-6 h-6 text-gray-400" />
+                        </div>
+                        <div className="flex-1 min-w-0 mr-2">
+                          <p className="text-[14px] font-bold truncate">{msg.metadata?.fileName || 'File đính kèm'}</p>
+                          <p className="text-[10px] text-gray-400 font-medium">{(msg.metadata?.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                        <a 
+                          href={msg.content} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="w-8 h-8 rounded-full bg-white flex items-center justify-center hover:bg-gray-200 transition shadow-sm border border-gray-100"
+                        >
+                          <ArrowDownTrayIcon className="w-4 h-4 text-black" />
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="bg-[#F5F5F5] text-gray-900 p-4 rounded-2xl rounded-bl-sm text-[14px] font-medium leading-relaxed">
+                        {msg.content || msg.text}
+                      </div>
+                    )}
                     <span className="text-[10px] font-bold text-gray-400 mt-1.5 ml-1 block">
                       {timeString}
                     </span>
@@ -362,25 +549,13 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Message Input */}
-        <div className="p-4 bg-white shrink-0">
-          <div className="flex items-center gap-3 bg-[#F5F5F5] p-2 rounded-full border border-transparent focus-within:border-gray-200 focus-within:bg-white transition-all">
-            <button className="p-2 text-gray-400 hover:text-black transition">
-              <PaperClipIcon className="w-5 h-5" />
-            </button>
-            <input
-              type="text"
-              placeholder="Type a message..."
-              className="flex-1 bg-transparent border-none outline-none text-[14px] font-medium placeholder:text-gray-400"
-            />
-            <button className="p-2 text-gray-400 hover:text-black transition">
-              <FaceSmileIcon className="w-5 h-5" />
-            </button>
-            <button className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-800 transition active:scale-95 shadow-md">
-              <PaperAirplaneIcon className="w-4 h-4 -mr-0.5" />
-            </button>
-          </div>
-        </div>
+        {/* Message Input Component */}
+        <MessageInput 
+          activeChat={activeChat}
+          onSendMessage={handleSendMessage}
+          onTyping={handleTyping}
+          disabled={!activeChat || activeChat === "1"}
+        />
       </div>
 
       {/* ================= CỘT PHẢI: THÔNG TIN CHI TIẾT ================= */}

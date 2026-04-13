@@ -1,52 +1,27 @@
-import { Router, Request, Response, NextFunction } from 'express';
-import * as messageController from '../controllers/message.controller.js';
+import { Router } from 'express';
+import * as messageController from '../controllers/message.controller';
+import multer from 'multer';
 
-const messageRouter = Router();
+const router = Router();
 
-// Định nghĩa Base Path tập trung tại đây
-const BASE_PATH = '/api/v1/messages';
+// Cấu hình multer để lưu file vào bộ nhớ (memoryStorage) trước khi đẩy lên S3
+const storage = multer.memoryStorage();
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 105 * 1024 * 1024 // Giới hạn 105MB (trừ hao config Gateway)
+  }
+});
 
-/**
- * Middleware to extract userId from headers
- * API Gateway has already validated the request
- * Just extract x-user-id that Gateway provides
- */
-const extractUserId = (req: Request, res: Response, next: NextFunction) => {
-  const userId = req.headers['x-user-id'] as string;
-  (req as any).userId = userId;
-  next();
-};
+router.get('/:conversationId', messageController.getMessageHistory);
+router.post('/', messageController.sendMessage);
+router.delete('/:messageId', messageController.deleteMessage);
+router.patch('/:messageId', messageController.editMessage);
 
-messageRouter.use(extractUserId);
+// Route upload file lên S3
+router.post('/upload', upload.single('file'), messageController.uploadFile);
 
-/**
- * GET ${BASE_PATH}/:conversationId
- * Get message history for a conversation (paginated)
- */
-messageRouter.get(`${BASE_PATH}/:conversationId`, messageController.getMessageHistory);
+// Route đánh dấu đã đọc tin nhắn
+router.patch('/:conversationId/read', messageController.markMessagesAsRead);
 
-/**
- * GET ${BASE_PATH}/:conversationId/unread-count
- * Get unread message count
- */
-messageRouter.get(`${BASE_PATH}/:conversationId/unread-count`, messageController.getUnreadCount);
-
-/**
- * PUT ${BASE_PATH}/:messageId/read
- * Mark message as read
- */
-messageRouter.put(`${BASE_PATH}/:messageId/read`, messageController.markAsRead);
-
-/**
- * PUT ${BASE_PATH}/:messageId
- * Edit message
- */
-messageRouter.put(`${BASE_PATH}/:messageId`, messageController.editMessage);
-
-/**
- * DELETE ${BASE_PATH}/:messageId
- * Delete message (soft delete)
- */
-messageRouter.delete(`${BASE_PATH}/:messageId`, messageController.deleteMessage);
-
-export default messageRouter;
+export default router;

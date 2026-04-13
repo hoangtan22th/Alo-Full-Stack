@@ -119,6 +119,21 @@ export class MessageDataService {
     );
   }
 
+  async markConversationAsRead(conversationId: string, userId: string): Promise<number> {
+    const result = await Message.updateMany(
+      { 
+        conversationId: new Types.ObjectId(conversationId),
+        senderId: { $ne: userId },
+        readBy: { $ne: userId }
+      },
+      { 
+        $set: { isRead: true },
+        $addToSet: { readBy: userId }
+      }
+    );
+    return result.modifiedCount;
+  }
+
   async isMessageOwner(messageId: string, userId: string): Promise<boolean> {
     const message = await Message.findById(messageId);
     return message?.senderId === userId && !message?.isDeleted;

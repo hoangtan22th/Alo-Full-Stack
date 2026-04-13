@@ -1,4 +1,4 @@
-import { publishToQueue, ROUTING_KEYS } from '../config/rabbitmq';
+import { publishToQueue, ROUTING_KEYS, getChannel } from '../config/rabbitmq';
 import { MessageEvent, PresenceEvent, MessageReadEvent } from '../types/events';
 
 /**
@@ -20,10 +20,38 @@ export class RabbitMQProducerService {
       };
 
       await publishToQueue(ROUTING_KEYS.MESSAGE_CREATED, payload);
+      
+      // Đồng bộ sang Realtime Service (cho Socket.io broadcast)
+      await this.publishToRealtimeService('message-received', {
+        room: messageData.conversationId,
+        data: messageData
+      });
+
       console.log(`[RabbitMQProducer] Message event published: ${messageData._id}`);
     } catch (error) {
       console.error('[RabbitMQProducer] Failed to publish message event:', error);
-      // Don't throw - allow app to continue even if RabbitMQ is down
+    }
+  }
+
+  /**
+   * Helper để gửi sự kiện sang Realtime Service
+   */
+  private async publishToRealtimeService(event: string, payload: any): Promise<void> {
+    try {
+      const realtimePayload = {
+        event,
+        room: payload.room,
+        target: payload.target,
+        data: payload.data,
+      };
+      // Gửi trực tiếp vào queue 'realtime_events'
+      console.log(`[RabbitMQProducer] Debug: Sending to realtime_events queue for room_${payload.room}`);
+      const ch = getChannel();
+      ch.sendToQueue('realtime_events', Buffer.from(JSON.stringify(realtimePayload)), {
+        persistent: true
+      });
+    } catch (error) {
+      console.error('[RabbitMQProducer] Failed to publish to realtime queue:', error);
     }
   }
 
@@ -76,7 +104,14 @@ export class RabbitMQProducerService {
       };
 
       await publishToQueue(ROUTING_KEYS.MESSAGE_READ, payload);
-      console.log(`[RabbitMQProducer] Message read event published`);
+
+      // Đồng bộ sang Realtime Service để báo cho người gửi tin nhắn biết là đã được đọc
+      await this.publishToRealtimeService('messages-read', {
+        room: readEvent.conversationId,
+        data: readEvent
+      });
+
+      console.log(`[RabbitMQProducer] Message read event published to Realtime`);
     } catch (error) {
       console.error('[RabbitMQProducer] Failed to publish message read event:', error);
     }

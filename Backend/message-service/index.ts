@@ -66,7 +66,7 @@ async function startApplication(): Promise<void> {
 });
     // 7. Register REST API routes
     console.log('[App] Registering routes...');
-    app.use('/', messageRouter);
+    app.use('/api/v1/messages', messageRouter);
 
     // 8. Error handling middleware
     app.use(notFoundHandler);
