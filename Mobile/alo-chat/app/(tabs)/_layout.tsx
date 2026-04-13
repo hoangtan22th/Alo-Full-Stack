@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ChatBubbleLeftEllipsisIcon as ChatOutlineIcon,
   Cog6ToothIcon as Cog6OutlineIcon,
@@ -14,6 +15,9 @@ import {
 } from "react-native-heroicons/solid";
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = insets.bottom > 0 ? insets.bottom : 10;
+
   return (
     <Tabs
       screenOptions={{
@@ -27,8 +31,8 @@ export default function TabLayout() {
           borderTopLeftRadius: 35,
           borderTopRightRadius: 35,
           borderTopWidth: 0,
-          height: Platform.OS === "ios" ? 90 : 70,
-          paddingBottom: Platform.OS === "ios" ? 30 : 10,
+          height: 60 + bottomPadding,
+          paddingBottom: bottomPadding,
           paddingTop: 10,
           elevation: 10, // Shadow Android
           shadowColor: "#000",
