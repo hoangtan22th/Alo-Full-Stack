@@ -1,5 +1,7 @@
 package edu.iuh.fit.controller;
 
+import edu.iuh.fit.common_service.dto.response.ApiResponse;
+import edu.iuh.fit.common_service.dto.response.PageResponse;
 import edu.iuh.fit.dto.request.UserUpdateRequest;
 import edu.iuh.fit.dto.response.UserDto;
 import edu.iuh.fit.service.UserService;
@@ -9,7 +11,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import edu.iuh.fit.common_service.dto.response.ApiResponse;
 
 @RestController
 @RequestMapping("/api/v1/users")
@@ -67,7 +68,7 @@ public class UserController {
 
     // Tìm kiếm users (có phân trang) và trả về tất cả
     @GetMapping({"", "/search"})
-    public ResponseEntity<ApiResponse<Page<UserDto>>> searchUsers(
+    public ResponseEntity<ApiResponse<PageResponse<UserDto>>> searchUsers(
             @RequestParam(required = false) String fullName,
             @RequestParam(required = false) String email,
             @RequestParam(required = false) String phoneNumber,
@@ -75,9 +76,23 @@ public class UserController {
             @RequestParam(defaultValue = "10") int size) {
             
         Pageable pageable = PageRequest.of(page, size);
+        Page<UserDto> users = userService.searchUsersDynamic(fullName, email, phoneNumber, pageable);
+        
+        PageResponse<UserDto> pageResponse = PageResponse.<UserDto>builder()
+            .content(users.getContent())
+            .page(users.getNumber())
+            .size(users.getSize())
+            .totalElements(users.getTotalElements())
+            .totalPages(users.getTotalPages())
+            .last(users.isLast())
+            .build();
+            
+        return ResponseEntity.ok(ApiResponse.success(pageResponse));
+    }
 
-        // Truyền thẳng 3 tham số vào lớp service thay vì chia if-else
-        // Nếu cái nào không truyền, Spring sẽ gán là "null", và cái @Query SQL của chúng ta sẽ thông minh bỏ qua lỗi đó
-        return ResponseEntity.ok(ApiResponse.success(userService.searchUsersDynamic(fullName, email, phoneNumber, pageable)));
+    // API: Lấy list User theo danh sách ID
+    @PostMapping("/by-ids")
+    public ResponseEntity<ApiResponse<java.util.List<UserDto>>> getUsersByIds(@RequestBody java.util.List<String> ids) {
+        return ResponseEntity.ok(ApiResponse.success(userService.getUsersByIds(ids)));
     }
 }
