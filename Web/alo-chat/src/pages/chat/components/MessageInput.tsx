@@ -1,26 +1,32 @@
 // src/pages/chat/components/MessageInput.tsx
 import { useRef, useState } from 'react';
 import {
-  PaperAirplaneIcon,
   PaperClipIcon,
   FaceSmileIcon,
+  PaperAirplaneIcon,
 } from '@heroicons/react/24/outline';
+import { uploadFile } from '@/services/message.service';
 
 interface MessageInputProps {
+  activeChat: string;
   onSendMessage: (content: string, type?: 'text' | 'file' | 'image' | 'voice') => void;
   onTyping?: (isTyping: boolean) => void;
   disabled?: boolean;
 }
 
 export default function MessageInput({
+  activeChat,
   onSendMessage,
   onTyping,
   disabled = false,
 }: MessageInputProps) {
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   /**
    * Handle input change
@@ -84,8 +90,48 @@ export default function MessageInput({
    * Handle file attachment
    */
   const handleFileAttach = () => {
-    // TODO: Implement file upload
-    console.log('File attachment clicked');
+    fileInputRef.current?.click();
+  };
+
+  /**
+   * Handle file change and upload
+   */
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeChat || activeChat === "1") return;
+
+    // Check file size (100MB limit)
+    const MAX_SIZE = 100 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      alert("File is too large! Maximum limit is 100MB.");
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      setUploadProgress(0);
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('conversationId', activeChat);
+
+      await uploadFile(formData, (percent) => {
+        setUploadProgress(percent);
+      });
+
+      // Cleanup
+      setIsUploading(false);
+      setUploadProgress(0);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      
+      // We don't need to call onSendMessage here because the backend handles message creation 
+      // when uploading, and socket will push it back to us.
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert("Failed to upload file. Please try again.");
+      setIsUploading(false);
+      setUploadProgress(0);
+    }
   };
 
   /**
@@ -97,12 +143,34 @@ export default function MessageInput({
   };
 
   return (
-    <div className="p-4 bg-white shrink-0 border-t border-gray-100">
+    <div className="p-4 bg-white shrink-0 border-t border-gray-100 relative">
+      {/* Progress Bar overlay */}
+      {isUploading && (
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gray-100 overflow-hidden">
+          <div 
+            className="h-full bg-black transition-all duration-300 ease-out"
+            style={{ width: `${uploadProgress}%` }}
+          />
+          <div className="absolute top-2 left-6 bg-white/90 backdrop-blur px-2 py-1 rounded shadow-sm flex items-center gap-2 z-10">
+            <div className="w-3 h-3 border-2 border-black border-t-transparent rounded-full animate-spin" />
+            <span className="text-[10px] font-bold text-black">Uploading... {uploadProgress}%</span>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
       <div className="flex items-center gap-3 bg-[#F5F5F5] p-2 rounded-full border border-transparent focus-within:border-gray-200 focus-within:bg-white transition-all">
         {/* Attachment button */}
         <button
           onClick={handleFileAttach}
-          disabled={disabled}
+          disabled={disabled || isUploading}
           className="p-2 text-gray-400 hover:text-black transition disabled:opacity-50 disabled:cursor-not-allowed"
           title="Attach file"
         >
@@ -116,15 +184,15 @@ export default function MessageInput({
           value={message}
           onChange={handleInputChange}
           onKeyPress={handleKeyPress}
-          placeholder="Type a message..."
-          disabled={disabled}
+          placeholder={isUploading ? "Uploading file..." : "Type a message..."}
+          disabled={disabled || isUploading}
           className="flex-1 bg-transparent border-none outline-none text-[14px] font-medium placeholder:text-gray-400 disabled:opacity-50"
         />
 
         {/* Emoji button */}
         <button
           onClick={handleEmojiPicker}
-          disabled={disabled}
+          disabled={disabled || isUploading}
           className="p-2 text-gray-400 hover:text-black transition disabled:opacity-50 disabled:cursor-not-allowed"
           title="Add emoji"
         >
@@ -134,7 +202,7 @@ export default function MessageInput({
         {/* Send button */}
         <button
           onClick={handleSend}
-          disabled={disabled || !message.trim()}
+          disabled={disabled || !message.trim() || isUploading}
           className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-800 transition active:scale-95 shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black"
         >
           <PaperAirplaneIcon className="w-4 h-4 -mr-0.5" />
