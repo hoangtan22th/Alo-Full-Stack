@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axiosClient from "../../config/axiosClient";
+import { getMessageHistory } from "../../services/message.service";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -21,37 +22,17 @@ import {
 } from "@heroicons/react/24/outline";
 
 // ================= DỮ LIỆU MẪU DỰ PHÒNG =================
-const mockConversations = [
-  {
-    id: "1",
-    name: "Nguyễn Hoàng Tấn",
-    message: "Can you review the latest Fi...",
-    time: "12:45 PM",
-    unread: false,
-    online: true,
-    avatar: "https://i.pravatar.cc/150?img=11",
-  },
-  {
-    id: "2",
-    name: "Sarah Jenkins",
-    message: "The project scope looks goo...",
-    time: "Yesterday",
-    unread: false,
-    online: false,
-    avatar: "https://i.pravatar.cc/150?img=5",
-  },
-  {
-    id: "3",
-    name: "Acme Design Team",
-    message: "Alex: Uploaded the new asse...",
-    time: "Mon",
-    unread: false,
-    online: false,
-    avatar:
-      "https://ui-avatars.com/api/?name=Acme+Design&background=333&color=fff",
-  },
-];
 
+  // {
+  //   id: "1",
+  //   name: "Nguyễn Hoàng Tấn",
+  //   message: "Can you review the latest Fi...",
+  //   time: "12:45 PM",
+  //   unread: false,
+  //   online: true,
+  //   avatar: "https://i.pravatar.cc/150?img=11",
+  // },
+ 
 export default function ChatPage() {
   const [activeTab, setActiveTab] = useState("Ưu tiên");
   const [activeChat, setActiveChat] = useState("1");
@@ -59,10 +40,40 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [messages, setMessages] = useState<any[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   useEffect(() => {
     fetchGroups();
   }, []);
+
+  useEffect(() => {
+    if (!activeChat || activeChat === "1") {
+      setMessages([]);
+      return;
+    }
+    const fetchMessages = async () => {
+      try {
+        const data = await getMessageHistory(activeChat);
+        if (data && data.messages) {
+          setMessages(data.messages);
+        } else if (Array.isArray(data)) {
+          setMessages(data);
+        }
+      } catch (err) {
+        console.error("Lỗi lấy lịch sử tin nhắn:", err);
+      }
+    };
+    fetchMessages();
+  }, [activeChat]);
 
   const fetchGroups = async () => {
     try {
@@ -138,6 +149,11 @@ export default function ChatPage() {
           }),
         );
         setConversations(formattedGroups);
+        
+        // Tự động chọn chat đầu tiên nếu đang ở mặc định "1"
+        if (formattedGroups.length > 0 && activeChat === "1") {
+          setActiveChat(formattedGroups[0].id);
+        }
       }
     } catch (error) {
       console.error("Lỗi lấy danh sách nhóm:", error);
@@ -261,16 +277,15 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* ================= CỘT GIỮA: NỘI DUNG CHAT ================= */}
+      {/* ================= CỘT GIỮA: NỘI DUNG CHAT ===================================================================================== */}
       <div className="flex-1 flex flex-col min-w-0 h-full bg-white relative">
-        {/* Chat Header */}
         <div className="h-[76px] px-6 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md z-10">
           <div>
             <h2 className="text-[16px] font-black tracking-tight">
-              Nguyễn Hoàng Tấn
+              {conversations.find((c) => String(c.id) === String(activeChat))?.name || "Nhóm trò chuyện"}
             </h2>
             <p className="text-[12px] font-bold text-gray-400 mt-0.5">
-              Đang hoạt động
+              {conversations.find((c) => String(c.id) === String(activeChat))?.online ? "Đang hoạt động" : "Ngoại tuyến"}
             </p>
           </div>
           <div className="flex items-center gap-4 text-gray-400">
@@ -297,77 +312,54 @@ export default function ChatPage() {
             </span>
           </div>
 
-          {/* Left Bubble (Them) */}
-          <div className="flex items-end gap-3 max-w-[85%] lg:max-w-[70%]">
-            <img
-              src="https://i.pravatar.cc/150?img=11"
-              className="w-8 h-8 rounded-full mb-1"
-              alt=""
-            />
-            <div>
-              <div className="bg-[#F5F5F5] text-gray-900 p-4 rounded-2xl rounded-bl-sm text-[14px] font-medium leading-relaxed">
-                Hello! I've just pushed the latest design tokens for the Concise
-                dashboard. Could you take a look when you have a moment?
-              </div>
-              <span className="text-[10px] font-bold text-gray-400 mt-1.5 ml-1 block">
-                12:38 PM
-              </span>
-            </div>
-          </div>
-
-          {/* Right Bubble (Me) */}
-          <div className="flex justify-end">
-            <div className="max-w-[85%] lg:max-w-[70%]">
-              <div className="bg-black text-white p-4 rounded-2xl rounded-br-sm text-[14px] font-medium leading-relaxed shadow-md">
-                Hey Tấn! That's great news. I'll jump on Figma right now and
-                check them out. Are they in the main branch?
-              </div>
-              <div className="flex items-center justify-end gap-1 mt-1.5 mr-1">
-                <span className="text-[10px] font-bold text-gray-400">
-                  12:42 PM
-                </span>
-                <span className="text-[10px] text-gray-400">✓✓</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Left Bubble (Them) - With Attachment */}
-          <div className="flex items-end gap-3 max-w-[85%] lg:max-w-[70%]">
-            <img
-              src="https://i.pravatar.cc/150?img=11"
-              className="w-8 h-8 rounded-full mb-1"
-              alt=""
-            />
-            <div className="w-full">
-              <div className="bg-[#F5F5F5] text-gray-900 p-4 rounded-2xl rounded-bl-sm text-[14px] font-medium leading-relaxed mb-2">
-                Yes, I've created a "v2-revision" branch. Can you review the
-                latest Figma file?
-              </div>
-
-              {/* File Attachment UI */}
-              <div className="bg-[#F5F5F5] p-3 rounded-2xl rounded-bl-sm flex items-center justify-between gap-4 cursor-pointer hover:bg-gray-200 transition">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
-                    <DocumentIcon className="w-5 h-5 text-gray-600" />
-                  </div>
-                  <div>
-                    <p className="text-[13px] font-bold text-gray-900 line-clamp-1">
-                      Design_Systems_Final.fig
-                    </p>
-                    <p className="text-[11px] font-bold text-gray-400">
-                      4.2 MB • Figma Document
-                    </p>
+          {messages.map((msg, idx) => {
+            const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+            const senderId = msg.senderId || msg.sender || (typeof msg.sender === 'object' ? msg.sender?._id : null);
+            
+            // So sánh an toàn hơn bằng String()
+            const isMe = String(senderId) === String(myId);
+            const timeString = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
+            
+            if (isMe) {
+              return (
+                <div key={msg._id || msg.id || idx} className="flex justify-end">
+                  <div className="max-w-[85%] lg:max-w-[70%]">
+                    <div className="bg-black text-white p-4 rounded-2xl rounded-br-sm text-[14px] font-medium leading-relaxed shadow-md">
+                      {msg.content || msg.text}
+                    </div>
+                    <div className="flex items-center justify-end gap-1 mt-1.5 mr-1">
+                      <span className="text-[10px] font-bold text-gray-400">
+                        {timeString}
+                      </span>
+                      <span className="text-[10px] text-gray-400">✓✓</span>
+                    </div>
                   </div>
                 </div>
-                <button className="p-2 hover:bg-white rounded-full transition">
-                  <ArrowDownTrayIcon className="w-4 h-4 text-gray-600" />
-                </button>
-              </div>
-              <span className="text-[10px] font-bold text-gray-400 mt-1.5 ml-1 block">
-                12:45 PM
-              </span>
-            </div>
-          </div>
+              );
+            } else {
+              const chatInfo = conversations.find((c) => String(c.id) === String(activeChat));
+              const avatar = chatInfo?.avatar || "https://i.pravatar.cc/150?img=11";
+
+              return (
+                <div key={msg._id || msg.id || idx} className="flex items-end gap-3 max-w-[85%] lg:max-w-[70%]">
+                  <img
+                    src={avatar}
+                    className="w-8 h-8 rounded-full mb-1"
+                    alt=""
+                  />
+                  <div>
+                    <div className="bg-[#F5F5F5] text-gray-900 p-4 rounded-2xl rounded-bl-sm text-[14px] font-medium leading-relaxed">
+                      {msg.content || msg.text}
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-400 mt-1.5 ml-1 block">
+                      {timeString}
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+          })}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Message Input */}
