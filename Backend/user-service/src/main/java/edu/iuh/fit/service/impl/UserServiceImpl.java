@@ -47,6 +47,7 @@ public class UserServiceImpl implements UserService {
         }
         if (request.getAvatar() != null) user.setAvatarUrl(request.getAvatar());
         if (request.getCoverImage() != null) user.setCoverUrl(request.getCoverImage());
+        if (request.getPhoneNumber() != null) user.setPhoneNumber(request.getPhoneNumber());
         
         if (request.getGender() != null) {
             user.setGender(UserProfile.Gender.values()[Math.min(Math.max(0, request.getGender()), UserProfile.Gender.values().length - 1)]);

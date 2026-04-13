@@ -33,7 +33,7 @@ export default function PersonalInfoScreen() {
   const [accountInfo, setAccountInfo] = useState({
     fullName: "",
     dateOfBirth: "",
-    gender: "1", // 1: Nam, 0: Nữ, 2: Khác
+    gender: "0", // 0: Nam, 1: Nữ, 2: Khác
     phoneNumber: "",
     email: "",
     bio: "",
@@ -55,10 +55,26 @@ export default function PersonalInfoScreen() {
         : new Date();
       setTempDate(initialDate);
 
+      let genderVal = "0"; // Default MALE (0)
+      if (user.gender === "MALE" || user.gender === 0 || user.gender === "0")
+        genderVal = "0";
+      else if (
+        user.gender === "FEMALE" ||
+        user.gender === 1 ||
+        user.gender === "1"
+      )
+        genderVal = "1";
+      else if (
+        user.gender === "OTHER" ||
+        user.gender === 2 ||
+        user.gender === "2"
+      )
+        genderVal = "2";
+
       setAccountInfo({
         fullName: user.fullName || "",
         dateOfBirth: user.dateOfBirth || "",
-        gender: user.gender !== undefined ? String(user.gender) : "1",
+        gender: genderVal,
         phoneNumber: user.phoneNumber || "",
         email: user.email || "",
         bio: user.bio || "",
@@ -149,9 +165,9 @@ export default function PersonalInfoScreen() {
   };
 
   const getGenderText = (val: string) => {
-    if (val === "1") return "Nam";
-    if (val === "0") return "Nữ";
-    if (val === "2") return "Khác";
+    if (val === "0" || val === "MALE") return "Nam";
+    if (val === "1" || val === "FEMALE") return "Nữ";
+    if (val === "2" || val === "OTHER") return "Khác";
     return "";
   };
 
@@ -333,8 +349,8 @@ export default function PersonalInfoScreen() {
                 Chọn giới tính
               </Text>
               {[
-                { label: "Nam", value: "1" },
-                { label: "Nữ", value: "0" },
+                { label: "Nam", value: "0" },
+                { label: "Nữ", value: "1" },
                 { label: "Khác", value: "2" },
               ].map((item) => (
                 <TouchableOpacity
