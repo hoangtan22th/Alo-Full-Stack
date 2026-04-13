@@ -15,7 +15,8 @@ import groupRoutes from "./src/routes/group.routes";
 const app: Application = express();
 
 // Middlewares
-app.use(cors());
+// Bỏ CORS ở các service bên dưới vì API Gateway đã đảm nhận. Nếu mở cả 2 sẽ sinh ra lỗi 'Multiple Access-Control-Allow-Origin'
+// app.use(cors());
 app.use(express.json());
 
 // Điểm cuối bắt buộc cho Eureka (Để Spring Boot biết Node.js còn sống)

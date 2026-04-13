@@ -75,6 +75,12 @@ axiosClient.interceptors.response.use(
       data: error.response?.data,
     });
 
+    if (error.response?.status === 401) {
+      console.warn("⚠️ Token hết hạn hoặc không hợp lệ, đang đăng xuất...");
+      localStorage.removeItem("accessToken");
+      window.location.href = "/login";
+    }
+
     // Xử lý các loại lỗi
     if (error.code === "ERR_NETWORK") {
       console.error("⚠️ KHÔNG THỂ KẾT NỐI BACKEND!");
