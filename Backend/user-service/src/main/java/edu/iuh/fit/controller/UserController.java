@@ -12,6 +12,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
@@ -25,6 +27,7 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id)));
     }
 
+    // Cập nhật thông tin user
     // Lấy thông tin cá nhân của người dùng đang đăng nhập
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserDto>> getMyProfile(@RequestHeader("X-User-Id") String userId) {

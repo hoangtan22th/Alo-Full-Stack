@@ -7,7 +7,8 @@ import {
   EyeIcon,
 } from "@heroicons/react/24/outline";
 import { QRCodeSVG } from "qrcode.react";
-import axiosClient from "../../config/axiosClient";
+import api from "../../services/api";
+import { useAuthStore } from "../../store/useAuthStore";
 import { toast } from "sonner";
 import { GoogleLogin } from "@react-oauth/google";
 
@@ -38,6 +39,10 @@ const LoginPage = () => {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
 
+  // Zustand Store
+  const setAuth = useAuthStore((state) => state.setAuth);
+  const setUser = useAuthStore((state) => state.setUser);
+
   // 1. Fetch QR Token on mount
   useEffect(() => {
     fetchQrToken();
@@ -45,7 +50,8 @@ const LoginPage = () => {
 
   const fetchQrToken = async () => {
     try {
-      const data: any = await axiosClient.get("/auth/qr/generate");
+      const res: any = await api.get("/auth/qr/generate");
+      const data = res.data || res;
       if (data) {
         setQrToken(data.qrToken);
         setQrStatus(data.status);
@@ -61,20 +67,22 @@ const LoginPage = () => {
 
     const interval = setInterval(async () => {
       try {
-        const data: any = await axiosClient.get(`/auth/qr/status/${qrToken}`);
+        const res: any = await api.get(`/auth/qr/status/${qrToken}`);
+        const data = res.data || res;
         if (data) {
           setQrStatus(data.status);
 
           if (data.status === "CONFIRMED") {
             clearInterval(interval);
-            const token = data.accessToken;
-            if (token) {
-              localStorage.setItem("accessToken", token);
+            const { accessToken, refreshToken, user } = data;
+            if (accessToken) {
+              setAuth(accessToken, refreshToken || "", user?.id || "");
+              if (user) setUser(user);
+              toast.success("Đăng nhập bằng mã QR thành công!");
+              navigate("/contacts");
             } else {
               console.error("Không tìm thấy token trong response", data);
             }
-            toast.success("Đăng nhập bằng mã QR thành công!");
-            navigate("/contacts");
           } else if (data.status === "EXPIRED") {
             clearInterval(interval);
           }
@@ -85,25 +93,29 @@ const LoginPage = () => {
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [qrToken, qrStatus, navigate]);
+  }, [qrToken, qrStatus, navigate, setAuth, setUser]);
 
   // --- HANDLERS CHO LOGIN ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     try {
-      const res: any = await axiosClient.post("/auth/login", {
+      const response: any = await api.post("/auth/login", {
         email,
         password,
       });
-      const token = res.accessToken;
-      if (token) {
-        localStorage.setItem("accessToken", token);
+      const data = response.data || response;
+      const { accessToken, refreshToken, user } = data;
+
+      if (accessToken) {
+        setAuth(accessToken, refreshToken || "", user?.id || "");
+        if (user) setUser(user);
+        toast.success("Đăng nhập thành công!");
+        navigate("/contacts");
       } else {
-        console.error("Không tìm thấy token trong response", res);
+        console.error("Không tìm thấy token trong response", data);
+        setError("Phản hồi không hợp lệ từ máy chủ");
       }
-      toast.success("Đăng nhập thành công!");
-      navigate("/contacts");
     } catch (err: any) {
       setError(err.response?.data?.message || "Đăng nhập thất bại");
     }
@@ -114,15 +126,19 @@ const LoginPage = () => {
     setError("");
     try {
       const idToken = credentialResponse.credential;
-      const res: any = await axiosClient.post("/auth/google", { idToken });
-      const token = res.accessToken;
-      if (token) {
-        localStorage.setItem("accessToken", token);
+      const response: any = await api.post("/auth/google", { idToken });
+      const data = response.data || response;
+      const { accessToken, refreshToken, user } = data;
+
+      if (accessToken) {
+        setAuth(accessToken, refreshToken || "", user?.id || "");
+        if (user) setUser(user);
+        toast.success("Đăng nhập bằng Google thành công!");
+        navigate("/contacts");
       } else {
-        console.error("Không tìm thấy token trong response", res);
+        console.error("Không tìm thấy token trong response", data);
+        setError("Phản hồi không hợp lệ từ máy chủ");
       }
-      toast.success("Đăng nhập bằng Google thành công!");
-      navigate("/contacts");
     } catch (err: any) {
       setError(err.response?.data?.message || "Đăng nhập Google thất bại");
     }
@@ -140,7 +156,7 @@ const LoginPage = () => {
     setIsSubmitting(true);
     setError("");
     try {
-      await axiosClient.post("/auth/forgot-password/send-otp", {
+      await api.post("/auth/forgot-password/send-otp", {
         email: forgotEmail,
       });
       toast.success("Mã xác nhận đã được gửi!", {
@@ -162,7 +178,7 @@ const LoginPage = () => {
     setIsSubmitting(true);
     setError("");
     try {
-      await axiosClient.post("/auth/forgot-password/reset", {
+      await api.post("/auth/forgot-password/reset", {
         email: forgotEmail,
         otp: otp,
         newPassword: newPassword,
