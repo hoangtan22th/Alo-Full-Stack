@@ -9,4 +9,5 @@ public class UserUpdateRequest {
     private String coverImage;
     private Integer gender;
     private java.time.LocalDate dateOfBirth;
+    private String bio;
 }

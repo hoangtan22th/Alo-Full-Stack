@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import edu.iuh.fit.common_service.dto.response.ApiResponse;
 
 @RestController
 @RequestMapping("/api/v1/users")
@@ -17,28 +18,56 @@ public class UserController {
 
     private final UserService userService;
 
-    // Lấy thông tin user theo ID
+    // Lấy thông tin user theo ID (Admin hoặc Service khác gọi)
     @GetMapping("/{id}")
-    public ResponseEntity<UserDto> getUserById(@PathVariable String id) {
-        return ResponseEntity.ok(userService.getUserById(id));
+    public ResponseEntity<ApiResponse<UserDto>> getUserById(@PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id)));
     }
 
-    // Cập nhật thông tin user
+    // Lấy thông tin cá nhân của người dùng đang đăng nhập
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<UserDto>> getMyProfile(@RequestHeader("X-User-Id") String userId) {
+        return ResponseEntity.ok(ApiResponse.success(userService.getUserById(userId)));
+    }
+
+    // Cập nhật thông tin cá nhân hiện tại
+    @PutMapping("/me")
+    public ResponseEntity<ApiResponse<UserDto>> updateMyProfile(@RequestHeader("X-User-Id") String userId, @RequestBody UserUpdateRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(userService.updateUser(userId, request)));
+    }
+
+    // Cập nhật Avatar
+    @PostMapping(value = "/me/avatar", consumes = "multipart/form-data")
+    public ResponseEntity<ApiResponse<UserDto>> updateMyAvatar(
+            @RequestHeader("X-User-Id") String userId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) throws java.io.IOException {
+        return ResponseEntity.ok(ApiResponse.success(userService.updateAvatarOrCover(userId, file, true)));
+    }
+
+    // Cập nhật Cover
+    @PostMapping(value = "/me/cover", consumes = "multipart/form-data")
+    public ResponseEntity<ApiResponse<UserDto>> updateMyCover(
+            @RequestHeader("X-User-Id") String userId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) throws java.io.IOException {
+        return ResponseEntity.ok(ApiResponse.success(userService.updateAvatarOrCover(userId, file, false)));
+    }
+
+    // Cập nhật thông tin user (Admin)
     @PutMapping("/{id}")
-    public ResponseEntity<UserDto> updateUser(@PathVariable String id, @RequestBody UserUpdateRequest request) {
-        return ResponseEntity.ok(userService.updateUser(id, request));
+    public ResponseEntity<ApiResponse<UserDto>> updateUser(@PathVariable String id, @RequestBody UserUpdateRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(userService.updateUser(id, request)));
     }
 
     // Xóa/Ban user
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteUser(@PathVariable String id) {
+    public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable String id) {
         userService.deleteUser(id);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     // Tìm kiếm users (có phân trang) và trả về tất cả
     @GetMapping({"", "/search"})
-    public ResponseEntity<Page<UserDto>> searchUsers(
+    public ResponseEntity<ApiResponse<Page<UserDto>>> searchUsers(
             @RequestParam(required = false) String fullName,
             @RequestParam(required = false) String email,
             @RequestParam(required = false) String phoneNumber,
@@ -49,6 +78,6 @@ public class UserController {
 
         // Truyền thẳng 3 tham số vào lớp service thay vì chia if-else
         // Nếu cái nào không truyền, Spring sẽ gán là "null", và cái @Query SQL của chúng ta sẽ thông minh bỏ qua lỗi đó
-        return ResponseEntity.ok(userService.searchUsersDynamic(fullName, email, phoneNumber, pageable));
+        return ResponseEntity.ok(ApiResponse.success(userService.searchUsersDynamic(fullName, email, phoneNumber, pageable)));
     }
 }

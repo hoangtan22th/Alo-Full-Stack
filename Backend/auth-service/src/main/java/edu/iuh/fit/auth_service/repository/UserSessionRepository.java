@@ -11,13 +11,13 @@ import java.util.Optional;
 public interface UserSessionRepository extends JpaRepository<UserSession, String> {
 
     // Tìm tất cả các phiên đăng nhập của 1 User để hiển thị danh sách thiết bị
-    List<UserSession> findByUserId(String userId);
+    List<UserSession> findByAccountId(String accountId);
 
     // Tìm phiên cụ thể theo Token ID để thu hồi (Logout)
     Optional<UserSession> findByRefreshTokenId(String refreshTokenId);
 
     // Xóa một phiên cụ thể của User trên một thiết bị nhất định
-    void deleteByUserIdAndDeviceId(String userId, String deviceId);
+    void deleteByAccountIdAndDeviceId(String accountId, String deviceId);
 
     @Modifying
     void deleteByRefreshTokenId(String refreshTokenId);

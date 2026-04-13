@@ -32,4 +32,15 @@ public class JwtUtils {
                 .getBody()
                 .get("sessionId", String.class);
     }
+
+    public String extractRoles(String token) {
+        SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        Object roles = Jwts.parserBuilder()
+                .setSigningKey(key)
+                .build()
+                .parseClaimsJws(token)
+                .getBody()
+                .get("roles");
+        return roles != null ? roles.toString() : "";
+    }
 }

@@ -48,6 +48,7 @@ public class AuthenticationFilter implements GlobalFilter {
                 // 4. Giải mã lấy userId và sessionId
                 String userId = jwtUtils.extractUserId(token);
                 String sessionId = jwtUtils.extractSessionId(token);
+                String roles = jwtUtils.extractRoles(token);
 
                 // Kiểm tra xem sessionId có nằm trong Blacklist của Redis không
                 if (sessionId != null) {
@@ -61,6 +62,7 @@ public class AuthenticationFilter implements GlobalFilter {
                                 ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
                                         .header("X-User-Id", userId)
                                         .header("X-Session-Id", sessionId)
+                                        .header("X-User-Roles", roles)
                                         .build();
                                 return chain.filter(exchange.mutate().request(modifiedRequest).build());
                             });
@@ -70,6 +72,7 @@ public class AuthenticationFilter implements GlobalFilter {
                 ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
                         .header("X-User-Id", userId)
                         .header("X-Session-Id", sessionId)
+                        .header("X-User-Roles", roles)
                         .build();
 
                 return chain.filter(exchange.mutate().request(modifiedRequest).build());

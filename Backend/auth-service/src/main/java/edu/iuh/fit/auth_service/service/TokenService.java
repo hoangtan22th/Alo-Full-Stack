@@ -1,7 +1,7 @@
 package edu.iuh.fit.auth_service.service;
 
 
-import edu.iuh.fit.auth_service.entity.User;
+import edu.iuh.fit.auth_service.entity.Account;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
@@ -22,7 +22,7 @@ public class TokenService {
 
     private final StringRedisTemplate redisTemplate;
 
-    public String generateAccessToken(User user, String sessionId) {
+    public String generateAccessToken(Account user, String sessionId) {
         return Jwts.builder()
                 .setSubject(user.getId())
                 .claim("email", user.getEmail())
@@ -33,7 +33,7 @@ public class TokenService {
                 .compact();
     }
 
-    public String generateRefreshToken(User user, String deviceId) {
+    public String generateRefreshToken(Account user, String deviceId) {
         String tokenId = UUID.randomUUID().toString();
         // Lưu tokenId vào Redis để quản lý logout từ xa
 //        redisTemplate.opsForValue().set("rt:" + user.getId() + ":" + deviceId, tokenId, 7, TimeUnit.DAYS);
