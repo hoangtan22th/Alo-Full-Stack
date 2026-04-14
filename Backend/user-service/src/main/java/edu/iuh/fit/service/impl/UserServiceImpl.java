@@ -1,9 +1,11 @@
 package edu.iuh.fit.service.impl;
 
+import edu.iuh.fit.common_service.exception.DuplicateResourceException;
 import edu.iuh.fit.dto.request.UserUpdateRequest;
 import edu.iuh.fit.dto.response.UserDto;
 import edu.iuh.fit.entity.UserProfile;
 import edu.iuh.fit.repository.UserProfileRepository;
+import edu.iuh.fit.service.RabbitMQPublisher;
 import edu.iuh.fit.service.S3Service;
 import edu.iuh.fit.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -21,10 +23,11 @@ import java.util.stream.Collectors;
 public class UserServiceImpl implements UserService {
 
     private static final String DEFAULT_AVATAR_URL = "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_user_images/user_avt.png";
-    private static final String DEFAULT_COVER_URL   = "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg";
+    private static final String DEFAULT_COVER_URL = "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg";
 
     private final UserProfileRepository userProfileRepository;
     private final S3Service s3Service;
+    private final RabbitMQPublisher rabbitMQPublisher;
 
     @Override
     public UserDto getUserById(String id) {
@@ -51,18 +54,27 @@ public class UserServiceImpl implements UserService {
                 user.setLastName("");
             }
         }
-        if (request.getAvatar() != null) user.setAvatarUrl(request.getAvatar());
-        if (request.getCoverImage() != null) user.setCoverUrl(request.getCoverImage());
-        if (request.getPhoneNumber() != null) user.setPhoneNumber(request.getPhoneNumber());
-        
-        if (request.getGender() != null) {
-            user.setGender(UserProfile.Gender.values()[Math.min(Math.max(0, request.getGender()), UserProfile.Gender.values().length - 1)]);
+        if (request.getAvatar() != null)
+            user.setAvatarUrl(request.getAvatar());
+        if (request.getCoverImage() != null)
+            user.setCoverUrl(request.getCoverImage());
+
+        String reqPhone = request.getPhoneNumber();
+        if (reqPhone != null && !reqPhone.trim().isEmpty() && !reqPhone.equals(user.getPhoneNumber())) {
+            throw new edu.iuh.fit.common_service.exception.AppException(400, "Số điện thoại không được phép thay đổi sau khi đăng ký");
         }
-        
-        if (request.getDateOfBirth() != null) user.setDateOfBirth(request.getDateOfBirth());
-        if (request.getBio() != null) user.setBio(request.getBio());
+        if (request.getGender() != null) {
+            user.setGender(UserProfile.Gender.values()[Math.min(Math.max(0, request.getGender()),
+                    UserProfile.Gender.values().length - 1)]);
+        }
+
+        if (request.getDateOfBirth() != null)
+            user.setDateOfBirth(request.getDateOfBirth());
+        if (request.getBio() != null)
+            user.setBio(request.getBio());
 
         UserProfile updatedUser = userProfileRepository.save(user);
+
         return UserDto.fromEntity(updatedUser);
     }
 
@@ -70,7 +82,7 @@ public class UserServiceImpl implements UserService {
     public void deleteUser(String id) {
         UserProfile user = userProfileRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("UserProfile not found with id: " + id));
-        // Soft delete logic should ideally be handled via Account, 
+        // Soft delete logic should ideally be handled via Account,
         // Here we just ignore or clear data
     }
 

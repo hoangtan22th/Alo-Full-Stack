@@ -32,4 +32,18 @@ public class RabbitMQPublisher {
         );
         log.info("Published UserRegisteredEvent for userID: {}", userId);
     }
+
+    public void publishForceLogoutEvent(String userId, String keepSessionId) {
+        java.util.Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("target", userId);
+        payload.put("event", "FORCE_LOGOUT");
+        
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("message", "Tài khoản của bạn đã được đăng nhập ở một thiết bị khác");
+        data.put("keepSessionId", keepSessionId);
+        payload.put("data", data);
+
+        rabbitTemplate.convertAndSend(RabbitMQConfig.QUEUE_REALTIME_EVENTS, payload);
+        log.info("Published FORCE_LOGOUT event for userID: {}", userId);
+    }
 }

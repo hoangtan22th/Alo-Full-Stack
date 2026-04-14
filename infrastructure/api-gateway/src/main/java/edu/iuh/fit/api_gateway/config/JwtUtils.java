@@ -2,10 +2,12 @@ package edu.iuh.fit.api_gateway.config;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.io.Decoders;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 @Component
 public class JwtUtils {
@@ -14,7 +16,7 @@ public class JwtUtils {
     private String secret;
 
     public String extractUserId(String token) {
-        SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
         return Jwts.parserBuilder()
                 .setSigningKey(key)
                 .build()
@@ -24,7 +26,7 @@ public class JwtUtils {
     }
 
     public String extractSessionId(String token) {
-        SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
         return Jwts.parserBuilder()
                 .setSigningKey(key)
                 .build()
@@ -34,13 +36,17 @@ public class JwtUtils {
     }
 
     public String extractRoles(String token) {
-        SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-        Object roles = Jwts.parserBuilder()
+        SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
+        Object rolesObj = Jwts.parserBuilder()
                 .setSigningKey(key)
                 .build()
                 .parseClaimsJws(token)
                 .getBody()
                 .get("roles");
-        return roles != null ? roles.toString() : "";
+        
+        if (rolesObj instanceof List<?> listRoles) {
+            return String.join(",", listRoles.stream().map(Object::toString).toList());
+        }
+        return rolesObj != null ? rolesObj.toString() : "";
     }
 }

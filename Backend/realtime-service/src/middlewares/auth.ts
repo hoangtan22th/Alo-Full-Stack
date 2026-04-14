@@ -21,6 +21,7 @@ export const socketAuthMiddleware = (
 
     // Spring Boot Jwts thường đẩy UserId vào Subject (sub) thay vì userId.
     const userId = decoded.sub || decoded.userId;
+    const sessionId = (decoded as any).sessionId;
 
     if (!userId) {
       return next(
@@ -31,6 +32,9 @@ export const socketAuthMiddleware = (
     }
 
     socket.data.userId = String(userId);
+    if (sessionId) {
+      socket.data.sessionId = String(sessionId);
+    }
     next();
   } catch (err) {
     next(new Error("Authentication error: Invalid token"));
