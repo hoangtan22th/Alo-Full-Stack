@@ -31,23 +31,27 @@ export async function initRabbitMQ(io: Server) {
     amqpChannel = await connection.createChannel();
 
     // 1. Phải khai báo lại Exchange để đảm bảo có tồn tại
-    await amqpChannel.assertExchange(EXCHANGES.CHAT, "topic", { durable: true });
+    await amqpChannel.assertExchange(EXCHANGES.CHAT, "topic", {
+      durable: true,
+    });
 
     // 2. Khai báo 1 Queue cố định (Durable)
     const q = await amqpChannel.assertQueue(QUEUE_NAME, { durable: true });
 
     // 3. Bind Queue vào Exchange Chat
-    // Lắng nghe tất cả sự kiện tin nhắn
-    await amqpChannel.bindQueue(q.queue, EXCHANGES.CHAT, "chat.message.*");
+    // Lắng nghe tất cả sự kiện tin nhắn (Dùng # để match nhiều cấp độ chữ, ví dụ: chat.message.reaction.updated)
+    await amqpChannel.bindQueue(q.queue, EXCHANGES.CHAT, "chat.message.#");
     // Lắng nghe sự kiện update conversation
-    await amqpChannel.bindQueue(q.queue, EXCHANGES.CHAT, "chat.conversation.*");
+    await amqpChannel.bindQueue(q.queue, EXCHANGES.CHAT, "chat.conversation.#");
 
-    console.log(`[RabbitMQ] Bounded to Exchange [${EXCHANGES.CHAT}] on queue [${q.queue}]`);
+    console.log(
+      `[RabbitMQ] Bounded to Exchange [${EXCHANGES.CHAT}] on queue [${q.queue}]`,
+    );
 
     // KHÔI PHỤC LẠI LUỒNG CŨ CHO CÁC SERVICE KHÁC CHƯA REFACTOR (Ví dụ Auth Service bắn FORCE_LOGOUT vào realtime_events)
     const legacyQueue = "realtime_events";
     await amqpChannel.assertQueue(legacyQueue, { durable: true });
-    
+
     // Xử lý chung message handler
     const processMessage = (msg: amqp.ConsumeMessage | null) => {
       if (!msg) return;
@@ -60,35 +64,46 @@ export async function initRabbitMQ(io: Server) {
         const routingKey = msg.fields.routingKey;
         if (routingKey) {
           const { type, data } = payload;
-          
+
           if (routingKey === ROUTING_KEYS.MESSAGE_CREATED) {
             io.to(`room_${data.conversationId}`).emit("message-received", data);
           } else if (routingKey === ROUTING_KEYS.MESSAGE_READ) {
             io.to(`room_${data.conversationId}`).emit("messages-read", data);
           } else if (routingKey === ROUTING_KEYS.MESSAGE_REACTION) {
-            io.to(`room_${data.conversationId}`).emit("message-reaction-updated", data);
+            io.to(`room_${data.conversationId}`).emit(
+              "message-reaction-updated",
+              data,
+            );
           } else if (routingKey === ROUTING_KEYS.MESSAGE_REVOKED) {
             io.to(`room_${data.conversationId}`).emit("message-revoked", data);
           } else if (routingKey === ROUTING_KEYS.MESSAGE_DELETED) {
             io.to(`room_${data.conversationId}`).emit("MESSAGE_DELETED", data); // Tuỳ UI bạn map event nào
           } else if (routingKey === ROUTING_KEYS.CONVERSATION_UPDATED) {
             // Broadcast đến các thành viên trong room chat
-            io.to(`room_${data.conversationId}`).emit("CONVERSATION_UPDATED", data);
+            io.to(`room_${data.conversationId}`).emit(
+              "CONVERSATION_UPDATED",
+              data,
+            );
           }
-        } 
+        }
         // NẾU LÀ PAYLOAD LẠC HẬU TỪ DIRECT QUEUE (Ví dụ FORCE_LOGOUT)
         else {
           if (payload.target) {
-            if (payload.event === "FORCE_LOGOUT" && payload.data?.killedSessionIds) {
-              io.in(`user_${payload.target}`).fetchSockets().then((sockets) => {
-                sockets.forEach((s) => {
-                  const killedIds: string[] = payload.data.killedSessionIds;
-                  if (killedIds.includes(s.data.sessionId)) {
-                    s.emit(payload.event, payload.data);
-                    s.disconnect();
-                  }
+            if (
+              payload.event === "FORCE_LOGOUT" &&
+              payload.data?.killedSessionIds
+            ) {
+              io.in(`user_${payload.target}`)
+                .fetchSockets()
+                .then((sockets) => {
+                  sockets.forEach((s) => {
+                    const killedIds: string[] = payload.data.killedSessionIds;
+                    if (killedIds.includes(s.data.sessionId)) {
+                      s.emit(payload.event, payload.data);
+                      s.disconnect();
+                    }
+                  });
                 });
-              });
             } else {
               io.to(`user_${payload.target}`).emit(payload.event, payload.data);
             }
@@ -110,7 +125,6 @@ export async function initRabbitMQ(io: Server) {
     // Bắt đầu lắng nghe cả 2 source
     amqpChannel.consume(q.queue, processMessage);
     amqpChannel.consume(legacyQueue, processMessage);
-
   } catch (error) {
     console.error("[RabbitMQ] Critical Init Error", error);
   }
