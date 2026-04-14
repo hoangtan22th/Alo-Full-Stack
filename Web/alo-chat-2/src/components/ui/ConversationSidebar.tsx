@@ -479,8 +479,10 @@ export default function ConversationSidebar() {
               <div
                 key={chat.id}
                 onClick={() => router.push(`/chat/${chat.id}`)}
-                className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all group relative ${
-                  conversationId === chat.id ? "bg-[#F5F5F5]" : "hover:bg-gray-50 border border-transparent hover:border-gray-100"
+                className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-[background-color] duration-150 group relative select-none outline-none border ${
+                  conversationId === chat.id 
+                    ? "bg-[#F5F5F5] border-[#F5F5F5]" 
+                    : "hover:bg-gray-50 border-transparent hover:border-gray-100"
                 } ${pinnedIds.has(chat.id) ? "bg-blue-50/30 shadow-sm" : ""}`}
               >
                 <div className="relative shrink-0">
