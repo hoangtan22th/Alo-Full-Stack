@@ -19,9 +19,9 @@ import * as ImagePicker from "expo-image-picker";
 import {
   contactService,
   FriendshipResponseDTO,
-} from "../../../services/contactService";
-import { groupService } from "../../../services/groupService";
-import { useAuth } from "../../../contexts/AuthContext";
+} from "../../services/contactService";
+import { groupService } from "../../services/groupService";
+import { useAuth } from "../../contexts/AuthContext";
 
 type Contact = {
   id: string;
@@ -120,15 +120,36 @@ export default function CreateGroupScreen() {
 
     try {
       setIsLoading(true);
-      await groupService.createGroup(
+      const result = await groupService.createGroup(
         groupName.trim(),
         selectedContacts,
         groupAvatarUri || undefined,
       );
-      Alert.alert("Thành công", "Tạo nhóm thành công!", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+
+      // Backend trả về group object có _id hoặc id
+      const newGroup = result?.data?.data ? result.data.data : result?.data ? result.data : result;
+      const newGroupId = newGroup?._id || newGroup?.id;
+
+      if (newGroupId) {
+        // Chuyển thẳng sang màn hình chat, dùng replace để giải phóng màn hình tạo nhóm khỏi stack
+        router.replace({
+          pathname: "/chat/[id]",
+          params: {
+            id: newGroupId,
+            name: groupName.trim(),
+            isGroup: "true",
+            avatar: groupAvatarUri || "",
+            membersCount: (selectedContacts.length + 1).toString(),
+          },
+        } as any);
+      } else {
+        // Fallback nếu không lấy được ID
+        Alert.alert("Thành công", "Tạo nhóm thành công!", [
+          { text: "OK", onPress: () => router.back() },
+        ]);
+      }
     } catch (error) {
+      console.error("Lỗi tạo nhóm:", error);
       Alert.alert("Lỗi", "Đã xảy ra lỗi khi tạo nhóm");
     } finally {
       setIsLoading(false);
