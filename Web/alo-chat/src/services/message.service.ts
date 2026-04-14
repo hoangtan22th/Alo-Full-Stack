@@ -85,3 +85,29 @@ export const markMessagesAsRead = async (conversationId: string): Promise<any> =
     throw error;
   }
 };
+
+/**
+ * Thả cảm xúc hoặc spam emoji
+ */
+export const reactToMessage = async (messageId: string, emoji: string): Promise<any> => {
+  try {
+    const response = await axiosClient.post(`/messages/${messageId}/reactions`, { emoji });
+    return response;
+  } catch (error) {
+    console.error("Error reacting to message:", error);
+    throw error;
+  }
+};
+
+/**
+ * Xóa sạch cảm xúc của mình trên tin nhắn
+ */
+export const clearReactions = async (messageId: string): Promise<any> => {
+  try {
+    const response = await axiosClient.delete(`/messages/${messageId}/reactions`);
+    return response;
+  } catch (error) {
+    console.error("Error clearing reactions:", error);
+    throw error;
+  }
+};
