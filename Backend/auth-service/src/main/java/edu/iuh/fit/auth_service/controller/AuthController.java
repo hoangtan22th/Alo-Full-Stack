@@ -6,6 +6,7 @@ import edu.iuh.fit.auth_service.dto.request.RegistrationOtpRequest;
 import edu.iuh.fit.auth_service.dto.response.UserResponse;
 import edu.iuh.fit.auth_service.dto.response.UserSessionResponse;
 import edu.iuh.fit.auth_service.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -27,7 +28,7 @@ public class AuthController {
 
     @PostMapping("/send-otp")
     public ResponseEntity<ApiResponse<String>> sendOtp(@Valid @RequestBody RegistrationOtpRequest request) {
-        authService.sendRegistrationOtp(request.email());
+        authService.sendRegistrationOtp(request.email(), request.phoneNumber());
         return ResponseEntity.ok(ApiResponse.success("Mã xác nhận đã được gửi đến email của bạn"));
     }
 
@@ -39,15 +40,15 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<Map<String, String>>> login(@RequestBody LoginRequest request,
-            HttpServletResponse response) {
-        Map<String, String> tokens = authService.login(request, response);
+            HttpServletRequest httpRequest, HttpServletResponse response) {
+        Map<String, String> tokens = authService.login(request, httpRequest, response);
         return ResponseEntity.ok(ApiResponse.success(tokens));
     }
 
     @PostMapping("/google")
     public ResponseEntity<ApiResponse<Map<String, String>>> loginWithGoogle(@RequestBody GoogleLoginRequest request,
-            HttpServletResponse response) {
-        Map<String, String> tokens = authService.loginWithGoogle(request, response);
+            HttpServletRequest httpRequest, HttpServletResponse response) {
+        Map<String, String> tokens = authService.loginWithGoogle(request, httpRequest, response);
         return ResponseEntity.ok(ApiResponse.success(tokens));
     }
 
@@ -118,8 +119,14 @@ public class AuthController {
     // Đăng xuất hiện tại
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<String>> logout(
-            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            @CookieValue(name = "refreshToken", required = false) String cookieRefreshToken,
+            @RequestBody(required = false) Map<String, String> body,
             jakarta.servlet.http.HttpServletResponse response) {
+
+        String refreshToken = cookieRefreshToken;
+        if (refreshToken == null && body != null) {
+            refreshToken = body.get("refreshToken");
+        }
 
         if (refreshToken != null && !refreshToken.isBlank()) {
             try {

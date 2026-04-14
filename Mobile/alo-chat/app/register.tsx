@@ -19,12 +19,14 @@ export default function RegisterScreen() {
   const [form, setForm] = useState({
     fullName: "",
     email: "",
+    phoneNumber: "",
     password: "",
     confirmPassword: "",
   });
   const [errors, setErrors] = useState({
     fullName: "",
     email: "",
+    phoneNumber: "",
     password: "",
     confirmPassword: "",
   });
@@ -36,7 +38,7 @@ export default function RegisterScreen() {
 
   // Regex tĩnh
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  // Bắt đầu bằng 0, có 10 chữ số, các đầu số mạng phổ biến VN
+  // Bắt đầu bằng 0, có 10 chữ số, các đầu số mạng phổ biến VN ^0[0-9]{9}$
   const phoneRegex = /^0[35789]\d{8}$/;
   // Format password: Ít nhất 8 ký tự, có xét chữ Hoa, chữ Thường và Số
   const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
@@ -50,6 +52,8 @@ export default function RegisterScreen() {
     } else {
       if (field === "email" && !emailRegex.test(value)) {
         errorMsg = "Email không đúng định dạng";
+      } else if (field === "phoneNumber" && !phoneRegex.test(value)) {
+        errorMsg = "Số điện thoại không đúng định dạng (10 số, bắt đầu bằng 0)";
       } else if (field === "password" && !passwordRegex.test(value)) {
         errorMsg = "Mật khẩu phải >= 8 ký tự, gồm chữ Hoa, chữ Thường và Số";
       } else if (field === "confirmPassword" && value !== form.password) {
@@ -69,13 +73,18 @@ export default function RegisterScreen() {
 
   // Hàm gọi API Gửi OTP
   const handleSendOtp = async () => {
-    if (!form.fullName || !form.email || !form.password) {
+    if (!form.fullName || !form.email || !form.phoneNumber || !form.password) {
       Alert.alert("Thông báo", "Vui lòng nhập đầy đủ thông tin");
       return;
     }
 
     if (!emailRegex.test(form.email)) {
       Alert.alert("Lỗi", "Vui lòng nhập đúng định dạng Email");
+      return;
+    }
+
+    if (!phoneRegex.test(form.phoneNumber)) {
+      Alert.alert("Lỗi", "Số điện thoại không đúng hợp lệ (10 số, bắt đầu bằng 0)");
       return;
     }
 
@@ -94,8 +103,9 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      await api.post("/auth/send-otp", { 
-        email: form.email.trim()
+      await api.post("/auth/send-otp", {
+        email: form.email.trim(),
+        phoneNumber: form.phoneNumber.trim()
       });
       Alert.alert("Thành công", "Mã OTP 6 số đã được gửi tới email của bạn!");
       setStep(2); // Chuyển sang màn hình nhập OTP
@@ -106,8 +116,8 @@ export default function RegisterScreen() {
         const payloadData = error.response?.data?.data;
         let detailedError = "";
         if (payloadData && typeof payloadData === "object") {
-           // Lấy lỗi đầu tiên từ object validation errors
-           detailedError = Object.values(payloadData)[0] as string;
+          // Lấy lỗi đầu tiên từ object validation errors
+          detailedError = Object.values(payloadData)[0] as string;
         }
 
         const errorMsg = detailedError || error.response?.data?.message || "Không thể gửi OTP. Vui lòng thử lại.";
@@ -130,6 +140,7 @@ export default function RegisterScreen() {
       await api.post("/auth/register", {
         fullName: form.fullName.trim(),
         email: form.email.trim(),
+        phoneNumber: form.phoneNumber.trim(),
         password: form.password,
         otp: otp.trim(),
       });
@@ -144,10 +155,10 @@ export default function RegisterScreen() {
         const payloadData = error.response?.data?.data;
         let detailedError = "";
         if (payloadData && typeof payloadData === "object") {
-           // Lấy lỗi đầu tiên từ object validation errors
-           detailedError = Object.values(payloadData)[0] as string;
+          // Lấy lỗi đầu tiên từ object validation errors
+          detailedError = Object.values(payloadData)[0] as string;
         }
-        
+
         const errorMsg = detailedError || error.response?.data?.message || "Đăng ký thất bại. Kiểm tra lại thông tin.";
         Alert.alert("Lỗi", errorMsg);
       }
@@ -223,6 +234,20 @@ export default function RegisterScreen() {
                   />
                 </View>
                 {errors.email ? <Text style={styles.errorText}>{errors.email}</Text> : null}
+
+                <Text style={styles.inputLabel}>SỐ ĐIỆN THOẠI</Text>
+                <View style={[styles.inputWrapper, errors.phoneNumber ? styles.inputError : null]}>
+                  <TextInput
+                    placeholder="0912345678"
+                    style={styles.input}
+                    keyboardType="number-pad"
+                    value={form.phoneNumber}
+                    onChangeText={(val) => handleTextChange("phoneNumber", val)}
+                    placeholderTextColor="#aaa"
+                    maxLength={10}
+                  />
+                </View>
+                {errors.phoneNumber ? <Text style={styles.errorText}>{errors.phoneNumber}</Text> : null}
 
                 <Text style={styles.inputLabel}>MẬT KHẨU</Text>
                 <View style={[styles.inputWrapper, errors.password ? styles.inputError : null]}>

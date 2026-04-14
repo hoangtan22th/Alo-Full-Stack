@@ -144,12 +144,11 @@ export class MessageDataService {
    */
   async addReaction(messageId: string, userId: string, emoji: string): Promise<IMessage | null> {
     try {
-      // 1. Thử cập nhật nếu đã tồn tại tổ hợp userId + emoji
+      // 1. Thử cập nhật nếu đã tồn tại tổ hợp userId + emoji bằng $elemMatch
       const result = await Message.updateOne(
         { 
           _id: new Types.ObjectId(messageId),
-          "reactions.userId": userId,
-          "reactions.emoji": emoji
+          reactions: { $elemMatch: { userId: userId, emoji: emoji } }
         },
         { $inc: { "reactions.$.count": 1 } }
       );

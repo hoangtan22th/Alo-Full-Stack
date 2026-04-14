@@ -3,6 +3,10 @@ import React, { useEffect, useState } from "react";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useRouter, usePathname } from "next/navigation";
 
+import Swal from "sweetalert2";
+
+import { socketService } from "../../services/socketService";
+
 // Các route cho phép xem khi chưa đăng nhập
 const publicRoutes = ["/login", "/register"];
 
@@ -19,8 +23,30 @@ export default function AuthProvider({
   // 1. Xử lý event logout toàn cục (ví dụ từ axios interceptor)
   useEffect(() => {
     const handleForceLogout = () => {
-      logout();
-      router.push("/login");
+      // Ngăn chặn hiển thị đè đúp Swal nếu đã có một cái đang mở
+      if (document.body.classList.contains("swal2-shown")) {
+         return;
+      }
+
+      // 1. Chỉ ngắt kết nối socket để ko gửi/nhận thêm tin nhắn (treo UI lại)
+      socketService.disconnect();
+      
+      // 2. Hiển thị Swal bằng static import và đợi user xác nhận
+      Swal.fire({
+        icon: 'warning',
+        title: 'Đã ngắt kết nối',
+        text: 'Tài khoản của bạn đã bị đăng nhập ở một thiết bị khác. Vui lòng đăng nhập lại.',
+        confirmButtonColor: '#000',
+        allowOutsideClick: false, // Bắt buộc user phải bấm OK
+        allowEscapeKey: false,
+      }).then((result) => {
+        // Chỉ logout khi người dùng thực sự bấm nút OK (Confirm)
+        if (result.isConfirmed) {
+          // 3. Gọi logout để huỷ state + chuyển trang TỰ NGUYỆN
+          logout();
+          router.push("/login"); // Push login sau khi logout
+        }
+      });
     };
 
     window.addEventListener("force_logout", handleForceLogout);
@@ -32,12 +58,21 @@ export default function AuthProvider({
     setMounted(true);
   }, []);
 
-  // 3. Logic bảo vệ route (Private/Public)
+  // 3. Logic bảo vệ route (Private/Public) & Quản lý Socket Toàn Cục
   useEffect(() => {
     if (!mounted) return;
 
     const token = localStorage.getItem("accessToken");
     const isAuth = isAuthenticated || !!token;
+
+    // Quản lý Socket
+    if (isAuth) {
+      if (!socketService.connected) {
+        socketService.connect();
+      }
+    } else {
+      socketService.disconnect();
+    }
 
     // Kiểm tra xem route hiện tại có phải là route public hay không
     const isPublicRoute = publicRoutes.some((route) =>
