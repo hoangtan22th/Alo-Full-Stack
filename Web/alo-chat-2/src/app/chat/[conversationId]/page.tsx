@@ -78,8 +78,8 @@ export default function ChatPage() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   // Reaction viewers
-  const [viewingReactions, setViewingReactions] = useState<{messageId: string, reactions: any[], activeTab: string} | null>(null);
-  const [userCache, setUserCache] = useState<Record<string, {name: string, avatar: string}>>({});
+  const [viewingReactions, setViewingReactions] = useState<{ messageId: string, reactions: any[], activeTab: string } | null>(null);
+  const [userCache, setUserCache] = useState<Record<string, { name: string, avatar: string }>>({});
 
   const fetchUserInfo = async (userId: string) => {
     if (userCache[userId] || !userId) return;
@@ -95,7 +95,7 @@ export default function ChatPage() {
           }
         }));
       }
-    } catch {}
+    } catch { }
   };
 
   const EMOJI_MAP: Record<string, string> = {
@@ -144,7 +144,7 @@ export default function ChatPage() {
                       u.fullName || u.username || u.name || "Người dùng";
                     chatAvatar = u.avatar || chatAvatar;
                   }
-                } catch {}
+                } catch { }
               }
             }
 
@@ -212,7 +212,7 @@ export default function ChatPage() {
                 u.fullName || u.username || u.name || "Người dùng";
               displayAvatar = u.avatar || displayAvatar;
             }
-          } catch {}
+          } catch { }
         }
       }
 
@@ -395,7 +395,7 @@ export default function ChatPage() {
       const lastMsg = last?.messages[last.messages.length - 1];
       const gap = lastMsg
         ? new Date(msg.createdAt).getTime() -
-          new Date(lastMsg.createdAt).getTime()
+        new Date(lastMsg.createdAt).getTime()
         : Infinity;
       if (last && last.isMine === isMine && gap < FIVE_MIN) {
         last.messages.push(msg);
@@ -448,11 +448,10 @@ export default function ChatPage() {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`text-[13px] font-bold relative ${
-                    activeTab === tab
-                      ? "text-black"
-                      : "text-gray-400 hover:text-gray-600"
-                  }`}
+                  className={`text-[13px] font-bold relative ${activeTab === tab
+                    ? "text-black"
+                    : "text-gray-400 hover:text-gray-600"
+                    }`}
                 >
                   {tab}
                   {activeTab === tab && (
@@ -488,11 +487,10 @@ export default function ChatPage() {
               <div
                 key={chat.id}
                 onClick={() => router.push(`/chat/${chat.id}`)}
-                className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all ${
-                  conversationId === chat.id
-                    ? "bg-[#F5F5F5]"
-                    : "hover:bg-gray-50"
-                }`}
+                className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all ${conversationId === chat.id
+                  ? "bg-[#F5F5F5]"
+                  : "hover:bg-gray-50"
+                  }`}
               >
                 <div className="relative shrink-0">
                   {chat.avatar ? (
@@ -639,24 +637,23 @@ export default function ChatPage() {
                       // Bo góc bubble
                       const bubbleRadius = isMine
                         ? [
-                            "rounded-2xl",
-                            isFirst && !isLast ? "rounded-br-md" : "",
-                            !isFirst && !isLast ? "rounded-r-md" : "",
-                            !isFirst && isLast ? "rounded-br-sm" : "",
-                          ].join(" ")
+                          "rounded-2xl",
+                          isFirst && !isLast ? "rounded-br-md" : "",
+                          !isFirst && !isLast ? "rounded-r-md" : "",
+                          !isFirst && isLast ? "rounded-br-sm" : "",
+                        ].join(" ")
                         : [
-                            "rounded-2xl",
-                            isFirst && !isLast ? "rounded-bl-md" : "",
-                            !isFirst && !isLast ? "rounded-l-md" : "",
-                            !isFirst && isLast ? "rounded-bl-sm" : "",
-                          ].join(" ");
+                          "rounded-2xl",
+                          isFirst && !isLast ? "rounded-bl-md" : "",
+                          !isFirst && !isLast ? "rounded-l-md" : "",
+                          !isFirst && isLast ? "rounded-bl-sm" : "",
+                        ].join(" ");
 
                       return (
                         <div
                           key={msg._id}
-                          className={`flex items-center gap-1.5 ${
-                            isMine ? "flex-row-reverse" : "flex-row"
-                          }`}
+                          className={`flex items-center gap-1.5 ${isMine ? "flex-row-reverse" : "flex-row"
+                            }`}
                           onMouseEnter={(e) => {
                             setHoveredMsgId(msg._id);
                             setMousePos({ x: e.clientX, y: e.clientY });
@@ -706,9 +703,8 @@ export default function ChatPage() {
                                   href={msg.content}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className={`flex items-center gap-3 p-3 hover:opacity-80 transition w-fit max-w-full ${
-                                    isMine ? "bg-black text-white" : "bg-[#F5F5F5] text-gray-900"
-                                  } ${bubbleRadius}`}
+                                  className={`flex items-center gap-3 p-3 hover:opacity-80 transition w-fit max-w-full ${isMine ? "bg-black text-white" : "bg-[#F5F5F5] text-gray-900"
+                                    } ${bubbleRadius}`}
                                 >
                                   <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
                                     <DocumentIcon className="w-5 h-5" />
@@ -727,11 +723,10 @@ export default function ChatPage() {
                                 </a>
                               ) : (
                                 <div
-                                  className={`px-4 py-2.5 text-[14px] font-medium leading-relaxed w-fit max-w-full ${
-                                    isMine
-                                      ? "bg-black text-white shadow-md"
-                                      : "bg-[#F5F5F5] text-gray-900"
-                                  } ${bubbleRadius}`}
+                                  className={`px-4 py-2.5 text-[14px] font-medium leading-relaxed w-fit max-w-full ${isMine
+                                    ? "bg-black text-white shadow-md"
+                                    : "bg-[#F5F5F5] text-gray-900"
+                                    } ${bubbleRadius}`}
                                 >
                                   {msg.content}
                                 </div>
@@ -740,193 +735,186 @@ export default function ChatPage() {
 
 
                               {/* Hover Controls (Reaction & Menu) đặt cạnh text bubble */}
-                              <div className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 py-4 ${
-                                isMine ? "right-full pr-2" : "left-full pl-2"
-                              } ${
-                                hoveredMsgId === msg._id ? "opacity-100" : "opacity-0 pointer-events-none"
-                              } transition-opacity`}>
-                            {/* Nút thả cảm xúc */}
-                            <div className="relative">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveMenu(null);
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  setMenuPosition(rect.top < window.innerHeight / 2 ? "bottom" : "top");
-                                  setActiveReactionMenu(activeReactionMenu === msg._id ? null : msg._id);
-                                }}
-                                className="w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
-                              >
-                                <FaceSmileIcon className="w-4 h-4" />
-                              </button>
+                              <div className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 py-4 ${isMine ? "right-full pr-2" : "left-full pl-2"
+                                } ${hoveredMsgId === msg._id ? "opacity-100" : "opacity-0 pointer-events-none"
+                                } transition-opacity`}>
+                                {/* Nút thả cảm xúc */}
+                                <div className="relative">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveMenu(null);
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      setMenuPosition(rect.top < window.innerHeight / 2 ? "bottom" : "top");
+                                      setActiveReactionMenu(activeReactionMenu === msg._id ? null : msg._id);
+                                    }}
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
+                                  >
+                                    <FaceSmileIcon className="w-4 h-4" />
+                                  </button>
 
-                              {/* Emoji Picker */}
-                              {activeReactionMenu === msg._id && (
-                                <div
-                                  className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 ${
-                                    isMine ? "right-0" : "left-0"
-                                  } ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
-                                  onMouseLeave={() => setActiveReactionMenu(null)}
-                                >
-                                  {msg.reactions?.some((r: any) => String(r.userId) === String(currentUser?.id || currentUser?._id || currentUser?.userId)) && (
-                                    <div className="border-r border-gray-200 pr-1 flex items-center">
+                                  {/* Emoji Picker */}
+                                  {activeReactionMenu === msg._id && (
+                                    <div
+                                      className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 ${isMine ? "right-0" : "left-0"
+                                        } ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                                      onMouseLeave={() => setActiveReactionMenu(null)}
+                                    >
+                                      {msg.reactions?.some((r: any) => String(r.userId) === String(currentUser?.id || currentUser?._id || currentUser?.userId)) && (
+                                        <div className="border-r border-gray-200 pr-1 flex items-center">
+                                          <button
+                                            onClick={async () => {
+                                              setActiveReactionMenu(null);
+                                              await messageService.clearReactions(msg._id);
+                                            }}
+                                            className="w-8 h-8 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all rounded-full text-gray-400"
+                                            title="Xoá cảm xúc"
+                                          >
+                                            <XMarkIcon className="w-5 h-5" />
+                                          </button>
+                                        </div>
+                                      )}
+
+                                      {Object.entries(EMOJI_MAP).map(([key, icon]) => (
+                                        <button
+                                          key={key}
+                                          onClick={() => handleToggleReaction(msg._id, key)}
+                                          className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 hover:scale-125 transition-all rounded-full text-lg"
+                                        >
+                                          {icon}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Nút "..." menu */}
+                                <div className="relative">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveReactionMenu(null);
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      setMenuPosition(rect.top < window.innerHeight / 2 ? "bottom" : "top");
+                                      setActiveMenu(activeMenu === msg._id ? null : msg._id);
+                                    }}
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
+                                  >
+                                    <EllipsisHorizontalIcon className="w-4 h-4" />
+                                  </button>
+
+                                  {/* Context Menu */}
+                                  {activeMenu === msg._id && (
+                                    <div
+                                      className={`absolute z-50 w-46 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 overflow-hidden ${isMine ? "right-0" : "left-0"
+                                        } ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                                      onMouseLeave={() => setActiveMenu(null)}
+                                    >
+                                      {!msg.isRevoked && msg.type === "text" && (
+                                        <button
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(msg.content);
+                                            setActiveMenu(null);
+                                          }}
+                                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
+                                        >
+                                          <ClipboardDocumentIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                                          Copy tin nhắn
+                                        </button>
+                                      )}
                                       <button
-                                        onClick={async () => {
-                                          setActiveReactionMenu(null);
-                                          await messageService.clearReactions(msg._id);
-                                        }}
-                                        className="w-8 h-8 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all rounded-full text-gray-400"
-                                        title="Xoá cảm xúc"
+                                        onClick={() => setActiveMenu(null)}
+                                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
                                       >
-                                        <XMarkIcon className="w-5 h-5" />
+                                        <MapPinIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                                        Ghim tin nhắn
+                                      </button>
+                                      <div className="my-1 border-t border-gray-100" />
+                                      {isMine && !msg.isRevoked && (
+                                        <button
+                                          onClick={async () => {
+                                            setActiveMenu(null);
+                                            const ok = await messageService.deleteMessage(msg._id);
+                                            if (ok) {
+                                              setMessages((prev) =>
+                                                prev.map((m) =>
+                                                  m._id === msg._id
+                                                    ? { ...m, isRevoked: true, content: "" }
+                                                    : m
+                                                )
+                                              );
+                                            }
+                                          }}
+                                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-orange-500 hover:bg-orange-50 transition text-left"
+                                        >
+                                          <ArrowUturnLeftIcon className="w-4 h-4 shrink-0" />
+                                          Thu hồi tin nhắn
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => {
+                                          setActiveMenu(null);
+                                          setMessages((prev) =>
+                                            prev.filter((m) => m._id !== msg._id)
+                                          );
+                                        }}
+                                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition text-left"
+                                      >
+                                        <TrashIcon className="w-4 h-4 shrink-0" />
+                                        Xóa tin nhắn
                                       </button>
                                     </div>
                                   )}
+                                </div> {/* Nút "..." menu */}
+                              </div>
 
-                                  {Object.entries(EMOJI_MAP).map(([key, icon]) => (
-                                    <button
-                                      key={key}
-                                      onClick={() => handleToggleReaction(msg._id, key)}
-                                      className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 hover:scale-125 transition-all rounded-full text-lg"
+                            </div> {/* Đóng thẻ Wrapper cho nội dung và hover controls */}
+
+                            {/* Hiển thị các cảm xúc đã thả */}
+                            {msg.reactions && msg.reactions.length > 0 && (
+                              <div className={`flex flex-wrap gap-1 mt-1 ${isMine ? "justify-end" : "justify-start"}`}>
+                                {Array.from(new Set(msg.reactions.map((r: any) => r.emoji))).map((emojiKey: any) => {
+                                  const peopleReacted = msg.reactions!.filter((r: any) => r.emoji === emojiKey);
+                                  return (
+                                    <div
+                                      key={emojiKey}
+                                      onClick={() => {
+                                        setViewingReactions({ messageId: msg._id, reactions: msg.reactions!, activeTab: "all" });
+                                        msg.reactions!.forEach((r: any) => fetchUserInfo(r.userId));
+                                      }}
+                                      onMouseEnter={() => {
+                                        peopleReacted.forEach((r: any) => fetchUserInfo(r.userId));
+                                      }}
+                                      title={peopleReacted.map(r => userCache[r.userId]?.name || `User #${r.userId.substring(0, 4)}`).join(", ")}
+                                      className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] cursor-pointer transition ${msg.reactions!.some((r: any) => r.emoji === emojiKey && String(r.userId) === String(currentUser?.id || currentUser?._id || currentUser?.userId))
+                                        ? "bg-blue-100 text-blue-600 border border-blue-200"
+                                        : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
+                                        }`}
                                     >
-                                      {icon}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Nút "..." menu */}
-                            <div className="relative">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveReactionMenu(null);
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  setMenuPosition(rect.top < window.innerHeight / 2 ? "bottom" : "top");
-                                  setActiveMenu(activeMenu === msg._id ? null : msg._id);
-                                }}
-                                className="w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
-                              >
-                                <EllipsisHorizontalIcon className="w-4 h-4" />
-                              </button>
-
-                              {/* Context Menu */}
-                            {activeMenu === msg._id && (
-                              <div
-                                className={`absolute z-50 w-46 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 overflow-hidden ${
-                                  isMine ? "right-0" : "left-0"
-                                } ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
-                                onMouseLeave={() => setActiveMenu(null)}
-                              >
-                                {!msg.isRevoked && msg.type === "text" && (
-                                  <button
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(msg.content);
-                                      setActiveMenu(null);
-                                    }}
-                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
-                                  >
-                                    <ClipboardDocumentIcon className="w-4 h-4 text-gray-400 shrink-0" />
-                                    Copy tin nhắn
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => setActiveMenu(null)}
-                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
-                                >
-                                  <MapPinIcon className="w-4 h-4 text-gray-400 shrink-0" />
-                                  Ghim tin nhắn
-                                </button>
-                                <div className="my-1 border-t border-gray-100" />
-                                {isMine && !msg.isRevoked && (
-                                  <button
-                                    onClick={async () => {
-                                      setActiveMenu(null);
-                                      const ok = await messageService.deleteMessage(msg._id);
-                                      if (ok) {
-                                        setMessages((prev) =>
-                                          prev.map((m) =>
-                                            m._id === msg._id
-                                              ? { ...m, isRevoked: true, content: "" }
-                                              : m
-                                          )
-                                        );
-                                      }
-                                    }}
-                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-orange-500 hover:bg-orange-50 transition text-left"
-                                  >
-                                    <ArrowUturnLeftIcon className="w-4 h-4 shrink-0" />
-                                    Thu hồi tin nhắn
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => {
-                                    setActiveMenu(null);
-                                    setMessages((prev) =>
-                                      prev.filter((m) => m._id !== msg._id)
-                                    );
-                                  }}
-                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition text-left"
-                                >
-                                  <TrashIcon className="w-4 h-4 shrink-0" />
-                                  Xóa tin nhắn
-                                </button>
+                                      <span>{EMOJI_MAP[emojiKey as string] || emojiKey}</span>
+                                      <span className="font-bold">
+                                        {peopleReacted.reduce((acc, r: any) => acc + (r.count || 1), 0)}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
-                            </div> {/* Nút "..." menu */}
-                          </div>
+                          </div> {/* Đóng thẻ Bubble */}
 
-                        </div> {/* Đóng thẻ Wrapper cho nội dung và hover controls */}
-
-                        {/* Hiển thị các cảm xúc đã thả */}
-                        {msg.reactions && msg.reactions.length > 0 && (
-                          <div className={`flex flex-wrap gap-1 mt-1 ${isMine ? "justify-end" : "justify-start"}`}>
-                            {Array.from(new Set(msg.reactions.map((r: any) => r.emoji))).map((emojiKey: any) => {
-                              const peopleReacted = msg.reactions!.filter((r: any) => r.emoji === emojiKey);
-                              return (
-                                <div
-                                  key={emojiKey}
-                                  onClick={() => {
-                                    setViewingReactions({ messageId: msg._id, reactions: msg.reactions!, activeTab: "all" });
-                                    msg.reactions!.forEach((r: any) => fetchUserInfo(r.userId));
-                                  }}
-                                  onMouseEnter={() => {
-                                    peopleReacted.forEach((r: any) => fetchUserInfo(r.userId));
-                                  }}
-                                  title={peopleReacted.map(r => userCache[r.userId]?.name || `User #${r.userId.substring(0,4)}`).join(", ")}
-                                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] cursor-pointer transition ${
-                                    msg.reactions!.some((r: any) => r.emoji === emojiKey && String(r.userId) === String(currentUser?.id || currentUser?._id || currentUser?.userId))
-                                      ? "bg-blue-100 text-blue-600 border border-blue-200"
-                                      : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
-                                  }`}
-                                >
-                                  <span>{EMOJI_MAP[emojiKey as string] || emojiKey}</span>
-                                  <span className="font-bold">
-                                    {peopleReacted.reduce((acc, r: any) => acc + (r.count || 1), 0)}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div> {/* Đóng thẻ Bubble */}
-
-                    </div>
+                        </div>
                       );
                     })}
 
                     {/* Footer: timestamp + trạng thái của nhóm — hiện 1 lần */}
-                    <div className={`flex items-center gap-1 mt-0.5 ${
-                      isMine ? "justify-end pr-10" : "pl-10"
-                    }`}>
+                    <div className={`flex items-center gap-1 mt-0.5 ${isMine ? "justify-end pr-10" : "pl-10"
+                      }`}>
                       <span className="text-[10px] font-bold text-gray-400">
                         {formatTime(lastMsg.createdAt)}
                       </span>
                       {isMine && (
-                        <span className={`text-[10px] font-bold ${
-                          lastMsg.isRead ? "text-blue-500" : "text-gray-400"
-                        }`}>
+                        <span className={`text-[10px] font-bold ${lastMsg.isRead ? "text-blue-500" : "text-gray-400"
+                          }`}>
                           {lastMsg.isRead ? "✓✓" : "✓"}
                         </span>
                       )}
@@ -1014,18 +1002,18 @@ export default function ChatPage() {
 
                   // Right Column Users
                   const activeFilters = viewingReactions.activeTab === "all" ? rList : rList.filter(r => r.emoji === viewingReactions.activeTab);
-                  
+
                   // Group by user for the right column
                   const userEmoteMap = activeFilters.reduce((acc, r) => {
                     const uid = String(r.userId);
                     if (!acc[uid]) acc[uid] = { total: 0, emotes: [] };
                     acc[uid].total += (r.count || 1);
-                    
+
                     // Group similar emojis if user clicked multiple times
                     const existingEmote = acc[uid].emotes.find((e: any) => e.emoji === r.emoji);
                     if (existingEmote) existingEmote.count += (r.count || 1);
                     else acc[uid].emotes.push({ emoji: r.emoji, count: r.count || 1 });
-                    
+
                     return acc;
                   }, {} as Record<string, { total: number, emotes: { emoji: string, count: number }[] }>);
 
@@ -1101,11 +1089,10 @@ export default function ChatPage() {
 
       {/* ═══ CỘT PHẢI: THÔNG TIN CHI TIẾT ═══ */}
       <div
-        className={`hidden lg:flex flex-col shrink-0 bg-[#FAFAFA] h-full transition-all duration-300 ease-in-out overflow-hidden ${
-          showInfoPanel
-            ? "w-[320px] xl:w-85 opacity-100 border-l border-gray-100"
-            : "w-0 opacity-0 border-l-0"
-        }`}
+        className={`hidden lg:flex flex-col shrink-0 bg-[#FAFAFA] h-full transition-all duration-300 ease-in-out overflow-hidden ${showInfoPanel
+          ? "w-[320px] xl:w-85 opacity-100 border-l border-gray-100"
+          : "w-0 opacity-0 border-l-0"
+          }`}
       >
         <div className="w-[320px] xl:w-85 h-full flex flex-col">
           <div className="flex-1 overflow-y-auto scrollbar-hide">

@@ -15,7 +15,10 @@ class SocketService {
       typeof window !== "undefined"
         ? localStorage.getItem("accessToken")
         : null;
-    if (!token) return;
+    console.log(
+      "🔌 [Socket] Attempting to connect with token:",
+      token ? `${token.substring(0, 10)}...` : "NONE",
+    );
 
     this.socket = io(SOCKET_URL, {
       auth: { token },
