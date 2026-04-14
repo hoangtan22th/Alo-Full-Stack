@@ -10,9 +10,9 @@ export async function startRabbitMQConsumer() {
     // Khởi tạo queue riêng cho group-service để nhận copy tin nhắn
     await channel.assertQueue(queueName, { durable: true });
 
-    // Bind vào chat_exchange với routing key chat.message.created
-    // Lưu ý: EXCHANGE CHAT là 'chat_exchange' (theo message-service)
+    // Bind vào chat_exchange với các routing key cần thiết
     await channel.bindQueue(queueName, "chat_exchange", "chat.message.created");
+    await channel.bindQueue(queueName, "chat_exchange", "chat.message.read");
 
     console.log(`[*] Group Service is waiting for messages in ${queueName}.`);
 
@@ -23,29 +23,46 @@ export async function startRabbitMQConsumer() {
           const { type, data } = content;
 
           if (type === "message.created") {
-            const { conversationId, _id: messageId, createdAt, content, type: msgType, senderId } = data;
+            const { conversationId, _id: messageId, createdAt, content: msgContent, type: msgType, senderId } = data;
 
-            console.log(`[RabbitMQConsumer] Updating lastMessage for conversation: ${conversationId}`);
+            console.log(`[RabbitMQConsumer] Updating lastMessage and incrementing unread for conversation: ${conversationId}`);
 
-            let lastContent = content || "";
+            let lastContent = msgContent || "";
             if (msgType === "image") lastContent = "[Hình ảnh]";
             else if (msgType === "file") lastContent = "[Tệp tin]";
 
+            // 1. Tìm conversation để lấy danh sách members
+            const conversation = await Conversation.findById(conversationId);
+            if (!conversation) {
+              console.warn(`[RabbitMQConsumer] Conversation not found: ${conversationId}`);
+              channel.ack(msg);
+              return;
+            }
+
+            // 2. Cập nhật lastMessage và Tăng unreadCount cho các thành viên khác
+            const updateObj: any = {
+              $set: { 
+                lastMessage: new Types.ObjectId(messageId),
+                lastMessageAt: new Date(createdAt),
+                lastMessageContent: lastContent
+              }
+            };
+
+            // Increment unreadCount for all members except sender
+            conversation.members.forEach(member => {
+              if (member.userId !== senderId) {
+                const currentCount = conversation.unreadCount.get(member.userId) || 0;
+                updateObj.$set[`unreadCount.${member.userId}`] = currentCount + 1;
+              }
+            });
+
             const updatedConversation = await Conversation.findByIdAndUpdate(
               conversationId,
-              {
-                $set: { 
-                  lastMessage: new Types.ObjectId(messageId),
-                  lastMessageAt: new Date(createdAt),
-                  lastMessageContent: lastContent
-                },
-              },
-              { new: true } // Lấy bản update kèm danh sách members
+              updateObj,
+              { new: true }
             );
 
             if (updatedConversation) {
-              // Gửi notify REALTIME cho tất cả thành viên trong nhóm 
-              // qua realtime-service (Personal user room: user_ID)
               updatedConversation.members.forEach((member: any) => {
                 const realtimePayload = {
                   event: "CONVERSATION_UPDATED",
@@ -55,6 +72,7 @@ export async function startRabbitMQConsumer() {
                     lastMessageContent: updatedConversation.lastMessageContent,
                     lastMessageAt: updatedConversation.lastMessageAt,
                     lastMessageId: updatedConversation.lastMessage,
+                    unreadCount: updatedConversation.unreadCount.get(member.userId) || 0,
                     updatedAt: updatedConversation.updatedAt,
                     senderId: senderId
                   },
@@ -68,6 +86,35 @@ export async function startRabbitMQConsumer() {
                 );
               });
               console.log(`[RabbitMQConsumer] Successfully broadcasted update to ${updatedConversation.members.length} members`);
+            }
+          } else if (type === "message.read") {
+            const { conversationId, userId } = data;
+            console.log(`[RabbitMQConsumer] Resetting unreadCount for user ${userId} in conversation ${conversationId}`);
+
+            const updatedConversation = await Conversation.findByIdAndUpdate(
+              conversationId,
+              {
+                $set: { [`unreadCount.${userId}`]: 0 }
+              },
+              { new: true }
+            );
+
+            if (updatedConversation) {
+              const realtimePayload = {
+                event: "CONVERSATION_UPDATED",
+                target: userId,
+                data: {
+                  conversationId: updatedConversation._id,
+                  unreadCount: 0,
+                  updatedAt: updatedConversation.updatedAt
+                },
+              };
+
+              channel.sendToQueue(
+                "realtime_events",
+                Buffer.from(JSON.stringify(realtimePayload)),
+                { persistent: true }
+              );
             }
           }
 

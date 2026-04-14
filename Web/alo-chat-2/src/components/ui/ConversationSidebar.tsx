@@ -290,6 +290,7 @@ export default function ConversationSidebar() {
               membersCount: g.members?.length,
               message: g.lastMessageContent || "Chưa có tin nhắn",
               time: timeString,
+              unreadCount: g.unreadCount?.[currentUserId] || 0,
               updatedAt: g.updatedAt,
               online: false,
             };
@@ -524,6 +525,12 @@ export default function ConversationSidebar() {
                     <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 font-bold shadow-sm">
                       {chat.name.charAt(0).toUpperCase()}
                     </div>
+                  )}
+                  {/* Unread Count Badge on Top Right of Avatar */}
+                  {chat.unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white border-2 border-white shadow-sm scale-100 animate-in fade-in zoom-in duration-300">
+                      {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
+                    </span>
                   )}
                   {chat.online && (
                     <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />

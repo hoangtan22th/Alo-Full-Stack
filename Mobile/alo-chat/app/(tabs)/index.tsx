@@ -354,7 +354,8 @@ export default function MessagesScreen() {
               membersCount: g.members?.length,
               message: g.lastMessageContent || "Chưa có tin nhắn",
               time: timeString,
-              unread: false,
+              unreadCount: g.unreadCount?.[currentUserId as string] || 0,
+              unread: (g.unreadCount?.[currentUserId as string] || 0) > 0,
               updatedAt: g.updatedAt,
             };
           }),
@@ -464,8 +465,12 @@ export default function MessagesScreen() {
               )}
             </View>
           )}
-          {chat.unread && (
-            <View className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-black border-2 border-white rounded-full" />
+          {chat.unreadCount > 0 && (
+            <View className="absolute -top-1 -right-1 min-w-[20px] h-5 bg-red-500 border-2 border-white rounded-full items-center justify-center px-1">
+              <Text className="text-[10px] font-bold text-white">
+                {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
+              </Text>
+            </View>
           )}
         </View>
 
