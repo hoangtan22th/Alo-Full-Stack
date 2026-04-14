@@ -5,6 +5,18 @@ let channel: any = null;
 
 const RABBITMQ_URL = process.env.RABBITMQ_URL || `amqp://${process.env.RABBITMQ_USER}:${process.env.RABBITMQ_PASSWORD}@${process.env.RABBITMQ_HOST}:${process.env.RABBITMQ_PORT}${process.env.RABBITMQ_VHOST || '/'}`;
 
+export const EXCHANGES = {
+  CHAT: 'chat_exchange',
+};
+
+export const ROUTING_KEYS = {
+  CONVERSATION_CREATED: 'chat.conversation.created',
+  CONVERSATION_UPDATED: 'chat.conversation.updated',
+  CONVERSATION_REMOVED: 'chat.conversation.removed',
+  CONVERSATION_PIN_UPDATED: 'chat.conversation.pin_updated',
+  CONVERSATION_LABEL_UPDATED: 'chat.conversation.label_updated',
+};
+
 export async function connectRabbitMQ(): Promise<Channel> {
   try {
     // Nếu vhost là / thì không nên nối thêm / vào URL vì amqplib coi / đầu tiên là phân tách
@@ -20,10 +32,10 @@ export async function connectRabbitMQ(): Promise<Channel> {
         throw new Error('Could not create RabbitMQ channel');
     }
 
-    // Quan trọng: Phải assert queue 'realtime_events' trước khi send để đảm bảo nó tồn tại
-    await channel.assertQueue('realtime_events', { durable: true });
+    // Khởi tạo Exchange loại 'topic'
+    await channel.assertExchange(EXCHANGES.CHAT, 'topic', { durable: true });
 
-    console.log('[RabbitMQ] Connected and queue "realtime_events" asserted in group-service');
+    console.log('[RabbitMQ] Connected and exchange asserted in group-service');
 
     connection?.on('error', (err: any) => {
       console.error('[RabbitMQ] Connection error:', err);
@@ -47,6 +59,27 @@ export async function connectRabbitMQ(): Promise<Channel> {
 export function getChannel(): Channel {
   if (!channel) throw new Error('RabbitMQ channel not initialized.');
   return channel;
+}
+
+export async function publishToQueue(
+  routingKey: string,
+  message: Record<string, any>,
+  options: Record<string, any> = {}
+): Promise<void> {
+  try {
+    const ch = getChannel();
+    const messageBuffer = Buffer.from(JSON.stringify(message));
+    ch.publish(EXCHANGES.CHAT, routingKey, messageBuffer, {
+      persistent: true,
+      contentType: 'application/json',
+      timestamp: Date.now(),
+      ...options,
+    });
+    console.log(`[RabbitMQ] Published to '${routingKey}'`);
+  } catch (error) {
+    console.error(`[RabbitMQ] Failed to publish to '${routingKey}':`, error);
+    throw error;
+  }
 }
 
 export async function closeRabbitMQ(): Promise<void> {
