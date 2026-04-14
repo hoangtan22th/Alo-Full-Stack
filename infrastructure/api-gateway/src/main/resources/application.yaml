@@ -51,7 +51,7 @@ spring:
                 - Path=/api/v1/chatbot/**
                 
             - id: realtime-service
-              uri: lb:ws://REALTIME-SERVICE
+              uri: lb://REALTIME-SERVICE
               predicates:
                 - Path=/socket.io/**
 
