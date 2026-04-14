@@ -34,6 +34,7 @@ import {
   PencilIcon,
 } from "@heroicons/react/24/outline";
 import BotChatArea from "@/components/ui/BotChatArea";
+import { useAuthStore } from "@/store/useAuthStore";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -58,15 +59,8 @@ export default function ChatPage() {
   const router = useRouter();
   const conversationId = params?.conversationId as string;
 
-  /* ---------- sidebar state ---------- */
-  const [activeTab, setActiveTab] = useState("Ưu tiên");
-  const [conversations, setConversations] = useState<any[]>([]);
-  const [loadingList, setLoadingList] = useState(true);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showNewChatModal, setShowNewChatModal] = useState(false);
-
   /* ---------- chat area state ---------- */
+  const { user: currentUser } = useAuthStore();
   const [messages, setMessages] = useState<MessageDTO[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageText, setMessageText] = useState("");
@@ -126,70 +120,6 @@ export default function ChatPage() {
     conversationIdRef.current = conversationId;
   }, [conversationId]);
 
-  /* ─── Fetch conversation list (sidebar) ─── */
-  const fetchGroups = useCallback(async () => {
-    try {
-      setLoadingList(true);
-      const userRes: any = await axiosClient.get("/auth/me");
-      const user = userRes?.data || userRes;
-      if (user) setCurrentUser(user);
-      const currentUserId = user?.id || user?._id || user?.userId;
-
-      let groups: any = await axiosClient.get("/groups/me", {
-        params: { type: "all" },
-      });
-      if (groups?.data?.data) groups = groups.data.data;
-      else if (groups?.data) groups = groups.data;
-
-      if (Array.isArray(groups)) {
-        const formatted = await Promise.all(
-          groups.map(async (g: any) => {
-            let chatName = g.name;
-            let chatAvatar = g.groupAvatar;
-
-            if (!g.isGroup && currentUserId && g.members) {
-              const other = g.members.find(
-                (m: any) => m.userId !== currentUserId,
-              );
-              if (other) {
-                try {
-                  const res: any = await axiosClient.get(
-                    `/users/${other.userId}`,
-                  );
-                  const u = res?.data?.data || res?.data || res;
-                  if (u) {
-                    chatName =
-                      u.fullName || u.username || u.name || "Người dùng";
-                    chatAvatar = u.avatar || chatAvatar;
-                  }
-                } catch {}
-              }
-            }
-
-            return {
-              id: g._id || g.id,
-              name: chatName || "Nhóm trò chuyện",
-              avatar: chatAvatar || "",
-              isGroup: g.isGroup,
-              time: formatListTime(g.updatedAt),
-              message: "Chưa có tin nhắn",
-              unread: false,
-              online: false,
-            };
-          }),
-        );
-        const currentTime = new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        setConversations([{ ...BOT_INFO, time: currentTime }, ...formatted]);
-      }
-    } catch (err) {
-      console.error("Lỗi lấy danh sách nhóm:", err);
-    } finally {
-      setLoadingList(false);
-    }
-  }, []);
 
   /* ─── Fetch messages for current conversation ─── */
   const fetchMessages = useCallback(async () => {
@@ -247,9 +177,6 @@ export default function ChatPage() {
     }
   }, [conversationId, currentUser]);
 
-  useEffect(() => {
-    fetchGroups();
-  }, [fetchGroups]);
 
   /* ─── Socket: connect once on mount, cleanup on unmount ─── */
   // socketService.connect() is now handled globally in AuthProvider
@@ -483,9 +410,6 @@ const handleDownload = async (url: string, fileName: string) => {
     }
   };
 
-  const filteredConversations = conversations.filter((chat) =>
-    chat.name?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
 
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
 
@@ -529,127 +453,7 @@ const handleDownload = async (url: string, fileName: string) => {
      RENDER
   ───────────────────────────────────────── */
   return (
-    <div className="flex h-screen w-full bg-white text-gray-900 font-sans overflow-hidden">
-      {/* ═══ CỘT TRÁI: DANH SÁCH CHAT ═══ */}
-      <div className="w-full md:w-[320px] lg:w-85 flex flex-col border-r border-gray-100 shrink-0 h-full">
-        <div className="p-5 flex flex-col gap-5">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-black tracking-tight text-black">
-              Messages
-            </h1>
-            <button
-              onClick={() => setShowNewChatModal(true)}
-              title="Tạo cuộc hội thoại mới"
-              className="w-8 h-8 bg-black rounded-full text-white flex items-center justify-center hover:bg-gray-800 transition shadow-md active:scale-95"
-            >
-              <PlusIcon className="w-5 h-5 stroke-2" />
-            </button>
-          </div>
-
-          {/* Search */}
-          <div className="relative">
-            <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search conversations"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#F5F5F5] border-transparent rounded-xl pl-10 pr-4 py-2.5 text-[13px] font-medium outline-none focus:bg-white focus:border-black border transition-all"
-            />
-          </div>
-
-          {/* Tabs */}
-          <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-            <div className="flex gap-5">
-              {["Ưu tiên", "Khác"].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`text-[13px] font-bold relative ${
-                    activeTab === tab
-                      ? "text-black"
-                      : "text-gray-400 hover:text-gray-600"
-                  }`}
-                >
-                  {tab}
-                  {activeTab === tab && (
-                    <span className="absolute -bottom-2.25 left-0 right-0 h-0.5 bg-black rounded-t-full" />
-                  )}
-                </button>
-              ))}
-            </div>
-            <button className="text-gray-400 hover:text-black">
-              <Bars3BottomRightIcon className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Conversation List */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide px-3 pb-4">
-          {loadingList ? (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              Đang tải danh sách...
-            </div>
-          ) : filteredConversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-3">
-              <p className="text-[13px]">Không có cuộc trò chuyện nào</p>
-              <button
-                onClick={() => setShowNewChatModal(true)}
-                className="px-4 py-2 bg-black text-white text-[12px] font-bold rounded-full hover:bg-gray-800 transition"
-              >
-                + Tạo mới
-              </button>
-            </div>
-          ) : (
-            filteredConversations.map((chat) => (
-              <div
-                key={chat.id}
-                onClick={() => router.push(`/chat/${chat.id}`)}
-                className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all ${
-                  conversationId === chat.id
-                    ? "bg-[#F5F5F5]"
-                    : "hover:bg-gray-50"
-                }`}
-              >
-                <div className="relative shrink-0">
-                  {chat.avatar ? (
-                    <img
-                      src={chat.avatar}
-                      alt={chat.name}
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
-                  ) : chat.isGroup ? (
-                    <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold">
-                      {chat.name.charAt(0).toUpperCase()}
-                    </div>
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
-                      {chat.name.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  {chat.online && (
-                    <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center mb-0.5">
-                    <h3 className="font-bold text-[14px] truncate">
-                      {chat.name}
-                    </h3>
-                    <span className="text-[11px] font-medium text-gray-400 shrink-0">
-                      {chat.time}
-                    </span>
-                  </div>
-                  <p className="text-[13px] text-gray-500 truncate font-medium">
-                    {chat.message}
-                  </p>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+    <>
 
           {conversationId === BOT_ID ? (
             <BotChatArea currentUser={currentUser} />
@@ -1501,14 +1305,6 @@ const handleDownload = async (url: string, fileName: string) => {
       </div>
                 </>
             )}
-      {/* Modal tạo chat 1-1 */}
-      <NewDirectChatModal
-        isOpen={showNewChatModal}
-        onClose={() => {
-          setShowNewChatModal(false);
-          fetchGroups();
-        }}
-      />
-    </div>
+    </>
   );
 }
