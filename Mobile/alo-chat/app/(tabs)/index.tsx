@@ -225,16 +225,24 @@ export default function MessagesScreen() {
       );
     };
 
+    const handleConversationUpdated = (data: any) => {
+      console.log("📡 [Mobile Socket] Received CONVERSATION_UPDATED:", data.conversationId);
+      // Refresh list to update message content and position
+      fetchGroups();
+    };
+
     socket.on("CONVERSATION_PIN_UPDATED", handlePinUpdated);
     socket.on("CONVERSATION_LABEL_UPDATED", handleLabelUpdated);
     socket.on("CONVERSATION_CREATED", handleNewConversation);
     socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
+    socket.on("CONVERSATION_UPDATED", handleConversationUpdated);
 
     return () => {
       socket.off("CONVERSATION_PIN_UPDATED", handlePinUpdated);
       socket.off("CONVERSATION_LABEL_UPDATED", handleLabelUpdated);
       socket.off("CONVERSATION_CREATED", handleNewConversation);
       socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
+      socket.off("CONVERSATION_UPDATED", handleConversationUpdated);
     };
   }, [socket]);
 
@@ -344,7 +352,7 @@ export default function MessagesScreen() {
               avatar: chatAvatar,
               isGroup: g.isGroup,
               membersCount: g.members?.length,
-              message: "Chưa có tin nhắn",
+              message: g.lastMessageContent || "Chưa có tin nhắn",
               time: timeString,
               unread: false,
               updatedAt: g.updatedAt,
