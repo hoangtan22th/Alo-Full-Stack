@@ -14,6 +14,7 @@ import edu.iuh.fit.common_service.exception.AppException;
 import edu.iuh.fit.common_service.exception.ForbiddenException;
 import edu.iuh.fit.common_service.exception.ResourceNotFoundException;
 import edu.iuh.fit.common_service.exception.UnauthorizedException;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,10 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -41,6 +39,7 @@ public class AuthService {
     private final org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
     private final EmailService emailService;
     private final RabbitMQPublisher rabbitMQPublisher;
+    private final RoleRepository roleRepository;
 
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final long LOCK_TIME_DURATION = 15;
@@ -49,9 +48,12 @@ public class AuthService {
     protected String GOOGLE_CLIENT_ID;
 
     @Transactional
-    public void sendRegistrationOtp(String email) {
+    public void sendRegistrationOtp(String email, String phoneNumber) {
         if (accountRepository.findByEmail(email).isPresent()) {
-            throw new RuntimeException("Email đã được đăng ký");
+            throw new edu.iuh.fit.common_service.exception.DuplicateResourceException("Email đã được đăng ký");
+        }
+        if (accountRepository.existsByPhoneNumber(phoneNumber)) {
+            throw new edu.iuh.fit.common_service.exception.DuplicateResourceException("Số điện thoại đã được đăng ký bởi tài khoản khác");
         }
 
         SecureRandom random = new SecureRandom();
@@ -76,15 +78,24 @@ public class AuthService {
             throw new RuntimeException("Mã OTP không chính xác");
         }
 
+        if (accountRepository.existsByPhoneNumber(request.phoneNumber())) {
+            throw new edu.iuh.fit.common_service.exception.DuplicateResourceException("Số điện thoại đã được đăng ký bởi tài khoản khác");
+        }
+
         stringRedisTemplate.delete(redisKey);
+
+        Set<Role> roles = new HashSet<>();
+        roleRepository.findByName("ROLE_USER").ifPresent(roles::add);
 
         Account user = Account.builder()
                 .id(UUID.randomUUID().toString())
                 .email(request.email())
+                .phoneNumber(request.phoneNumber())
                 // Only auth fields
                 .password(passwordEncoder.encode(request.password()))
                 .authProvider(Account.AuthProvider.LOCAL)
                 .status(AccountStatus.ACTIVE)
+                .roles(roles)
                 .build();
         accountRepository.save(user);
 
@@ -93,13 +104,14 @@ public class AuthService {
                 user.getId(), 
                 user.getEmail(), 
                 request.fullName(), 
-                null, 
+                user.getPhoneNumber(), 
                 "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_user_images/user_avt.png", 
                 "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg", 
                 2);
     }
 
-    public Map<String, String> login(LoginRequest request, HttpServletResponse response) {
+    @Transactional
+    public Map<String, String> login(LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse response) {
         Account user = accountRepository.findByEmailOrPhoneNumber(request.email(), request.email())
                 .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
 
@@ -151,12 +163,17 @@ public class AuthService {
         String refreshToken = tokenService.generateRefreshToken(user, deviceId);
         String tokenId = tokenService.getTokenIdFromJWT(refreshToken);
 
+        // Đổ toàn bộ session cũ vào blacklist và xóa khỏi DB chặn dùng nhiều máy
+        invalidateOldSessions(user.getId(), sessionId, deviceId);
+
+        String ipAddress = getClientIpString(httpRequest);
+        
         UserSession session = UserSession.builder()
                 .id(sessionId)
                 .account(user)
                 .deviceId(deviceId)
                 .refreshTokenId(tokenId)
-                .ipAddress("127.0.0.1")
+                .ipAddress(ipAddress)
                 .expiresAt(LocalDateTime.now().plusDays(7))
                 .build();
         sessionRepository.save(session);
@@ -308,7 +325,7 @@ public class AuthService {
     }
 
     @Transactional
-    public Map<String, String> loginWithGoogle(GoogleLoginRequest request, HttpServletResponse response) {
+    public Map<String, String> loginWithGoogle(GoogleLoginRequest request, HttpServletRequest httpRequest, HttpServletResponse response) {
         try {
             GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
                     .setAudience(Collections.singletonList(GOOGLE_CLIENT_ID))
@@ -331,16 +348,21 @@ public class AuthService {
             Account user = accountRepository.findByEmail(email).orElse(null);
 
             if (user == null) {
+                Set<Role> roles = new HashSet<>();
+                roleRepository.findByName("ROLE_USER").ifPresent(roles::add);
+
                 user = Account.builder()
                         .id(UUID.randomUUID().toString())
                         .email(email)
                         .authProvider(Account.AuthProvider.GOOGLE)
                         .password(passwordEncoder.encode(UUID.randomUUID().toString()))
                         .providerId(payload.getSubject())
+                        .status(AccountStatus.ACTIVE)
+                        .roles(roles)
                         .build();
                 user = accountRepository.save(user);
                 
-                rabbitMQPublisher.publishUserRegisteredEvent(user.getId(), email, name, "0000000000", pictureUrl, "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg", 2);
+                rabbitMQPublisher.publishUserRegisteredEvent(user.getId(), email, name, null, pictureUrl, "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg", 2);
             } else {
                 if (user.getAuthProvider() == null || user.getAuthProvider() == Account.AuthProvider.LOCAL) {
                     user.setAuthProvider(Account.AuthProvider.GOOGLE);
@@ -356,12 +378,16 @@ public class AuthService {
             String refreshToken = tokenService.generateRefreshToken(user, deviceId);
             String tokenId = tokenService.getTokenIdFromJWT(refreshToken);
 
+            invalidateOldSessions(user.getId(), sessionId, deviceId);
+
+            String ipAddress = getClientIpString(httpRequest);
+
             UserSession session = UserSession.builder()
                     .id(sessionId)
                     .account(user)
                     .deviceId(deviceId)
                     .refreshTokenId(tokenId)
-                    .ipAddress("127.0.0.1")
+                    .ipAddress(ipAddress)
                     .expiresAt(LocalDateTime.now().plusDays(7))
                     .build();
             sessionRepository.save(session);
@@ -372,5 +398,44 @@ public class AuthService {
         } catch (Exception e) {
             throw new UnauthorizedException("Xác thực Google thất bại: " + e.getMessage());
         }
+    }
+
+    @Transactional
+    public void invalidateOldSessions(String accountId, String keepSessionId, String deviceId) {
+        boolean isWebLogin = deviceId != null && deviceId.toLowerCase().contains("web");
+        List<UserSession> oldSessions = sessionRepository.findByAccountId(accountId);
+        
+        List<UserSession> sessionsToKill = oldSessions.stream()
+                .filter(s -> !s.getId().equals(keepSessionId)) // Bảo hiểm không kick session hiện hành
+                .filter(s -> {
+                    boolean isOldWeb = s.getDeviceId() != null && s.getDeviceId().toLowerCase().contains("web");
+                    return isWebLogin == isOldWeb; // Web kills Web, Mobile kills Mobile
+                })
+                .toList();
+
+        List<String> killedSessionIds = new java.util.ArrayList<>();
+        for (UserSession s : sessionsToKill) {
+            killedSessionIds.add(s.getId());
+            String blacklistKey = "BLACKLIST_SESSION:" + s.getId();
+            stringRedisTemplate.opsForValue().set(blacklistKey, "true", 15, TimeUnit.MINUTES);
+        }
+        
+        if (!sessionsToKill.isEmpty()) {
+            sessionRepository.deleteAll(sessionsToKill);
+            rabbitMQPublisher.publishForceLogoutEvent(accountId, killedSessionIds);
+        }
+    }
+
+    private String getClientIpString(HttpServletRequest request) {
+        String ipAddress = request.getHeader("X-Forwarded-For");
+        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
+            ipAddress = request.getRemoteAddr();
+        }
+        
+        // In case of multiple IPs, take the first one
+        if (ipAddress != null && ipAddress.indexOf(',') > 0) {
+            ipAddress = ipAddress.substring(0, ipAddress.indexOf(',')).trim();
+        }
+        return ipAddress;
     }
 }

@@ -15,7 +15,10 @@ class SocketService {
       typeof window !== "undefined"
         ? localStorage.getItem("accessToken")
         : null;
-    if (!token) return;
+    console.log(
+      "🔌 [Socket] Attempting to connect with token:",
+      token ? `${token.substring(0, 10)}...` : "NONE",
+    );
 
     this.socket = io(SOCKET_URL, {
       auth: { token },
@@ -34,6 +37,14 @@ class SocketService {
 
     this.socket.on("connect_error", (error) => {
       console.error("⚠️ [Socket] Connection Error:", error.message);
+    });
+
+    // Lắng nghe lệnh đá thiết bị từ hệ thống phòng khi dùng nhiều máy
+    this.socket.on("FORCE_LOGOUT", (data) => {
+      console.warn("⚠️ Received FORCE_LOGOUT from server:", data);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("force_logout"));
+      }
     });
   }
 
