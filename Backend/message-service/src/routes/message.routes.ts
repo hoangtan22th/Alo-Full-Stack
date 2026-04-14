@@ -15,7 +15,8 @@ const upload = multer({
 
 router.get('/:conversationId', messageController.getMessageHistory);
 router.post('/', messageController.sendMessage);
-router.delete('/:messageId', messageController.deleteMessage);
+router.patch('/:messageId/revoke', messageController.revokeMessage);
+router.delete('/:messageId/me', messageController.deleteMessageForMe);
 router.patch('/:messageId', messageController.editMessage);
 
 // Route upload file lên S3

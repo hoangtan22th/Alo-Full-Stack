@@ -50,6 +50,7 @@ function RootLayoutNav() {
       <Stack.Screen name="register" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="chat/[id]" />
+      <Stack.Screen name="groups/create-group" />
     </Stack>
   );
 }

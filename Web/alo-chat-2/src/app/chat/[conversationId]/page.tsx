@@ -30,6 +30,8 @@ import {
   TrashIcon,
   ArrowUturnLeftIcon,
   XMarkIcon,
+  CheckCircleIcon,
+  PencilIcon,
 } from "@heroicons/react/24/outline";
 import BotChatArea from "@/components/ui/BotChatArea";
 
@@ -81,14 +83,14 @@ export default function ChatPage() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   // Reaction viewers
-  const [viewingReactions, setViewingReactions] = useState<{
-    messageId: string;
-    reactions: any[];
-    activeTab: string;
-  } | null>(null);
-  const [userCache, setUserCache] = useState<
-    Record<string, { name: string; avatar: string }>
-  >({});
+
+  const [viewingReactions, setViewingReactions] = useState<{ messageId: string, reactions: any[], activeTab: string } | null>(null);
+  const [userCache, setUserCache] = useState<Record<string, { name: string, avatar: string }>>({});
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const fetchUserInfo = async (userId: string) => {
     if (userCache[userId] || !userId) return;
@@ -307,10 +309,23 @@ export default function ChatPage() {
       );
     });
 
+    // Lắng nghe thu hồi tin nhắn
+    socketService.off("message-revoked");
+    socketService.onMessageRevoked((data) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === data.messageId 
+            ? { ...m, isRevoked: true, revokedAt: data.revokedAt || new Date().toISOString() } 
+            : m
+        )
+      );
+    });
+
     return () => {
       socketService.off("message-received");
       socketService.off("messages-read");
       socketService.off("message-reaction-updated");
+      socketService.off("message-revoked");
     };
   }, [conversationId, currentUser]);
 
@@ -340,6 +355,80 @@ export default function ChatPage() {
       console.error("Lỗi toggle cảm xúc:", error);
     }
   };
+
+  /* ─── Revoke Message (Thu hồi) ─── */
+  const handleRevoke = async (messageId: string) => {
+    setActiveMenu(null);
+    try {
+      const ok = await messageService.revokeMessage(messageId);
+      if (ok) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === messageId
+              ? { ...m, isRevoked: true, revokedAt: new Date().toISOString() }
+              : m
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Lỗi thu hồi tin nhắn:", error);
+    }
+  };
+
+  /* ─── Delete Message For Me (Xóa 1 phía) ─── */
+  const handleDeleteForMe = async (messageId: string) => {
+    setActiveMenu(null);
+    try {
+      // Optimistic Update: Xóa ngay ở local UI
+      setMessages((prev) => prev.filter((m) => m._id !== messageId));
+      await messageService.deleteMessageForMe(messageId);
+    } catch (error) {
+      console.error("Lỗi xóa tin nhắn phía tôi:", error);
+    }
+  };
+
+  // /* ─── Download File/Image ─── */
+  // const handleDownload = async (url: string, fileName: string) => {
+  //   try {
+  //     const response = await fetch(url);
+  //     const blob = await response.blob();
+  //     const blobUrl = window.URL.createObjectURL(blob);
+  //     const link = document.createElement("a");
+  //     link.href = blobUrl;
+  //     link.download = fileName || "download";
+  //     document.body.appendChild(link);
+  //     link.click();
+  //     document.body.removeChild(link);
+  //     window.URL.revokeObjectURL(blobUrl);
+  //   } catch (error) {
+  //     console.error("Lỗi tải tệp:", error);
+  //   }
+  // };
+
+  /* ─── Download File/Image ─── */
+const handleDownload = async (url: string, fileName: string) => {
+  try {
+    // Thêm { cache: 'no-cache' } hoặc thêm một tham số ngẫu nhiên vào URL
+    const response = await fetch(`${url}?t=${new Date().getTime()}`, {
+      method: 'GET',
+      cache: 'no-cache', // Ép trình duyệt không dùng cache cũ
+    });
+
+    if (!response.ok) throw new Error("Network response was not ok");
+
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = fileName || "download";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (error) {
+    console.error("Lỗi tải tệp:", error);
+  }
+};
 
   /* ─── Send message ─── */
   const handleSend = async () => {
@@ -707,7 +796,6 @@ export default function ChatPage() {
                           }
                           onMouseLeave={() => {
                             setHoveredMsgId(null);
-                            // Đóng menu ngay khi rời khỏi tin nhắn
                             setActiveMenu(null);
                           }}
                         >
@@ -734,9 +822,11 @@ export default function ChatPage() {
                             {/* Wrapper cho Bubble content và Hover controls để nó luôn căn giữa text */}
                             <div className="relative max-w-full">
                               {isRevoked ? (
-                                <span className="italic text-[12px] text-gray-400 bg-gray-100 px-4 py-2 rounded-2xl block w-fit">
-                                  Tin nhắn đã bị thu hồi
-                                </span>
+                                <div className="flex items-center gap-2 group/revoked">
+                                  <span className="italic text-[12px] text-gray-400 bg-gray-100 px-4 py-2 rounded-2xl block w-fit">
+                                    Tin nhắn đã được thu hồi
+                                  </span>
+                                </div>
                               ) : msg.type === "image" ? (
                                 <img
                                   src={msg.content}
@@ -744,31 +834,52 @@ export default function ChatPage() {
                                   className={`object-cover max-h-64 shadow ${bubbleRadius}`}
                                 />
                               ) : msg.type === "file" ? (
-                                <a
-                                  href={msg.content}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={`flex items-center gap-3 p-3 hover:opacity-80 transition w-fit max-w-full ${
-                                    isMine
-                                      ? "bg-black text-white"
-                                      : "bg-[#F5F5F5] text-gray-900"
-                                  } ${bubbleRadius}`}
+
+                                <div
+                                  className={`flex items-center justify-between gap-4 px-4 py-2 transition w-[350px] max-w-full group ${
+                                    isMine ? "bg-blue-50 border-blue-100" : "bg-white border-gray-100"
+                                  } border rounded-2xl shadow-sm`}
+
                                 >
-                                  <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-                                    <DocumentIcon className="w-5 h-5" />
+                                  <div 
+                                     className="flex items-center gap-4 flex-1 min-w-0"
+                                     onClick={() => window.open(msg.content, "_blank")}
+                                  >
+                                     {/* File Type Icon */}
+                                     <div className="w-12 h-14 bg-[#70CDBF] rounded-xl flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
+                                       <div className="absolute top-0 right-0 w-4 h-4 bg-white/30 rounded-bl-lg"></div>
+                                       <DocumentIcon className="w-7 h-7 text-white" />
+                                     </div>
+                                     
+                                     {/* Info */}
+                                     <div className="min-w-0 flex-1">
+                                       <p className="text-[15px] font-bold text-[#1A237E] truncate leading-tight mb-1">
+                                         {msg.metadata?.fileName || "Tệp đính kèm"}
+                                       </p>
+                                       <div className="flex items-center gap-1.5 text-[12px]">
+                                         <span className="text-gray-500">
+                                           {msg.metadata?.fileSize
+                                             ? `${(msg.metadata.fileSize / 1024).toFixed(2)} KB`
+                                             : "N/A"}
+                                         </span>
+                                       </div>
+                                     </div>
                                   </div>
-                                  <div className="min-w-0">
-                                    <p className="text-[13px] font-bold truncate">
-                                      {msg.metadata?.fileName || "Tệp đính kèm"}
-                                    </p>
-                                    <p className="text-[11px] opacity-60">
-                                      {msg.metadata?.fileSize
-                                        ? `${(msg.metadata.fileSize / 1024).toFixed(1)} KB`
-                                        : ""}
-                                    </p>
+
+                                  {/* Actions */}
+                                  <div className="flex items-center gap-2 shrink-0">
+                                     <button 
+                                       onClick={(e) => {
+                                         e.stopPropagation();
+                                         handleDownload(msg.content, msg.metadata?.fileName || "file");
+                                       }}
+                                       className="w-9 h-9 bg-white border border-gray-200 rounded-lg flex items-center justify-center text-gray-600 hover:bg-gray-50 transition shadow-sm"
+                                       title="Lưu về máy"
+                                     >
+                                       <ArrowDownTrayIcon className="w-5 h-5" />
+                                     </button>
                                   </div>
-                                  <ArrowDownTrayIcon className="w-4 h-4 shrink-0 opacity-60" />
-                                </a>
+                                </div>
                               ) : (
                                 <div
                                   className={`px-4 py-2.5 text-[14px] font-medium leading-relaxed w-fit max-w-full ${
@@ -781,92 +892,68 @@ export default function ChatPage() {
                                 </div>
                               )}
 
-                              {/* Hover Controls (Reaction & Menu) đặt cạnh text bubble */}
-                              <div
-                                className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 py-4 ${
-                                  isMine ? "right-full pr-2" : "left-full pl-2"
-                                } ${
-                                  hoveredMsgId === msg._id
-                                    ? "opacity-100"
-                                    : "opacity-0 pointer-events-none"
-                                } transition-opacity`}
-                              >
-                                {/* Nút thả cảm xúc */}
-                                <div className="relative">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setActiveMenu(null);
-                                      const rect =
-                                        e.currentTarget.getBoundingClientRect();
-                                      setMenuPosition(
-                                        rect.top < window.innerHeight / 2
-                                          ? "bottom"
-                                          : "top",
-                                      );
-                                      setActiveReactionMenu(
-                                        activeReactionMenu === msg._id
-                                          ? null
-                                          : msg._id,
-                                      );
-                                    }}
-                                    className="w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
-                                  >
-                                    <FaceSmileIcon className="w-4 h-4" />
-                                  </button>
 
-                                  {/* Emoji Picker */}
-                                  {activeReactionMenu === msg._id && (
-                                    <div
-                                      className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 ${
-                                        isMine ? "right-0" : "left-0"
-                                      } ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
-                                      onMouseLeave={() =>
-                                        setActiveReactionMenu(null)
-                                      }
+                              {/* Hover Controls (Reaction & Menu & Redo) */}
+                              <div className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1.5 py-4 ${isMine ? "right-full pr-2" : "left-full pl-2"
+                                } ${hoveredMsgId === msg._id ? "opacity-100" : "opacity-0 pointer-events-none"
+                                } transition-opacity`}>
+
+                                {/* 1. Reaction Button (Hide if revoked) */}
+                                {!msg.isRevoked && (
+                                  <div className="relative">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveMenu(null);
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        setMenuPosition(rect.top < window.innerHeight / 2 ? "bottom" : "top");
+                                        setActiveReactionMenu(activeReactionMenu === msg._id ? null : msg._id);
+                                      }}
+                                      className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
                                     >
-                                      {msg.reactions?.some(
-                                        (r: any) =>
-                                          String(r.userId) ===
-                                          String(
-                                            currentUser?.id ||
-                                              currentUser?._id ||
-                                              currentUser?.userId,
-                                          ),
-                                      ) && (
-                                        <div className="border-r border-gray-200 pr-1 flex items-center">
-                                          <button
-                                            onClick={async () => {
-                                              setActiveReactionMenu(null);
-                                              await messageService.clearReactions(
-                                                msg._id,
-                                              );
-                                            }}
-                                            className="w-8 h-8 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all rounded-full text-gray-400"
-                                            title="Xoá cảm xúc"
-                                          >
-                                            <XMarkIcon className="w-5 h-5" />
-                                          </button>
-                                        </div>
-                                      )}
+                                      <FaceSmileIcon className="w-4 h-4" />
+                                    </button>
 
-                                      {Object.entries(EMOJI_MAP).map(
-                                        ([key, icon]) => (
+                                    {/* Emoji Picker */}
+                                    {activeReactionMenu === msg._id && (
+                                      <div
+                                        className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 ${isMine ? "right-0" : "left-0"
+                                          } ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                                        onMouseLeave={() => setActiveReactionMenu(null)}
+                                      >
+                                        {msg.reactions?.some((r: any) => String(r.userId) === String(currentUser?.id || currentUser?._id || currentUser?.userId)) && (
+                                          <div className="border-r border-gray-200 pr-1 flex items-center">
+                                            <button
+                                              onClick={async () => {
+                                                setActiveReactionMenu(null);
+                                                await messageService.clearReactions(msg._id);
+                                              }}
+                                              className="w-8 h-8 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all rounded-full text-gray-400"
+                                              title="Xoá cảm xúc"
+                                            >
+                                              <XMarkIcon className="w-5 h-5" />
+                                            </button>
+                                          </div>
+                                        )}
+
+                                        {Object.entries(EMOJI_MAP).map(([key, icon]) => (
                                           <button
                                             key={key}
-                                            onClick={() =>
-                                              handleToggleReaction(msg._id, key)
-                                            }
+                                            onClick={() => handleToggleReaction(msg._id, key)}
                                             className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 hover:scale-125 transition-all rounded-full text-lg"
+
                                           >
                                             {icon}
                                           </button>
-                                        ),
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                                {/* Nút "..." menu */}
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+
+                                {/* 2. Context Menu Button (...) */}
+
                                 <div className="relative">
                                   <button
                                     onClick={(e) => {
@@ -883,64 +970,58 @@ export default function ChatPage() {
                                         activeMenu === msg._id ? null : msg._id,
                                       );
                                     }}
-                                    className="w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
+                                    className="w-7 h-7 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
                                   >
                                     <EllipsisHorizontalIcon className="w-4 h-4" />
                                   </button>
 
-                                  {/* Context Menu */}
+                                  {/* Context Menu Content */}
                                   {activeMenu === msg._id && (
                                     <div
-                                      className={`absolute z-50 w-46 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 overflow-hidden ${
-                                        isMine ? "right-0" : "left-0"
-                                      } ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+
+                                      className={`absolute z-50 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 overflow-hidden ${isMine ? "right-0" : "left-0"
+                                        } ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
                                       onMouseLeave={() => setActiveMenu(null)}
                                     >
-                                      {!msg.isRevoked &&
-                                        msg.type === "text" && (
-                                          <button
-                                            onClick={() => {
-                                              navigator.clipboard.writeText(
-                                                msg.content,
-                                              );
-                                              setActiveMenu(null);
-                                            }}
-                                            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
-                                          >
-                                            <ClipboardDocumentIcon className="w-4 h-4 text-gray-400 shrink-0" />
-                                            Copy tin nhắn
-                                          </button>
-                                        )}
-                                      <button
-                                        onClick={() => setActiveMenu(null)}
-                                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
-                                      >
-                                        <MapPinIcon className="w-4 h-4 text-gray-400 shrink-0" />
-                                        Ghim tin nhắn
-                                      </button>
-                                      <div className="my-1 border-t border-gray-100" />
-                                      {isMine && !msg.isRevoked && (
+                                      {!msg.isRevoked && msg.type === "text" && (
                                         <button
-                                          onClick={async () => {
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(msg.content);
                                             setActiveMenu(null);
-                                            const ok =
-                                              await messageService.deleteMessage(
-                                                msg._id,
-                                              );
-                                            if (ok) {
-                                              setMessages((prev) =>
-                                                prev.map((m) =>
-                                                  m._id === msg._id
-                                                    ? {
-                                                        ...m,
-                                                        isRevoked: true,
-                                                        content: "",
-                                                      }
-                                                    : m,
-                                                ),
-                                              );
-                                            }
                                           }}
+                                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
+                                        >
+                                          <ClipboardDocumentIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                                          Copy tin nhắn
+                                        </button>
+                                      )}
+                                      {!msg.isRevoked && (
+
+                                        <button
+                                          onClick={() => setActiveMenu(null)}
+                                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
+                                        >
+                                          <MapPinIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                                          Ghim tin nhắn
+                                        </button>
+                                      )}
+                                      {!msg.isRevoked && (msg.type === "image" || msg.type === "file") && (
+                                        <button
+                                          onClick={() => {
+                                            setActiveMenu(null);
+
+                                            handleDownload(msg.content, msg.metadata?.fileName || (msg.type === "image" ? "image.png" : "file"));
+                                          }}
+                                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-blue-600 hover:bg-blue-50 transition text-left"
+                                        >
+                                          <ArrowDownTrayIcon className="w-4 h-4 shrink-0" />
+                                          Lưu về máy
+                                        </button>
+                                      )}
+                                      {!msg.isRevoked && <div className="my-1 border-t border-gray-100" />}
+                                      {isMine && !msg.isRevoked && (new Date().getTime() - new Date(msg.createdAt).getTime() < 86400000) && (
+                                        <button
+                                          onClick={() => handleRevoke(msg._id)}
                                           className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-orange-500 hover:bg-orange-50 transition text-left"
                                         >
                                           <ArrowUturnLeftIcon className="w-4 h-4 shrink-0" />
@@ -948,23 +1029,31 @@ export default function ChatPage() {
                                         </button>
                                       )}
                                       <button
-                                        onClick={() => {
-                                          setActiveMenu(null);
-                                          setMessages((prev) =>
-                                            prev.filter(
-                                              (m) => m._id !== msg._id,
-                                            ),
-                                          );
-                                        }}
+
+                                        onClick={() => handleDeleteForMe(msg._id)}
+
                                         className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition text-left"
                                       >
                                         <TrashIcon className="w-4 h-4 shrink-0" />
-                                        Xóa tin nhắn
+                                        Xóa chỉ ở phía tôi
                                       </button>
                                     </div>
                                   )}
-                                </div>{" "}
-                                {/* Nút "..." menu */}
+                                </div> {/* Nút "..." menu */}
+
+                                {/* 3. Redo Button (Pencil Icon) - Nằm cạnh nút menu ... */}
+                                {isMounted && isMine && msg.isRevoked && msg.revokedAt && (new Date().getTime() - new Date(msg.revokedAt).getTime() < 60000) && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setMessageText(msg.content);
+                                    }}
+                                    className="w-7 h-7 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-blue-500 hover:bg-blue-50 transition"
+                                    title="Sửa nhanh (Hoàn tác)"
+                                  >
+                                    <PencilIcon className="w-4 h-4" />
+                                  </button>
+                                )}
                               </div>
                             </div>{" "}
                             {/* Đóng thẻ Wrapper cho nội dung và hover controls */}

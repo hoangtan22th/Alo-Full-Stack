@@ -21,8 +21,8 @@ export class MessageDataService {
         content: data.content,
         metadata: data.metadata || {},
         isRead: false,
-        isDeleted: false,    // Thu hồi
-        deletedByUsers: [],    // Xóa 1 phía
+        isRevoked: false,    // Thu hồi (revoke)
+        deletedByUsers: [],    // Xóa 1 phía (delete)
       });
 
       await message.save();
@@ -37,17 +37,18 @@ export class MessageDataService {
   /**
    * Thu hồi tin nhắn (Cho tất cả mọi người)
    */
-  async revokeMessage(messageId: string): Promise<void> {
+  async revokeMessage(messageId: string): Promise<IMessage | null> {
     try {
-      // Bỏ từ khóa 'function' đi vì đang ở trong Class
-      await Message.findByIdAndUpdate(
+      const updated = await Message.findByIdAndUpdate(
         messageId,
         { 
-          $set: { isDeleted: true },
-          deletedAt: new Date() 
-        }
+          $set: { isRevoked: true },
+          revokedAt: new Date() 
+        },
+        { new: true }
       );
       console.log(`[MessageDataService] Message revoked for everyone: ${messageId}`);
+      return updated;
     } catch (error) {
       console.error('[MessageDataService] Failed to revoke message:', error);
       throw error;
@@ -71,18 +72,18 @@ export class MessageDataService {
   }
 
   /**
-   * Lấy lịch sử tin nhắn (Có lọc những tin đã xóa 1 phía)
+   * Lấy lịch sử tin nhắn (Có lọc những tin đã xóa 1 phía và xử lý thu hồi)
    */
   async getMessageHistory(
     conversationId: string,
-    userId: string, // Phải truyền userId vào để lọc
+    userId: string, // UserId của người yêu cầu
     limit: number = 50,
     skip: number = 0
   ): Promise<IMessage[]> {
     try {
       const messages = await Message.find({
         conversationId: new Types.ObjectId(conversationId),
-        deletedByUsers: { $ne: userId } // LỌC: Không lấy tin mà user này đã xóa
+        deletedByUsers: { $ne: userId } // LỌC: Không lấy tin mà user này đã xóa phía mình
       })
         .sort({ createdAt: -1 })
         .limit(limit)
@@ -91,8 +92,12 @@ export class MessageDataService {
 
       // Reverse và xử lý hiển thị tin đã thu hồi
       return messages.reverse().map((msg: any) => {
-        if (msg.isDeleted) {
-          msg.content = "Tin nhắn đã được thu hồi";
+        if (msg.isRevoked) {
+          // Chỉ ẩn nội dung đối với người không phải người gửi
+          if (String(msg.senderId) !== String(userId)) {
+            msg.content = "Tin nhắn đã được thu hồi";
+          }
+          // Note: Người gửi vẫn nhận được nội dung gốc để thực hiện Redo/Sửa nhanh
         }
         return msg;
       });

@@ -93,13 +93,14 @@ const deleteGroup = async (groupId: string) => {
 // Tạo nhóm
 const createGroup = async (data: {
   name: string;
-  memberIds: string[];
+  userIds: string[];
   avatarFile?: File;
 }) => {
   try {
     const formData = new FormData();
     formData.append("name", data.name);
-    data.memberIds.forEach((id) => formData.append("memberIds", id));
+    // Backend yêu cầu JSON string cho userIds khi dùng multipart/form-data
+    formData.append("userIds", JSON.stringify(data.userIds));
     if (data.avatarFile) formData.append("avatarFile", data.avatarFile);
 
     const response = await axiosClient.post("/groups", formData, {
@@ -370,7 +371,7 @@ const CreateGroupModal = ({
     try {
       const result = await createGroup({
         name: name.trim(),
-        memberIds: selectedIds,
+        userIds: selectedIds,
         avatarFile: avatarFile || undefined,
       });
 
