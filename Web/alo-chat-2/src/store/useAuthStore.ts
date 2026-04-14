@@ -81,17 +81,23 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        set({
-          accessToken: null,
-          refreshToken: null,
-          userId: null,
-          user: null,
-          isAuthenticated: false,
-        });
+        set((state) => {
+          // Chỉ xóa local storage nếu token trong local storage trùng với token hiện tại của tab nàv
+          // Nếu không trùng, nghĩa là tab khác đã login đè token mới lên
+          const localToken = localStorage.getItem("accessToken");
+          if (state.accessToken === localToken) {
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("refreshToken");
+          }
 
-        // Dọn dẹp token trong local storage
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
+          return {
+            accessToken: null,
+            refreshToken: null,
+            userId: null,
+            user: null,
+            isAuthenticated: false,
+          };
+        });
       },
     }),
     {

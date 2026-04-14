@@ -15,7 +15,10 @@ class SocketService {
       typeof window !== "undefined"
         ? localStorage.getItem("accessToken")
         : null;
-    if (!token) return;
+    console.log(
+      "🔌 [Socket] Attempting to connect with token:",
+      token ? `${token.substring(0, 10)}...` : "NONE",
+    );
 
     this.socket = io(SOCKET_URL, {
       auth: { token },
@@ -34,6 +37,14 @@ class SocketService {
 
     this.socket.on("connect_error", (error) => {
       console.error("⚠️ [Socket] Connection Error:", error.message);
+    });
+
+    // Lắng nghe lệnh đá thiết bị từ hệ thống phòng khi dùng nhiều máy
+    this.socket.on("FORCE_LOGOUT", (data) => {
+      console.warn("⚠️ Received FORCE_LOGOUT from server:", data);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("force_logout"));
+      }
     });
   }
 
@@ -124,6 +135,29 @@ class SocketService {
     callback: (data: { messageId: string; reactions: any[] }) => void,
   ) {
     this.socket?.on("message-reaction-updated", callback);
+  }
+
+  // Realtime Sync cho Ghim và Phân loại
+  onPinUpdated(callback: (data: { conversationId: string; isPinned: boolean }) => void) {
+    this.socket?.on("CONVERSATION_PIN_UPDATED", callback);
+  }
+
+  onLabelUpdated(callback: (data: { conversationId: string; label: any }) => void) {
+    this.socket?.on("CONVERSATION_LABEL_UPDATED", callback);
+  }
+
+  // Lắng nghe sự kiện hội thoại mới được tạo
+  onConversationCreated(callback: (newConvo: any) => void) {
+    this.socket?.on("CONVERSATION_CREATED", callback);
+  }
+
+  onConversationRemoved(callback: (data: { conversationId: string }) => void) {
+    this.socket?.on("CONVERSATION_REMOVED", callback);
+  }
+
+  // Lắng nghe sự kiện thu hồi tin nhắn
+  onMessageRevoked(callback: (data: { messageId: string, revokedAt?: string }) => void) {
+    this.socket?.on("message-revoked", callback);
   }
 
   // Hủy lắng nghe một sự kiện
