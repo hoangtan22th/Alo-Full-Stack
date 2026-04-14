@@ -293,20 +293,38 @@ public class ContactTool {
         }
     }
 
-    @Tool(description = "Hủy kết bạn/Xóa một người khỏi danh sách bạn bè bằng SỐ ĐIỆN THOẠI của họ. BẮT BUỘC cần số điện thoại.")
+    @Tool(description = "Hủy kết bạn bằng số điện thoại. Chỉ dùng khi người dùng muốn xóa bạn đã kết bạn.")
     public String removeFriendByPhone(
             @ToolParam(description = "Số điện thoại của bạn bè cần xóa", required = true) String phone,
-            @ToolParam(description = "ID của người dùng đang đăng nhập", required = true) String userId) {
+            @ToolParam(description = "ID người dùng hiện tại", required = true) String userId) {
         System.out.println(">>> [TOOL CALLED] removeFriendByPhone - phone: " + phone + ", userId: " + userId);
         try {
+            // Bước 1: Tìm user qua phone
             var searchResp = contactClient.searchUserByPhone(phone, userId);
             SearchFriendResponseDTO data = searchResp.getData();
             if (data == null) return "Không tìm thấy người dùng với số điện thoại " + phone;
-            if (!data.isFriend()) return "Người này hiện không phải là bạn bè của bạn.";
             String friendId = data.getUserId();
+
+            // Bước 2: Kiểm tra có phải bạn bè không (gọi getFriendsList)
+            var friendsResp = contactClient.getFriendsList(userId);
+            boolean isFriend = false;
+            if (friendsResp.getData() != null) {
+                for (FriendshipResponseDTO f : friendsResp.getData()) {
+                    String otherId = f.getRequesterId().equals(userId) ? f.getRecipientId() : f.getRequesterId();
+                    if (otherId.equals(friendId)) {
+                        isFriend = true;
+                        break;
+                    }
+                }
+            }
+            if (!isFriend) return "Số điện thoại " + phone + " hiện không phải là bạn bè của bạn.";
+
+            // Bước 3: Xóa bạn
             var removeResp = contactClient.removeFriend(friendId, userId);
-            if (removeResp.getStatus() == 200) return "👋 Đã xóa bạn bè " + data.getFullName() + " thành công.";
-            else return "Không thể xóa: " + removeResp.getMessage();
+            if (removeResp.getStatus() == 200)
+                return "👋 Đã xóa bạn bè " + (data.getFullName() != null ? data.getFullName() : phone) + " thành công.";
+            else
+                return "Không thể xóa: " + removeResp.getMessage();
         } catch (Exception e) {
             return "Lỗi: " + e.getMessage();
         }

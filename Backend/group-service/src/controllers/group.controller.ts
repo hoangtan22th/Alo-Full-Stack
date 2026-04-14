@@ -2,7 +2,7 @@
 import { Request, Response } from "express";
 import Conversation from "../models/Conversation";
 import { uploadImageToS3, deleteImageFromS3 } from "../services/s3Service";
-
+// import mongoose from "mongoose";
 // Helper lấy danh sách bạn bè
 async function getFriendIds(
   userId: string,
@@ -423,6 +423,15 @@ export const getGroupById = async (
 ): Promise<void> => {
   try {
     const { groupId } = req.params;
+
+    // fix chat bot nhung ko duoc, de luon
+    // const groupId = req.params.groupId as string;
+
+    // 🛡️ CHẶN NGAY TỪ CỬA: Nếu ID không phải là định dạng MongoDB hợp lệ (ví dụ "alo-bot") thì chặn luôn
+    // if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
+    //   res.status(400).json({ error: "ID nhóm không hợp lệ" });
+    //   return;
+    // }
     const group = await Conversation.findById(groupId);
     if (!group) {
       res.status(404).json({ error: "Không tìm thấy nhóm" });

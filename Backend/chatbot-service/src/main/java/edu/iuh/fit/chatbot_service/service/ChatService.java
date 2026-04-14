@@ -1,6 +1,7 @@
 package edu.iuh.fit.chatbot_service.service;
 
 import edu.iuh.fit.chatbot_service.config.*;
+import edu.iuh.fit.chatbot_service.config.GuidelineTool;
 import edu.iuh.fit.chatbot_service.dto.ChatRequest;
 import edu.iuh.fit.chatbot_service.entity.ChatHistory;
 import edu.iuh.fit.chatbot_service.repository.ChatHistoryRepository;
@@ -23,10 +24,22 @@ public class ChatService {
     private final UserTool userTool;
     private final ContactTool contactTool;
     private final SystemTool systemTool;
+    private final GuidelineTool guidelineTool;
     private final ChatHistoryRepository chatHistoryRepository;
 
-    public ChatService(ChatClient.Builder builder, WeatherToolConfig weatherTool, UserTool userTool, ContactTool contactTool, SystemTool systemTool, ChatHistoryRepository chatHistoryRepository) {
-        this.weatherTool = weatherTool; this.userTool = userTool; this.contactTool = contactTool; this.systemTool = systemTool; this.chatHistoryRepository = chatHistoryRepository;
+    public ChatService(ChatClient.Builder builder,
+                       WeatherToolConfig weatherTool,
+                       UserTool userTool,
+                       ContactTool contactTool,
+                       SystemTool systemTool,
+                       GuidelineTool guidelineTool,
+                       ChatHistoryRepository chatHistoryRepository) {
+        this.weatherTool = weatherTool;
+        this.userTool = userTool;
+        this.contactTool = contactTool;
+        this.systemTool = systemTool;
+        this.guidelineTool = guidelineTool;
+        this.chatHistoryRepository = chatHistoryRepository;
         this.chatClient = builder.build();
     }
 
@@ -44,14 +57,15 @@ public class ChatService {
                 else if ("assistant".equals(h.getRole())) history.add(new AssistantMessage(h.getContent()));
             }
 
-            // [FIXED] System prompt: Đưa ra luật rõ ràng để AI không tự bịa thông số
+            // System prompt ngắn gọn, hướng dẫn AI khi nào gọi guideline
             String systemPromptText = String.format("""
-                    Bạn là AI của Alo Chat. ID hiện tại của bạn là: %s. (LUÔN DÙNG ID NÀY CHO THAM SỐ userId HOẶC requesterId TRONG TOOL).
+                    Bạn là AI Alo Chat. ID người dùng: %s.
                     
-                    NGUYÊN TẮC HOẠT ĐỘNG (TUYỆT ĐỐI TUÂN THỦ):
-                    1. HỎI LẠI NẾU THIẾU: Không bao giờ gọi tool nếu người dùng chưa cung cấp đủ thông tin bắt buộc (ví dụ: số điện thoại, tên thành phố).
-                    2. KHÔNG TỰ BỊA: Không tự bịa ra số điện thoại, ID, hoặc tên thành phố để điền vào Tool.
-                    3. GIAO TIẾP TỰ NHIÊN: Nếu người dùng chỉ chào hỏi, tán gẫu, hãy trả lời bình thường, KHÔNG GỌI TOOL.
+                    QUY TẮC:
+                    1. Nếu người dùng hỏi về CÁCH SỬ DỤNG APP (ví dụ: "nút kết bạn ở đâu?", "làm sao tạo nhóm?", "hướng dẫn xóa bạn") → hãy gọi tool readGuidelines().
+                    2. Còn lại, xử lý bình thường với các tool: thời tiết, tìm người, kết bạn, xóa bạn, xem danh sách, v.v.
+                    3. KHÔNG tự bịa số điện thoại hay ID. Hỏi lại nếu thiếu thông tin.
+                    4. Trả lời ngắn gọn, tiếng Việt.
                     """, userId);
 
             List<Message> messages = new ArrayList<>();
@@ -61,25 +75,29 @@ public class ChatService {
 
             String content = chatClient.prompt()
                     .messages(messages)
-                    .tools(weatherTool, userTool, contactTool, systemTool)
+                    .tools(weatherTool, userTool, contactTool, systemTool, guidelineTool)
                     .call()
                     .content();
 
-            // Lưu lịch sử...
+            // Lưu lịch sử
             ChatHistory userMsg = new ChatHistory();
-            userMsg.setConversationId(conversationId); userMsg.setRole("user"); userMsg.setContent(request.message());
+            userMsg.setConversationId(conversationId);
+            userMsg.setRole("user");
+            userMsg.setContent(request.message());
             chatHistoryRepository.save(userMsg);
 
             if (content != null && !content.isBlank()) {
                 ChatHistory assistantMsg = new ChatHistory();
-                assistantMsg.setConversationId(conversationId); assistantMsg.setRole("assistant"); assistantMsg.setContent(content);
+                assistantMsg.setConversationId(conversationId);
+                assistantMsg.setRole("assistant");
+                assistantMsg.setContent(content);
                 chatHistoryRepository.save(assistantMsg);
             }
 
-            // Xóa cũ...
+            // Giới hạn lịch sử 10 tin nhắn để tiết kiệm token
             List<ChatHistory> all = chatHistoryRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
-            if (all.size() > 20) {
-                for (int i = 0; i < all.size() - 20; i++) chatHistoryRepository.delete(all.get(i));
+            if (all.size() > 10) {
+                for (int i = 0; i < all.size() - 10; i++) chatHistoryRepository.delete(all.get(i));
             }
 
             System.out.println(">>> [AI RESPONSE] " + content);
