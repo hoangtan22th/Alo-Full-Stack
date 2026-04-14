@@ -290,7 +290,7 @@ export default function ConversationSidebar() {
               membersCount: g.members?.length,
               message: g.lastMessageContent || "Chưa có tin nhắn",
               time: timeString,
-              unreadCount: g.unreadCount?.[currentUserId] || 0,
+              unreadCount: (currentUserId && g.unreadCount?.[currentUserId]) || 0,
               updatedAt: g.updatedAt,
               online: false,
             };
