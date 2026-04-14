@@ -88,6 +88,31 @@ export async function initRabbitMQ(io: Server) {
               "CONVERSATION_UPDATED",
               data,
             );
+          } else if (routingKey === "chat.conversation.created") {
+            // Nhóm tạo mới -> Ép các thành viên join room để từ bây giờ nhận được tin nhắn realtime
+            if (data.members) {
+              data.members.forEach((m: any) => {
+                const userId = m.userId;
+                io.in(`user_${userId}`).fetchSockets().then(sockets => {
+                  sockets.forEach(s => {
+                    s.join(`room_${data._id}`); // Thực hiện join room thực tế trên Socket.IO
+                    s.emit("CONVERSATION_CREATED", data); // Thông báo cho client UI update danh sách
+                  });
+                });
+              });
+            }
+          } else if (routingKey === "chat.conversation.removed") {
+             // Ai đó bị kick, hoặc rời nhóm -> Ép huỷ kết nối room
+             io.in(`user_${data.userId}`).fetchSockets().then(sockets => {
+               sockets.forEach(s => {
+                  s.leave(`room_${data.conversationId}`);
+                  s.emit("CONVERSATION_REMOVED", data); // Báo xuống client
+               });
+             });
+          } else if (routingKey === "chat.conversation.pin_updated") {
+             io.to(`user_${data.userId}`).emit("CONVERSATION_PIN_UPDATED", data);
+          } else if (routingKey === "chat.conversation.label_updated") {
+             io.to(`user_${data.userId}`).emit("CONVERSATION_LABEL_UPDATED", data);
           }
         }
         // NẾU LÀ PAYLOAD LẠC HẬU TỪ DIRECT QUEUE (Ví dụ FORCE_LOGOUT)
