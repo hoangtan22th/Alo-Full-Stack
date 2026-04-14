@@ -142,6 +142,28 @@ export class RabbitMQProducerService {
       // Don't throw - allow app to continue even if RabbitMQ is down
     }
   }
+
+  /**
+   * Đồng bộ cập nhật cảm xúc tới Realtime Service
+   */
+  async publishReactionUpdateEvent(data: {
+    messageId: string;
+    conversationId: string;
+    reactions: any[];
+  }): Promise<void> {
+    try {
+      await this.publishToRealtimeService('message-reaction-updated', {
+        room: data.conversationId,
+        data: {
+          messageId: data.messageId,
+          reactions: data.reactions
+        }
+      });
+      console.log(`[RabbitMQProducer] Reaction update event published: ${data.messageId}`);
+    } catch (error) {
+      console.error('[RabbitMQProducer] Failed to publish reaction update event:', error);
+    }
+  }
 }
 
 export default new RabbitMQProducerService();

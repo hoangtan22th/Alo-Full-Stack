@@ -383,3 +383,85 @@ export async function markMessagesAsRead(
     next(error);
   }
 }
+
+/**
+ * Thả cảm xúc hoặc tăng số lượng (Spam)
+ */
+export async function reactToMessage(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = getUserIdFromHeader(req);
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!messageId || !emoji) {
+      res.status(400).json({ error: 'Missing messageId or emoji' });
+      return;
+    }
+
+    const updatedMessage = await messageDataService.addReaction(messageId, userId, emoji);
+    
+    if (updatedMessage) {
+      // Bắn sự kiện realtime
+      await rabbitMQProducer.publishReactionUpdateEvent({
+        messageId,
+        conversationId: updatedMessage.conversationId.toString(),
+        reactions: updatedMessage.reactions
+      });
+    }
+
+    res.json({
+      status: 'success',
+      data: updatedMessage?.reactions || []
+    });
+  } catch (error) {
+    console.error('[MessageController] POST reactToMessage error:', error);
+    next(error);
+  }
+}
+
+/**
+ * Xóa toàn bộ cảm xúc của user trên tin nhắn
+ */
+export async function clearReactions(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { messageId } = req.params;
+    const userId = getUserIdFromHeader(req);
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const updatedMessage = await messageDataService.clearReactions(messageId, userId);
+
+    if (updatedMessage) {
+      // Bắn sự kiện realtime
+      await rabbitMQProducer.publishReactionUpdateEvent({
+        messageId,
+        conversationId: updatedMessage.conversationId.toString(),
+        reactions: updatedMessage.reactions
+      });
+    }
+
+    res.json({
+      status: 'success',
+      data: updatedMessage?.reactions || []
+    });
+  } catch (error) {
+    console.error('[MessageController] DELETE clearReactions error:', error);
+    next(error);
+  }
+}
