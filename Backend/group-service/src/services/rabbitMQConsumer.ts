@@ -19,13 +19,23 @@ export async function startRabbitMQConsumer() {
     channel.consume(queueName, async (msg) => {
       if (msg !== null) {
         try {
+          const routingKey = msg.fields.routingKey;
           const content = JSON.parse(msg.content.toString());
-          const { type, data } = content;
+          const { data } = content;
 
-          if (type === "message.created") {
-            const { conversationId, _id: messageId, createdAt, content: msgContent, type: msgType, senderId } = data;
+          if (routingKey === "chat.message.created") {
+            const {
+              conversationId,
+              _id: messageId,
+              createdAt,
+              content: msgContent,
+              type: msgType,
+              senderId,
+            } = data;
 
-            console.log(`[RabbitMQConsumer] Updating lastMessage and incrementing unread for conversation: ${conversationId}`);
+            console.log(
+              `[RabbitMQConsumer] Updating lastMessage and incrementing unread for conversation: ${conversationId}`,
+            );
 
             let lastContent = msgContent || "";
             if (msgType === "image") lastContent = "[Hình ảnh]";
@@ -34,32 +44,36 @@ export async function startRabbitMQConsumer() {
             // 1. Tìm conversation để lấy danh sách members
             const conversation = await Conversation.findById(conversationId);
             if (!conversation) {
-              console.warn(`[RabbitMQConsumer] Conversation not found: ${conversationId}`);
+              console.warn(
+                `[RabbitMQConsumer] Conversation not found: ${conversationId}`,
+              );
               channel.ack(msg);
               return;
             }
 
             // 2. Cập nhật lastMessage và Tăng unreadCount cho các thành viên khác
             const updateObj: any = {
-              $set: { 
+              $set: {
                 lastMessage: new Types.ObjectId(messageId),
                 lastMessageAt: new Date(createdAt),
-                lastMessageContent: lastContent
-              }
+                lastMessageContent: lastContent,
+              },
             };
 
             // Increment unreadCount for all members except sender
-            conversation.members.forEach(member => {
+            conversation.members.forEach((member) => {
               if (member.userId !== senderId) {
-                const currentCount = conversation.unreadCount.get(member.userId) || 0;
-                updateObj.$set[`unreadCount.${member.userId}`] = currentCount + 1;
+                const currentCount =
+                  conversation.unreadCount.get(member.userId) || 0;
+                updateObj.$set[`unreadCount.${member.userId}`] =
+                  currentCount + 1;
               }
             });
 
             const updatedConversation = await Conversation.findByIdAndUpdate(
               conversationId,
               updateObj,
-              { new: true }
+              { new: true },
             );
 
             if (updatedConversation) {
@@ -72,31 +86,38 @@ export async function startRabbitMQConsumer() {
                     lastMessageContent: updatedConversation.lastMessageContent,
                     lastMessageAt: updatedConversation.lastMessageAt,
                     lastMessageId: updatedConversation.lastMessage,
-                    unreadCount: updatedConversation.unreadCount.get(member.userId) || 0,
+                    unreadCount:
+                      updatedConversation.unreadCount.get(member.userId) || 0,
                     updatedAt: updatedConversation.updatedAt,
-                    senderId: senderId
+                    senderId: senderId,
                   },
                 };
 
-                console.log(`[RabbitMQConsumer] Broadcasting CONVERSATION_UPDATED to user: ${member.userId}`);
+                console.log(
+                  `[RabbitMQConsumer] Broadcasting CONVERSATION_UPDATED to user: ${member.userId}`,
+                );
                 channel.sendToQueue(
                   "realtime_events",
                   Buffer.from(JSON.stringify(realtimePayload)),
-                  { persistent: true }
+                  { persistent: true },
                 );
               });
-              console.log(`[RabbitMQConsumer] Successfully broadcasted update to ${updatedConversation.members.length} members`);
+              console.log(
+                `[RabbitMQConsumer] Successfully broadcasted update to ${updatedConversation.members.length} members`,
+              );
             }
-          } else if (type === "message.read") {
+          } else if (routingKey === "chat.message.read") {
             const { conversationId, userId } = data;
-            console.log(`[RabbitMQConsumer] Resetting unreadCount for user ${userId} in conversation ${conversationId}`);
+            console.log(
+              `[RabbitMQConsumer] Resetting unreadCount for user ${userId} in conversation ${conversationId}`,
+            );
 
             const updatedConversation = await Conversation.findByIdAndUpdate(
               conversationId,
               {
-                $set: { [`unreadCount.${userId}`]: 0 }
+                $set: { [`unreadCount.${userId}`]: 0 },
               },
-              { new: true }
+              { new: true },
             );
 
             if (updatedConversation) {
@@ -106,14 +127,14 @@ export async function startRabbitMQConsumer() {
                 data: {
                   conversationId: updatedConversation._id,
                   unreadCount: 0,
-                  updatedAt: updatedConversation.updatedAt
+                  updatedAt: updatedConversation.updatedAt,
                 },
               };
 
               channel.sendToQueue(
                 "realtime_events",
                 Buffer.from(JSON.stringify(realtimePayload)),
-                { persistent: true }
+                { persistent: true },
               );
             }
           }
