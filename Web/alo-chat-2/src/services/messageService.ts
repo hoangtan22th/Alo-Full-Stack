@@ -13,6 +13,7 @@ export interface MessageDTO {
   };
   isRead: boolean;
   isRevoked?: boolean;
+  reactions?: any[];
   createdAt: string;
   updatedAt?: string;
 }
@@ -145,12 +146,33 @@ export const messageService = {
   },
 
   // Đánh dấu đã đọc tất cả tin trong conversation
+  // Đánh dấu đã đọc tất cả tin trong conversation
   markAsRead: async (conversationId: string): Promise<boolean> => {
     try {
-      await api.patch<any, any>(`/messages/${conversationId}/read`, {});
+      await api.patch(`/messages/${conversationId}/read`);
       return true;
     } catch (error) {
       console.error("Lỗi đánh dấu đã đọc:", error);
+      return false;
+    }
+  },
+
+  async reactToMessage(messageId: string, emoji: string): Promise<boolean> {
+    try {
+      await api.post(`/messages/${messageId}/reactions`, { emoji });
+      return true;
+    } catch (error) {
+      console.error("Lỗi reactToMessage:", error);
+      return false;
+    }
+  },
+
+  async clearReactions(messageId: string): Promise<boolean> {
+    try {
+      await api.delete(`/messages/${messageId}/reactions`);
+      return true;
+    } catch (error) {
+      console.error("Lỗi clearReactions:", error);
       return false;
     }
   },

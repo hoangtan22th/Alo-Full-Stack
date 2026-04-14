@@ -29,6 +29,7 @@ import {
   MapPinIcon,
   TrashIcon,
   ArrowUturnLeftIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 
 /* ─────────────────────────────────────────
@@ -69,10 +70,37 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
   const [conversationInfo, setConversationInfo] = useState<any>(null);
-  // Hover tooltip & context menu
+  // Hover tooltip & context menu & reactions
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [activeReactionMenu, setActiveReactionMenu] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<"top" | "bottom">("top");
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+  // Reaction viewers
+  const [viewingReactions, setViewingReactions] = useState<{messageId: string, reactions: any[], activeTab: string} | null>(null);
+  const [userCache, setUserCache] = useState<Record<string, {name: string, avatar: string}>>({});
+
+  const fetchUserInfo = async (userId: string) => {
+    if (userCache[userId] || !userId) return;
+    try {
+      const res: any = await axiosClient.get(`/users/${userId}`);
+      const u = res?.data?.data || res?.data || res;
+      if (u) {
+        setUserCache(prev => ({
+          ...prev,
+          [userId]: {
+            name: u.fullName || u.username || u.name || "Người dùng",
+            avatar: u.avatar || ""
+          }
+        }));
+      }
+    } catch {}
+  };
+
+  const EMOJI_MAP: Record<string, string> = {
+    like: '👍', heart: '❤️', haha: '😂', wow: '😮', cry: '😢', angry: '😡'
+  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -258,9 +286,20 @@ export default function ChatPage() {
       }
     });
 
+    // Lắng nghe thay đổi cảm xúc
+    socketService.off("message-reaction-updated");
+    socketService.onMessageReactionUpdated((data) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === data.messageId ? { ...m, reactions: data.reactions } : m
+        )
+      );
+    });
+
     return () => {
       socketService.off("message-received");
       socketService.off("messages-read");
+      socketService.off("message-reaction-updated");
     };
   }, [conversationId, currentUser]);
 
@@ -280,6 +319,16 @@ export default function ChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  /* ─── Reactions ─── */
+  const handleToggleReaction = async (messageId: string, emoji: string) => {
+    setActiveReactionMenu(null);
+    try {
+      await messageService.reactToMessage(messageId, emoji);
+    } catch (error) {
+      console.error("Lỗi toggle cảm xúc:", error);
+    }
+  };
 
   /* ─── Send message ─── */
   const handleSend = async () => {
@@ -648,74 +697,135 @@ export default function ChatPage() {
                           </div>
 
                           {/* Bubble */}
-                          <div className="max-w-[70%]">
-                            {isRevoked ? (
-                              <span className="italic text-[12px] text-gray-400 bg-gray-100 px-4 py-2 rounded-2xl block">
-                                Tin nhắn đã bị thu hồi
-                              </span>
-                            ) : msg.type === "image" ? (
-                              <img
-                                src={msg.content}
-                                alt="img"
-                                className={`object-cover max-h-64 w-full shadow ${bubbleRadius}`}
-                              />
-                            ) : msg.type === "file" ? (
-                              <a
-                                href={msg.content}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={`flex items-center gap-3 p-3 hover:opacity-80 transition ${
-                                  isMine ? "bg-black text-white" : "bg-[#F5F5F5] text-gray-900"
-                                } ${bubbleRadius}`}
-                              >
-                                <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
-                                  <DocumentIcon className="w-5 h-5" />
+                          <div className={`max-w-[70%] flex flex-col ${isMine ? "items-end" : "items-start"}`}>
+                            {/* Wrapper cho Bubble content và Hover controls để nó luôn căn giữa text */}
+                            <div className="relative max-w-full">
+                              {isRevoked ? (
+                                <span className="italic text-[12px] text-gray-400 bg-gray-100 px-4 py-2 rounded-2xl block w-fit">
+                                  Tin nhắn đã bị thu hồi
+                                </span>
+                              ) : msg.type === "image" ? (
+                                <img
+                                  src={msg.content}
+                                  alt="img"
+                                  className={`object-cover max-h-64 shadow ${bubbleRadius}`}
+                                />
+                              ) : msg.type === "file" ? (
+                                <a
+                                  href={msg.content}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`flex items-center gap-3 p-3 hover:opacity-80 transition w-fit max-w-full ${
+                                    isMine ? "bg-black text-white" : "bg-[#F5F5F5] text-gray-900"
+                                  } ${bubbleRadius}`}
+                                >
+                                  <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+                                    <DocumentIcon className="w-5 h-5" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-[13px] font-bold truncate">
+                                      {msg.metadata?.fileName || "Tệp đính kèm"}
+                                    </p>
+                                    <p className="text-[11px] opacity-60">
+                                      {msg.metadata?.fileSize
+                                        ? `${(msg.metadata.fileSize / 1024).toFixed(1)} KB`
+                                        : ""}
+                                    </p>
+                                  </div>
+                                  <ArrowDownTrayIcon className="w-4 h-4 shrink-0 opacity-60" />
+                                </a>
+                              ) : (
+                                <div
+                                  className={`px-4 py-2.5 text-[14px] font-medium leading-relaxed w-fit max-w-full ${
+                                    isMine
+                                      ? "bg-black text-white shadow-md"
+                                      : "bg-[#F5F5F5] text-gray-900"
+                                  } ${bubbleRadius}`}
+                                >
+                                  {msg.content}
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="text-[13px] font-bold truncate">
-                                    {msg.metadata?.fileName || "Tệp đính kèm"}
-                                  </p>
-                                  <p className="text-[11px] opacity-60">
-                                    {msg.metadata?.fileSize
-                                      ? `${(msg.metadata.fileSize / 1024).toFixed(1)} KB`
-                                      : ""}
-                                  </p>
-                                </div>
-                                <ArrowDownTrayIcon className="w-4 h-4 shrink-0 opacity-60" />
-                              </a>
-                            ) : (
-                              <div
-                                className={`px-4 py-2.5 text-[14px] font-medium leading-relaxed ${
-                                  isMine
-                                    ? "bg-black text-white shadow-md"
-                                    : "bg-[#F5F5F5] text-gray-900"
-                                } ${bubbleRadius}`}
+                              )}
+
+
+
+                              {/* Hover Controls (Reaction & Menu) đặt cạnh text bubble */}
+                              <div className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1 py-4 ${
+                                isMine ? "right-full pr-2" : "left-full pl-2"
+                              } ${
+                                hoveredMsgId === msg._id ? "opacity-100" : "opacity-0 pointer-events-none"
+                              } transition-opacity`}>
+                            {/* Nút thả cảm xúc */}
+                            <div className="relative">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMenu(null);
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setMenuPosition(rect.top < window.innerHeight / 2 ? "bottom" : "top");
+                                  setActiveReactionMenu(activeReactionMenu === msg._id ? null : msg._id);
+                                }}
+                                className="w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
                               >
-                                {msg.content}
-                              </div>
-                            )}
-                          </div>
+                                <FaceSmileIcon className="w-4 h-4" />
+                              </button>
 
-                          {/* Nút "..." — hướng vào giữa màn hình, chỉ hiện khi hover */}
-                          <div className={`relative ${
-                            hoveredMsgId === msg._id ? "opacity-100" : "opacity-0 pointer-events-none"
-                          } transition-opacity`}>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveMenu(activeMenu === msg._id ? null : msg._id);
-                              }}
-                              className="w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
-                            >
-                              <EllipsisHorizontalIcon className="w-4 h-4" />
-                            </button>
+                              {/* Emoji Picker */}
+                              {activeReactionMenu === msg._id && (
+                                <div
+                                  className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 ${
+                                    isMine ? "right-0" : "left-0"
+                                  } ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                                  onMouseLeave={() => setActiveReactionMenu(null)}
+                                >
+                                  {msg.reactions?.some((r: any) => String(r.userId) === String(currentUser?.id || currentUser?._id || currentUser?.userId)) && (
+                                    <div className="border-r border-gray-200 pr-1 flex items-center">
+                                      <button
+                                        onClick={async () => {
+                                          setActiveReactionMenu(null);
+                                          await messageService.clearReactions(msg._id);
+                                        }}
+                                        className="w-8 h-8 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all rounded-full text-gray-400"
+                                        title="Xoá cảm xúc"
+                                      >
+                                        <XMarkIcon className="w-5 h-5" />
+                                      </button>
+                                    </div>
+                                  )}
 
-                            {/* Context Menu */}
+                                  {Object.entries(EMOJI_MAP).map(([key, icon]) => (
+                                    <button
+                                      key={key}
+                                      onClick={() => handleToggleReaction(msg._id, key)}
+                                      className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 hover:scale-125 transition-all rounded-full text-lg"
+                                    >
+                                      {icon}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Nút "..." menu */}
+                            <div className="relative">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveReactionMenu(null);
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setMenuPosition(rect.top < window.innerHeight / 2 ? "bottom" : "top");
+                                  setActiveMenu(activeMenu === msg._id ? null : msg._id);
+                                }}
+                                className="w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
+                              >
+                                <EllipsisHorizontalIcon className="w-4 h-4" />
+                              </button>
+
+                              {/* Context Menu */}
                             {activeMenu === msg._id && (
                               <div
-                                className={`absolute z-50 bottom-full mb-1.5 w-46 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 overflow-hidden ${
+                                className={`absolute z-50 w-46 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 overflow-hidden ${
                                   isMine ? "right-0" : "left-0"
-                                }`}
+                                } ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
                                 onMouseLeave={() => setActiveMenu(null)}
                               >
                                 {!msg.isRevoked && msg.type === "text" && (
@@ -773,8 +883,45 @@ export default function ChatPage() {
                                 </button>
                               </div>
                             )}
+                            </div> {/* Nút "..." menu */}
                           </div>
-                        </div>
+
+                        </div> {/* Đóng thẻ Wrapper cho nội dung và hover controls */}
+
+                        {/* Hiển thị các cảm xúc đã thả */}
+                        {msg.reactions && msg.reactions.length > 0 && (
+                          <div className={`flex flex-wrap gap-1 mt-1 ${isMine ? "justify-end" : "justify-start"}`}>
+                            {Array.from(new Set(msg.reactions.map((r: any) => r.emoji))).map((emojiKey: any) => {
+                              const peopleReacted = msg.reactions!.filter((r: any) => r.emoji === emojiKey);
+                              return (
+                                <div
+                                  key={emojiKey}
+                                  onClick={() => {
+                                    setViewingReactions({ messageId: msg._id, reactions: msg.reactions!, activeTab: "all" });
+                                    msg.reactions!.forEach((r: any) => fetchUserInfo(r.userId));
+                                  }}
+                                  onMouseEnter={() => {
+                                    peopleReacted.forEach((r: any) => fetchUserInfo(r.userId));
+                                  }}
+                                  title={peopleReacted.map(r => userCache[r.userId]?.name || `User #${r.userId.substring(0,4)}`).join(", ")}
+                                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] cursor-pointer transition ${
+                                    msg.reactions!.some((r: any) => r.emoji === emojiKey && String(r.userId) === String(currentUser?.id || currentUser?._id || currentUser?.userId))
+                                      ? "bg-blue-100 text-blue-600 border border-blue-200"
+                                      : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
+                                  }`}
+                                >
+                                  <span>{EMOJI_MAP[emojiKey as string] || emojiKey}</span>
+                                  <span className="font-bold">
+                                    {peopleReacted.reduce((acc, r: any) => acc + (r.count || 1), 0)}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div> {/* Đóng thẻ Bubble */}
+
+                    </div>
                       );
                     })}
 
@@ -851,6 +998,114 @@ export default function ChatPage() {
             </button>
           </div>
         </div>
+
+        {/* Reaction Modal */}
+        {viewingReactions && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setViewingReactions(null)} />
+            <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden relative animate-in fade-in zoom-in duration-200 flex flex-col max-h-[80vh]">
+              <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="font-bold text-lg">Cảm xúc tin nhắn</h3>
+                <button onClick={() => setViewingReactions(null)} className="p-2 hover:bg-gray-100 rounded-full transition text-gray-500">
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex flex-1 overflow-hidden">
+                {/* Left Column: Emoji Tabs */}
+                {(() => {
+                  const rList = viewingReactions.reactions;
+                  const totalCount = rList.reduce((acc, r) => acc + (r.count || 1), 0);
+                  const groupedCount = rList.reduce((acc, r) => {
+                    acc[r.emoji] = (acc[r.emoji] || 0) + (r.count || 1);
+                    return acc;
+                  }, {} as Record<string, number>);
+                  const sortedGrouped = (Object.entries(groupedCount) as [string, number][]).sort((a, b) => b[1] - a[1]);
+
+                  // Right Column Users
+                  const activeFilters = viewingReactions.activeTab === "all" ? rList : rList.filter(r => r.emoji === viewingReactions.activeTab);
+                  
+                  // Group by user for the right column
+                  const userEmoteMap = activeFilters.reduce((acc, r) => {
+                    const uid = String(r.userId);
+                    if (!acc[uid]) acc[uid] = { total: 0, emotes: [] };
+                    acc[uid].total += (r.count || 1);
+                    
+                    // Group similar emojis if user clicked multiple times
+                    const existingEmote = acc[uid].emotes.find((e: any) => e.emoji === r.emoji);
+                    if (existingEmote) existingEmote.count += (r.count || 1);
+                    else acc[uid].emotes.push({ emoji: r.emoji, count: r.count || 1 });
+                    
+                    return acc;
+                  }, {} as Record<string, { total: number, emotes: { emoji: string, count: number }[] }>);
+
+                  const sortedUsers = (Object.entries(userEmoteMap) as [string, any][]).sort((a, b) => b[1].total - a[1].total);
+
+                  return (
+                    <>
+                      <div className="w-1/3 border-r border-gray-100 p-2 overflow-y-auto bg-white max-h-[60vh]">
+                        <button
+                          onClick={() => setViewingReactions({ ...viewingReactions, activeTab: "all" })}
+                          className={`w-full flex items-center justify-between p-3 rounded-2xl transition mb-1 ${viewingReactions.activeTab === "all" ? "bg-gray-100" : "hover:bg-gray-50"}`}
+                        >
+                          <span className="font-semibold text-sm">Tất cả</span>
+                          <span className="text-gray-500 text-sm font-medium">{totalCount}</span>
+                        </button>
+                        {sortedGrouped.map(([emojiKey, count]) => (
+                          <button
+                            key={emojiKey}
+                            onClick={() => setViewingReactions({ ...viewingReactions, activeTab: emojiKey })}
+                            className={`w-full flex items-center justify-between p-3 rounded-2xl transition mb-1 ${viewingReactions.activeTab === emojiKey ? "bg-gray-100" : "hover:bg-gray-50"}`}
+                          >
+                            <span className="text-2xl">{EMOJI_MAP[emojiKey] || emojiKey}</span>
+                            <span className="text-gray-500 text-sm font-medium">{count}</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="w-2/3 p-2 overflow-y-auto bg-[#F9FAFB] max-h-[60vh]">
+                        {sortedUsers.map(([uid, uData]) => {
+                          const uInfo = userCache[uid] || { name: `User #${uid.substring(0, 4)}`, avatar: "" };
+                          return (
+                            <div key={uid} className="flex items-center gap-3 p-3 mb-1 bg-white rounded-2xl shadow-sm border border-gray-50 hover:shadow-md transition">
+                              <div className="relative">
+                                {uInfo.avatar ? (
+                                  <img src={uInfo.avatar} alt={uInfo.name} className="w-10 h-10 rounded-full object-cover shadow-sm bg-gray-100" />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm shadow-sm uppercase">
+                                    {uInfo.name.charAt(0)}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-[14px] truncate text-gray-900">{uInfo.name}</p>
+                                <div className="flex flex-wrap gap-1.5 mt-1">
+                                  {uData.emotes.map((em: any, idx: number) => (
+                                    <div key={idx} className="flex items-center text-xs bg-gray-50 border border-gray-100 rounded-lg px-2 py-0.5">
+                                      <span className="text-[14px] mr-1">{EMOJI_MAP[em.emoji] || em.emoji}</span>
+                                      {em.count > 1 && <span className="font-black text-gray-600">x{em.count}</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="text-right flex flex-col justify-center">
+                                <span className="text-[20px] font-black text-gray-200 leading-none">{uData.total}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {sortedUsers.length === 0 && (
+                          <div className="h-full flex items-center justify-center text-gray-400 font-medium text-sm">
+                            Không có cảm xúc nào
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ═══ CỘT PHẢI: THÔNG TIN CHI TIẾT ═══ */}
