@@ -416,6 +416,7 @@ const handleDownload = async (url: string, fileName: string) => {
   // ─── Group messages: cùng sender + cách nhau < 5 phút = 1 group ───
   interface MsgGroup {
     isMine: boolean;
+    senderId: string;
     messages: MessageDTO[];
   }
   const messageGroups = useMemo((): MsgGroup[] => {
@@ -429,10 +430,12 @@ const handleDownload = async (url: string, fileName: string) => {
         ? new Date(msg.createdAt).getTime() -
           new Date(lastMsg.createdAt).getTime()
         : Infinity;
-      if (last && last.isMine === isMine && gap < FIVE_MIN) {
+      
+      // Nhóm theo SENDER ID để tránh gộp nhiều người khác vào 1 khối trong group chat
+      if (last && last.senderId === msg.senderId && gap < FIVE_MIN) {
         last.messages.push(msg);
       } else {
-        groups.push({ isMine, messages: [msg] });
+        groups.push({ isMine, senderId: msg.senderId, messages: [msg] });
       }
     }
     return groups;

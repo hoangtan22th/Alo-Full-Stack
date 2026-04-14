@@ -561,6 +561,7 @@ export default function GlobalChatScreen() {
 
   interface MsgGroup {
     isSender: boolean;
+    senderId: string;
     messages: MessageDTO[];
   }
   const messageGroups = useMemo((): MsgGroup[] => {
@@ -574,10 +575,12 @@ export default function GlobalChatScreen() {
         ? new Date(msg.createdAt).getTime() -
           new Date(lastMsg.createdAt).getTime()
         : Infinity;
-      if (last && last.isSender === isSender && gap < FIVE_MIN) {
+      
+      // Nhóm theo SENDER ID cụ thể (không chỉ là isSender) để tránh gộp nhiều người khác vào 1 khối
+      if (last && last.senderId === msg.senderId && gap < FIVE_MIN) {
         last.messages.push(msg);
       } else {
-        groups.push({ isSender, messages: [msg] });
+        groups.push({ isSender, senderId: msg.senderId, messages: [msg] });
       }
     }
     return groups;
