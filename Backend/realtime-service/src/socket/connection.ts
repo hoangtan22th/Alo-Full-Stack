@@ -13,12 +13,15 @@ async function fetchUserGroups(
     const gatewayUrl = process.env.GATEWAY_URL || "http://localhost:8888";
 
     // Yêu cầu lấy TẤT CẢ cuộc hội thoại (bao gồm cả chat 1-1 và Nhóm)
-    const response = await axios.get(`${gatewayUrl}/api/v1/groups/me?type=all`, {
-      headers: {
-        Authorization: `Bearer ${token}`, // Pass the JWT token to bypass API Gateway auth
-        "X-User-Id": userId, // Pass the internal header required by group-service just in case
+    const response = await axios.get(
+      `${gatewayUrl}/api/v1/groups/me?type=all`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`, // Pass the JWT token to bypass API Gateway auth
+          "X-User-Id": userId, // Pass the internal header required by group-service just in case
+        },
       },
-    });
+    );
 
     // Extract group IDs from the response payload structure expected from group-service
     // The controller returns: res.status(200).json({ data: groups });
@@ -42,6 +45,12 @@ export function initSocketConnection(io: Server) {
 
     // 1. Join Personal Room for 1v1 messages
     socket.join(`user_${userId}`);
+
+    // Join Session Room for specific device targeting (FORCE_LOGOUT)
+    const sessionId = socket.data.sessionId;
+    if (sessionId) {
+      socket.join(`session_${sessionId}`);
+    }
 
     // 2. Auto join all Group Chat rooms
     try {
