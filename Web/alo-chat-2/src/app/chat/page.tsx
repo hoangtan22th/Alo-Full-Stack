@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import axiosClient from "@/services/api";
+import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -16,6 +17,7 @@ export default function ChatPage() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
 
   useEffect(() => {
     fetchGroups();
@@ -116,7 +118,11 @@ export default function ChatPage() {
             <h1 className="text-2xl font-black tracking-tight text-black">
               Messages
             </h1>
-            <button className="w-8 h-8 bg-black rounded-full text-white flex items-center justify-center hover:bg-gray-800 transition shadow-md active:scale-95">
+            <button
+              onClick={() => setShowNewChatModal(true)}
+              title="Tạo cuộc hội thoại mới"
+              className="w-8 h-8 bg-black rounded-full text-white flex items-center justify-center hover:bg-gray-800 transition shadow-md active:scale-95"
+            >
               <PlusIcon className="w-5 h-5 stroke-2" />
             </button>
           </div>
@@ -229,7 +235,22 @@ export default function ChatPage() {
           Chọn một cuộc trò chuyện từ danh sách bên trái hoặc bắt đầu một cuộc
           trò chuyện mới để kết nối với mọi người.
         </p>
+        <button
+          onClick={() => setShowNewChatModal(true)}
+          className="mt-6 px-5 py-2.5 bg-black text-white text-[13px] font-bold rounded-full hover:bg-gray-800 transition active:scale-95 shadow-md"
+        >
+          + Cuộc trò chuyện mới
+        </button>
       </div>
+
+      {/* Modal tạo chat 1-1 */}
+      <NewDirectChatModal
+        isOpen={showNewChatModal}
+        onClose={() => {
+          setShowNewChatModal(false);
+          fetchGroups(); // reload list sau khi tạo
+        }}
+      />
     </div>
   );
 }

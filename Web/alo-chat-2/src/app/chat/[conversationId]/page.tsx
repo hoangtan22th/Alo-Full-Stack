@@ -1,6 +1,10 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
 import axiosClient from "@/services/api";
+import { messageService, MessageDTO } from "@/services/messageService";
+import { groupService } from "@/services/groupService";
+import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -19,110 +23,88 @@ import {
   FolderIcon,
   NoSymbolIcon,
   ExclamationCircleIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 
-// ================= DỮ LIỆU MẪU DỰ PHÒNG =================
-const mockConversations = [
-  {
-    id: "1",
-    name: "Nguyễn Hoàng Tấn",
-    message: "Can you review the latest Fi...",
-    time: "12:45 PM",
-    unread: false,
-    online: true,
-    avatar: "https://i.pravatar.cc/150?img=11",
-  },
-  {
-    id: "2",
-    name: "Sarah Jenkins",
-    message: "The project scope looks goo...",
-    time: "Yesterday",
-    unread: false,
-    online: false,
-    avatar: "https://i.pravatar.cc/150?img=5",
-  },
-  {
-    id: "3",
-    name: "Acme Design Team",
-    message: "Alex: Uploaded the new asse...",
-    time: "Mon",
-    unread: false,
-    online: false,
-    avatar:
-      "https://ui-avatars.com/api/?name=Acme+Design&background=333&color=fff",
-  },
-];
+/* ─────────────────────────────────────────
+   Helpers
+───────────────────────────────────────── */
+function formatTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
 
+function formatListTime(iso: string) {
+  return new Date(iso).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/* ─────────────────────────────────────────
+   Page Component
+───────────────────────────────────────── */
 export default function ChatPage() {
+  const params = useParams();
+  const router = useRouter();
+  const conversationId = params?.conversationId as string;
+
+  /* ---------- sidebar state ---------- */
   const [activeTab, setActiveTab] = useState("Ưu tiên");
-  const [activeChat, setActiveChat] = useState("1");
   const [conversations, setConversations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingList, setLoadingList] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showInfoPanel, setShowInfoPanel] = useState(true); // Trạng thái mở/đóng tab info
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
 
-  useEffect(() => {
-    fetchGroups();
-  }, []);
+  /* ---------- chat area state ---------- */
+  const [messages, setMessages] = useState<MessageDTO[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [showInfoPanel, setShowInfoPanel] = useState(true);
+  const [conversationInfo, setConversationInfo] = useState<any>(null);
 
-  const fetchGroups = async () => {
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  /* ─── Fetch conversation list (sidebar) ─── */
+  const fetchGroups = useCallback(async () => {
     try {
-      setLoading(true);
-      // 1. Lấy user info
+      setLoadingList(true);
       const userRes: any = await axiosClient.get("/auth/me");
       const user = userRes?.data || userRes;
       if (user) setCurrentUser(user);
       const currentUserId = user?.id || user?._id || user?.userId;
 
-      // 2. Lấy groups
       let groups: any = await axiosClient.get("/groups/me", {
         params: { type: "all" },
       });
-
-      // Axios interceptor của bạn có thể trả về array hoặc object chứa data
-      if (groups?.data?.data) {
-        groups = groups.data.data;
-      } else if (groups?.data) {
-        groups = groups.data;
-      }
+      if (groups?.data?.data) groups = groups.data.data;
+      else if (groups?.data) groups = groups.data;
 
       if (Array.isArray(groups)) {
-        // Map thông tin nhóm & người dùng
-        const formattedGroups = await Promise.all(
+        const formatted = await Promise.all(
           groups.map(async (g: any) => {
-            const date = new Date(g.updatedAt);
-            const timeString = date.toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            });
-
             let chatName = g.name;
             let chatAvatar = g.groupAvatar;
 
-            // Nếu là chat 1-1
             if (!g.isGroup && currentUserId && g.members) {
-              const otherMember = g.members.find(
+              const other = g.members.find(
                 (m: any) => m.userId !== currentUserId,
               );
-              if (otherMember) {
+              if (other) {
                 try {
-                  const userRes: any = await axiosClient.get(
-                    `/users/${otherMember.userId}`,
+                  const res: any = await axiosClient.get(
+                    `/users/${other.userId}`,
                   );
-                  const otherUser =
-                    userRes?.data?.data || userRes?.data || userRes;
-                  if (otherUser) {
+                  const u = res?.data?.data || res?.data || res;
+                  if (u) {
                     chatName =
-                      otherUser.fullName ||
-                      otherUser.username ||
-                      otherUser.name ||
-                      "Người dùng";
-                    chatAvatar = otherUser.avatar || chatAvatar;
+                      u.fullName || u.username || u.name || "Người dùng";
+                    chatAvatar = u.avatar || chatAvatar;
                   }
-                } catch (err) {
-                  console.log("Không lấy được info user", err);
-                }
+                } catch {}
               }
             }
 
@@ -131,20 +113,143 @@ export default function ChatPage() {
               name: chatName || "Nhóm trò chuyện",
               avatar: chatAvatar || "",
               isGroup: g.isGroup,
-              membersCount: g.members?.length,
-              message: "Chưa có tin nhắn", // Placeholder nếu backend chưa trả lastMessage
-              time: timeString,
+              time: formatListTime(g.updatedAt),
+              message: "Chưa có tin nhắn",
               unread: false,
               online: false,
             };
           }),
         );
-        setConversations(formattedGroups);
+        setConversations(formatted);
       }
-    } catch (error) {
-      console.error("Lỗi lấy danh sách nhóm:", error);
+    } catch (err) {
+      console.error("Lỗi lấy danh sách nhóm:", err);
     } finally {
-      setLoading(false);
+      setLoadingList(false);
+    }
+  }, []);
+
+  /* ─── Fetch messages for current conversation ─── */
+  const fetchMessages = useCallback(async () => {
+    if (!conversationId) return;
+    setLoadingMessages(true);
+    try {
+      const res = await messageService.getMessageHistory(conversationId, 50, 0);
+      if (res?.messages) {
+        setMessages(res.messages);
+      }
+      // mark as read
+      messageService.markAsRead(conversationId);
+    } catch (err) {
+      console.error("Lỗi lấy tin nhắn:", err);
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, [conversationId]);
+
+  /* ─── Fetch conversation info ─── */
+  const fetchConversationInfo = useCallback(async () => {
+    if (!conversationId) return;
+    try {
+      const data: any = await groupService.getGroupById(conversationId);
+      const g = data?.data || data;
+      if (!g) return;
+
+      let displayName = g.name;
+      let displayAvatar = g.groupAvatar;
+
+      const currentUserId =
+        currentUser?.id || currentUser?._id || currentUser?.userId;
+      if (!g.isGroup && currentUserId && g.members) {
+        const other = g.members.find(
+          (m: any) => m.userId !== currentUserId,
+        );
+        if (other) {
+          try {
+            const res: any = await axiosClient.get(`/users/${other.userId}`);
+            const u = res?.data?.data || res?.data || res;
+            if (u) {
+              displayName =
+                u.fullName || u.username || u.name || "Người dùng";
+              displayAvatar = u.avatar || displayAvatar;
+            }
+          } catch {}
+        }
+      }
+
+      setConversationInfo({ ...g, displayName, displayAvatar });
+    } catch (err) {
+      console.error("Lỗi lấy thông tin cuộc hội thoại:", err);
+    }
+  }, [conversationId, currentUser]);
+
+  useEffect(() => {
+    fetchGroups();
+  }, [fetchGroups]);
+
+  useEffect(() => {
+    if (conversationId) {
+      fetchMessages();
+    }
+  }, [conversationId, fetchMessages]);
+
+  useEffect(() => {
+    if (conversationId && currentUser) {
+      fetchConversationInfo();
+    }
+  }, [conversationId, currentUser, fetchConversationInfo]);
+
+  /* ─── Auto scroll to bottom ─── */
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  /* ─── Send message ─── */
+  const handleSend = async () => {
+    const text = messageText.trim();
+    if (!text || !conversationId || sending) return;
+
+    setSending(true);
+    setMessageText("");
+
+    // Optimistic UI
+    const tempMsg: MessageDTO = {
+      _id: `temp_${Date.now()}`,
+      conversationId,
+      senderId: currentUser?.id || currentUser?._id || "me",
+      type: "text",
+      content: text,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+
+    try {
+      const sent = await messageService.sendMessage({
+        conversationId,
+        content: text,
+        type: "text",
+      });
+      if (sent) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === tempMsg._id ? sent : m)),
+        );
+      }
+    } catch (err) {
+      console.error("Lỗi gửi tin nhắn:", err);
+      // Rollback optimistic
+      setMessages((prev) => prev.filter((m) => m._id !== tempMsg._id));
+      setMessageText(text);
+    } finally {
+      setSending(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   };
 
@@ -152,9 +257,15 @@ export default function ChatPage() {
     chat.name?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
+  const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+
+  /* ─────────────────────────────────────────
+     RENDER
+  ───────────────────────────────────────── */
   return (
     <div className="flex h-screen w-full bg-white text-gray-900 font-sans overflow-hidden">
-      {/* ================= CỘT TRÁI: DANH SÁCH CHAT ================= */}
+
+      {/* ═══ CỘT TRÁI: DANH SÁCH CHAT ═══ */}
       <div className="w-full md:w-[320px] lg:w-85 flex flex-col border-r border-gray-100 shrink-0 h-full">
         <div className="p-5 flex flex-col gap-5">
           {/* Header */}
@@ -162,7 +273,11 @@ export default function ChatPage() {
             <h1 className="text-2xl font-black tracking-tight text-black">
               Messages
             </h1>
-            <button className="w-8 h-8 bg-black rounded-full text-white flex items-center justify-center hover:bg-gray-800 transition shadow-md active:scale-95">
+            <button
+              onClick={() => setShowNewChatModal(true)}
+              title="Tạo cuộc hội thoại mới"
+              className="w-8 h-8 bg-black rounded-full text-white flex items-center justify-center hover:bg-gray-800 transition shadow-md active:scale-95"
+            >
               <PlusIcon className="w-5 h-5 stroke-2" />
             </button>
           </div>
@@ -205,23 +320,31 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* List */}
+        {/* Conversation List */}
         <div className="flex-1 overflow-y-auto scrollbar-hide px-3 pb-4">
-          {loading ? (
+          {loadingList ? (
             <div className="flex items-center justify-center h-full text-gray-500">
               Đang tải danh sách...
             </div>
           ) : filteredConversations.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              Không có cuộc trò chuyện nào
+            <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-3">
+              <p className="text-[13px]">Không có cuộc trò chuyện nào</p>
+              <button
+                onClick={() => setShowNewChatModal(true)}
+                className="px-4 py-2 bg-black text-white text-[12px] font-bold rounded-full hover:bg-gray-800 transition"
+              >
+                + Tạo mới
+              </button>
             </div>
           ) : (
             filteredConversations.map((chat) => (
               <div
                 key={chat.id}
-                onClick={() => setActiveChat(chat.id)}
+                onClick={() => router.push(`/chat/${chat.id}`)}
                 className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all ${
-                  activeChat === chat.id ? "bg-[#F5F5F5]" : "hover:bg-gray-50"
+                  conversationId === chat.id
+                    ? "bg-[#F5F5F5]"
+                    : "hover:bg-gray-50"
                 }`}
               >
                 <div className="relative shrink-0">
@@ -263,16 +386,21 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* ================= CỘT GIỮA: NỘI DUNG CHAT ================= */}
+      {/* ═══ CỘT GIỮA: NỘI DUNG CHAT ═══ */}
       <div className="flex-1 flex flex-col min-w-0 h-full bg-white relative">
+
         {/* Chat Header */}
         <div className="h-19 px-6 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md z-10">
           <div>
             <h2 className="text-[16px] font-black tracking-tight">
-              Nguyễn Hoàng Tấn
+              {conversationInfo?.displayName ||
+                conversationInfo?.name ||
+                "Đang tải..."}
             </h2>
             <p className="text-[12px] font-bold text-gray-400 mt-0.5">
-              Đang hoạt động
+              {conversationInfo?.isGroup
+                ? `${conversationInfo?.members?.length ?? ""} thành viên`
+                : "Đang hoạt động"}
             </p>
           </div>
           <div className="flex items-center gap-4 text-gray-400">
@@ -294,85 +422,149 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
-          <div className="flex justify-center">
-            <span className="bg-[#F5F5F5] text-gray-500 text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full">
-              Today
-            </span>
-          </div>
-
-          {/* Left Bubble (Them) */}
-          <div className="flex items-end gap-3 max-w-[85%] lg:max-w-[70%]">
-            <img
-              src="https://i.pravatar.cc/150?img=11"
-              className="w-8 h-8 rounded-full mb-1"
-              alt=""
-            />
-            <div>
-              <div className="bg-[#F5F5F5] text-gray-900 p-4 rounded-2xl rounded-bl-sm text-[14px] font-medium leading-relaxed">
-                Hello! I've just pushed the latest design tokens for the Concise
-                dashboard. Could you take a look when you have a moment?
-              </div>
-              <span className="text-[10px] font-bold text-gray-400 mt-1.5 ml-1 block">
-                12:38 PM
-              </span>
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
+          {loadingMessages ? (
+            <div className="flex items-center justify-center h-full">
+              <ArrowPathIcon className="w-6 h-6 text-gray-400 animate-spin" />
             </div>
-          </div>
-
-          {/* Right Bubble (Me) */}
-          <div className="flex justify-end">
-            <div className="max-w-[85%] lg:max-w-[70%]">
-              <div className="bg-black text-white p-4 rounded-2xl rounded-br-sm text-[14px] font-medium leading-relaxed shadow-md">
-                Hey Tấn! That's great news. I'll jump on Figma right now and
-                check them out. Are they in the main branch?
-              </div>
-              <div className="flex items-center justify-end gap-1 mt-1.5 mr-1">
-                <span className="text-[10px] font-bold text-gray-400">
-                  12:42 PM
-                </span>
-                <span className="text-[10px] text-gray-400">✓✓</span>
-              </div>
+          ) : messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2">
+              <FaceSmileIcon className="w-10 h-10 opacity-30" />
+              <p className="text-[13px] font-medium">
+                Chưa có tin nhắn nào. Hãy bắt đầu cuộc trò chuyện!
+              </p>
             </div>
-          </div>
+          ) : (
+            <>
+              {messages.map((msg) => {
+                const isMine = msg.senderId === myId;
+                const isRevoked = msg.isRevoked;
 
-          {/* Left Bubble (Them) - With Attachment */}
-          <div className="flex items-end gap-3 max-w-[85%] lg:max-w-[70%]">
-            <img
-              src="https://i.pravatar.cc/150?img=11"
-              className="w-8 h-8 rounded-full mb-1"
-              alt=""
-            />
-            <div className="w-full">
-              <div className="bg-[#F5F5F5] text-gray-900 p-4 rounded-2xl rounded-bl-sm text-[14px] font-medium leading-relaxed mb-2">
-                Yes, I've created a "v2-revision" branch. Can you review the
-                latest Figma file?
-              </div>
+                if (isRevoked) {
+                  return (
+                    <div
+                      key={msg._id}
+                      className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+                    >
+                      <span className="italic text-[12px] text-gray-400 bg-gray-100 px-4 py-2 rounded-2xl">
+                        Tin nhắn đã bị thu hồi
+                      </span>
+                    </div>
+                  );
+                }
 
-              {/* File Attachment UI */}
-              <div className="bg-[#F5F5F5] p-3 rounded-2xl rounded-bl-sm flex items-center justify-between gap-4 cursor-pointer hover:bg-gray-200 transition">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
-                    <DocumentIcon className="w-5 h-5 text-gray-600" />
-                  </div>
-                  <div>
-                    <p className="text-[13px] font-bold text-gray-900 line-clamp-1">
-                      Design_Systems_Final.fig
-                    </p>
-                    <p className="text-[11px] font-bold text-gray-400">
-                      4.2 MB • Figma Document
-                    </p>
-                  </div>
-                </div>
-                <button className="p-2 hover:bg-white rounded-full transition">
-                  <ArrowDownTrayIcon className="w-4 h-4 text-gray-600" />
-                </button>
-              </div>
-              <span className="text-[10px] font-bold text-gray-400 mt-1.5 ml-1 block">
-                12:45 PM
-              </span>
-            </div>
-          </div>
+                if (msg.type === "text") {
+                  return (
+                    <div
+                      key={msg._id}
+                      className={`flex ${isMine ? "justify-end" : "items-end gap-3"}`}
+                    >
+                      {!isMine && (
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px] shrink-0 mb-1">
+                          ?
+                        </div>
+                      )}
+                      <div className={`max-w-[70%] ${isMine ? "" : ""}`}>
+                        <div
+                          className={`p-3.5 rounded-2xl text-[14px] font-medium leading-relaxed ${
+                            isMine
+                              ? "bg-black text-white rounded-br-sm shadow-md"
+                              : "bg-[#F5F5F5] text-gray-900 rounded-bl-sm"
+                          }`}
+                        >
+                          {msg.content}
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold text-gray-400 mt-1 block ${isMine ? "text-right mr-1" : "ml-1"}`}
+                        >
+                          {formatTime(msg.createdAt)}
+                          {isMine && (
+                            <span className="ml-1">
+                              {msg.isRead ? "✓✓" : "✓"}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (msg.type === "image") {
+                  return (
+                    <div
+                      key={msg._id}
+                      className={`flex ${isMine ? "justify-end" : "items-end gap-3"}`}
+                    >
+                      {!isMine && (
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px] shrink-0 mb-1">
+                          ?
+                        </div>
+                      )}
+                      <div className="max-w-[60%]">
+                        <img
+                          src={msg.content}
+                          alt="img"
+                          className="rounded-2xl object-cover max-h-64 w-full shadow"
+                        />
+                        <span
+                          className={`text-[10px] font-bold text-gray-400 mt-1 block ${isMine ? "text-right" : ""}`}
+                        >
+                          {formatTime(msg.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (msg.type === "file") {
+                  return (
+                    <div
+                      key={msg._id}
+                      className={`flex ${isMine ? "justify-end" : "items-end gap-3"}`}
+                    >
+                      {!isMine && (
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px] shrink-0 mb-1">
+                          ?
+                        </div>
+                      )}
+                      <div className="max-w-[70%]">
+                        <a
+                          href={msg.content}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 bg-[#F5F5F5] p-3 rounded-2xl hover:bg-gray-200 transition"
+                        >
+                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                            <DocumentIcon className="w-5 h-5 text-gray-600" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-bold text-gray-900 truncate">
+                              {msg.metadata?.fileName || "Tệp đính kèm"}
+                            </p>
+                            <p className="text-[11px] font-bold text-gray-400">
+                              {msg.metadata?.fileSize
+                                ? `${(msg.metadata.fileSize / 1024).toFixed(1)} KB`
+                                : ""}
+                            </p>
+                          </div>
+                          <ArrowDownTrayIcon className="w-4 h-4 text-gray-500 shrink-0" />
+                        </a>
+                        <span
+                          className={`text-[10px] font-bold text-gray-400 mt-1 block ${isMine ? "text-right" : ""}`}
+                        >
+                          {formatTime(msg.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return null;
+              })}
+              <div ref={messagesEndRef} />
+            </>
+          )}
         </div>
 
         {/* Message Input */}
@@ -382,21 +574,34 @@ export default function ChatPage() {
               <PaperClipIcon className="w-5 h-5" />
             </button>
             <input
+              ref={inputRef}
               type="text"
-              placeholder="Type a message..."
-              className="flex-1 bg-transparent border-none outline-none text-[14px] font-medium placeholder:text-gray-400"
+              placeholder="Nhập tin nhắn..."
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={sending}
+              className="flex-1 bg-transparent border-none outline-none text-[14px] font-medium placeholder:text-gray-400 disabled:opacity-60"
             />
             <button className="p-2 text-gray-400 hover:text-black transition">
               <FaceSmileIcon className="w-5 h-5" />
             </button>
-            <button className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-800 transition active:scale-95 shadow-md">
-              <PaperAirplaneIcon className="w-4 h-4 -mr-0.5" />
+            <button
+              onClick={handleSend}
+              disabled={!messageText.trim() || sending}
+              className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-800 transition active:scale-95 shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {sending ? (
+                <ArrowPathIcon className="w-4 h-4 animate-spin" />
+              ) : (
+                <PaperAirplaneIcon className="w-4 h-4 -mr-0.5" />
+              )}
             </button>
           </div>
         </div>
       </div>
 
-      {/* ================= CỘT PHẢI: THÔNG TIN CHI TIẾT ================= */}
+      {/* ═══ CỘT PHẢI: THÔNG TIN CHI TIẾT ═══ */}
       <div
         className={`hidden lg:flex flex-col shrink-0 bg-[#FAFAFA] h-full transition-all duration-300 ease-in-out overflow-hidden ${
           showInfoPanel
@@ -406,21 +611,33 @@ export default function ChatPage() {
       >
         <div className="w-[320px] xl:w-85 h-full flex flex-col">
           <div className="flex-1 overflow-y-auto scrollbar-hide">
+
             {/* Profile Section */}
             <div className="flex flex-col items-center pt-10 pb-8 border-b border-gray-100/60">
               <div className="relative mb-4">
-                <img
-                  src="https://i.pravatar.cc/150?img=11"
-                  alt="Profile"
-                  className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
-                />
-                <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full" />
+                {conversationInfo?.displayAvatar ? (
+                  <img
+                    src={conversationInfo.displayAvatar}
+                    alt="Profile"
+                    className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
+                  />
+                ) : (
+                  <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-3xl border-4 border-white shadow-lg">
+                    {(conversationInfo?.displayName || "?")
+                      .charAt(0)
+                      .toUpperCase()}
+                  </div>
+                )}
               </div>
               <h2 className="text-[18px] font-black text-gray-900 tracking-tight">
-                Nguyễn Hoàng Tấn
+                {conversationInfo?.displayName ||
+                  conversationInfo?.name ||
+                  "..."}
               </h2>
               <p className="text-[12px] font-bold text-gray-400 mt-1">
-                Senior Product Designer
+                {conversationInfo?.isGroup
+                  ? `${conversationInfo?.members?.length ?? 0} thành viên`
+                  : "Người dùng"}
               </p>
 
               <div className="flex items-center gap-3 mt-6">
@@ -436,78 +653,43 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* Shared Media */}
-            <div className="p-6 border-b border-gray-100/60">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                  Shared Media
-                </h3>
-                <button className="text-[10px] font-black text-black hover:underline uppercase">
-                  See All
-                </button>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="aspect-square rounded-xl bg-gray-200 overflow-hidden shadow-sm">
-                  <img
-                    src="https://images.unsplash.com/photo-1517048676732-d65bc937f952?q=80&w=200&auto=format&fit=crop"
-                    className="w-full h-full object-cover"
-                    alt=""
-                  />
-                </div>
-                <div className="aspect-square rounded-xl bg-gray-200 overflow-hidden shadow-sm">
-                  <img
-                    src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=200&auto=format&fit=crop"
-                    className="w-full h-full object-cover"
-                    alt=""
-                  />
-                </div>
-                <div className="aspect-square rounded-xl bg-gray-200 overflow-hidden shadow-sm">
-                  <img
-                    src="https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=200&auto=format&fit=crop"
-                    className="w-full h-full object-cover"
-                    alt=""
-                  />
-                </div>
-              </div>
-            </div>
-
             {/* Shared Files */}
             <div className="p-6 border-b border-gray-100/60">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
                   Shared Files
                 </h3>
-                <button className="text-[10px] font-black text-black hover:underline uppercase">
-                  See All
-                </button>
               </div>
               <div className="space-y-4">
-                <div className="flex items-center gap-4 cursor-pointer group">
-                  <div className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-400 group-hover:bg-gray-50 transition">
-                    <DocumentIcon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-[13px] font-bold text-gray-900">
-                      Brand_Guidelines.pdf
-                    </p>
-                    <p className="text-[11px] font-bold text-gray-400">
-                      12.5 MB • PDF
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 cursor-pointer group">
-                  <div className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-400 group-hover:bg-gray-50 transition">
-                    <FolderIcon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-[13px] font-bold text-gray-900">
-                      UI_Assets_v2.zip
-                    </p>
-                    <p className="text-[11px] font-bold text-gray-400">
-                      85 MB • ZIP
-                    </p>
-                  </div>
-                </div>
+                {messages
+                  .filter((m) => m.type === "file")
+                  .slice(-5)
+                  .map((m) => (
+                    <a
+                      key={m._id}
+                      href={m.content}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-4 cursor-pointer group"
+                    >
+                      <div className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-400 group-hover:bg-gray-50 transition">
+                        <FolderIcon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-bold text-gray-900 truncate">
+                          {m.metadata?.fileName || "File"}
+                        </p>
+                        <p className="text-[11px] font-bold text-gray-400">
+                          {m.metadata?.fileType || ""}
+                        </p>
+                      </div>
+                    </a>
+                  ))}
+                {messages.filter((m) => m.type === "file").length === 0 && (
+                  <p className="text-[12px] text-gray-400 font-medium">
+                    Chưa có file nào được chia sẻ
+                  </p>
+                )}
               </div>
             </div>
 
@@ -525,6 +707,15 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal tạo chat 1-1 */}
+      <NewDirectChatModal
+        isOpen={showNewChatModal}
+        onClose={() => {
+          setShowNewChatModal(false);
+          fetchGroups();
+        }}
+      />
     </div>
   );
 }
