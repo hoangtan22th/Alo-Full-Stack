@@ -229,4 +229,64 @@ export const groupService = {
       throw error;
     }
   },
+
+  // --- Quản lý Nhãn (Labels) ---
+  getLabels: async () => {
+    try {
+      return await api.get<any, any>(`/labels`);
+    } catch (error) {
+      console.error("Lỗi lấy danh sách nhãn:", error);
+      throw error;
+    }
+  },
+
+  createLabel: async (name: string, color: string) => {
+    try {
+      return await api.post<any, any>(`/labels`, { name, color });
+    } catch (error) {
+      console.error("Lỗi tạo nhãn mới:", error);
+      throw error;
+    }
+  },
+
+  updateLabel: async (id: string, name: string, color: string) => {
+    try {
+      return await api.put<any, any>(`/labels/${id}`, { name, color });
+    } catch (error) {
+      console.error("Lỗi cập nhật nhãn:", error);
+      throw error;
+    }
+  },
+
+  deleteLabel: async (id: string) => {
+    try {
+      return await api.delete<any, any>(`/labels/${id}`);
+    } catch (error) {
+      console.error("Lỗi xóa nhãn:", error);
+      throw error;
+    }
+  },
+
+  // Gán nhãn cho cuộc hội thoại
+  assignLabel: async (conversationId: string, labelId: string | null) => {
+    try {
+      return await api.post<any, any>(
+        `/conversations/${conversationId}/label`,
+        { labelId }
+      );
+    } catch (error) {
+      console.error("Lỗi gán nhãn cho hội thoại:", error);
+      throw error;
+    }
+  },
+
+  // Lấy tất cả các gán nhãn của user
+  getConversationLabels: async () => {
+    try {
+      return await api.get<any, any>(`/conversations/labels`);
+    } catch (error) {
+      console.error("Lỗi lấy danh sách hội thoại đã gán nhãn:", error);
+      throw error;
+    }
+  },
 };

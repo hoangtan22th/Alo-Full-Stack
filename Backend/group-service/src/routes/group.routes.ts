@@ -2,6 +2,7 @@
 import { Router } from "express";
 import multer from "multer";
 import * as groupController from "../controllers/group.controller";
+import * as labelController from "../controllers/label.controller";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -68,5 +69,15 @@ router.post(
   "/api/v1/groups/direct",
   groupController.getOrCreateDirectConversation,
 );
+
+// --- Quản lý Nhãn (Labels) ---
+router.get("/api/v1/labels", labelController.getLabels);
+router.post("/api/v1/labels", labelController.createLabel);
+router.put("/api/v1/labels/:id", labelController.updateLabel);
+router.delete("/api/v1/labels/:id", labelController.deleteLabel);
+
+// Gán nhãn cho cuộc hội thoại
+router.post("/api/v1/conversations/:conversationId/label", labelController.assignLabel);
+router.get("/api/v1/conversations/labels", labelController.getConversationLabels);
 
 export default router;
