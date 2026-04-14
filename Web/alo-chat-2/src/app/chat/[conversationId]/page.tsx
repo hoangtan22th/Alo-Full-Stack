@@ -35,6 +35,8 @@ import {
 } from "@heroicons/react/24/outline";
 import BotChatArea from "@/components/ui/BotChatArea";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useSocketStore } from "@/store/useSocketStore";
+import { formatLastActive } from "@/utils/presence";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -61,6 +63,9 @@ export default function ChatPage() {
 
   /* ---------- chat area state ---------- */
   const { user: currentUser } = useAuthStore();
+  const onlineUsers = useSocketStore((state) => state.onlineUsers);
+  const currentUserId =
+    currentUser?.id || currentUser?._id || currentUser?.userId;
   const [messages, setMessages] = useState<MessageDTO[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageText, setMessageText] = useState("");
@@ -81,13 +86,15 @@ export default function ChatPage() {
   const [viewingReactions, setViewingReactions] = useState<{ messageId: string, reactions: any[], activeTab: string } | null>(null);
   const [userCache, setUserCache] = useState<Record<string, { name: string, avatar: string }>>({});
   const [isMounted, setIsMounted] = useState(false);
+  const fetchingUsersRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   const fetchUserInfo = async (userId: string) => {
-    if (userCache[userId] || !userId) return;
+    if (userCache[userId] || !userId || fetchingUsersRef.current.has(userId)) return;
+    fetchingUsersRef.current.add(userId);
     try {
       const res: any = await axiosClient.get(`/users/${userId}`);
       const u = res?.data?.data || res?.data || res;
@@ -268,6 +275,36 @@ export default function ChatPage() {
     }
   }, [conversationId, currentUser, fetchConversationInfo]);
 
+  const directChatUserId =
+    !conversationInfo?.isGroup && currentUserId && conversationInfo?.members
+      ? conversationInfo.members.find((m: any) => m.userId !== currentUserId)
+          ?.userId
+      : null;
+  const userStatus = directChatUserId ? onlineUsers[directChatUserId] : null;
+  const isDirectUserOnline = userStatus?.status === "online";
+  const directChatSubtitle = conversationInfo?.isGroup
+    ? `${conversationInfo?.members?.length ?? ""} thành viên`
+    : isDirectUserOnline
+      ? "Đang hoạt động"
+      : formatLastActive(userStatus?.last_active);
+
+  useEffect(() => {
+    if (directChatUserId && !onlineUsers[directChatUserId]) {
+      socketService.checkUserStatus(directChatUserId);
+    }
+  }, [directChatUserId, onlineUsers]);
+
+  /* ─── Fetch user info for group members who sent messages ─── */
+  useEffect(() => {
+    if (conversationInfo?.isGroup) {
+      const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
+      const uniqueSenders = Array.from(new Set(messages.map((m) => m.senderId)));
+      uniqueSenders.forEach((id) => {
+        if (id && id !== currentUserId) fetchUserInfo(id);
+      });
+    }
+  }, [messages, conversationInfo?.isGroup, currentUser]);
+
   /* ─── Auto scroll to bottom ─── */
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -416,6 +453,7 @@ const handleDownload = async (url: string, fileName: string) => {
   // ─── Group messages: cùng sender + cách nhau < 5 phút = 1 group ───
   interface MsgGroup {
     isMine: boolean;
+    senderId: string;
     messages: MessageDTO[];
   }
   const messageGroups = useMemo((): MsgGroup[] => {
@@ -429,10 +467,12 @@ const handleDownload = async (url: string, fileName: string) => {
         ? new Date(msg.createdAt).getTime() -
           new Date(lastMsg.createdAt).getTime()
         : Infinity;
-      if (last && last.isMine === isMine && gap < FIVE_MIN) {
+      
+      // Nhóm theo SENDER ID để tránh gộp nhiều người khác vào 1 khối trong group chat
+      if (last && last.senderId === msg.senderId && gap < FIVE_MIN) {
         last.messages.push(msg);
       } else {
-        groups.push({ isMine, messages: [msg] });
+        groups.push({ isMine, senderId: msg.senderId, messages: [msg] });
       }
     }
     return groups;
@@ -495,7 +535,7 @@ const handleDownload = async (url: string, fileName: string) => {
                 </div>
               )}
               {/* Online dot — chỉ hiện với chat 1-1 */}
-              {!conversationInfo?.isGroup && (
+              {isDirectUserOnline && (
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" />
               )}
             </div>
@@ -508,9 +548,7 @@ const handleDownload = async (url: string, fileName: string) => {
                   "Đang tải..."}
               </h2>
               <p className="text-[12px] font-bold text-gray-400 mt-0.5">
-                {conversationInfo?.isGroup
-                  ? `${conversationInfo?.members?.length ?? ""} thành viên`
-                  : "Đang hoạt động"}
+                {directChatSubtitle}
               </p>
             </div>
           </div>
@@ -550,12 +588,26 @@ const handleDownload = async (url: string, fileName: string) => {
           ) : (
             <div className="flex flex-col gap-1">
               {messageGroups.map((group, groupIdx) => {
-                const { isMine, messages: gMsgs } = group;
-                const senderAvatar = conversationInfo?.displayAvatar;
-                const senderName =
-                  conversationInfo?.displayName ||
-                  conversationInfo?.name ||
-                  "?";
+                const { isMine, messages: gMsgs, senderId } = group;
+
+                let senderName = "?";
+                let senderAvatar = "";
+
+                if (conversationInfo?.isGroup && !isMine) {
+                  const cachedUser = userCache[senderId];
+                  if (cachedUser) {
+                    senderName = cachedUser.name;
+                    senderAvatar = cachedUser.avatar;
+                  } else {
+                    senderName = `Người dùng (${senderId.substring(0, 4)})`;
+                  }
+                } else {
+                  senderAvatar = conversationInfo?.displayAvatar;
+                  senderName =
+                    conversationInfo?.displayName ||
+                    conversationInfo?.name ||
+                    "?";
+                }
 
                 // Tin cuối cùng của nhóm — chỉ đây mới hiện timestamp + avatar + trạng thái
                 const lastMsg = gMsgs[gMsgs.length - 1];
@@ -611,10 +663,14 @@ const handleDownload = async (url: string, fileName: string) => {
                                 <img
                                   src={senderAvatar}
                                   alt={senderName}
+                                  title={senderName}
                                   className="w-8 h-8 rounded-full object-cover"
                                 />
                               ) : (
-                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px]">
+                                <div 
+                                  className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px]"
+                                  title={senderName}
+                                >
                                   {senderName.charAt(0).toUpperCase()}
                                 </div>
                               ))}
@@ -1231,9 +1287,7 @@ const handleDownload = async (url: string, fileName: string) => {
                   "..."}
               </h2>
               <p className="text-[12px] font-bold text-gray-400 mt-1">
-                {conversationInfo?.isGroup
-                  ? `${conversationInfo?.members?.length ?? 0} thành viên`
-                  : "Người dùng"}
+                {directChatSubtitle}
               </p>
 
               <div className="flex items-center gap-3 mt-6">

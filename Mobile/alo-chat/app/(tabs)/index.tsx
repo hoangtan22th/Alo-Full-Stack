@@ -11,6 +11,8 @@ import {
   Pressable,
   Dimensions,
   ActivityIndicator,
+  Alert,
+  DeviceEventEmitter,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -24,6 +26,7 @@ import {
   MapPinIcon,
   TagIcon,
   ChevronRightIcon,
+  TrashIcon,
 } from "react-native-heroicons/outline";
 import { useRouter } from "expo-router";
 import { groupService } from "../../services/groupService";
@@ -225,16 +228,24 @@ export default function MessagesScreen() {
       );
     };
 
+    const handleConversationUpdated = (data: any) => {
+      console.log("📡 [Mobile Socket] Received CONVERSATION_UPDATED:", data.conversationId);
+      // Refresh list to update message content and position
+      fetchGroups();
+    };
+
     socket.on("CONVERSATION_PIN_UPDATED", handlePinUpdated);
     socket.on("CONVERSATION_LABEL_UPDATED", handleLabelUpdated);
     socket.on("CONVERSATION_CREATED", handleNewConversation);
     socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
+    socket.on("CONVERSATION_UPDATED", handleConversationUpdated);
 
     return () => {
       socket.off("CONVERSATION_PIN_UPDATED", handlePinUpdated);
       socket.off("CONVERSATION_LABEL_UPDATED", handleLabelUpdated);
       socket.off("CONVERSATION_CREATED", handleNewConversation);
       socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
+      socket.off("CONVERSATION_UPDATED", handleConversationUpdated);
     };
   }, [socket]);
 
@@ -344,13 +355,19 @@ export default function MessagesScreen() {
               avatar: chatAvatar,
               isGroup: g.isGroup,
               membersCount: g.members?.length,
-              message: "Chưa có tin nhắn",
+              message: g.lastMessageContent || "Chưa có tin nhắn",
               time: timeString,
-              unread: false,
+              unreadCount: g.unreadCount?.[currentUserId as string] || 0,
+              unread: (g.unreadCount?.[currentUserId as string] || 0) > 0,
               updatedAt: g.updatedAt,
             };
           }),
         );
+
+        // Tính tổng số cuộc hội thoại có tin nhắn chưa đọc
+        const totalUnreadCount = formattedGroups.filter(g => g.unread).length;
+        DeviceEventEmitter.emit("update_unread_count", totalUnreadCount);
+
         setConversations(formattedGroups);
       }
     } catch (error) {
@@ -412,6 +429,32 @@ export default function MessagesScreen() {
     }
   };
 
+  const handleClearChat = async () => {
+    if (!selectedChat) return;
+    const convoId = selectedChat.id;
+
+    Alert.alert(
+      "Xoá lịch sử trò chuyện",
+      "Bạn có chắc chắn muốn xoá lịch sử trò chuyện này? Các tin nhắn cũ sẽ biến mất đối với bạn.",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xoá",
+          style: "destructive",
+          onPress: async () => {
+            closeMenu();
+            try {
+              await groupService.clearConversation(convoId);
+              fetchGroups();
+            } catch (err) {
+              console.error("Lỗi xoá lịch sử:", err);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   // Sorting logic for Pinning
   const sortedConversations = [...conversations].sort((a, b) => {
     const aPinned = pinnedIds.has(a.id);
@@ -456,8 +499,12 @@ export default function MessagesScreen() {
               )}
             </View>
           )}
-          {chat.unread && (
-            <View className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-black border-2 border-white rounded-full" />
+          {chat.unreadCount > 0 && (
+            <View className="absolute -top-1 -right-1 min-w-[20px] h-5 bg-red-500 border-2 border-white rounded-full items-center justify-center px-1">
+              <Text className="text-[10px] font-bold text-white">
+                {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
+              </Text>
+            </View>
           )}
         </View>
 
@@ -718,6 +765,18 @@ export default function MessagesScreen() {
                           </Text>
                         </View>
                         <ChevronRightIcon size={16} color="#9ca3af" />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={handleClearChat}
+                        className="flex-row items-center justify-between px-5 py-4 border-t border-gray-50 active:bg-red-50"
+                      >
+                        <View className="flex-row items-center gap-3">
+                          <TrashIcon size={20} color="#ef4444" />
+                          <Text className="text-[15px] font-bold text-red-500">
+                            Xoá cuộc trò chuyện
+                          </Text>
+                        </View>
                       </TouchableOpacity>
                     </View>
                   </View>

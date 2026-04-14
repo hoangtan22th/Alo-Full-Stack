@@ -22,6 +22,7 @@ const ROUTING_KEYS = {
   CONVERSATION_REMOVED: "chat.conversation.removed",
   CONVERSATION_PIN_UPDATED: "chat.conversation.pin_updated",
   CONVERSATION_LABEL_UPDATED: "chat.conversation.label_updated",
+  SESSION_FORCE_LOGOUT: "auth.session.force_logout",
 };
 
 // Queue chung cho toàn bộ cluster realtime khi có Redis Adapter
@@ -47,6 +48,8 @@ export async function initRabbitMQ(io: Server) {
     await amqpChannel.bindQueue(q.queue, EXCHANGES.CHAT, "chat.message.#");
     // Lắng nghe sự kiện update conversation
     await amqpChannel.bindQueue(q.queue, EXCHANGES.CHAT, "chat.conversation.#");
+    // Lắng nghe sự kiện từ Auth
+    await amqpChannel.bindQueue(q.queue, EXCHANGES.CHAT, "auth.session.#");
 
     console.log(
       `[RabbitMQ] Bounded to Exchange [${EXCHANGES.CHAT}] on queue [${q.queue}]`,
@@ -116,9 +119,18 @@ export async function initRabbitMQ(io: Server) {
               "CONVERSATION_LABEL_UPDATED",
               data,
             );
+          } else if (routingKey === ROUTING_KEYS.SESSION_FORCE_LOGOUT) {
+            if (data.killedSessionIds) {
+              const killedIds: string[] = data.killedSessionIds;
+              killedIds.forEach((sessionId) => {
+                // Thao tác phát event trước rồi mới đóng session
+                io.in(`session_${sessionId}`).emit("FORCE_LOGOUT", data);
+                io.in(`session_${sessionId}`).disconnectSockets();
+              });
+            }
           }
         }
-        // NẾU LÀ PAYLOAD LẠC HẬU TỪ DIRECT QUEUE (Ví dụ FORCE_LOGOUT)
+        // NẾU LÀ PAYLOAD LẠC HẬU TỪ DIRECT QUEUE (Ví dụ service khác chưa cập nhật)
         else {
           if (payload.target) {
             if (
