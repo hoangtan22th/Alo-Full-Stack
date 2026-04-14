@@ -10,8 +10,7 @@
   "scripts": {
     "start": "node dist/index.js",
     "dev": "tsx watch index.ts",
-    "build": "tsc",
-    "consumer": "node dist/workers/startWorkers.js"
+    "build": "tsc"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1029.0",

@@ -18,6 +18,10 @@ const ROUTING_KEYS = {
   MESSAGE_REACTION: "chat.message.reaction.updated",
   MESSAGE_REVOKED: "chat.message.revoked",
   CONVERSATION_UPDATED: "chat.conversation.updated",
+  CONVERSATION_CREATED: "chat.conversation.created",
+  CONVERSATION_REMOVED: "chat.conversation.removed",
+  CONVERSATION_PIN_UPDATED: "chat.conversation.pin_updated",
+  CONVERSATION_LABEL_UPDATED: "chat.conversation.label_updated",
 };
 
 // Queue chung cho toàn bộ cluster realtime khi có Redis Adapter
@@ -88,31 +92,30 @@ export async function initRabbitMQ(io: Server) {
               "CONVERSATION_UPDATED",
               data,
             );
-          } else if (routingKey === "chat.conversation.created") {
+          } else if (routingKey === ROUTING_KEYS.CONVERSATION_CREATED) {
             // Nhóm tạo mới -> Ép các thành viên join room để từ bây giờ nhận được tin nhắn realtime
             if (data.members) {
               data.members.forEach((m: any) => {
                 const userId = m.userId;
-                io.in(`user_${userId}`).fetchSockets().then(sockets => {
-                  sockets.forEach(s => {
-                    s.join(`room_${data._id}`); // Thực hiện join room thực tế trên Socket.IO
-                    s.emit("CONVERSATION_CREATED", data); // Thông báo cho client UI update danh sách
-                  });
-                });
+                // Sử dụng socketsJoin thay vì fetchSockets để tránh OOM do I/O Redis
+                io.in(`user_${userId}`).socketsJoin(`room_${data._id}`);
+                io.in(`user_${userId}`).emit("CONVERSATION_CREATED", data);
               });
             }
-          } else if (routingKey === "chat.conversation.removed") {
-             // Ai đó bị kick, hoặc rời nhóm -> Ép huỷ kết nối room
-             io.in(`user_${data.userId}`).fetchSockets().then(sockets => {
-               sockets.forEach(s => {
-                  s.leave(`room_${data.conversationId}`);
-                  s.emit("CONVERSATION_REMOVED", data); // Báo xuống client
-               });
-             });
-          } else if (routingKey === "chat.conversation.pin_updated") {
-             io.to(`user_${data.userId}`).emit("CONVERSATION_PIN_UPDATED", data);
-          } else if (routingKey === "chat.conversation.label_updated") {
-             io.to(`user_${data.userId}`).emit("CONVERSATION_LABEL_UPDATED", data);
+          } else if (routingKey === ROUTING_KEYS.CONVERSATION_REMOVED) {
+            // Ai đó bị kick, hoặc rời nhóm -> Ép huỷ kết nối room
+            // Sử dụng socketsLeave thay vì fetchSockets
+            io.in(`user_${data.userId}`).socketsLeave(
+              `room_${data.conversationId}`,
+            );
+            io.in(`user_${data.userId}`).emit("CONVERSATION_REMOVED", data);
+          } else if (routingKey === ROUTING_KEYS.CONVERSATION_PIN_UPDATED) {
+            io.to(`user_${data.userId}`).emit("CONVERSATION_PIN_UPDATED", data);
+          } else if (routingKey === ROUTING_KEYS.CONVERSATION_LABEL_UPDATED) {
+            io.to(`user_${data.userId}`).emit(
+              "CONVERSATION_LABEL_UPDATED",
+              data,
+            );
           }
         }
         // NẾU LÀ PAYLOAD LẠC HẬU TỪ DIRECT QUEUE (Ví dụ FORCE_LOGOUT)
@@ -122,17 +125,12 @@ export async function initRabbitMQ(io: Server) {
               payload.event === "FORCE_LOGOUT" &&
               payload.data?.killedSessionIds
             ) {
-              io.in(`user_${payload.target}`)
-                .fetchSockets()
-                .then((sockets) => {
-                  sockets.forEach((s) => {
-                    const killedIds: string[] = payload.data.killedSessionIds;
-                    if (killedIds.includes(s.data.sessionId)) {
-                      s.emit(payload.event, payload.data);
-                      s.disconnect();
-                    }
-                  });
-                });
+              const killedIds: string[] = payload.data.killedSessionIds;
+              killedIds.forEach((sessionId) => {
+                // Thao tác phát event trước rồi mới đóng session
+                io.in(`session_${sessionId}`).emit(payload.event, payload.data);
+                io.in(`session_${sessionId}`).disconnectSockets();
+              });
             } else {
               io.to(`user_${payload.target}`).emit(payload.event, payload.data);
             }
