@@ -575,7 +575,13 @@ export default function GlobalChatScreen() {
         <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
           <View className="flex-row items-center flex-1">
             <TouchableOpacity
-              onPress={() => router.back()}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace("/(tabs)");
+                }
+              }}
               className="pr-4 py-2"
             >
               <ArrowLeftIcon size={24} color="#000" />

@@ -173,7 +173,7 @@ export default function MessagesScreen() {
             className="px-4 py-3 border-b border-gray-100"
             onPress={() => {
               setShowPlusMenu(false);
-              router.push("/(tabs)/groups/create-group" as any);
+              router.push("/groups/create-group" as any);
             }}
           >
             <Text className="text-base text-gray-800">Tạo nhóm chat mới</Text>
