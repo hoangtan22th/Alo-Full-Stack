@@ -81,13 +81,15 @@ export default function ChatPage() {
   const [viewingReactions, setViewingReactions] = useState<{ messageId: string, reactions: any[], activeTab: string } | null>(null);
   const [userCache, setUserCache] = useState<Record<string, { name: string, avatar: string }>>({});
   const [isMounted, setIsMounted] = useState(false);
+  const fetchingUsersRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   const fetchUserInfo = async (userId: string) => {
-    if (userCache[userId] || !userId) return;
+    if (userCache[userId] || !userId || fetchingUsersRef.current.has(userId)) return;
+    fetchingUsersRef.current.add(userId);
     try {
       const res: any = await axiosClient.get(`/users/${userId}`);
       const u = res?.data?.data || res?.data || res;
@@ -267,6 +269,17 @@ export default function ChatPage() {
       fetchConversationInfo();
     }
   }, [conversationId, currentUser, fetchConversationInfo]);
+
+  /* ─── Fetch user info for group members who sent messages ─── */
+  useEffect(() => {
+    if (conversationInfo?.isGroup) {
+      const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
+      const uniqueSenders = Array.from(new Set(messages.map((m) => m.senderId)));
+      uniqueSenders.forEach((id) => {
+        if (id && id !== currentUserId) fetchUserInfo(id);
+      });
+    }
+  }, [messages, conversationInfo?.isGroup, currentUser]);
 
   /* ─── Auto scroll to bottom ─── */
   useEffect(() => {
@@ -553,12 +566,26 @@ const handleDownload = async (url: string, fileName: string) => {
           ) : (
             <div className="flex flex-col gap-1">
               {messageGroups.map((group, groupIdx) => {
-                const { isMine, messages: gMsgs } = group;
-                const senderAvatar = conversationInfo?.displayAvatar;
-                const senderName =
-                  conversationInfo?.displayName ||
-                  conversationInfo?.name ||
-                  "?";
+                const { isMine, messages: gMsgs, senderId } = group;
+
+                let senderName = "?";
+                let senderAvatar = "";
+
+                if (conversationInfo?.isGroup && !isMine) {
+                  const cachedUser = userCache[senderId];
+                  if (cachedUser) {
+                    senderName = cachedUser.name;
+                    senderAvatar = cachedUser.avatar;
+                  } else {
+                    senderName = `Người dùng (${senderId.substring(0, 4)})`;
+                  }
+                } else {
+                  senderAvatar = conversationInfo?.displayAvatar;
+                  senderName =
+                    conversationInfo?.displayName ||
+                    conversationInfo?.name ||
+                    "?";
+                }
 
                 // Tin cuối cùng của nhóm — chỉ đây mới hiện timestamp + avatar + trạng thái
                 const lastMsg = gMsgs[gMsgs.length - 1];
@@ -614,10 +641,14 @@ const handleDownload = async (url: string, fileName: string) => {
                                 <img
                                   src={senderAvatar}
                                   alt={senderName}
+                                  title={senderName}
                                   className="w-8 h-8 rounded-full object-cover"
                                 />
                               ) : (
-                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px]">
+                                <div 
+                                  className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px]"
+                                  title={senderName}
+                                >
                                   {senderName.charAt(0).toUpperCase()}
                                 </div>
                               ))}
