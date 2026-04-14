@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Swal from "sweetalert2";
 
 import { socketService } from "../../services/socketService";
+import { SocketManager } from "./SocketManager";
 
 // Các route cho phép xem khi chưa đăng nhập
 const publicRoutes = ["/login", "/register"];
@@ -103,5 +104,6 @@ export default function AuthProvider({
   if (!isAuth && !isPublicRoute) return null; // Đang bị redirect về /login
   if (isAuth && isPublicRoute) return null; // Đang bị redirect về /
 
-  return <>{children}</>;
+  return <><SocketManager />{children}</>;
 }
+

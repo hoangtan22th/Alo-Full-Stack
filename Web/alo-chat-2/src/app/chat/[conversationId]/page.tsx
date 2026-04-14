@@ -35,6 +35,8 @@ import {
 } from "@heroicons/react/24/outline";
 import BotChatArea from "@/components/ui/BotChatArea";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useSocketStore } from "@/store/useSocketStore";
+import { formatLastActive } from "@/utils/presence";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -61,6 +63,9 @@ export default function ChatPage() {
 
   /* ---------- chat area state ---------- */
   const { user: currentUser } = useAuthStore();
+  const onlineUsers = useSocketStore((state) => state.onlineUsers);
+  const currentUserId =
+    currentUser?.id || currentUser?._id || currentUser?.userId;
   const [messages, setMessages] = useState<MessageDTO[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messageText, setMessageText] = useState("");
@@ -269,6 +274,25 @@ export default function ChatPage() {
       fetchConversationInfo();
     }
   }, [conversationId, currentUser, fetchConversationInfo]);
+
+  const directChatUserId =
+    !conversationInfo?.isGroup && currentUserId && conversationInfo?.members
+      ? conversationInfo.members.find((m: any) => m.userId !== currentUserId)
+          ?.userId
+      : null;
+  const userStatus = directChatUserId ? onlineUsers[directChatUserId] : null;
+  const isDirectUserOnline = userStatus?.status === "online";
+  const directChatSubtitle = conversationInfo?.isGroup
+    ? `${conversationInfo?.members?.length ?? ""} thành viên`
+    : isDirectUserOnline
+      ? "Đang hoạt động"
+      : formatLastActive(userStatus?.last_active);
+
+  useEffect(() => {
+    if (directChatUserId && !onlineUsers[directChatUserId]) {
+      socketService.checkUserStatus(directChatUserId);
+    }
+  }, [directChatUserId, onlineUsers]);
 
   /* ─── Fetch user info for group members who sent messages ─── */
   useEffect(() => {
@@ -511,7 +535,7 @@ const handleDownload = async (url: string, fileName: string) => {
                 </div>
               )}
               {/* Online dot — chỉ hiện với chat 1-1 */}
-              {!conversationInfo?.isGroup && (
+              {isDirectUserOnline && (
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" />
               )}
             </div>
@@ -524,9 +548,7 @@ const handleDownload = async (url: string, fileName: string) => {
                   "Đang tải..."}
               </h2>
               <p className="text-[12px] font-bold text-gray-400 mt-0.5">
-                {conversationInfo?.isGroup
-                  ? `${conversationInfo?.members?.length ?? ""} thành viên`
-                  : "Đang hoạt động"}
+                {directChatSubtitle}
               </p>
             </div>
           </div>
@@ -1265,9 +1287,7 @@ const handleDownload = async (url: string, fileName: string) => {
                   "..."}
               </h2>
               <p className="text-[12px] font-bold text-gray-400 mt-1">
-                {conversationInfo?.isGroup
-                  ? `${conversationInfo?.members?.length ?? 0} thành viên`
-                  : "Người dùng"}
+                {directChatSubtitle}
               </p>
 
               <div className="flex items-center gap-3 mt-6">

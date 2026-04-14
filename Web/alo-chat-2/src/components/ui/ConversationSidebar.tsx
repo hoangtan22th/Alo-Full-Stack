@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import axiosClient from "@/services/api";
 import { groupService } from "@/services/groupService";
 import { socketService } from "@/services/socketService";
+import { useSocketStore } from "@/store/useSocketStore";
 import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import { useAuthStore } from "@/store/useAuthStore";
 import {
@@ -22,15 +23,15 @@ import {
 } from "@heroicons/react/24/outline";
 
 // --- Sub-component: ManageLabelsModal ---
-function ManageLabelsModal({ 
-  isOpen, 
-  onClose, 
-  labels, 
-  onRefresh 
-}: { 
-  isOpen: boolean; 
-  onClose: () => void; 
-  labels: any[]; 
+function ManageLabelsModal({
+  isOpen,
+  onClose,
+  labels,
+  onRefresh,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  labels: any[];
   onRefresh: () => void;
 }) {
   const [editingLabel, setEditingLabel] = useState<any>(null);
@@ -39,8 +40,16 @@ function ManageLabelsModal({
   const [loading, setLoading] = useState(false);
 
   const colors = [
-    "#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", 
-    "#ec4899", "#6b7280", "#000000", "#14b8a6", "#f97316"
+    "#ef4444",
+    "#f59e0b",
+    "#10b981",
+    "#3b82f6",
+    "#8b5cf6",
+    "#ec4899",
+    "#6b7280",
+    "#000000",
+    "#14b8a6",
+    "#f97316",
   ];
 
   const handleCreateOrUpdate = async () => {
@@ -48,7 +57,11 @@ function ManageLabelsModal({
     setLoading(true);
     try {
       if (editingLabel) {
-        await groupService.updateLabel(editingLabel._id || editingLabel.id, name, color);
+        await groupService.updateLabel(
+          editingLabel._id || editingLabel.id,
+          name,
+          color,
+        );
       } else {
         await groupService.createLabel(name, color);
       }
@@ -64,7 +77,12 @@ function ManageLabelsModal({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Xóa thẻ này sẽ gỡ nhãn khỏi tất cả các hội thoại liên quan. Tiếp tục?")) return;
+    if (
+      !confirm(
+        "Xóa thẻ này sẽ gỡ nhãn khỏi tất cả các hội thoại liên quan. Tiếp tục?",
+      )
+    )
+      return;
     try {
       await groupService.deleteLabel(id);
       onRefresh();
@@ -79,8 +97,13 @@ function ManageLabelsModal({
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-xl font-black text-gray-900">Quản lý thẻ phân loại</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+          <h2 className="text-xl font-black text-gray-900">
+            Quản lý thẻ phân loại
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          >
             <XMarkIcon className="w-6 h-6 text-gray-400" />
           </button>
         </div>
@@ -92,14 +115,14 @@ function ManageLabelsModal({
               {editingLabel ? "Chỉnh sửa thẻ" : "Thêm thẻ mới"}
             </p>
             <div className="flex gap-3">
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Tên thẻ..."
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-black transition-all"
               />
-              <button 
+              <button
                 onClick={handleCreateOrUpdate}
                 disabled={loading || !name.trim()}
                 className="px-5 bg-black text-white rounded-xl text-sm font-bold hover:bg-gray-800 transition disabled:bg-gray-300"
@@ -108,8 +131,8 @@ function ManageLabelsModal({
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {colors.map(c => (
-                <button 
+              {colors.map((c) => (
+                <button
                   key={c}
                   onClick={() => setColor(c)}
                   className={`w-7 h-7 rounded-full border-2 transition-transform hover:scale-110 ${color === c ? "border-black scale-110" : "border-transparent"}`}
@@ -118,7 +141,14 @@ function ManageLabelsModal({
               ))}
             </div>
             {editingLabel && (
-              <button onClick={() => { setEditingLabel(null); setName(""); setColor("#3b82f6"); }} className="text-[12px] font-bold text-gray-400 hover:text-black self-start">
+              <button
+                onClick={() => {
+                  setEditingLabel(null);
+                  setName("");
+                  setColor("#3b82f6");
+                }}
+                className="text-[12px] font-bold text-gray-400 hover:text-black self-start"
+              >
                 Hủy chỉnh sửa
               </button>
             )}
@@ -126,24 +156,40 @@ function ManageLabelsModal({
 
           {/* List */}
           <div className="flex flex-col gap-3">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">Danh sách thẻ</p>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">
+              Danh sách thẻ
+            </p>
             {labels.length === 0 ? (
-              <p className="text-sm text-gray-400 italic px-1">Chưa có thẻ nào...</p>
+              <p className="text-sm text-gray-400 italic px-1">
+                Chưa có thẻ nào...
+              </p>
             ) : (
-              labels.map(l => (
-                <div key={l._id || l.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-2xl hover:border-gray-200 transition-colors group/item shadow-sm">
+              labels.map((l) => (
+                <div
+                  key={l._id || l.id}
+                  className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-2xl hover:border-gray-200 transition-colors group/item shadow-sm"
+                >
                   <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: l.color }} />
-                    <span className="text-sm font-bold text-gray-700">{l.name}</span>
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: l.color }}
+                    />
+                    <span className="text-sm font-bold text-gray-700">
+                      {l.name}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover/item:opacity-100 transition-opacity">
-                    <button 
-                      onClick={() => { setEditingLabel(l); setName(l.name); setColor(l.color); }}
+                    <button
+                      onClick={() => {
+                        setEditingLabel(l);
+                        setName(l.name);
+                        setColor(l.color);
+                      }}
                       className="p-1.5 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-all"
                     >
                       <PencilSquareIcon className="w-4 h-4" />
                     </button>
-                    <button 
+                    <button
                       onClick={() => handleDelete(l._id || l.id)}
                       className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                     >
@@ -177,6 +223,7 @@ export default function ConversationSidebar() {
 
   const [activeTab, setActiveTab] = useState("Ưu tiên");
   const [conversations, setConversations] = useState<any[]>([]);
+  const onlineUsers = useSocketStore((state) => state.onlineUsers);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showNewChatModal, setShowNewChatModal] = useState(false);
@@ -184,7 +231,9 @@ export default function ConversationSidebar() {
 
   // Labels & Pin states
   const [labels, setLabels] = useState<any[]>([]);
-  const [labelAssignments, setLabelAssignments] = useState<Record<string, any>>({});
+  const [labelAssignments, setLabelAssignments] = useState<Record<string, any>>(
+    {},
+  );
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuView, setMenuView] = useState<"main" | "labels">("main");
@@ -196,6 +245,14 @@ export default function ConversationSidebar() {
   useEffect(() => {
     conversationIdRef.current = conversationId;
   }, [conversationId]);
+
+  useEffect(() => {
+    conversations.forEach((chat) => {
+      if (!chat.isGroup && chat.otherUserId && !onlineUsers[chat.otherUserId]) {
+        socketService.checkUserStatus(chat.otherUserId);
+      }
+    });
+  }, [conversations, onlineUsers]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -243,7 +300,8 @@ export default function ConversationSidebar() {
 
   const fetchGroups = async () => {
     try {
-      const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
+      const currentUserId =
+        currentUser?.id || currentUser?._id || currentUser?.userId;
 
       let groups: any = await axiosClient.get("/groups/me", {
         params: { type: "all" },
@@ -265,17 +323,26 @@ export default function ConversationSidebar() {
             let chatAvatar = g.groupAvatar;
 
             if (!g.isGroup && currentUserId && g.members) {
-              const otherMember = g.members.find((m: any) => m.userId !== currentUserId);
+              const otherMember = g.members.find(
+                (m: any) => m.userId !== currentUserId,
+              );
               if (otherMember) {
                 try {
                   let otherUser = userFetchCache.current[otherMember.userId];
                   if (!otherUser) {
-                    const uRes: any = await axiosClient.get(`/users/${otherMember.userId}`);
+                    const uRes: any = await axiosClient.get(
+                      `/users/${otherMember.userId}`,
+                    );
                     otherUser = uRes?.data?.data || uRes?.data || uRes;
-                    if (otherUser) userFetchCache.current[otherMember.userId] = otherUser;
+                    if (otherUser)
+                      userFetchCache.current[otherMember.userId] = otherUser;
                   }
                   if (otherUser) {
-                    chatName = otherUser.fullName || otherUser.username || otherUser.name || "Người dùng";
+                    chatName =
+                      otherUser.fullName ||
+                      otherUser.username ||
+                      otherUser.name ||
+                      "Người dùng";
                     chatAvatar = otherUser.avatar || chatAvatar;
                   }
                 } catch {}
@@ -287,21 +354,34 @@ export default function ConversationSidebar() {
               name: chatName || "Nhóm trò chuyện",
               avatar: chatAvatar || "",
               isGroup: g.isGroup,
+              otherUserId:
+                !g.isGroup && currentUserId && g.members
+                  ? g.members.find((m: any) => m.userId !== currentUserId)
+                      ?.userId
+                  : null,
               membersCount: g.members?.length,
               message: g.lastMessageContent || "Chưa có tin nhắn",
               time: timeString,
-              unreadCount: (currentUserId && g.unreadCount?.[currentUserId]) || 0,
+              unreadCount:
+                (currentUserId && g.unreadCount?.[currentUserId]) || 0,
               updatedAt: g.updatedAt,
               online: false,
             };
           }),
         );
-        
+
         const currentTime = new Date().toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
         });
-        setConversations([{ ...BOT_INFO, time: currentTime, updatedAt: new Date().toISOString() }, ...formattedGroups]);
+        setConversations([
+          {
+            ...BOT_INFO,
+            time: currentTime,
+            updatedAt: new Date().toISOString(),
+          },
+          ...formattedGroups,
+        ]);
       }
     } catch (error) {
       console.error("Lỗi lấy danh sách nhóm:", error);
@@ -311,36 +391,44 @@ export default function ConversationSidebar() {
   useEffect(() => {
     fetchData();
 
-    socketService.onPinUpdated((data: { conversationId: string; isPinned: boolean }) => {
-      setPinnedIds(prev => {
-        const next = new Set(prev);
-        if (data.isPinned) next.add(data.conversationId);
-        else next.delete(data.conversationId);
-        return next;
-      });
-    });
+    socketService.onPinUpdated(
+      (data: { conversationId: string; isPinned: boolean }) => {
+        setPinnedIds((prev) => {
+          const next = new Set(prev);
+          if (data.isPinned) next.add(data.conversationId);
+          else next.delete(data.conversationId);
+          return next;
+        });
+      },
+    );
 
-    socketService.onLabelUpdated((data: { conversationId: string; label: any }) => {
-      setLabelAssignments(prev => {
-        const next = { ...prev };
-        if (data.label) next[data.conversationId] = data.label;
-        else delete next[data.conversationId];
-        return next;
-      });
-    });
+    socketService.onLabelUpdated(
+      (data: { conversationId: string; label: any }) => {
+        setLabelAssignments((prev) => {
+          const next = { ...prev };
+          if (data.label) next[data.conversationId] = data.label;
+          else delete next[data.conversationId];
+          return next;
+        });
+      },
+    );
 
     socketService.onConversationCreated((newConvo: any) => {
-      setConversations(prev => {
-        const exists = prev.some(c => (c._id || c.id) === (newConvo._id || newConvo.id));
+      setConversations((prev) => {
+        const exists = prev.some(
+          (c) => (c._id || c.id) === (newConvo._id || newConvo.id),
+        );
         if (exists) return prev;
         return [newConvo, ...prev];
       });
     });
 
     socketService.onConversationRemoved((data: { conversationId: string }) => {
-      setConversations(prev => prev.filter(c => (c._id || c.id) !== data.conversationId));
+      setConversations((prev) =>
+        prev.filter((c) => (c._id || c.id) !== data.conversationId),
+      );
       if (conversationIdRef.current === data.conversationId) {
-        router.push('/chat');
+        router.push("/chat");
       }
     });
 
@@ -370,7 +458,10 @@ export default function ConversationSidebar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleTogglePin = async (e: React.MouseEvent, conversationId: string) => {
+  const handleTogglePin = async (
+    e: React.MouseEvent,
+    conversationId: string,
+  ) => {
     e.stopPropagation();
     try {
       await groupService.togglePinConversation(conversationId);
@@ -384,14 +475,18 @@ export default function ConversationSidebar() {
     }
   };
 
-  const handleAssignLabel = async (e: React.MouseEvent, conversationId: string, labelId: string | null) => {
+  const handleAssignLabel = async (
+    e: React.MouseEvent,
+    conversationId: string,
+    labelId: string | null,
+  ) => {
     e.stopPropagation();
     try {
       await groupService.assignLabel(conversationId, labelId);
       const newAssignments = { ...labelAssignments };
       if (!labelId) delete newAssignments[conversationId];
       else {
-        const selectedLabel = labels.find(l => (l._id || l.id) === labelId);
+        const selectedLabel = labels.find((l) => (l._id || l.id) === labelId);
         newAssignments[conversationId] = selectedLabel;
       }
       setLabelAssignments(newAssignments);
@@ -404,7 +499,12 @@ export default function ConversationSidebar() {
 
   const handleClearHistory = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!confirm("Bạn có chắc chắn muốn xoá lịch sử trò chuyện này? Các tin nhắn cũ sẽ biến mất đối với bạn.")) return;
+    if (
+      !confirm(
+        "Bạn có chắc chắn muốn xoá lịch sử trò chuyện này? Các tin nhắn cũ sẽ biến mất đối với bạn.",
+      )
+    )
+      return;
     try {
       await groupService.clearConversation(id);
       setOpenMenuId(null);
@@ -447,7 +547,9 @@ export default function ConversationSidebar() {
       <div className="w-full md:w-[320px] lg:w-85 flex flex-col border-r border-gray-100 shrink-0 h-full">
         <div className="p-5 flex flex-col gap-5">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-black tracking-tight text-black">Messages</h1>
+            <h1 className="text-2xl font-black tracking-tight text-black">
+              Messages
+            </h1>
             <button
               onClick={() => setShowNewChatModal(true)}
               className="w-8 h-8 bg-black rounded-full text-white flex items-center justify-center hover:bg-gray-800 transition shadow-md active:scale-95"
@@ -474,7 +576,9 @@ export default function ConversationSidebar() {
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`text-[13px] font-bold relative ${
-                    activeTab === tab ? "text-black" : "text-gray-400 hover:text-gray-600"
+                    activeTab === tab
+                      ? "text-black"
+                      : "text-gray-400 hover:text-gray-600"
                   }`}
                 >
                   {tab}
@@ -505,8 +609,8 @@ export default function ConversationSidebar() {
                 key={chat.id}
                 onClick={() => router.push(`/chat/${chat.id}`)}
                 className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-[background-color] duration-150 group relative select-none outline-none border ${
-                  conversationId === chat.id 
-                    ? "bg-[#F5F5F5] border-[#F5F5F5]" 
+                  conversationId === chat.id
+                    ? "bg-[#F5F5F5] border-[#F5F5F5]"
                     : "hover:bg-gray-50 border-transparent hover:border-gray-100"
                 } ${pinnedIds.has(chat.id) ? "bg-blue-50/30 shadow-sm" : ""}`}
               >
@@ -532,9 +636,11 @@ export default function ConversationSidebar() {
                       {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
                     </span>
                   )}
-                  {chat.online && (
-                    <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
-                  )}
+                  {!chat.isGroup &&
+                    chat.otherUserId &&
+                    onlineUsers[chat.otherUserId]?.status === "online" && (
+                      <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
+                    )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center mb-0.5">
@@ -542,20 +648,28 @@ export default function ConversationSidebar() {
                       {pinnedIds.has(chat.id) && (
                         <MapPinIcon className="w-3.5 h-3.5 text-blue-500 shrink-0 fill-blue-500" />
                       )}
-                      <h3 className="font-bold text-[14px] truncate text-gray-900">{chat.name}</h3>
+                      <h3 className="font-bold text-[14px] truncate text-gray-900">
+                        {chat.name}
+                      </h3>
                       {labelAssignments[chat.id] && (
-                        <span 
+                        <span
                           className="px-1.5 py-0.5 rounded-full text-[9px] font-black text-white shrink-0 uppercase tracking-tighter shadow-sm"
-                          style={{ backgroundColor: labelAssignments[chat.id].color }}
+                          style={{
+                            backgroundColor: labelAssignments[chat.id].color,
+                          }}
                         >
                           {labelAssignments[chat.id].name}
                         </span>
                       )}
                     </div>
-                    <span className="text-[10px] font-bold text-gray-400 shrink-0">{chat.time}</span>
+                    <span className="text-[10px] font-bold text-gray-400 shrink-0">
+                      {chat.time}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center h-5">
-                    <p className="text-[13px] text-gray-500 truncate font-medium flex-1">{chat.message}</p>
+                    <p className="text-[13px] text-gray-500 truncate font-medium flex-1">
+                      {chat.message}
+                    </p>
                     <button
                       onClick={(e) => toggleMenu(e, chat.id)}
                       className="md:opacity-0 group-hover:opacity-100 p-1 hover:bg-white hover:shadow-sm rounded-full transition-all text-gray-400 hover:text-black"
@@ -566,21 +680,25 @@ export default function ConversationSidebar() {
                 </div>
 
                 {openMenuId === chat.id && (
-                  <div 
+                  <div
                     ref={menuRef}
                     onClick={(e) => e.stopPropagation()}
                     className="absolute right-3 top-13 w-56 bg-white border border-gray-100 rounded-2xl shadow-2xl py-2 z-[60] animate-in fade-in zoom-in duration-150"
                   >
                     {menuView === "main" ? (
                       <div className="flex flex-col p-1">
-                        <button 
+                        <button
                           onClick={(e) => handleTogglePin(e, chat.id)}
                           className="flex items-center gap-3 w-full px-3 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group/item"
                         >
-                          <MapPinIcon className={`w-5 h-5 ${pinnedIds.has(chat.id) ? "text-blue-500 fill-blue-500" : "text-gray-400 group-hover/item:text-black"}`} />
-                          {pinnedIds.has(chat.id) ? "Bỏ ghim" : "Ghim hội thoại"}
+                          <MapPinIcon
+                            className={`w-5 h-5 ${pinnedIds.has(chat.id) ? "text-blue-500 fill-blue-500" : "text-gray-400 group-hover/item:text-black"}`}
+                          />
+                          {pinnedIds.has(chat.id)
+                            ? "Bỏ ghim"
+                            : "Ghim hội thoại"}
                         </button>
-                        <button 
+                        <button
                           onClick={() => setMenuView("labels")}
                           className="flex items-center justify-between w-full px-3 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group/item"
                         >
@@ -591,7 +709,7 @@ export default function ConversationSidebar() {
                           <ChevronRightIcon className="w-4 h-4 text-gray-300" />
                         </button>
 
-                        <button 
+                        <button
                           onClick={(e) => handleClearHistory(e, chat.id)}
                           className="flex items-center gap-3 w-full px-3 py-2.5 text-[13px] font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors group/item"
                         >
@@ -602,21 +720,37 @@ export default function ConversationSidebar() {
                     ) : (
                       <div className="flex flex-col">
                         <div className="px-2 py-1 flex items-center gap-1 border-b border-gray-50 mb-1">
-                          <button onClick={() => setMenuView("main")} className="p-1 px-2 hover:bg-gray-50 rounded-lg text-gray-400">
+                          <button
+                            onClick={() => setMenuView("main")}
+                            className="p-1 px-2 hover:bg-gray-50 rounded-lg text-gray-400"
+                          >
                             <ChevronLeftIcon className="w-4 h-4" />
                           </button>
-                          <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest pl-1">Chọn nhãn</span>
+                          <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                            Chọn nhãn
+                          </span>
                         </div>
                         <div className="max-h-56 overflow-y-auto p-1 scrollbar-hide">
                           {labels.map((label) => (
                             <button
                               key={label._id || label.id}
-                              onClick={(e) => handleAssignLabel(e, chat.id, label._id || label.id)}
+                              onClick={(e) =>
+                                handleAssignLabel(
+                                  e,
+                                  chat.id,
+                                  label._id || label.id,
+                                )
+                              }
                               className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-[13px] hover:bg-gray-50 rounded-xl transition-colors group/label"
                             >
                               <div className="flex items-center gap-3">
-                                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: label.color }} />
-                                <span className={`${labelAssignments[chat.id]?._id === (label._id || label.id) ? "font-black text-black" : "text-gray-600 font-bold"}`}>
+                                <div
+                                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: label.color }}
+                                />
+                                <span
+                                  className={`${labelAssignments[chat.id]?._id === (label._id || label.id) ? "font-black text-black" : "text-gray-600 font-bold"}`}
+                                >
                                   {label.name}
                                 </span>
                               </div>
@@ -631,7 +765,11 @@ export default function ConversationSidebar() {
                             Gỡ nhãn hiện tại
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); setShowManageLabelsModal(true); setOpenMenuId(null); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowManageLabelsModal(true);
+                              setOpenMenuId(null);
+                            }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-[12px] font-black text-blue-600 hover:bg-blue-50 rounded-xl transition-colors mt-0.5"
                           >
                             <PlusIcon className="w-3.5 h-3.5" />
@@ -656,7 +794,7 @@ export default function ConversationSidebar() {
         }}
       />
 
-      <ManageLabelsModal 
+      <ManageLabelsModal
         isOpen={showManageLabelsModal}
         onClose={() => setShowManageLabelsModal(false)}
         labels={labels}
