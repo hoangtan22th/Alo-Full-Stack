@@ -3,6 +3,7 @@ import { Router } from "express";
 import multer from "multer";
 import * as groupController from "../controllers/group.controller";
 import * as labelController from "../controllers/label.controller";
+import * as pinnedController from "../controllers/pinned.controller";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -17,6 +18,10 @@ router.delete("/api/v1/groups/labels/:id", labelController.deleteLabel);
 // Gán nhãn cho cuộc hội thoại
 router.get("/api/v1/groups/conversations/labels", labelController.getConversationLabels);
 router.post("/api/v1/groups/conversations/:conversationId/label", labelController.assignLabel);
+
+// --- Ghim cuộc hội thoại ---
+router.get("/api/v1/groups/conversations/pinned", pinnedController.getPinnedList);
+router.post("/api/v1/groups/conversations/:conversationId/pin", pinnedController.togglePin);
 
 
 // Quản lý thông tin nhóm

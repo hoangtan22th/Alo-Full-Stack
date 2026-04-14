@@ -16,6 +16,7 @@ import {
   PencilSquareIcon,
   TrashIcon,
   XMarkIcon,
+  MapPinIcon,
 } from "@heroicons/react/24/outline";
 
 // --- Sub-component: ManageLabelsModal ---
@@ -167,9 +168,10 @@ export default function ChatPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showNewChatModal, setShowNewChatModal] = useState(false);
 
-  // Labels states
+  // Labels & Pin states
   const [labels, setLabels] = useState<any[]>([]);
   const [labelAssignments, setLabelAssignments] = useState<Record<string, any>>({});
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuView, setMenuView] = useState<"main" | "labels">("main");
   const [showManageLabelsModal, setShowManageLabelsModal] = useState(false);
@@ -194,11 +196,21 @@ export default function ChatPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      await Promise.all([fetchGroups(), fetchLabelsInfo()]);
+      await Promise.all([fetchGroups(), fetchLabelsInfo(), fetchPinnedInfo()]);
     } catch (error) {
       console.error("Lỗi tải dữ liệu:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPinnedInfo = async () => {
+    try {
+      const res = await groupService.getPinnedConversations();
+      const ids = res?.data || res || [];
+      setPinnedIds(new Set(ids));
+    } catch (err) {
+      console.error("Lỗi tải danh sách ghim:", err);
     }
   };
 
@@ -289,6 +301,7 @@ export default function ChatPage() {
               time: timeString,
               unread: false,
               online: false,
+              updatedAt: g.updatedAt,
             };
           }),
         );
@@ -296,6 +309,23 @@ export default function ChatPage() {
       }
     } catch (error) {
       console.error("Lỗi lấy danh sách nhóm:", error);
+    }
+  };
+
+  const handleTogglePin = async (e: React.MouseEvent, conversationId: string) => {
+    e.stopPropagation();
+    try {
+      await groupService.togglePinConversation(conversationId);
+      const newPinned = new Set(pinnedIds);
+      if (newPinned.has(conversationId)) {
+        newPinned.delete(conversationId);
+      } else {
+        newPinned.add(conversationId);
+      }
+      setPinnedIds(newPinned);
+      setOpenMenuId(null);
+    } catch (err) {
+      console.error("Lỗi ghim hội thoại:", err);
     }
   };
 
@@ -330,7 +360,19 @@ export default function ChatPage() {
     }
   };
 
-  const filteredConversations = conversations.filter((chat) =>
+  // Sorting logic for Pinning
+  const sortedConversations = [...conversations].sort((a, b) => {
+    const aPinned = pinnedIds.has(a.id);
+    const bPinned = pinnedIds.has(b.id);
+    
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+    
+    // Nếu cùng trạng thái ghim, sắp xếp theo thời gian mới nhất
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
+
+  const filteredConversations = sortedConversations.filter((chat) =>
     chat.name?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
@@ -408,7 +450,7 @@ export default function ChatPage() {
                 onClick={() => router.push(`/chat/${chat.id}`)}
                 className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all group relative ${
                   activeChat === chat.id ? "bg-[#F5F5F5]" : "hover:bg-gray-50 border border-transparent hover:border-gray-100"
-                }`}
+                } ${pinnedIds.has(chat.id) ? "bg-blue-50/30 shadow-sm" : ""}`}
               >
                 <div className="relative shrink-0">
                   {chat.avatar ? (
@@ -433,6 +475,9 @@ export default function ChatPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center mb-0.5">
                     <div className="flex items-center gap-2 overflow-hidden">
+                      {pinnedIds.has(chat.id) && (
+                        <MapPinIcon className="w-3.5 h-3.5 text-blue-500 shrink-0 fill-blue-500" />
+                      )}
                       <h3 className="font-bold text-[14px] truncate text-gray-900">
                         {chat.name}
                       </h3>
@@ -474,6 +519,14 @@ export default function ChatPage() {
                     {menuView === "main" ? (
                       <div className="flex flex-col p-1">
                         <button 
+                          onClick={(e) => handleTogglePin(e, chat.id)}
+                          className="flex items-center gap-3 w-full px-3 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group/item"
+                        >
+                          <MapPinIcon className={`w-5 h-5 ${pinnedIds.has(chat.id) ? "text-blue-500 fill-blue-500" : "text-gray-400 group-hover/item:text-black"}`} />
+                          {pinnedIds.has(chat.id) ? "Bỏ ghim" : "Ghim hội thoại"}
+                        </button>
+                        
+                        <button 
                           onClick={() => setMenuView("labels")}
                           className="flex items-center justify-between w-full px-3 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group/item"
                         >
@@ -483,6 +536,7 @@ export default function ChatPage() {
                           </div>
                           <ChevronRightIcon className="w-4 h-4 text-gray-300" />
                         </button>
+                        
                         <div className="mt-1 pt-1 border-t border-gray-50">
                            <button className="flex items-center gap-3 w-full px-3 py-2.5 text-[13px] font-bold text-gray-300 cursor-not-allowed italic">
                             <div className="w-5 h-5 rounded-full border border-gray-200 border-dashed" />

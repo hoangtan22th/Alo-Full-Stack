@@ -288,4 +288,23 @@ export const groupService = {
       throw error;
     }
   },
+
+  // --- Ghim cuộc hội thoại ---
+  togglePinConversation: async (conversationId: string) => {
+    try {
+      return await api.post<any, any>(`/groups/conversations/${conversationId}/pin`);
+    } catch (error) {
+      console.error("Lỗi ghim/bỏ ghim hội thoại:", error);
+      throw error;
+    }
+  },
+
+  getPinnedConversations: async () => {
+    try {
+      return await api.get<any, any>(`/groups/conversations/pinned`);
+    } catch (error) {
+      console.error("Lỗi lấy danh sách hội thoại đã ghim:", error);
+      throw error;
+    }
+  },
 };
