@@ -217,4 +217,16 @@ export const groupService = {
       throw error;
     }
   },
+
+  // Lấy hoặc tạo cuộc hội thoại 1-1
+  createDirectConversation: async (targetUserId: string) => {
+    try {
+      const res = await api.post<any, any>(`/groups/direct`, { targetUserId });
+      // Backend trả về { status, data: { _id, ... } } hoặc trực tiếp { _id, ... } tùy vào interceptor
+      return res?.data?.data ? res.data.data : res?.data ? res.data : res;
+    } catch (error) {
+      console.error("Lỗi tạo cuộc hội thoại 1-1:", error);
+      throw error;
+    }
+  },
 };
