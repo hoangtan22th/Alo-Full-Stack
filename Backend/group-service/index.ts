@@ -15,7 +15,8 @@ import groupRoutes from "./src/routes/group.routes";
 const app: Application = express();
 
 // Middlewares
-app.use(cors());
+// Bỏ CORS ở các service bên dưới vì API Gateway đã đảm nhận. Nếu mở cả 2 sẽ sinh ra lỗi 'Multiple Access-Control-Allow-Origin'
+// app.use(cors());
 app.use(express.json());
 
 // Điểm cuối bắt buộc cho Eureka (Để Spring Boot biết Node.js còn sống)
@@ -40,6 +41,14 @@ app.listen(PORT, async () => {
 
   // 1. Kết nối MongoDB
   await connectDB();
+
+  // 1.1 Kết nối RabbitMQ
+  try {
+    const { connectRabbitMQ } = require("./src/config/rabbitmq");
+    await connectRabbitMQ();
+  } catch (err) {
+    console.error("❌ Lỗi kết nối RabbitMQ:", err);
+  }
 
   // 2. Báo cáo có mặt với Eureka
   // Khai báo kiểu error là any để tránh lỗi type checker

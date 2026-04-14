@@ -33,9 +33,10 @@ export default function PersonalInfoScreen() {
   const [accountInfo, setAccountInfo] = useState({
     fullName: "",
     dateOfBirth: "",
-    gender: "1", // 1: Nam, 0: Nữ, 2: Khác
+    gender: "0", // 0: Nam, 1: Nữ, 2: Khác
     phoneNumber: "",
     email: "",
+    bio: "",
   });
 
   const [refreshing, setRefreshing] = useState(false);
@@ -54,12 +55,29 @@ export default function PersonalInfoScreen() {
         : new Date();
       setTempDate(initialDate);
 
+      let genderVal = "0"; // Default MALE (0)
+      if (user.gender === "MALE" || user.gender === 0 || user.gender === "0")
+        genderVal = "0";
+      else if (
+        user.gender === "FEMALE" ||
+        user.gender === 1 ||
+        user.gender === "1"
+      )
+        genderVal = "1";
+      else if (
+        user.gender === "OTHER" ||
+        user.gender === 2 ||
+        user.gender === "2"
+      )
+        genderVal = "2";
+
       setAccountInfo({
         fullName: user.fullName || "",
         dateOfBirth: user.dateOfBirth || "",
-        gender: user.gender !== undefined ? String(user.gender) : "1",
+        gender: genderVal,
         phoneNumber: user.phoneNumber || "",
         email: user.email || "",
+        bio: user.bio || "",
       });
     } catch (err) {
       console.log("Lỗi gán profile context:", err);
@@ -90,14 +108,6 @@ export default function PersonalInfoScreen() {
       Alert.alert("Lỗi", "Họ và tên nên từ 1 đến 50 ký tự");
       return;
     }
-    if (!accountInfo.phoneNumber) {
-      Alert.alert("Lỗi", "Số điện thoại không được để trống");
-      return;
-    }
-    if (!phoneRegex.test(accountInfo.phoneNumber)) {
-      Alert.alert("Lỗi", "Số điện thoại không hợp lệ (10 số, bắt đầu bằng 0)");
-      return;
-    }
     if (accountInfo.email && !emailRegex.test(accountInfo.email)) {
       Alert.alert("Lỗi", "Email không đúng định dạng");
       return;
@@ -107,17 +117,20 @@ export default function PersonalInfoScreen() {
       setSaving(true);
       const payload = {
         fullName: accountInfo.fullName,
-        phoneNumber: accountInfo.phoneNumber,
         gender: parseInt(accountInfo.gender),
         dateOfBirth: accountInfo.dateOfBirth || null, // YYYY-MM-DD
         email: accountInfo.email || null,
+        bio: accountInfo.bio,
       };
 
-      await api.put("/auth/me", payload);
+      await api.put("/users/me", payload);
+      await refreshUser();
       Alert.alert("Thành công", "Đã cập nhật thông tin cá nhân.");
-    } catch (err) {
-      console.log("Lỗi cập nhật profile:", err);
-      Alert.alert("Lỗi", "Không thể cập nhật thông tin.");
+    } catch (err: any) {
+      console.log("Lỗi cập nhật profile:", err?.response?.data || err);
+      const errorMessage =
+        err?.response?.data?.message || "Không thể cập nhật thông tin.";
+      Alert.alert("Lỗi", errorMessage);
     } finally {
       setSaving(false);
     }
@@ -149,9 +162,9 @@ export default function PersonalInfoScreen() {
   };
 
   const getGenderText = (val: string) => {
-    if (val === "1") return "Nam";
-    if (val === "0") return "Nữ";
-    if (val === "2") return "Khác";
+    if (val === "0" || val === "MALE") return "Nam";
+    if (val === "1" || val === "FEMALE") return "Nữ";
+    if (val === "2" || val === "OTHER") return "Khác";
     return "";
   };
 
@@ -240,16 +253,19 @@ export default function PersonalInfoScreen() {
             label="SỐ ĐIỆN THOẠI"
             value={accountInfo.phoneNumber}
             keyboardType="phone-pad"
-            onChangeText={(text: string) =>
-              setAccountInfo({ ...accountInfo, phoneNumber: text })
-            }
+            editable={false}
           />
           <InputField
             label="EMAIL"
             value={accountInfo.email}
             keyboardType="email-address"
+            editable={false}
+          />
+          <InputField
+            label="TIỂU SỬ BẢN THÂN"
+            value={accountInfo.bio}
             onChangeText={(text: string) =>
-              setAccountInfo({ ...accountInfo, email: text })
+              setAccountInfo({ ...accountInfo, bio: text })
             }
           />
         </View>
@@ -328,8 +344,8 @@ export default function PersonalInfoScreen() {
                 Chọn giới tính
               </Text>
               {[
-                { label: "Nam", value: "1" },
-                { label: "Nữ", value: "0" },
+                { label: "Nam", value: "0" },
+                { label: "Nữ", value: "1" },
                 { label: "Khác", value: "2" },
               ].map((item) => (
                 <TouchableOpacity

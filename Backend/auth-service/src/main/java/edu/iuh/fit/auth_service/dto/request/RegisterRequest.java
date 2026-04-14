@@ -19,7 +19,7 @@ public record RegisterRequest(
     String fullName,
 
     @NotBlank(message = "Số điện thoại không được để trống")
-    @Pattern(regexp = "^0[35789]\\d{8}$", message = "Số điện thoại không hợp lệ (Bắt đầu bằng 0, đủ 10 số)")
+    @Pattern(regexp = "^0[35789]\\d{8}$", message = "Số điện thoại không hợp lệ (Phải là đầu số mạng VN hợp lệ: 03, 05, 07, 08, 09)")
     String phoneNumber,
 
     @NotBlank(message = "Mã OTP không được để trống")

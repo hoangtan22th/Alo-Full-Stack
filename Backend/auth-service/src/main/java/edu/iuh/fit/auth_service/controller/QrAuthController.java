@@ -38,8 +38,9 @@ public class QrAuthController {
     @GetMapping("/status/{qrToken}")
     public ResponseEntity<ApiResponse<QrSessionResponse>> checkQrStatus(
             @PathVariable String qrToken,
+            jakarta.servlet.http.HttpServletRequest request,
             HttpServletResponse response) {
         
-        return ResponseEntity.ok(ApiResponse.success(qrAuthService.checkQrStatus(qrToken, response)));
+        return ResponseEntity.ok(ApiResponse.success(qrAuthService.checkQrStatus(qrToken, request, response)));
     }
 }

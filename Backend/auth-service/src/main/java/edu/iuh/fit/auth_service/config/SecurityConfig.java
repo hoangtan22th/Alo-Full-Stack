@@ -15,8 +15,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    // Tạm thời không dùng filter này nữa vì Gateway đã check JWT rồi
-    // private final JwtAuthenticationFilter jwtAuthFilter;
+    private final InternalHeaderAuthenticationFilter headerAuthFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -28,21 +27,23 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/api/v1/auth/login",
+                                "/api/v1/auth/send-otp",
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/google",
                                 "/api/v1/auth/qr/generate",
                                 "/api/v1/auth/qr/status/**",
+                                "/api/v1/auth/forgot-password/**",
                                 "/api/v1/chatbot/**"
                         ).permitAll()
 
-                        // 2. Với Microservices, ta tin tưởng Gateway.
-                        // Nếu muốn an toàn tuyệt đối, ta permitAll() ở đây
-                        // và để Gateway chặn ở ngoài Port 8888.
-                        .anyRequest().permitAll()
+                        // 2. Với Microservices, ta không tin tưởng hoàn toàn mọi request.
+                        // Yêu cầu xác thực với các endpoint khác.
+                        .anyRequest().authenticated()
                 )
-                // 3. Tắt luôn cái Filter cũ này đi Dương nhé
-                // .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                
+                // 3. Thêm Filter khôi phục SecurityContext từ Header của Gateway
+                .addFilterBefore(headerAuthFilter, UsernamePasswordAuthenticationFilter.class)
 
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)

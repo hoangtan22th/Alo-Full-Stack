@@ -10,6 +10,6 @@ public record RegistrationOtpRequest(
     String email,
 
     @NotBlank(message = "Số điện thoại không được để trống")
-    @Pattern(regexp = "^0[35789]\\d{8}$", message = "Số điện thoại không hợp lệ")
+    @Pattern(regexp = "^0[35789]\\d{8}$", message = "Số điện thoại không hợp lệ (Phải là đầu số mạng VN hợp lệ: 03, 05, 07, 08, 09)")
     String phoneNumber
 ) {}
