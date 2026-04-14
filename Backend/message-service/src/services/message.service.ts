@@ -138,6 +138,60 @@ export class MessageDataService {
     const message = await Message.findById(messageId);
     return message?.senderId === userId && !message?.isDeleted;
   }
+
+  /**
+   * Thêm hoặc tăng số lượng cảm xúc (Spam logic)
+   */
+  async addReaction(messageId: string, userId: string, emoji: string): Promise<IMessage | null> {
+    try {
+      // 1. Thử cập nhật nếu đã tồn tại tổ hợp userId + emoji bằng $elemMatch
+      const result = await Message.updateOne(
+        { 
+          _id: new Types.ObjectId(messageId),
+          reactions: { $elemMatch: { userId: userId, emoji: emoji } }
+        },
+        { $inc: { "reactions.$.count": 1 } }
+      );
+
+      // 2. Nếu không tìm thấy để cập nhật, thực hiện push mới
+      if (result.matchedCount === 0) {
+        return await Message.findByIdAndUpdate(
+          messageId,
+          { 
+            $push: { 
+              reactions: { userId, emoji, count: 1 } 
+            } 
+          },
+          { new: true }
+        );
+      }
+
+      return await Message.findById(messageId);
+    } catch (error) {
+      console.error('[MessageDataService] Failed to add reaction:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Xóa toàn bộ cảm xúc của một user trên tin nhắn đó
+   */
+  async clearReactions(messageId: string, userId: string): Promise<IMessage | null> {
+    try {
+      return await Message.findByIdAndUpdate(
+        messageId,
+        { 
+          $pull: { 
+            reactions: { userId: userId } 
+          } 
+        },
+        { new: true }
+      );
+    } catch (error) {
+      console.error('[MessageDataService] Failed to clear reactions:', error);
+      throw error;
+    }
+  }
 }
 
 export default new MessageDataService();

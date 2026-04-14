@@ -119,6 +119,13 @@ class SocketService {
     this.socket?.on("messages-read", callback);
   }
 
+  // Lắng nghe sự kiện cập nhật cảm xúc
+  onMessageReactionUpdated(
+    callback: (data: { messageId: string; reactions: any[] }) => void,
+  ) {
+    this.socket?.on("message-reaction-updated", callback);
+  }
+
   // Hủy lắng nghe một sự kiện
   off(event: string) {
     this.socket?.off(event);

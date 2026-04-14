@@ -3,7 +3,9 @@ import axiosClient from "../../config/axiosClient";
 import { 
   getMessageHistory, 
   sendMessage as sendMessageApi,
-  markMessagesAsRead
+  markMessagesAsRead,
+  reactToMessage,
+  clearReactions
 } from "../../services/message.service";
 import socketService from "../../services/socket.service";
 import MessageInput from "./components/MessageInput";
@@ -25,7 +27,11 @@ import {
   FolderIcon,
   NoSymbolIcon,
   ExclamationCircleIcon,
+  XMarkIcon,
+  FaceSmileIcon as FaceSmileIconMini
 } from "@heroicons/react/24/outline";
+
+// ...
 
 // ================= DỮ LIỆU MẪU DỰ PHÒNG =================
 
@@ -48,7 +54,34 @@ export default function ChatPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [messages, setMessages] = useState<any[]>([]);
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({}); // { conversationId: [userIds] }
+  const [hoveredMessage, setHoveredMessage] = useState<string | null>(null);
+  const [viewingReactions, setViewingReactions] = useState<any[] | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const EMOJI_MAP: Record<string, string> = {
+    like: '👍',
+    heart: '❤️',
+    haha: '😂',
+    wow: '😮',
+    cry: '😢',
+    angry: '😡'
+  };
+
+  const handleToggleReaction = async (messageId: string, emoji: string) => {
+    try {
+      await reactToMessage(messageId, emoji);
+    } catch (error) {
+      console.error("Failed to toggle reaction:", error);
+    }
+  };
+
+  const handleClearReactions = async (messageId: string) => {
+    try {
+      await clearReactions(messageId);
+    } catch (error) {
+      console.error("Failed to clear reactions:", error);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -80,14 +113,28 @@ export default function ChatPage() {
       }
     });
 
-    // Lắng nghe sự kiện đối phương đã đọc tin nhắn
-    socketService.onMessagesRead((data) => {
-      if (String(data.conversationId) === String(activeChat)) {
-        setMessages((prev) => prev.map(msg => ({
-          ...msg,
-          isRead: true
-        })));
-      }
+    // Lắng nghe sự kiện tin nhắn đã được đọc
+    socketService.onMessagesRead((data: any) => {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.conversationId === data.conversationId && m.senderId !== data.userId) {
+            return { ...m, isRead: true };
+          }
+          return m;
+        })
+      );
+    });
+
+    // Lắng nghe sự kiện cập nhật cảm xúc (Reactions)
+    socketService.socket?.on('message-reaction-updated', (data: { messageId: string, reactions: any[] }) => {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (String(m._id || m.id) === String(data.messageId)) {
+            return { ...m, reactions: data.reactions };
+          }
+          return m;
+        })
+      );
     });
 
     // Tham gia phòng chat hiện tại
@@ -445,9 +492,55 @@ export default function ChatPage() {
             const timeString = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
             
             if (isMe) {
+              const msgId = String(msg._id || msg.id);
+              const isHovered = hoveredMessage === msgId;
+              const hasAnyReaction = Array.isArray(msg.reactions) && msg.reactions.length > 0;
+              const myReaction = msg.reactions?.filter((r: any) => String(r.userId) === String(myId));
+
               return (
-                <div key={msg._id || msg.id || idx} className="flex justify-end">
-                  <div className="max-w-[85%] lg:max-w-[70%]">
+                <div 
+                  key={msgId || idx} 
+                  className="flex justify-end"
+                  onMouseEnter={() => setHoveredMessage(msgId)}
+                  onMouseLeave={() => setHoveredMessage(null)}
+                >
+                  <div className="max-w-[85%] lg:max-w-[70%] flex flex-col items-end relative group">
+                    {/* Reaction Picker Button & Overlay */}
+                    <div className="absolute -bottom-2 -right-2 z-20 group-hover:opacity-100 opacity-0 transition-opacity">
+                      <button 
+                        className="w-7 h-7 bg-white border border-gray-100 rounded-full shadow-md flex items-center justify-center hover:bg-gray-50 transition transform hover:scale-110"
+                      >
+                        <FaceSmileIconMini className="w-4 h-4 text-gray-400" />
+                      </button>
+                      
+                    {/* The Picker (Aligned Right for own messages) */}
+                    {isHovered && (
+                      <div className="absolute bottom-full mb-2 right-0 flex items-center gap-1 z-30">
+                          <div className="bg-white border border-gray-100 rounded-full shadow-2xl p-1 flex items-center gap-0.5 animate-in slide-in-from-bottom-2 fade-in duration-200">
+                            {Object.entries(EMOJI_MAP).map(([key, emoji]) => (
+                              <button
+                                key={key}
+                                onClick={(e) => { e.stopPropagation(); handleToggleReaction(msgId, key); }}
+                                className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full transition-all hover:scale-125 text-xl"
+                                title={key}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                            {myReaction?.length > 0 && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleClearReactions(msgId); }}
+                                className="w-8 h-8 flex items-center justify-center hover:bg-red-50 text-red-500 rounded-full transition border-l border-gray-100 ml-0.5 pl-1.5"
+                                title="Xóa tất cả"
+                              >
+                                <XMarkIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     {msg.type === 'image' ? (
                       <div className="rounded-2xl overflow-hidden shadow-md border border-gray-100 bg-gray-50">
                         <img 
@@ -480,6 +573,24 @@ export default function ChatPage() {
                         {msg.content || msg.text}
                       </div>
                     )}
+
+                    {/* Reactions Summary */}
+                    {hasAnyReaction && (
+                      <button 
+                        onClick={() => setViewingReactions(msg.reactions)}
+                        className="flex items-center gap-1 bg-white border border-gray-100 rounded-full px-1.5 py-0.5 shadow-sm mt-1 hover:bg-gray-50 transition -mr-1"
+                      >
+                        <div className="flex -space-x-1">
+                          {Array.from(new Set(msg.reactions.map((r: any) => r.emoji))).map((emojiKey: any) => (
+                            <span key={emojiKey} className="text-xs">{EMOJI_MAP[emojiKey]}</span>
+                          ))}
+                        </div>
+                        <span className="text-[9px] font-black text-gray-500 ml-0.5">
+                          {msg.reactions.reduce((acc: number, r: any) => acc + (r.count || 1), 0)}
+                        </span>
+                      </button>
+                    )}
+
                     <div className="flex items-center justify-end gap-1 mt-1.5 mr-1">
                       <span className="text-[10px] font-bold text-gray-400">
                         {timeString}
@@ -495,17 +606,26 @@ export default function ChatPage() {
                 </div>
               );
             } else {
+              const msgId = String(msg._id || msg.id);
+              const isHovered = hoveredMessage === msgId;
+              const hasAnyReaction = Array.isArray(msg.reactions) && msg.reactions.length > 0;
+              const myReaction = msg.reactions?.filter((r: any) => String(r.userId) === String(myId));
               const chatInfo = conversations.find((c) => String(c.id) === String(activeChat));
               const avatar = chatInfo?.avatar || "https://i.pravatar.cc/150?img=11";
 
               return (
-                <div key={msg._id || msg.id || idx} className="flex items-end gap-3 max-w-[85%] lg:max-w-[70%]">
+                <div 
+                  key={msgId || idx} 
+                  className="flex items-end gap-3 max-w-[85%] lg:max-w-[70%]"
+                  onMouseEnter={() => setHoveredMessage(msgId)}
+                  onMouseLeave={() => setHoveredMessage(null)}
+                >
                   <img
                     src={avatar}
                     className="w-8 h-8 rounded-full mb-1 shrink-0"
                     alt=""
                   />
-                  <div>
+                  <div className="flex flex-col relative group">
                     {msg.type === 'image' ? (
                       <div className="rounded-2xl overflow-hidden shadow-md border border-gray-100 bg-gray-50">
                         <img 
@@ -538,9 +658,63 @@ export default function ChatPage() {
                         {msg.content || msg.text}
                       </div>
                     )}
+
+                    {/* Reactions Summary */}
+                    {hasAnyReaction && (
+                      <button 
+                        onClick={() => setViewingReactions(msg.reactions)}
+                        className="flex items-center gap-1 bg-white border border-gray-100 rounded-full px-1.5 py-0.5 shadow-sm mt-1 hover:bg-gray-50 transition w-fit"
+                      >
+                        <div className="flex -space-x-1">
+                          {Array.from(new Set(msg.reactions.map((r: any) => r.emoji))).map((emojiKey: any) => (
+                            <span key={emojiKey} className="text-xs">{EMOJI_MAP[emojiKey]}</span>
+                          ))}
+                        </div>
+                        <span className="text-[9px] font-black text-gray-500 ml-0.5">
+                          {msg.reactions.reduce((acc: number, r: any) => acc + (r.count || 1), 0)}
+                        </span>
+                      </button>
+                    )}
+
                     <span className="text-[10px] font-bold text-gray-400 mt-1.5 ml-1 block">
                       {timeString}
                     </span>
+
+                    {/* Reaction Picker Button & Overlay */}
+                    <div className="absolute -bottom-2 -right-2 z-20 group-hover:opacity-100 opacity-0 transition-opacity">
+                      <button 
+                        className="w-7 h-7 bg-white border border-gray-100 rounded-full shadow-md flex items-center justify-center hover:bg-gray-50 transition transform hover:scale-110"
+                      >
+                        <FaceSmileIconMini className="w-4 h-4 text-gray-400" />
+                      </button>
+                      
+                      {/* The Picker (Centered for others) */}
+                      {isHovered && (
+                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 flex items-center gap-1 z-30">
+                          <div className="bg-white border border-gray-100 rounded-full shadow-2xl p-1 flex items-center gap-0.5 animate-in slide-in-from-bottom-2 fade-in duration-200">
+                            {Object.entries(EMOJI_MAP).map(([key, emoji]) => (
+                              <button
+                                key={key}
+                                onClick={(e) => { e.stopPropagation(); handleToggleReaction(msgId, key); }}
+                                className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full transition-all hover:scale-125 text-xl"
+                                title={key}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                            {myReaction?.length > 0 && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleClearReactions(msgId); }}
+                                className="w-8 h-8 flex items-center justify-center hover:bg-red-50 text-red-500 rounded-full transition border-l border-gray-100 ml-0.5 pl-1.5"
+                                title="Xóa tất cả"
+                              >
+                                <XMarkIcon className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -679,6 +853,37 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+
+      {/* --- Reaction Details Modal --- */}
+      {viewingReactions && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setViewingReactions(null)} />
+          <div className="bg-white rounded-[32px] w-full max-w-sm shadow-2xl overflow-hidden relative animate-in fade-in zoom-in duration-300">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="font-black text-[18px]">Cảm xúc tin nhắn</h3>
+              <button onClick={() => setViewingReactions(null)} className="p-2 hover:bg-gray-100 rounded-full transition">
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto p-4 space-y-2">
+              {viewingReactions.map((r, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3.5 hover:bg-gray-50 rounded-2xl transition">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-2xl shadow-inner">
+                      {EMOJI_MAP[r.emoji]}
+                    </div>
+                    <div>
+                      <p className="font-bold text-[14px]">Người dùng #{r.userId.substring(0, 6)}</p>
+                      <p className="text-[11px] font-black text-gray-400 uppercase tracking-tight">Đã thả {r.count} cái {r.emoji}</p>
+                    </div>
+                  </div>
+                  <span className="text-2xl">{EMOJI_MAP[r.emoji]}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
