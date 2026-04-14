@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@config "../tailwind.config.js";
+
+@layer base {
+  body {
+    @apply font-body bg-background text-on-background antialiased;
+  }
+}
+
+.font-manrope {
+  font-family: "Manrope", sans-serif;
+}
+.material-symbols-outlined {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+.flat-no-shadows {
+  box-shadow: none;
+}
+.tonal-shift {
+  background-color: #f2f4f5;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #dde3e7;
+  border-radius: 10px;
+}

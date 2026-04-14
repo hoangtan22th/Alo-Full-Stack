@@ -18,10 +18,6 @@ public record RegisterRequest(
     @Size(min = 2, max = 50, message = "Họ và tên nên từ 2 đến 50 ký tự")
     String fullName,
 
-    @NotBlank(message = "Số điện thoại không được để trống")
-    @Pattern(regexp = "^0[35789]\\d{8}$", message = "Số điện thoại không hợp lệ (Bắt đầu bằng 0, đủ 10 số)")
-    String phoneNumber,
-
     @NotBlank(message = "Mã OTP không được để trống")
     @Size(min = 6, max = 6, message = "Mã OTP phải đúng 6 chữ số")
     String otp

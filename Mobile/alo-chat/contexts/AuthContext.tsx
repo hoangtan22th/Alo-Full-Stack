@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = async () => {
     try {
-      const res = await api.get("/auth/me");
+      const res = await api.get("/users/me");
       setUser(res);
       await AsyncStorage.setItem("userData", JSON.stringify(res));
     } catch (err) {
@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Lấy thông tin user ngay khi login (Gắn kèm thủ công token luôn do interceptor lúc này chưa chắc đã lấy kịp giá trị thay đổi từ cục bộ)
     try {
-      const res = await api.get("/auth/me", {
+      const res = await api.get("/users/me", {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       setUser(res);

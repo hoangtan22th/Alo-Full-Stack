@@ -18,14 +18,12 @@ import api from "../services/api";
 export default function RegisterScreen() {
   const [form, setForm] = useState({
     fullName: "",
-    phoneNumber: "",
     email: "",
     password: "",
     confirmPassword: "",
   });
   const [errors, setErrors] = useState({
     fullName: "",
-    phoneNumber: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -52,8 +50,6 @@ export default function RegisterScreen() {
     } else {
       if (field === "email" && !emailRegex.test(value)) {
         errorMsg = "Email không đúng định dạng";
-      } else if (field === "phoneNumber" && !phoneRegex.test(value)) {
-        errorMsg = "Số điện thoại không hợp lệ (10 số, bắt đầu bằng 0)";
       } else if (field === "password" && !passwordRegex.test(value)) {
         errorMsg = "Mật khẩu phải >= 8 ký tự, gồm chữ Hoa, chữ Thường và Số";
       } else if (field === "confirmPassword" && value !== form.password) {
@@ -73,18 +69,13 @@ export default function RegisterScreen() {
 
   // Hàm gọi API Gửi OTP
   const handleSendOtp = async () => {
-    if (!form.fullName || !form.email || !form.password || !form.phoneNumber) {
+    if (!form.fullName || !form.email || !form.password) {
       Alert.alert("Thông báo", "Vui lòng nhập đầy đủ thông tin");
       return;
     }
 
     if (!emailRegex.test(form.email)) {
       Alert.alert("Lỗi", "Vui lòng nhập đúng định dạng Email");
-      return;
-    }
-
-    if (!phoneRegex.test(form.phoneNumber)) {
-      Alert.alert("Lỗi", "Số điện thoại không hợp lệ. Vui lòng nhập số điện thoại Việt Nam (10 số).");
       return;
     }
 
@@ -104,8 +95,7 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       await api.post("/auth/send-otp", { 
-        email: form.email.trim(),
-        phoneNumber: form.phoneNumber.trim() 
+        email: form.email.trim()
       });
       Alert.alert("Thành công", "Mã OTP 6 số đã được gửi tới email của bạn!");
       setStep(2); // Chuyển sang màn hình nhập OTP
@@ -141,7 +131,6 @@ export default function RegisterScreen() {
         fullName: form.fullName.trim(),
         email: form.email.trim(),
         password: form.password,
-        phoneNumber: form.phoneNumber.trim(),
         otp: otp.trim(),
       });
 
@@ -220,19 +209,6 @@ export default function RegisterScreen() {
                   />
                 </View>
                 {errors.fullName ? <Text style={styles.errorText}>{errors.fullName}</Text> : null}
-
-                <Text style={styles.inputLabel}>SỐ ĐIỆN THOẠI</Text>
-                <View style={[styles.inputWrapper, errors.phoneNumber ? styles.inputError : null]}>
-                  <TextInput
-                    placeholder="090 123 4567"
-                    style={styles.input}
-                    keyboardType="phone-pad"
-                    value={form.phoneNumber}
-                    onChangeText={(val) => handleTextChange("phoneNumber", val)}
-                    placeholderTextColor="#aaa"
-                  />
-                </View>
-                {errors.phoneNumber ? <Text style={styles.errorText}>{errors.phoneNumber}</Text> : null}
 
                 <Text style={styles.inputLabel}>EMAIL</Text>
                 <View style={[styles.inputWrapper, errors.email ? styles.inputError : null]}>

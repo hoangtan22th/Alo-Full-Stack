@@ -60,7 +60,7 @@ export default function EditProfileScreen() {
       // @ts-ignore: FormData in React Native appends support these fields
       formData.append("file", { uri, name: filename, type });
 
-      const endpoint = isAvatar ? "/auth/me/avatar" : "/auth/me/cover";
+      const endpoint = isAvatar ? "/users/me/avatar" : "/users/me/cover";
       await api.post(endpoint, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -223,9 +223,11 @@ export default function EditProfileScreen() {
             <Text className="text-2xl font-bold text-black text-center">
               {user?.fullName || "Nguyễn Hoàng Tấn"}
             </Text>
-            <Text className="text-[15px] text-[#65676b] mt-1.5 text-center">
-              Học hỏi là việc cả đời
-            </Text>
+            {user?.bio ? (
+              <Text className="text-[15px] text-[#65676b] mt-1.5 text-center">
+                {user.bio}
+              </Text>
+            ) : null}
           </View>
 
           {/* Nút Chỉnh sửa trang cá nhân */}

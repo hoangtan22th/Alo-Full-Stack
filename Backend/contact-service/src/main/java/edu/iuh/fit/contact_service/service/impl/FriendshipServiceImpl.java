@@ -30,32 +30,41 @@ public class FriendshipServiceImpl implements FriendshipService {
 
     @Override
     public SearchFriendResponseDTO searchUserByPhone(String phone, String currentUserId) {
-        ApiResponse<UserDTO> userResponse = userClient.getUserByPhone(phone);
-        if (userResponse == null || userResponse.getData() == null) {
+        ApiResponse<edu.iuh.fit.common_service.dto.response.PageResponse<UserDTO>> userResponse = null;
+        try {
+            userResponse = userClient.getUserByPhone(phone);
+        } catch (feign.FeignException.NotFound e) {
+            throw new ResourceNotFoundException("Không tìm thấy người dùng!");
+        } catch (feign.FeignException e) {
+            throw new AppException(e.status(), "Lỗi khi gọi service auth: " + e.getMessage());
+        }
+
+        if (userResponse == null || userResponse.getData() == null || userResponse.getData().getContent() == null || userResponse.getData().getContent().isEmpty()) {
             throw new ResourceNotFoundException("Không tìm thấy người dùng!");
         }
 
-        UserDTO foundUser = userResponse.getData();
+        UserDTO foundUser = userResponse.getData().getContent().get(0);
         String foundUserId = foundUser.getId();
 
-        if (foundUserId.equals(currentUserId)) {
-            throw new AppException(400, "Bạn không thể tự tìm chính mình!");
-        }
-
-        // Kiểm tra quan hệ 2 chiều từ Database
-        Optional<Friendship> friendshipOpt = friendshipRepository.findByUserIds(currentUserId, foundUserId);
-
         String status = "NOT_FRIEND";
-        if (friendshipOpt.isPresent()) {
-            Friendship f = friendshipOpt.get();
-            if (f.getStatus() == FriendshipStatus.ACCEPTED) {
-                status = "ACCEPTED";
-            } else if (f.getRequesterId().equals(currentUserId)) {
-                // Trường hợp: Tấn là người gửi
-                status = "YOU_SENT_REQUEST";
-            } else {
-                // Trường hợp: Người kia gửi cho Tấn
-                status = "THEY_SENT_REQUEST";
+
+        if (foundUserId.equals(currentUserId)) {
+            status = "SELF";
+        } else {
+            // Kiểm tra quan hệ 2 chiều từ Database
+            Optional<Friendship> friendshipOpt = friendshipRepository.findByUserIds(currentUserId, foundUserId);
+
+            if (friendshipOpt.isPresent()) {
+                Friendship f = friendshipOpt.get();
+                if (f.getStatus() == FriendshipStatus.ACCEPTED) {
+                    status = "ACCEPTED";
+                } else if (f.getRequesterId().equals(currentUserId)) {
+                    // Trường hợp: Tấn là người gửi
+                    status = "YOU_SENT_REQUEST";
+                } else {
+                    // Trường hợp: Người kia gửi cho Tấn
+                    status = "THEY_SENT_REQUEST";
+                }
             }
         }
 

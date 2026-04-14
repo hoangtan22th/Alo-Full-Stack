@@ -26,10 +26,11 @@ spring:
             enable: true
       driver-class-name: org.mariadb.jdbc.Driver
 
+  sql:
+    init:
+      mode: always
   jpa:
     hibernate:
-      # QUAN TRỌNG: Đổi từ update sang none để Hibernate không gửi lệnh ALTER lỗi vào MariaDB 5.5
-      # Bạn đã tạo bảng bằng script SQL thủ công nên để 'none' hoặc 'validate' là an toàn nhất.
       ddl-auto: none
     show-sql: true
     properties:

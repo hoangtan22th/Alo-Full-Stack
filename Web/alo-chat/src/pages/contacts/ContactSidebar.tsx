@@ -5,6 +5,7 @@ import {
   UserGroupIcon,
   UserPlusIcon,
   EnvelopeIcon,
+  PaperAirplaneIcon,
 } from "@heroicons/react/24/outline";
 
 export default function ContactSidebar() {
@@ -29,16 +30,18 @@ export default function ContactSidebar() {
           Danh sách bạn bè
         </NavLink>
 
-        <NavLink to="/contacts/groups" className={navItemClass}>
-          <UserGroupIcon className="w-5 h-5" />
-          Danh sách nhóm
-        </NavLink>
-
         <NavLink to="/contacts/requests" className={navItemClass}>
           <UserPlusIcon className="w-5 h-5" />
           Lời mời kết bạn
         </NavLink>
-
+        <NavLink to="/contacts/sent-requests" className={navItemClass}>
+          <PaperAirplaneIcon className="w-5 h-5" />
+          Yêu cầu đã gửi
+        </NavLink>
+        <NavLink to="/contacts/groups" className={navItemClass}>
+          <UserGroupIcon className="w-5 h-5" />
+          Danh sách nhóm
+        </NavLink>
         <NavLink to="/contacts/group-invites" className={navItemClass}>
           <EnvelopeIcon className="w-5 h-5" />
           Lời mời vào nhóm
