@@ -24,7 +24,7 @@ public class UserProfile {
     @Column(name = "last_name")
     private String lastName;
 
-    @Column(name = "phone_number")
+    @Column(name = "phone_number", unique = true)
     private String phoneNumber;
 
     @Column(name = "avatar_url")

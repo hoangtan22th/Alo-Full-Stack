@@ -19,4 +19,7 @@ public interface UserProfileRepository extends JpaRepository<UserProfile, String
                                          @Param("email") String email,
                                          @Param("phoneNumber") String phoneNumber,
                                          Pageable pageable);
+
+    boolean existsByPhoneNumber(String phoneNumber);
+    boolean existsByPhoneNumberAndIdNot(String phoneNumber, String id);
 }

@@ -108,10 +108,6 @@ export default function PersonalInfoScreen() {
       Alert.alert("Lỗi", "Họ và tên nên từ 1 đến 50 ký tự");
       return;
     }
-    if (accountInfo.phoneNumber && !phoneRegex.test(accountInfo.phoneNumber)) {
-      Alert.alert("Lỗi", "Số điện thoại không hợp lệ (10 số, bắt đầu bằng 0)");
-      return;
-    }
     if (accountInfo.email && !emailRegex.test(accountInfo.email)) {
       Alert.alert("Lỗi", "Email không đúng định dạng");
       return;
@@ -121,7 +117,6 @@ export default function PersonalInfoScreen() {
       setSaving(true);
       const payload = {
         fullName: accountInfo.fullName,
-        phoneNumber: accountInfo.phoneNumber,
         gender: parseInt(accountInfo.gender),
         dateOfBirth: accountInfo.dateOfBirth || null, // YYYY-MM-DD
         email: accountInfo.email || null,
@@ -131,9 +126,11 @@ export default function PersonalInfoScreen() {
       await api.put("/users/me", payload);
       await refreshUser();
       Alert.alert("Thành công", "Đã cập nhật thông tin cá nhân.");
-    } catch (err) {
-      console.log("Lỗi cập nhật profile:", err);
-      Alert.alert("Lỗi", "Không thể cập nhật thông tin.");
+    } catch (err: any) {
+      console.log("Lỗi cập nhật profile:", err?.response?.data || err);
+      const errorMessage =
+        err?.response?.data?.message || "Không thể cập nhật thông tin.";
+      Alert.alert("Lỗi", errorMessage);
     } finally {
       setSaving(false);
     }
@@ -256,9 +253,7 @@ export default function PersonalInfoScreen() {
             label="SỐ ĐIỆN THOẠI"
             value={accountInfo.phoneNumber}
             keyboardType="phone-pad"
-            onChangeText={(text: string) =>
-              setAccountInfo({ ...accountInfo, phoneNumber: text })
-            }
+            editable={false}
           />
           <InputField
             label="EMAIL"

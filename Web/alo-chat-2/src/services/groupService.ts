@@ -217,4 +217,15 @@ export const groupService = {
       throw error;
     }
   },
+
+  // Lấy hoặc tạo cuộc hội thoại 1-1
+  createDirectConversation: async (targetUserId: string) => {
+    try {
+      const data = await api.post<any, any>(`/groups/direct`, { targetUserId });
+      return data;
+    } catch (error) {
+      console.error("Lỗi tạo cuộc hội thoại 1-1:", error);
+      throw error;
+    }
+  },
 };
