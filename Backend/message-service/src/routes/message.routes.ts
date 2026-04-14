@@ -24,4 +24,8 @@ router.post('/upload', upload.single('file'), messageController.uploadFile);
 // Route đánh dấu đã đọc tin nhắn
 router.patch('/:conversationId/read', messageController.markMessagesAsRead);
 
+// Route cho cảm xúc (Reactions)
+router.post('/:messageId/reactions', messageController.reactToMessage);
+router.delete('/:messageId/reactions', messageController.clearReactions);
+
 export default router;

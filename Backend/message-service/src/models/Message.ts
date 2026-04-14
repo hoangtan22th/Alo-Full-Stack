@@ -16,6 +16,11 @@ export interface IMessage extends Document {
     originalContent: string;
     editedAt: Date;
   }>;
+  reactions: Array<{
+    userId: string;
+    emoji: string;
+    count: number;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -75,6 +80,16 @@ const messageSchema = new Schema<IMessage>(
         {
           originalContent: String,
           editedAt: Date,
+        },
+      ],
+      default: [],
+    },
+    reactions: {
+      type: [
+        {
+          userId: String,
+          emoji: String,
+          count: { type: Number, default: 1 },
         },
       ],
       default: [],
