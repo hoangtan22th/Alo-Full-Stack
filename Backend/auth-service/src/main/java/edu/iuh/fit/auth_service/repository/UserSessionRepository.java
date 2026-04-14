@@ -19,6 +19,9 @@ public interface UserSessionRepository extends JpaRepository<UserSession, String
     // Xóa một phiên cụ thể của User trên một thiết bị nhất định
     void deleteByAccountIdAndDeviceId(String accountId, String deviceId);
 
+    // Xóa tất cả các phiên của User
+    void deleteAllByAccountId(String accountId);
+
     @Modifying
     void deleteByRefreshTokenId(String refreshTokenId);
 }

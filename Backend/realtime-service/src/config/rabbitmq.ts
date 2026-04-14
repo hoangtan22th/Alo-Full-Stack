@@ -25,7 +25,17 @@ export async function initRabbitMQ(io: Server) {
 
         // Map RabbitMQ target to Socket.IO room/user
         if (payload.target) {
-          io.to(`user_${payload.target}`).emit(payload.event, payload.data);
+          if (payload.event === "FORCE_LOGOUT" && payload.data?.keepSessionId) {
+            io.in(`user_${payload.target}`).fetchSockets().then((sockets) => {
+              sockets.forEach((s) => {
+                if (s.data.sessionId !== payload.data.keepSessionId) {
+                  s.emit(payload.event, payload.data);
+                }
+              });
+            });
+          } else {
+            io.to(`user_${payload.target}`).emit(payload.event, payload.data);
+          }
         } else if (payload.room) {
           io.to(`room_${payload.room}`).emit(payload.event, payload.data);
         } else {

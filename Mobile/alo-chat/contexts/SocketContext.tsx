@@ -66,6 +66,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             console.log("Có người đang gõ trong nhóm bạn tham gia: ", data);
           });
 
+          // Lắng nghe lệnh Đăng Xuất Tự Động từ hệ thống (khi có thiết bị khác đăng nhập)
+          newSocket.on("FORCE_LOGOUT", (data) => {
+            console.warn("⚠️ Received FORCE_LOGOUT from server:", data);
+            DeviceEventEmitter.emit("force_logout");
+          });
+
           // Lắng nghe trạng thái Online/Offline chung của các User khác
           newSocket.on(
             "USER_ONLINE",

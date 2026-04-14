@@ -11,6 +11,7 @@ public class RabbitMQConfig {
 
     public static final String EXCHANGE_NAME = "user.exchange";
     public static final String QUEUE_REGISTRATION = "user.registration.queue";
+    public static final String ROUTING_KEY_UPDATE = "user.updated";
 
     @Bean
     public TopicExchange userExchange() {
