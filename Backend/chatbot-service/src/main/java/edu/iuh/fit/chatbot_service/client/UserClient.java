@@ -4,6 +4,7 @@ import edu.iuh.fit.common_service.dto.response.PageResponse;
 import edu.iuh.fit.chatbot_service.dto.UserDto;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 
 @FeignClient(name = "user-service")
@@ -16,4 +17,7 @@ public interface UserClient {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     );
+    // Trong UserClient.java
+    @GetMapping("/api/v1/users/{id}")
+    UserDto getUserById(@PathVariable("id") String id);
 }

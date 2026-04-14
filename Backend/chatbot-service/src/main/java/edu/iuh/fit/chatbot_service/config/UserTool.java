@@ -19,6 +19,7 @@ public class UserTool {
             @ToolParam(description = "Số điện thoại (có thể null)", required = false) String phoneNumber,
             @ToolParam(description = "Số trang, bắt đầu từ 0", required = false) Integer page,
             @ToolParam(description = "Kích thước trang", required = false) Integer size) {
+        System.out.println(">>> [TOOL CALLED] searchUsers - fullName: " + fullName + ", email: " + email + ", phoneNumber: " + phoneNumber);
         int pageNum = (page != null && page >= 0) ? page : 0;
         int pageSize = (size != null && size > 0) ? size : 10;
         try {
