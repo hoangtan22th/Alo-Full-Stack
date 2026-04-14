@@ -26,6 +26,7 @@ import {
   MapPinIcon,
   TagIcon,
   ChevronRightIcon,
+  TrashIcon,
 } from "react-native-heroicons/outline";
 import { useRouter } from "expo-router";
 import { groupService } from "../../services/groupService";
@@ -428,6 +429,32 @@ export default function MessagesScreen() {
     }
   };
 
+  const handleClearChat = async () => {
+    if (!selectedChat) return;
+    const convoId = selectedChat.id;
+
+    Alert.alert(
+      "Xoá lịch sử trò chuyện",
+      "Bạn có chắc chắn muốn xoá lịch sử trò chuyện này? Các tin nhắn cũ sẽ biến mất đối với bạn.",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xoá",
+          style: "destructive",
+          onPress: async () => {
+            closeMenu();
+            try {
+              await groupService.clearConversation(convoId);
+              fetchGroups();
+            } catch (err) {
+              console.error("Lỗi xoá lịch sử:", err);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   // Sorting logic for Pinning
   const sortedConversations = [...conversations].sort((a, b) => {
     const aPinned = pinnedIds.has(a.id);
@@ -738,6 +765,18 @@ export default function MessagesScreen() {
                           </Text>
                         </View>
                         <ChevronRightIcon size={16} color="#9ca3af" />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={handleClearChat}
+                        className="flex-row items-center justify-between px-5 py-4 border-t border-gray-50 active:bg-red-50"
+                      >
+                        <View className="flex-row items-center gap-3">
+                          <TrashIcon size={20} color="#ef4444" />
+                          <Text className="text-[15px] font-bold text-red-500">
+                            Xoá cuộc trò chuyện
+                          </Text>
+                        </View>
                       </TouchableOpacity>
                     </View>
                   </View>

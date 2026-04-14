@@ -308,4 +308,13 @@ export const groupService = {
       throw error;
     }
   },
+
+  clearConversation: async (id: string) => {
+    try {
+      return await api.post<any, any>(`/groups/clear-history/${id}`);
+    } catch (error) {
+      console.error("Lỗi xoá lịch sử trò chuyện:", error);
+      throw error;
+    }
+  },
 };
