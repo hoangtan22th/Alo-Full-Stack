@@ -42,10 +42,12 @@ app.listen(PORT, async () => {
   // 1. Kết nối MongoDB
   await connectDB();
 
-  // 1.1 Kết nối RabbitMQ
   try {
     const { connectRabbitMQ } = require("./src/config/rabbitmq");
     await connectRabbitMQ();
+    // Khởi chạy Consumer để lắng nghe tin nhắn mới nhằm update lastMessage
+    const { startRabbitMQConsumer } = require("./src/services/rabbitMQConsumer");
+    await startRabbitMQConsumer();
   } catch (err) {
     console.error("❌ Lỗi kết nối RabbitMQ:", err);
   }

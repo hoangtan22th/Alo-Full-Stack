@@ -288,7 +288,7 @@ export default function ConversationSidebar() {
               avatar: chatAvatar || "",
               isGroup: g.isGroup,
               membersCount: g.members?.length,
-              message: "Chưa có tin nhắn",
+              message: g.lastMessageContent || "Chưa có tin nhắn",
               time: timeString,
               updatedAt: g.updatedAt,
               online: false,
@@ -343,11 +343,18 @@ export default function ConversationSidebar() {
       }
     });
 
+    socketService.onConversationUpdated((data: any) => {
+      console.log("📡 [Socket] Conversation updated:", data.conversationId);
+      // Refresh list để lấy tin nhắn mới và re-order
+      fetchGroups();
+    });
+
     return () => {
       socketService.off("CONVERSATION_PIN_UPDATED");
       socketService.off("CONVERSATION_LABEL_UPDATED");
       socketService.off("CONVERSATION_CREATED");
       socketService.off("CONVERSATION_REMOVED");
+      socketService.off("CONVERSATION_UPDATED");
     };
   }, [fetchData, router]);
 
@@ -391,6 +398,23 @@ export default function ConversationSidebar() {
       setMenuView("main");
     } catch (err) {
       console.error("Lỗi gán nhãn:", err);
+    }
+  };
+
+  const handleClearHistory = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!confirm("Bạn có chắc chắn muốn xoá lịch sử trò chuyện này? Các tin nhắn cũ sẽ biến mất đối với bạn.")) return;
+    try {
+      await groupService.clearConversation(id);
+      setOpenMenuId(null);
+      // Refresh list
+      fetchGroups();
+      // Nếu đang mở chính conversation đó thì chuyển hướng
+      if (conversationId === id) {
+        router.push("/chat");
+      }
+    } catch (err) {
+      console.error("Lỗi xoá lịch sử:", err);
     }
   };
 
@@ -549,7 +573,6 @@ export default function ConversationSidebar() {
                           <MapPinIcon className={`w-5 h-5 ${pinnedIds.has(chat.id) ? "text-blue-500 fill-blue-500" : "text-gray-400 group-hover/item:text-black"}`} />
                           {pinnedIds.has(chat.id) ? "Bỏ ghim" : "Ghim hội thoại"}
                         </button>
-                        
                         <button 
                           onClick={() => setMenuView("labels")}
                           className="flex items-center justify-between w-full px-3 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group/item"
@@ -559,6 +582,14 @@ export default function ConversationSidebar() {
                             Phân loại
                           </div>
                           <ChevronRightIcon className="w-4 h-4 text-gray-300" />
+                        </button>
+
+                        <button 
+                          onClick={(e) => handleClearHistory(e, chat.id)}
+                          className="flex items-center gap-3 w-full px-3 py-2.5 text-[13px] font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors group/item"
+                        >
+                          <TrashIcon className="w-5 h-5 text-red-400 group-hover/item:text-red-500" />
+                          Xoá lịch sử
                         </button>
                       </div>
                     ) : (

@@ -436,7 +436,17 @@ export const getMyGroups = async (
 
     const groups = await Conversation.find(query).sort({ updatedAt: -1 });
 
-    res.status(200).json({ data: groups });
+    // Lọc theo mốc thời gian xoá (clearedAt)
+    const filteredGroups = groups.filter((g) => {
+      const clearedAt = g.clearedAt ? g.clearedAt.get(currentUserId) : null;
+      if (!clearedAt) return true; // Chưa từng xoá thì hiện bình thường
+
+      // Nếu đã xoá, chỉ hiện nếu có tin nhắn mới sau mốc xoá
+      if (!g.lastMessageAt) return false;
+      return new Date(g.lastMessageAt) > new Date(clearedAt);
+    });
+
+    res.status(200).json({ data: filteredGroups });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -796,7 +806,7 @@ export const updateGroup = async (
       (m: any) => m.userId.toString() === currentUserId,
     );
 
-    if (!currentMember) {
+    if (!currentMember || (currentMember.role !== "LEADER" && currentMember.role !== "DEPUTY")) {
       res.status(403).json({
         error: "Bạn không có quyền cập nhật thông tin nhóm này",
       });
@@ -832,6 +842,43 @@ export const updateGroup = async (
     });
   } catch (error: any) {
     console.error("[UpdateGroup] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 14. Xoá lịch sử trò chuyện (Timestamp-based)
+export const clearConversation = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { groupId } = req.params;
+    const userId = (req.headers["x-user-id"] || "").toString();
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const conversation = await Conversation.findById(groupId);
+    if (!conversation) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+
+    // Update clearedAt for this user
+    if (!conversation.clearedAt) {
+      conversation.clearedAt = new Map();
+    }
+    conversation.clearedAt.set(userId, new Date());
+
+    await conversation.save();
+
+    res.status(200).json({
+      message: "Conversation cleared successfully",
+      clearedAt: conversation.clearedAt.get(userId),
+    });
+  } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 };
