@@ -62,11 +62,15 @@ export async function initRabbitMQ(io: Server) {
 
         // NẾU LÀ PAYLOAD CHUẨN MỚI TỪ EXCHANGE (Có type và data)
         const routingKey = msg.fields.routingKey;
-        if (routingKey) {
+        const exchange = msg.fields.exchange;
+
+        if (exchange === EXCHANGES.CHAT) {
           const { type, data } = payload;
 
           if (routingKey === ROUTING_KEYS.MESSAGE_CREATED) {
             io.to(`room_${data.conversationId}`).emit("message-received", data);
+          } else if (routingKey === ROUTING_KEYS.MESSAGE_UPDATED) {
+            io.to(`room_${data.conversationId}`).emit("MESSAGE_UPDATED", data);
           } else if (routingKey === ROUTING_KEYS.MESSAGE_READ) {
             io.to(`room_${data.conversationId}`).emit("messages-read", data);
           } else if (routingKey === ROUTING_KEYS.MESSAGE_REACTION) {
