@@ -36,11 +36,14 @@ export async function initRabbitMQ(io: Server) {
               });
             });
           } else {
+            console.log(`[Socket.IO] Emitting event '${payload.event}' to user room: user_${payload.target}`);
             io.to(`user_${payload.target}`).emit(payload.event, payload.data);
           }
         } else if (payload.room) {
+          console.log(`[Socket.IO] Emitting event '${payload.event}' to room: room_${payload.room}`);
           io.to(`room_${payload.room}`).emit(payload.event, payload.data);
         } else {
+          console.log(`[Socket.IO] Emitting global event: '${payload.event}'`);
           io.emit(payload.event, payload.data);
         }
       } catch (error) {

@@ -137,6 +137,15 @@ class SocketService {
     this.socket?.on("message-reaction-updated", callback);
   }
 
+  // Realtime Sync cho Ghim và Phân loại
+  onPinUpdated(callback: (data: { conversationId: string; isPinned: boolean }) => void) {
+    this.socket?.on("CONVERSATION_PIN_UPDATED", callback);
+  }
+
+  onLabelUpdated(callback: (data: { conversationId: string; label: any }) => void) {
+    this.socket?.on("CONVERSATION_LABEL_UPDATED", callback);
+  }
+
   // Hủy lắng nghe một sự kiện
   off(event: string) {
     this.socket?.off(event);

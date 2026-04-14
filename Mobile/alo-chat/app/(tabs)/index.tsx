@@ -133,6 +133,40 @@ export default function MessagesScreen() {
     fetchData();
   }, [currentUserId]);
 
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handlePinUpdated = (data: { conversationId: string; isPinned: boolean }) => {
+      console.log("📍 [Mobile Socket] Received CONVERSATION_PIN_UPDATED:", data);
+      setPinnedIds(prev => {
+        const next = new Set(prev);
+        if (data.isPinned) next.add(data.conversationId);
+        else next.delete(data.conversationId);
+        return next;
+      });
+    };
+
+    const handleLabelUpdated = (data: { conversationId: string; label: any }) => {
+      console.log("🏷️ [Mobile Socket] Received CONVERSATION_LABEL_UPDATED:", data);
+      setLabelAssignments(prev => {
+        const next = { ...prev };
+        if (data.label) next[data.conversationId] = data.label;
+        else delete next[data.conversationId];
+        return next;
+      });
+    };
+
+    socket.on("CONVERSATION_PIN_UPDATED", handlePinUpdated);
+    socket.on("CONVERSATION_LABEL_UPDATED", handleLabelUpdated);
+
+    return () => {
+      socket.off("CONVERSATION_PIN_UPDATED", handlePinUpdated);
+      socket.off("CONVERSATION_LABEL_UPDATED", handleLabelUpdated);
+    };
+  }, [socket]);
+
   const fetchData = async () => {
     if (!currentUserId) return;
     try {
@@ -522,7 +556,11 @@ export default function MessagesScreen() {
                     </TouchableOpacity>
 
                     <TouchableOpacity 
-                      onPress={() => { setShowLabelModal(true); }}
+                      onPress={() => { 
+                        // Ẩn menu trước khi hiện Modal phân loại để tránh xung đột Modal lồng nhau trên Android/iOS
+                        setSelectedChatLayout(null);
+                        setShowLabelModal(true); 
+                      }}
                       className="flex-row items-center justify-between px-5 py-4 active:bg-gray-50"
                     >
                       <View className="flex-row items-center gap-3">

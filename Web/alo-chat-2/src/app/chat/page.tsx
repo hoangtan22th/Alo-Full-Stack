@@ -179,6 +179,34 @@ export default function ChatPage() {
 
   useEffect(() => {
     fetchData();
+
+    // Realtime Sync
+    const { socketService } = require("@/services/socketService");
+    
+    socketService.onPinUpdated((data: { conversationId: string; isPinned: boolean }) => {
+      console.log("📍 [Socket] Received CONVERSATION_PIN_UPDATED:", data);
+      setPinnedIds(prev => {
+        const next = new Set(prev);
+        if (data.isPinned) next.add(data.conversationId);
+        else next.delete(data.conversationId);
+        return next;
+      });
+    });
+
+    socketService.onLabelUpdated((data: { conversationId: string; label: any }) => {
+      console.log("🏷️ [Socket] Received CONVERSATION_LABEL_UPDATED:", data);
+      setLabelAssignments(prev => {
+        const next = { ...prev };
+        if (data.label) next[data.conversationId] = data.label;
+        else delete next[data.conversationId];
+        return next;
+      });
+    });
+
+    return () => {
+      socketService.off("CONVERSATION_PIN_UPDATED");
+      socketService.off("CONVERSATION_LABEL_UPDATED");
+    };
   }, []);
 
   // Click outside to close menu

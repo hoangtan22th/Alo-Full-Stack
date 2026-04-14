@@ -129,8 +129,14 @@ export const assignLabel = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
+    const { default: rabbitMQProducer } = require("../services/rabbitMQProducer");
+
     if (!labelId) {
       await ConversationLabel.findOneAndDelete({ conversationId, userId });
+      
+      // Realtime Sync: Gỡ nhãn
+      rabbitMQProducer.publishLabelUpdated(userId, conversationId, null).catch(console.error);
+      
       res.json({ message: "Đã gỡ nhãn" });
       return;
     }
@@ -152,6 +158,9 @@ export const assignLabel = async (req: Request, res: Response): Promise<void> =>
       { labelId: labelIdStr },
       { upsert: true, new: true }
     );
+
+    // Realtime Sync: Gán nhãn mới
+    rabbitMQProducer.publishLabelUpdated(userId, conversationId, label).catch(console.error);
 
     res.json(assignment);
   } catch (error: any) {

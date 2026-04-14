@@ -25,14 +25,24 @@ export const togglePin = async (req: Request, res: Response): Promise<void> => {
     // Kiểm tra xem đã ghim chưa
     const existing = await PinnedConversation.findOne({ userId, conversationId });
 
+    const { default: rabbitMQProducer } = require("../services/rabbitMQProducer");
+
     if (existing) {
       // Đã ghim -> Bỏ ghim
       await PinnedConversation.deleteOne({ _id: existing._id });
+      
+      // Realtime Sync
+      rabbitMQProducer.publishPinUpdated(userId, conversationId, false).catch(console.error);
+      
       res.json({ isPinned: false, message: "Đã bỏ ghim" });
     } else {
       // Chưa ghim -> Ghim
       const newPin = new PinnedConversation({ userId, conversationId });
       await newPin.save();
+      
+      // Realtime Sync
+      rabbitMQProducer.publishPinUpdated(userId, conversationId, true).catch(console.error);
+      
       res.status(201).json({ isPinned: true, message: "Đã ghim thành công" });
     }
   } catch (error: any) {

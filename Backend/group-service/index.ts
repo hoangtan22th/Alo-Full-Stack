@@ -42,6 +42,14 @@ app.listen(PORT, async () => {
   // 1. Kết nối MongoDB
   await connectDB();
 
+  // 1.1 Kết nối RabbitMQ
+  try {
+    const { connectRabbitMQ } = require("./src/config/rabbitmq");
+    await connectRabbitMQ();
+  } catch (err) {
+    console.error("❌ Lỗi kết nối RabbitMQ:", err);
+  }
+
   // 2. Báo cáo có mặt với Eureka
   // Khai báo kiểu error là any để tránh lỗi type checker
   eurekaClient.start((error: any) => {
