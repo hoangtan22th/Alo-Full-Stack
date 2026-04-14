@@ -7,12 +7,33 @@ import * as labelController from "../controllers/label.controller";
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
+// --- Quản lý Nhãn (Labels) ---
+// Phải đặt trước các route có tham số :groupId để tránh xung đột
+router.get("/api/v1/groups/labels", labelController.getLabels);
+router.post("/api/v1/groups/labels", labelController.createLabel);
+router.put("/api/v1/groups/labels/:id", labelController.updateLabel);
+router.delete("/api/v1/groups/labels/:id", labelController.deleteLabel);
+
+// Gán nhãn cho cuộc hội thoại
+router.get("/api/v1/groups/conversations/labels", labelController.getConversationLabels);
+router.post("/api/v1/groups/conversations/:conversationId/label", labelController.assignLabel);
+
+
 // Quản lý thông tin nhóm
 router.post(
   "/api/v1/groups",
   upload.single("avatarFile"),
   groupController.createGroup,
 );
+router.get("/api/v1/groups/me", groupController.getMyGroups);
+router.post(
+  "/api/v1/groups/direct",
+  groupController.getOrCreateDirectConversation,
+);
+router.post("/api/v1/groups/assign-leader", groupController.assignNewLeader);
+
+// Các route có :groupId (PHẢI ĐẶT SAU CÁC ROUTE TĨNH)
+router.get("/api/v1/groups/:groupId", groupController.getGroupById);
 router.put(
   "/api/v1/groups/:groupId",
   upload.single("avatarFile"),
@@ -30,9 +51,6 @@ router.put(
   groupController.updateRole,
 );
 router.delete("/api/v1/groups/:groupId", groupController.deleteGroup);
-router.post("/api/v1/groups/assign-leader", groupController.assignNewLeader);
-router.get("/api/v1/groups/me", groupController.getMyGroups);
-router.get("/api/v1/groups/:groupId", groupController.getGroupById);
 
 // Join requests
 router.post(
@@ -63,21 +81,5 @@ router.put(
   "/api/v1/groups/:groupId/link-setting",
   groupController.updateLinkSetting,
 );
-
-// Lấy hoặc tạo hội thoại 1-1
-router.post(
-  "/api/v1/groups/direct",
-  groupController.getOrCreateDirectConversation,
-);
-
-// --- Quản lý Nhãn (Labels) ---
-router.get("/api/v1/labels", labelController.getLabels);
-router.post("/api/v1/labels", labelController.createLabel);
-router.put("/api/v1/labels/:id", labelController.updateLabel);
-router.delete("/api/v1/labels/:id", labelController.deleteLabel);
-
-// Gán nhãn cho cuộc hội thoại
-router.post("/api/v1/conversations/:conversationId/label", labelController.assignLabel);
-router.get("/api/v1/conversations/labels", labelController.getConversationLabels);
 
 export default router;

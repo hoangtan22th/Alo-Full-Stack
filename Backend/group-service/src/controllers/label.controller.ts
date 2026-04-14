@@ -33,6 +33,7 @@ export const getLabels = async (req: Request, res: Response): Promise<void> => {
 
     res.json(labels);
   } catch (error: any) {
+    console.error("Error in getLabels:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -53,6 +54,7 @@ export const createLabel = async (req: Request, res: Response): Promise<void> =>
 
     res.status(201).json(newLabel);
   } catch (error: any) {
+    console.error("Error in createLabel:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -82,6 +84,7 @@ export const updateLabel = async (req: Request, res: Response): Promise<void> =>
 
     res.json(updatedLabel);
   } catch (error: any) {
+    console.error("Error in updateLabel:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -109,6 +112,7 @@ export const deleteLabel = async (req: Request, res: Response): Promise<void> =>
 
     res.json({ message: "Đã xóa nhãn thành công" });
   } catch (error: any) {
+    console.error("Error in deleteLabel:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -151,6 +155,7 @@ export const assignLabel = async (req: Request, res: Response): Promise<void> =>
 
     res.json(assignment);
   } catch (error: any) {
+    console.error("Error in assignLabel:", error);
     res.status(500).json({ error: error.message });
   }
 };
@@ -162,6 +167,7 @@ export const getConversationLabels = async (req: Request, res: Response): Promis
     const assignments = await ConversationLabel.find({ userId }).populate<{ labelId: ILabel }>("labelId");
     res.json(assignments);
   } catch (error: any) {
+    console.error("Error in getConversationLabels:", error);
     res.status(500).json({ error: error.message });
   }
 };

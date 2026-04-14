@@ -233,7 +233,7 @@ export const groupService = {
   // --- Quản lý Nhãn (Labels) ---
   getLabels: async () => {
     try {
-      return await api.get<any, any>(`/labels`);
+      return await api.get<any, any>(`/groups/labels`);
     } catch (error) {
       console.error("Lỗi lấy danh sách nhãn:", error);
       throw error;
@@ -242,7 +242,7 @@ export const groupService = {
 
   createLabel: async (name: string, color: string) => {
     try {
-      return await api.post<any, any>(`/labels`, { name, color });
+      return await api.post<any, any>(`/groups/labels`, { name, color });
     } catch (error) {
       console.error("Lỗi tạo nhãn mới:", error);
       throw error;
@@ -251,7 +251,7 @@ export const groupService = {
 
   updateLabel: async (id: string, name: string, color: string) => {
     try {
-      return await api.put<any, any>(`/labels/${id}`, { name, color });
+      return await api.put<any, any>(`/groups/labels/${id}`, { name, color });
     } catch (error) {
       console.error("Lỗi cập nhật nhãn:", error);
       throw error;
@@ -260,7 +260,7 @@ export const groupService = {
 
   deleteLabel: async (id: string) => {
     try {
-      return await api.delete<any, any>(`/labels/${id}`);
+      return await api.delete<any, any>(`/groups/labels/${id}`);
     } catch (error) {
       console.error("Lỗi xóa nhãn:", error);
       throw error;
@@ -271,7 +271,7 @@ export const groupService = {
   assignLabel: async (conversationId: string, labelId: string | null) => {
     try {
       return await api.post<any, any>(
-        `/conversations/${conversationId}/label`,
+        `/groups/conversations/${conversationId}/label`,
         { labelId }
       );
     } catch (error) {
@@ -283,7 +283,7 @@ export const groupService = {
   // Lấy tất cả các gán nhãn của user
   getConversationLabels: async () => {
     try {
-      return await api.get<any, any>(`/conversations/labels`);
+      return await api.get<any, any>(`/groups/conversations/labels`);
     } catch (error) {
       console.error("Lỗi lấy danh sách hội thoại đã gán nhãn:", error);
       throw error;
