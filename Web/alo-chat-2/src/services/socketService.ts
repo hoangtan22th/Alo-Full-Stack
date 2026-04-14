@@ -7,6 +7,7 @@ const SOCKET_URL =
 
 class SocketService {
   private socket: Socket | null = null;
+  private listeners: Map<string, Array<(data: any) => void>> = new Map();
 
   connect() {
     if (this.socket?.connected) return;
@@ -15,6 +16,7 @@ class SocketService {
       typeof window !== "undefined"
         ? localStorage.getItem("accessToken")
         : null;
+        
     console.log(
       "🔌 [Socket] Attempting to connect with token:",
       token ? `${token.substring(0, 10)}...` : "NONE",
@@ -29,6 +31,12 @@ class SocketService {
 
     this.socket.on("connect", () => {
       console.log("🚀 [Socket] Connected to Gateway");
+      // Re-attach all buffered listeners upon reconnection
+      this.listeners.forEach((callbacks, event) => {
+        callbacks.forEach((cb) => {
+          this.socket?.on(event, cb);
+        });
+      });
     });
 
     this.socket.on("disconnect", (reason) => {
@@ -59,6 +67,18 @@ class SocketService {
     return this.socket?.connected ?? false;
   }
 
+  private addListener(event: string, callback: (data: any) => void) {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, []);
+    }
+    this.listeners.get(event)?.push(callback);
+
+    // If already connected, attach immediately
+    if (this.socket?.connected) {
+      this.socket.on(event, callback);
+    }
+  }
+
   // Tham gia vào phòng chat của cuộc hội thoại
   joinRoom(conversationId: string) {
     if (this.socket?.connected) {
@@ -76,7 +96,7 @@ class SocketService {
 
   // Lắng nghe tin nhắn mới
   onMessageReceived(callback: (message: any) => void) {
-    this.socket?.on("message-received", callback);
+    this.addListener("message-received", callback);
   }
 
   // Gửi sự kiện đang gõ
@@ -91,21 +111,21 @@ class SocketService {
 
   // Lắng nghe sự kiện đang gõ từ người khác
   onTyping(callback: (data: { actorId: string; roomId: string }) => void) {
-    this.socket?.on("TYPING", callback);
+    this.addListener("TYPING", callback);
   }
 
   // Lắng nghe sự kiện dừng gõ từ người khác
   onStopTyping(
     callback: (data: { actorId: string; roomId: string }) => void,
   ) {
-    this.socket?.on("STOP_TYPING", callback);
+    this.addListener("STOP_TYPING", callback);
   }
 
   // Lắng nghe trạng thái Online
   onUserOnline(
     callback: (data: { userId: string; status: string }) => void,
   ) {
-    this.socket?.on("USER_ONLINE", callback);
+    this.addListener("USER_ONLINE", callback);
   }
 
   // Lắng nghe trạng thái Offline
@@ -116,7 +136,7 @@ class SocketService {
       last_active: number;
     }) => void,
   ) {
-    this.socket?.on("USER_OFFLINE", callback);
+    this.addListener("USER_OFFLINE", callback);
   }
 
   // Lắng nghe sự kiện đối phương đã đọc tin nhắn
@@ -127,41 +147,46 @@ class SocketService {
       readAt: string;
     }) => void,
   ) {
-    this.socket?.on("messages-read", callback);
+    this.addListener("messages-read", callback);
   }
 
   // Lắng nghe sự kiện cập nhật cảm xúc
   onMessageReactionUpdated(
     callback: (data: { messageId: string; reactions: any[] }) => void,
   ) {
-    this.socket?.on("message-reaction-updated", callback);
+    this.addListener("message-reaction-updated", callback);
   }
 
   // Realtime Sync cho Ghim và Phân loại
   onPinUpdated(callback: (data: { conversationId: string; isPinned: boolean }) => void) {
-    this.socket?.on("CONVERSATION_PIN_UPDATED", callback);
+    this.addListener("CONVERSATION_PIN_UPDATED", callback);
   }
 
   onLabelUpdated(callback: (data: { conversationId: string; label: any }) => void) {
-    this.socket?.on("CONVERSATION_LABEL_UPDATED", callback);
+    this.addListener("CONVERSATION_LABEL_UPDATED", callback);
   }
 
   // Lắng nghe sự kiện hội thoại mới được tạo
   onConversationCreated(callback: (newConvo: any) => void) {
-    this.socket?.on("CONVERSATION_CREATED", callback);
+    this.addListener("CONVERSATION_CREATED", callback);
   }
 
   onConversationRemoved(callback: (data: { conversationId: string }) => void) {
-    this.socket?.on("CONVERSATION_REMOVED", callback);
+    this.addListener("CONVERSATION_REMOVED", callback);
+  }
+
+  onConversationUpdated(callback: (data: any) => void) {
+    this.addListener("CONVERSATION_UPDATED", callback);
   }
 
   // Lắng nghe sự kiện thu hồi tin nhắn
   onMessageRevoked(callback: (data: { messageId: string, revokedAt?: string }) => void) {
-    this.socket?.on("message-revoked", callback);
+    this.addListener("message-revoked", callback);
   }
 
   // Hủy lắng nghe một sự kiện
   off(event: string) {
+    this.listeners.delete(event);
     this.socket?.off(event);
   }
 }

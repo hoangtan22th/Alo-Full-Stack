@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import axiosClient from "@/services/api";
 import { useRouter } from "next/navigation";
 import QRCode from "react-qr-code";
+import { useAuthStore } from "@/store/useAuthStore";
 
 // ===========================
 // API FUNCTIONS (KHÔNG DÙNG ZUSTAND)
@@ -667,28 +668,43 @@ export default function GroupListPage() {
   }>({ isOpen: false, title: "", message: "", onConfirm: () => {} });
 
   // Load current user
+  const { user: authUser } = useAuthStore();
   useEffect(() => {
-    const loadUser = async () => {
-      const userRes: any = await getCurrentUser();
-      const user = userRes.data;
-      if (user) {
-        const uId = user.id || user._id || "";
-        setCurrentUserId(uId);
-        if (uId) {
-          setUserCache((prev) => ({
-            ...prev,
-            [uId]: {
-              id: uId,
-              fullName: user.fullName || user.name || "Bạn",
-              avatar: user.avatar,
-              email: user.email,
-            },
-          }));
-        }
+    if (authUser) {
+      const uId = authUser.id || authUser._id || authUser.userId || "";
+      setCurrentUserId(uId);
+      if (uId) {
+        setUserCache((prev) => ({
+          ...prev,
+          [uId]: {
+            id: uId,
+            fullName: authUser.fullName || "Bạn",
+            avatar: authUser.avatar,
+            email: authUser.email,
+          },
+        }));
       }
-    };
-    loadUser();
-  }, []);
+    } else {
+      getCurrentUser().then((res) => {
+        const user = res.data;
+        if (user) {
+          const uId = user.id || user._id || user.userId || "";
+          setCurrentUserId(uId);
+          if (uId) {
+            setUserCache((prev) => ({
+              ...prev,
+              [uId]: {
+                id: uId,
+                fullName: user.fullName || "Bạn",
+                avatar: user.avatar,
+                email: user.email,
+              },
+            }));
+          }
+        }
+      });
+    }
+  }, [authUser]);
 
   const loadGroups = useCallback(async () => {
     setLoading(true);
@@ -761,7 +777,7 @@ export default function GroupListPage() {
           if (id) {
             newUserCache[id] = {
               id,
-              fullName: user.fullName || user.name || "Người dùng ẩn",
+              fullName: user.fullName || "Người dùng ẩn",
               avatar: user.avatar,
               email: user.email,
             };
@@ -1152,10 +1168,15 @@ export default function GroupListPage() {
                     return nameA.localeCompare(nameB, "vi");
                   })
                   .map((m) => {
-                    const userName =
-                      m.userId === currentUserId
-                        ? "Bạn"
-                        : userCache[m.userId]?.fullName || m.userId.slice(-8);
+                    const isMe = m.userId === currentUserId;
+                    const cachedInfo = userCache[m.userId];
+                    const userName = isMe ? "Bạn" : (cachedInfo?.fullName || m.userId.slice(-8));
+                    // Luôn dùng tên thật cho avatar initials
+                    const avatarName = cachedInfo?.fullName || (isMe && authUser?.fullName) || userName;
+
+                    const userAvatar = isMe 
+                        ? (userCache[currentUserId]?.avatar || authUser?.avatar)
+                        : cachedInfo?.avatar;
 
                     // Quyền cho menu: LEADER chỉnh được phó/member; DEPUTY chỉnh được member; KHÔNG chỉnh bản thân
                     const canEdit =
@@ -1171,14 +1192,14 @@ export default function GroupListPage() {
                         <div className="relative shrink-0">
                           <img
                             src={
-                              userCache[m.userId]?.avatar ||
-                              `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=E5E7EB&color=374151&rounded=true`
+                              userAvatar ||
+                              `https://ui-avatars.com/api/?name=${encodeURIComponent(avatarName)}&background=E5E7EB&color=374151&rounded=true`
                             }
                             alt=""
                             className="w-10 h-10 rounded-full object-cover border border-gray-100 bg-gray-50"
                             onError={(e) => {
                               e.currentTarget.onerror = null;
-                              e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=E5E7EB&color=374151&rounded=true`;
+                              e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(avatarName)}&background=E5E7EB&color=374151&rounded=true`;
                             }}
                           />
                         </div>
@@ -1442,6 +1463,43 @@ export default function GroupListPage() {
                   >
                     Xem tất cả
                   </button>
+                </div>
+                {/* Member avatars list */}
+                <div className="flex flex-wrap gap-2">
+                  {selectedGroup.members.slice(0, 8).map((m) => {
+                    const isMe = m.userId === currentUserId;
+                    const info = userCache[m.userId];
+                    const name = isMe ? "Bạn" : (info?.fullName || "User");
+                    const avatarName = info?.fullName || (isMe && authUser?.fullName) || name;
+                    const avatar = isMe ? (userCache[currentUserId]?.avatar || authUser?.avatar) : info?.avatar;
+
+                    return (
+                      <div key={m.userId} className="relative group/member">
+                        <img
+                          src={
+                            avatar ||
+                            `https://ui-avatars.com/api/?name=${encodeURIComponent(avatarName)}&background=E5E7EB&color=374151&rounded=true`
+                          }
+                          alt={name}
+                          title={name}
+                          className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm"
+                        />
+                        {m.role === "LEADER" && (
+                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center border-2 border-white">
+                            <StarIcon className="w-2.5 h-2.5 text-white" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {selectedGroup.members.length > 8 && (
+                    <div 
+                      onClick={() => setRightPanelMode("members")}
+                      className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-[11px] font-bold text-gray-500 cursor-pointer hover:bg-gray-200 transition"
+                    >
+                      +{selectedGroup.members.length - 8}
+                    </div>
+                  )}
                 </div>
               </div>
 

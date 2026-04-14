@@ -78,13 +78,20 @@ export class MessageDataService {
     conversationId: string,
     userId: string, // UserId của người yêu cầu
     limit: number = 50,
-    skip: number = 0
+    skip: number = 0,
+    clearedAt?: Date
   ): Promise<IMessage[]> {
     try {
-      const messages = await Message.find({
+      const query: any = {
         conversationId: new Types.ObjectId(conversationId),
         deletedByUsers: { $ne: userId } // LỌC: Không lấy tin mà user này đã xóa phía mình
-      })
+      };
+
+      if (clearedAt) {
+        query.createdAt = { $gt: new Date(clearedAt) };
+      }
+
+      const messages = await Message.find(query)
         .sort({ createdAt: -1 })
         .limit(limit)
         .skip(skip)

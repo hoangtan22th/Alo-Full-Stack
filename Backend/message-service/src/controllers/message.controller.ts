@@ -39,7 +39,28 @@ export async function getMessageHistory(
       return;
     }
 
-    const messages = await messageDataService.getMessageHistory(conversationId, userId, limit, skip);
+    // 0. Gọi sang group-service để lấy thông tin clearedAt (nếu có)
+    let clearedAt: Date | undefined = undefined;
+    try {
+      const gatewayUrl = process.env.GATEWAY_URL || 'http://127.0.0.1:8888';
+      const response = await fetch(`${gatewayUrl}/api/v1/groups/${conversationId}`, {
+        headers: {
+          'X-User-Id': userId,
+          'Authorization': req.headers.authorization || '',
+        }
+      });
+      if (response.ok) {
+        const result = await response.json();
+        const conversation = result.data;
+        if (conversation && conversation.clearedAt && conversation.clearedAt[userId]) {
+          clearedAt = new Date(conversation.clearedAt[userId]);
+        }
+      }
+    } catch (err) {
+      console.warn('[MessageController] Failed to fetch conversation info from group-service:', err);
+    }
+
+    const messages = await messageDataService.getMessageHistory(conversationId, userId, limit, skip, clearedAt);
 
     res.json({
       conversationId,

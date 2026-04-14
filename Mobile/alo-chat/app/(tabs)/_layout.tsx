@@ -1,5 +1,6 @@
+import React, { useState, useEffect } from "react";
 import { Tabs } from "expo-router";
-import { Platform } from "react-native";
+import { Platform, DeviceEventEmitter } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ChatBubbleLeftEllipsisIcon as ChatOutlineIcon,
@@ -17,6 +18,20 @@ import {
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const bottomPadding = insets.bottom > 0 ? insets.bottom : 10;
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener(
+      "update_unread_count",
+      (count) => {
+        setUnreadCount(count);
+      },
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   return (
     <Tabs
@@ -46,6 +61,12 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Tin nhắn",
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: "#EF4444",
+            color: "white",
+            fontSize: 10,
+          },
           tabBarIcon: ({ color, focused }) =>
             focused ? (
               <ChatSolidIcon size={24} color={color} />

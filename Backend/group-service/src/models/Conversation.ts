@@ -15,6 +15,8 @@ export interface IConversation extends Document {
   groupAvatar: string;
   isGroup: boolean;
   lastMessage?: Types.ObjectId; // Dấu ? nghĩa là không bắt buộc (optional)
+  lastMessageAt?: Date;
+  lastMessageContent?: string;
   members: IMember[];
   mutedBy: string[];
   hiddenBy: string[];
@@ -22,6 +24,8 @@ export interface IConversation extends Document {
   isBanned: boolean;
   isApprovalRequired: boolean;
   isLinkEnabled: boolean; // Add isLinkEnabled field
+  clearedAt: Map<string, Date>; // userId -> timestamp
+  unreadCount: Map<string, number>; // userId -> count
   // Các trường do timestamps tự sinh ra:
   createdAt: Date;
   updatedAt: Date;
@@ -34,6 +38,8 @@ const conversationSchema = new Schema<IConversation>(
     groupAvatar: { type: String, default: "" },
     isGroup: { type: Boolean, default: true },
     lastMessage: { type: Schema.Types.ObjectId, ref: "Message" },
+    lastMessageAt: { type: Date },
+    lastMessageContent: { type: String, default: "" },
 
     // Danh sách thành viên
     members: [
@@ -59,6 +65,16 @@ const conversationSchema = new Schema<IConversation>(
     isApprovalRequired: { type: Boolean, default: false },
     isLinkEnabled: { type: Boolean, default: false }, // Add isLinkEnabled schema logic
     isBanned: { type: Boolean, default: false },
+    unreadCount: {
+      type: Map,
+      of: Number,
+      default: {},
+    },
+    clearedAt: {
+      type: Map,
+      of: Date,
+      default: {},
+    },
   },
   {
     timestamps: true,

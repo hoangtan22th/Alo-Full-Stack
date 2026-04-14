@@ -44,6 +44,7 @@ router.put(
   upload.single("avatarFile"),
   groupController.updateGroup,
 );
+router.post("/api/v1/groups/:groupId/clear", groupController.clearConversation);
 
 // Quản lý thành viên trong nhóm
 router.post("/api/v1/groups/:groupId/members", groupController.addMember);
