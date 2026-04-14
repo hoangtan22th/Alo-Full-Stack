@@ -122,8 +122,8 @@ export default function Sidebar() {
           title="Danh bạ"
         >
           {isActive("/contacts") &&
-          !isActive("/contacts/groups") &&
-          !isActive("/contacts/group-invites") ? (
+            !isActive("/contacts/groups") &&
+            !isActive("/contacts/group-invites") ? (
             <UserSolid className="w-6 h-6" />
           ) : (
             <UserOutline className="w-6 h-6" />
@@ -137,7 +137,7 @@ export default function Sidebar() {
           title="Quản lý nhóm"
         >
           {isActive("/contacts/groups") ||
-          isActive("/contacts/group-invites") ? (
+            isActive("/contacts/group-invites") ? (
             <GroupSolid className="w-6 h-6" />
           ) : (
             <GroupOutline className="w-6 h-6" />
