@@ -15,6 +15,7 @@ export interface MessageDTO {
   isRevoked?: boolean;
   reactions?: any[];
   revokedAt?: string;
+  createdAt: string;
   updatedAt?: string;
 }
 
