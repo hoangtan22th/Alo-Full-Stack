@@ -102,8 +102,13 @@ export default function ChatPage() {
     like: '👍', heart: '❤️', haha: '😂', wow: '😮', cry: '😢', angry: '😡'
   };
 
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadCount, setUploadCount] = useState({ current: 0, total: 0 });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // Track conversationId in a ref so socket callback always has latest value
   const conversationIdRef = useRef(conversationId);
   useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
@@ -364,6 +369,46 @@ export default function ChatPage() {
         inputRef.current?.focus();
       }, 0);
     }
+  };
+
+  const handleFileAttach = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !conversationId) return;
+
+    const fileList = Array.from(files);
+    const MAX_SIZE = 100 * 1024 * 1024; // 100MB
+
+    setIsUploading(true);
+    setUploadCount({ current: 0, total: fileList.length });
+
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      if (file.size > MAX_SIZE) {
+        alert(`File "${file.name}" quá lớn (tối đa 100MB).`);
+        continue;
+      }
+
+      setUploadCount({ current: i + 1, total: fileList.length });
+      setUploadProgress(0);
+
+      try {
+        await messageService.uploadFile(
+          conversationId as string,
+          file,
+          (percent) => setUploadProgress(percent)
+        );
+      } catch (err) {
+        console.error("Upload failed for file:", file.name, err);
+      }
+    }
+
+    setIsUploading(false);
+    setUploadProgress(0);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
 
@@ -947,26 +992,56 @@ export default function ChatPage() {
         })()}
 
         {/* Message Input */}
-        <div className="p-4 bg-white shrink-0">
+        <div className="p-4 bg-white shrink-0 relative">
+          {/* Thanh Tiến Trình Upload (Multi-file) */}
+          {isUploading && (
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gray-100 overflow-hidden z-20">
+              <div
+                className="h-full bg-blue-500 transition-all duration-300 ease-out"
+                style={{ width: `${uploadProgress}%` }}
+              />
+              <div className="absolute top-2 left-6 bg-white/90 backdrop-blur px-3 py-1.5 rounded-full shadow-lg border border-gray-100 flex items-center gap-2 z-30">
+                <div className="w-3.5 h-3.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <span className="text-[11px] font-black text-gray-700">
+                  Đang gửi tệp {uploadCount.current}/{uploadCount.total} ({uploadProgress}%)
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            multiple
+            onChange={handleFileChange}
+          />
+
           <div className="flex items-center gap-3 bg-[#F5F5F5] p-2 rounded-full border border-transparent focus-within:border-gray-200 focus-within:bg-white transition-all">
-            <button className="p-2 text-gray-400 hover:text-black transition">
+            <button
+              onClick={handleFileAttach}
+              disabled={isUploading}
+              className="p-2 text-gray-400 hover:text-black transition disabled:opacity-50"
+            >
               <PaperClipIcon className="w-5 h-5" />
             </button>
             <input
               ref={inputRef}
               type="text"
-              placeholder="Nhập tin nhắn..."
+              placeholder={isUploading ? "Đang tải tệp lên..." : "Nhập tin nhắn..."}
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="flex-1 bg-transparent border-none outline-none text-[14px] font-medium placeholder:text-gray-400"
+              disabled={isUploading}
+              className="flex-1 bg-transparent border-none outline-none text-[14px] font-medium placeholder:text-gray-400 disabled:opacity-50"
             />
             <button className="p-2 text-gray-400 hover:text-black transition">
               <FaceSmileIcon className="w-5 h-5" />
             </button>
             <button
               onClick={handleSend}
-              disabled={!messageText.trim() || sending}
+              disabled={!messageText.trim() || sending || isUploading}
               className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-800 transition active:scale-95 shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {sending ? (
