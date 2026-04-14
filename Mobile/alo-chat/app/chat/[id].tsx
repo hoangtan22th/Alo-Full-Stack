@@ -269,15 +269,16 @@ export default function GlobalChatScreen() {
   }, [reactionDetailMsg, userCache, EMOJI_MAP]);
 
   // Tự động tải thông tin user khi xem chi tiết reactions
+  // Tải thông tin user (sender/reactor) nếu chưa có trong cache
   useEffect(() => {
-    if (!reactionDetailMsgId || !reactionDetailMsg?.reactions) return;
-
     const fetchMissingUsers = async () => {
-      const uniqueUserIds = Array.from(
-        new Set(reactionDetailMsg.reactions!.map((r: any) => r.userId)),
-      );
+      // 1. Lấy tất cả userId từ tin nhắn và reactions
+      const messageSenderIds = messages.map((m) => m.senderId);
+      const reactionUserIds = reactionDetailMsg?.reactions?.map((r: any) => r.userId) || [];
+      
+      const allIds = Array.from(new Set([...messageSenderIds, ...reactionUserIds]));
+      const missingIds = allIds.filter((id) => id && !userCache[id]);
 
-      const missingIds = uniqueUserIds.filter((id) => !userCache[id]);
       if (missingIds.length === 0) return;
 
       const newProfiles: Record<string, UserProfileDTO> = {};
@@ -285,11 +286,9 @@ export default function GlobalChatScreen() {
         missingIds.map(async (id) => {
           try {
             const profile = await userService.getUserById(id);
-            if (profile) {
-              newProfiles[id] = profile;
-            }
+            if (profile) newProfiles[id] = profile;
           } catch (err) {
-            console.error("Lỗi fetch user in reactions:", id, err);
+            console.error("Lỗi fetch profile:", id, err);
           }
         }),
       );
@@ -299,8 +298,10 @@ export default function GlobalChatScreen() {
       }
     };
 
-    fetchMissingUsers();
-  }, [reactionDetailMsgId, reactionDetailMsg?.reactions]);
+    if (messages.length > 0 || reactionDetailMsgId) {
+      fetchMissingUsers();
+    }
+  }, [messages, reactionDetailMsgId, reactionDetailMsg?.reactions]);
 
   const selectedMsg = useMemo(() => {
     if (!selectedMessageId) return null;
@@ -738,150 +739,181 @@ export default function GlobalChatScreen() {
               scrollViewRef.current?.scrollToEnd({ animated: false })
             }
           >
-            <Text className="text-center text-xs text-gray-400 font-bold my-6 tracking-widest uppercase">
-              THỨ HAI, 14 THÁNG 10
-            </Text>
-
             {messageGroups.map((group, groupIdx) => {
               const isSender = group.isSender;
+              const senderId = group.messages[0].senderId;
+              const sender = userCache[senderId];
+              const senderName = sender?.fullName || (sender as any)?.name || "Người dùng";
+              const senderAvatar = sender?.avatar;
 
               return (
                 <View
                   key={groupIdx}
-                  className={`mb-6 max-w-[80%] ${
-                    isSender ? "self-end items-end" : "self-start items-start"
+                  className={`mb-6 flex-row ${
+                    isSender ? "justify-end" : "justify-start"
                   }`}
                 >
-                  {group.messages.map((msg, idx) => {
-                    const isLast = idx === group.messages.length - 1;
-                    const timeString = isLast
-                      ? new Date(msg.createdAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "";
+                  {/* Cột Avatar (chỉ hiện cho người khác trong nhóm) */}
+                  {!isSender && (
+                    <View className="w-10 items-center justify-end mr-2">
+                      {senderAvatar ? (
+                        <Image
+                          source={{ uri: senderAvatar }}
+                          className="w-8 h-8 rounded-full mb-1"
+                        />
+                      ) : (
+                        <View className="w-8 h-8 rounded-full bg-blue-100 items-center justify-center mb-1">
+                          <Text className="text-blue-600 font-bold text-xs">
+                            {senderName.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
 
-                    return (
-                      <View key={msg._id} className={isLast ? "" : "mb-1"}>
-                        <TouchableOpacity
-                          ref={(r) => {
-                            if (r) messageRefs.current[msg._id] = r as any;
-                          }}
-                          activeOpacity={0.8}
-                          onLongPress={() => onLongPressMessage(msg._id)}
-                          className={`relative ${
-                            msg.reactions && msg.reactions.length > 0
-                              ? "mb-3"
-                              : ""
-                          }`}
-                        >
-                          <View
-                            className={`px-5 py-4 shadow-sm ${
-                              isSender
-                                ? "bg-black rounded-3xl rounded-br-lg"
-                                : "bg-white rounded-3xl rounded-bl-lg"
+                  <View
+                    className={`max-w-[80%] ${
+                      isSender ? "items-end" : "items-start"
+                    }`}
+                  >
+                    {/* Tên người gửi (chỉ hiện cho người khác trong nhóm) */}
+                    {!isSender && isGroupChat && (
+                      <Text className="text-[11px] font-bold text-gray-500 mb-1 ml-1">
+                        {senderName}
+                      </Text>
+                    )}
+
+                    {group.messages.map((msg, idx) => {
+                      const isLast = idx === group.messages.length - 1;
+                      const timeString = isLast
+                        ? new Date(msg.createdAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "";
+
+                      return (
+                        <View key={msg._id} className={`${isLast ? "" : "mb-1"} w-full ${isSender ? "items-end" : "items-start"}`}>
+                          <TouchableOpacity
+                            ref={(r) => {
+                              if (r) messageRefs.current[msg._id] = r as any;
+                            }}
+                            activeOpacity={0.8}
+                            onLongPress={() => onLongPressMessage(msg._id)}
+                            className={`relative ${
+                              msg.reactions && msg.reactions.length > 0
+                                ? "mb-3"
+                                : ""
                             }`}
                           >
-                            {msg.isRevoked ? (
-                              <Text
-                                className={
-                                  "italic text-sm leading-6 " +
-                                  (isSender ? "text-gray-300" : "text-gray-400")
-                                }
-                              >
-                                Tin nhắn đã bị thu hồi
-                              </Text>
-                            ) : msg.type === "image" ? (
-                              <Image
-                                source={{ uri: msg.content }}
-                                className="w-64 h-48 rounded-2xl self-center"
-                                resizeMode="cover"
-                              />
-                            ) : msg.type === "file" ? (
-                              <View className="flex-row items-center gap-2">
-                                <View className="w-10 h-10 bg-gray-200/20 items-center justify-center rounded-lg">
-                                  <InformationCircleIcon
-                                    size={24}
-                                    color={isSender ? "#fff" : "#000"}
-                                  />
-                                </View>
-                                <View>
-                                  <Text
-                                    className={`text-sm font-bold ${
-                                      isSender ? "text-white" : "text-gray-900"
-                                    }`}
-                                    numberOfLines={1}
-                                  >
-                                    {msg.metadata?.fileName || "Tệp đính kèm"}
-                                  </Text>
-                                </View>
-                              </View>
-                            ) : msg.type === "text" ? (
-                              <Text
-                                className={`text-base leading-6 ${
-                                  isSender ? "text-white" : "text-gray-900"
-                                }`}
-                              >
-                                {msg.content}
-                              </Text>
-                            ) : null}
-                          </View>
-
-                          {/* Hiển thị đếm Emoji dính dưới đáy bong bóng thoại */}
-                          {msg.reactions && msg.reactions.length > 0 && (
-                            <TouchableOpacity
-                              activeOpacity={0.7}
-                              onPress={() => openReactionDetails(msg._id)}
-                              className={`absolute -bottom-2.5 ${
-                                isSender ? "right-2" : "left-2"
-                              } bg-white border border-gray-100 rounded-full px-2 py-0.5 flex-row items-center shadow-sm z-10`}
+                            <View
+                              className={`px-5 py-4 shadow-sm ${
+                                isSender
+                                  ? "bg-black rounded-3xl rounded-br-lg"
+                                  : "bg-white rounded-3xl rounded-bl-lg"
+                              }`}
                             >
-                              <View className="flex-row items-center">
-                                {Array.from(
-                                  new Set(
-                                    msg.reactions.map((r: any) => r.emoji),
-                                  ),
-                                ).map((emojiKey: any) => (
-                                  <Text
-                                    key={emojiKey}
-                                    className="text-[11px] mr-0.5"
-                                  >
-                                    {EMOJI_MAP[emojiKey] || "👍"}
-                                  </Text>
-                                ))}
-                              </View>
-                              <Text className="text-[10px] font-bold text-gray-500 ml-1">
-                                {msg.reactions.length}
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                        </TouchableOpacity>
+                              {msg.isRevoked ? (
+                                <Text
+                                  className={
+                                    "italic text-sm leading-6 " +
+                                    (isSender ? "text-gray-300" : "text-gray-400")
+                                  }
+                                >
+                                  Tin nhắn đã bị thu hồi
+                                </Text>
+                              ) : msg.type === "image" ? (
+                                <Image
+                                  source={{ uri: msg.content }}
+                                  className="w-64 h-48 rounded-2xl self-center"
+                                  resizeMode="cover"
+                                />
+                              ) : msg.type === "file" ? (
+                                <View className="flex-row items-center gap-2">
+                                  <View className="w-10 h-10 bg-gray-200/20 items-center justify-center rounded-lg">
+                                    <InformationCircleIcon
+                                      size={24}
+                                      color={isSender ? "#fff" : "#000"}
+                                    />
+                                  </View>
+                                  <View>
+                                    <Text
+                                      className={`text-sm font-bold ${
+                                        isSender ? "text-white" : "text-gray-900"
+                                      }`}
+                                      numberOfLines={1}
+                                    >
+                                      {msg.metadata?.fileName || "Tệp đính kèm"}
+                                    </Text>
+                                  </View>
+                                </View>
+                              ) : msg.type === "text" ? (
+                                <Text
+                                  className={`text-base leading-6 ${
+                                    isSender ? "text-white" : "text-gray-900"
+                                  }`}
+                                >
+                                  {msg.content}
+                                </Text>
+                              ) : null}
+                            </View>
 
-                        {isLast && (
-                          <View
-                            className={`flex-row items-center mt-1 ${
-                              isSender
-                                ? "justify-end pr-2"
-                                : "justify-start pl-2"
-                            }`}
-                          >
-                            <Text className="text-[11px] text-gray-500">
-                              {timeString}
-                            </Text>
-                            {isSender && (
-                              <Text
-                                className={`ml-1 text-[11px] font-bold ${
-                                  msg.isRead ? "text-blue-500" : "text-gray-400"
-                                }`}
+                            {/* Hiển thị đếm Emoji dính dưới đáy bong bóng thoại */}
+                            {msg.reactions && msg.reactions.length > 0 && (
+                              <TouchableOpacity
+                                activeOpacity={0.7}
+                                onPress={() => openReactionDetails(msg._id)}
+                                className={`absolute -bottom-2.5 ${
+                                  isSender ? "right-2" : "left-2"
+                                } bg-white border border-gray-100 rounded-full px-2 py-0.5 flex-row items-center shadow-sm z-10`}
                               >
-                                {msg.isRead ? "✓✓" : "✓"}
-                              </Text>
+                                <View className="flex-row items-center">
+                                  {Array.from(
+                                    new Set(
+                                      msg.reactions.map((r: any) => r.emoji),
+                                    ),
+                                  ).map((emojiKey: any) => (
+                                    <Text
+                                      key={emojiKey}
+                                      className="text-[11px] mr-1"
+                                    >
+                                      {EMOJI_MAP[emojiKey] || "👍"}
+                                    </Text>
+                                  ))}
+                                </View>
+                                <Text className="text-[10px] font-bold text-gray-500 ml-1">
+                                  {msg.reactions.length}
+                                </Text>
+                              </TouchableOpacity>
                             )}
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })}
+                          </TouchableOpacity>
+
+                          {isLast && (
+                            <View
+                              className={`flex-row items-center mt-1 ${
+                                isSender
+                                  ? "justify-end pr-2"
+                                  : "justify-start pl-2"
+                              }`}
+                            >
+                              <Text className="text-[11px] text-gray-500">
+                                {timeString}
+                              </Text>
+                              {isSender && (
+                                <Text
+                                  className={`ml-1 text-[11px] font-bold ${
+                                    msg.isRead ? "text-blue-500" : "text-gray-400"
+                                  }`}
+                                >
+                                  {msg.isRead ? "✓✓" : "✓"}
+                                </Text>
+                              )}
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
                 </View>
               );
             })}
