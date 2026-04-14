@@ -1,0 +1,27 @@
+=== HƯỚNG DẪN SỬ DỤNG APP ALO CHAT ===
+
+1. KẾT BẠN:
+   - Cách 1: Nhấn nút "+" (dấu cộng) ở góc trên bên phải màn hình danh sách chat.
+   - Cách 2: Vào tab "Danh bạ" -> "Tìm bạn" -> nhập số điện thoại -> "Thêm bạn".
+   - Hoặc yêu cầu AI: "Kết bạn với số 0987654321" (AI sẽ tự gửi lời mời).
+
+2. TẠO NHÓM MỚI:
+   - Nhấn nút "+" -> chọn "Tạo nhóm" -> chọn thành viên -> đặt tên nhóm.
+
+3. TÌM KIẾM TIN NHẮN:
+   - Trong khung chat, nhấn biểu tượng kính lúp (🔍) ở góc trên bên phải.
+
+4. THU HỒI TIN NHẮN:
+   - Nhấn giữ tin nhắn -> chọn "Thu hồi".
+
+5. CHẶN NGƯỜI DÙNG:
+   - Vào hồ sơ của họ -> chọn biểu tượng ba chấm (⋯) -> "Chặn".
+
+6. XÓA BẠN BÈ:
+   - Vào hồ sơ bạn bè -> chọn "Xóa bạn" -> xác nhận.
+   - Hoặc yêu cầu AI: "Xóa bạn số 0987654321" (AI sẽ tự xóa).
+
+7. HỎI AI:
+   - Bạn có thể nhờ AI: thời tiết, tìm người, kết bạn, xóa bạn, xem danh sách bạn bè, xem lời mời.
+
+Nếu cần trợ giúp thêm, hãy hỏi AI nhé!
