@@ -14,6 +14,7 @@ import edu.iuh.fit.common_service.exception.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,8 @@ import java.util.UUID;
 public class QrAuthService {
 
     private final TokenService tokenService;
+    @Lazy
+    private final AuthService authService; // Thêm authService để dọn dẹp các session trỏ đè
     private final AccountRepository accountRepository;
     private final UserSessionRepository sessionRepository;
     private final QrSessionRepository qrSessionRepository;
@@ -68,7 +71,7 @@ public class QrAuthService {
     }
 
     @Transactional
-    public QrSessionResponse checkQrStatus(String qrToken, HttpServletResponse response) {
+    public QrSessionResponse checkQrStatus(String qrToken, jakarta.servlet.http.HttpServletRequest request, HttpServletResponse response) {
         QrSession qrSession = qrSessionRepository.findByQrToken(qrToken).orElse(null);
         
         if (qrSession == null) {
@@ -84,16 +87,27 @@ public class QrAuthService {
                     .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại"));
 
             String sessionId = UUID.randomUUID().toString();
+            String webDeviceId = "Trình duyệt Web"; // Đăng nhập qua QR luôn là Web
+            
+            // Xóa triệt để các session Web cũ trước khi lưu session web mới!
+            try {
+                authService.invalidateOldSessions(account.getId(), sessionId, webDeviceId);
+            } catch (Exception e) {
+                log.error("Failed to invalidate old web sessions during QR login", e);
+            }
+
             String accessToken = tokenService.generateAccessToken(account, sessionId);
-            String refreshToken = tokenService.generateRefreshToken(account, qrSession.getDeviceId());
+            String refreshToken = tokenService.generateRefreshToken(account, webDeviceId);
             String tokenId = tokenService.getTokenIdFromJWT(refreshToken);
+            
+            String ipAddress = getClientIpString(request);
 
             UserSession session = UserSession.builder()
                     .id(sessionId)
                     .account(account)
-                    .deviceId(qrSession.getDeviceId())
+                    .deviceId(webDeviceId) // <-- Thay vì gắn cho "Mobile-AloChat" thì gắn về cho Web
                     .refreshTokenId(tokenId)
-                    .ipAddress("0.0.0.0") 
+                    .ipAddress(ipAddress) 
                     .expiresAt(LocalDateTime.now().plusDays(7))
                     .build();
             sessionRepository.save(session);
@@ -109,5 +123,17 @@ public class QrAuthService {
         }
 
         return QrSessionResponse.builder().qrToken(qrToken).status(QrAuthStatus.EXPIRED).build();
+    }
+
+    private String getClientIpString(jakarta.servlet.http.HttpServletRequest request) {
+        if (request == null) return "unknown";
+        String ipAddress = request.getHeader("X-Forwarded-For");
+        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
+            ipAddress = request.getRemoteAddr();
+        }
+        if (ipAddress != null && ipAddress.indexOf(',') > 0) {
+            ipAddress = ipAddress.substring(0, ipAddress.indexOf(',')).trim();
+        }
+        return ipAddress;
     }
 }

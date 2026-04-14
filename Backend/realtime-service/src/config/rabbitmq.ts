@@ -25,11 +25,13 @@ export async function initRabbitMQ(io: Server) {
 
         // Map RabbitMQ target to Socket.IO room/user
         if (payload.target) {
-          if (payload.event === "FORCE_LOGOUT" && payload.data?.keepSessionId) {
+          if (payload.event === "FORCE_LOGOUT" && payload.data?.killedSessionIds) {
             io.in(`user_${payload.target}`).fetchSockets().then((sockets) => {
               sockets.forEach((s) => {
-                if (s.data.sessionId !== payload.data.keepSessionId) {
+                const killedIds: string[] = payload.data.killedSessionIds;
+                if (killedIds.includes(s.data.sessionId)) {
                   s.emit(payload.event, payload.data);
+                  s.disconnect(); // Đóng socket luôn cho chắc chắn
                 }
               });
             });

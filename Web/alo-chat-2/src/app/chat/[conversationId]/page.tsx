@@ -227,17 +227,8 @@ export default function ChatPage() {
   }, [fetchGroups]);
 
   /* ─── Socket: connect once on mount, cleanup on unmount ─── */
-  useEffect(() => {
-    socketService.connect();
-    return () => {
-      socketService.off("message-received");
-      socketService.off("messages-read");
-      socketService.off("TYPING");
-      socketService.off("STOP_TYPING");
-      socketService.off("USER_ONLINE");
-      socketService.off("USER_OFFLINE");
-    };
-  }, []);
+  // socketService.connect() is now handled globally in AuthProvider
+  // We no longer nuke these global listeners here.
 
   /* ─── Socket: join room + listen messages khi conversationId thay đổi ─── */
   useEffect(() => {
