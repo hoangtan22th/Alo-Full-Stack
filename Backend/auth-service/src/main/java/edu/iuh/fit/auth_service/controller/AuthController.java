@@ -119,8 +119,14 @@ public class AuthController {
     // Đăng xuất hiện tại
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<String>> logout(
-            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            @CookieValue(name = "refreshToken", required = false) String cookieRefreshToken,
+            @RequestBody(required = false) Map<String, String> body,
             jakarta.servlet.http.HttpServletResponse response) {
+
+        String refreshToken = cookieRefreshToken;
+        if (refreshToken == null && body != null) {
+            refreshToken = body.get("refreshToken");
+        }
 
         if (refreshToken != null && !refreshToken.isBlank()) {
             try {

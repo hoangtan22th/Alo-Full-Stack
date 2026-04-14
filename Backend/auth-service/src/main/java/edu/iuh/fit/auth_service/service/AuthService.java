@@ -164,7 +164,7 @@ public class AuthService {
         String tokenId = tokenService.getTokenIdFromJWT(refreshToken);
 
         // Đổ toàn bộ session cũ vào blacklist và xóa khỏi DB chặn dùng nhiều máy
-        invalidateOldSessions(user.getId(), sessionId);
+        invalidateOldSessions(user.getId(), sessionId, deviceId);
 
         String ipAddress = getClientIpString(httpRequest);
         
@@ -378,7 +378,7 @@ public class AuthService {
             String refreshToken = tokenService.generateRefreshToken(user, deviceId);
             String tokenId = tokenService.getTokenIdFromJWT(refreshToken);
 
-            invalidateOldSessions(user.getId(), sessionId);
+            invalidateOldSessions(user.getId(), sessionId, deviceId);
 
             String ipAddress = getClientIpString(httpRequest);
 
@@ -401,21 +401,28 @@ public class AuthService {
     }
 
     @Transactional
-    public void invalidateOldSessions(String accountId, String keepSessionId) {
+    public void invalidateOldSessions(String accountId, String keepSessionId, String deviceId) {
+        boolean isWebLogin = deviceId != null && deviceId.toLowerCase().contains("web");
         List<UserSession> oldSessions = sessionRepository.findByAccountId(accountId);
-        for (UserSession oldSession : oldSessions) {
-            if (!oldSession.getId().equals(keepSessionId)) {
-                String blacklistKey = "BLACKLIST_SESSION:" + oldSession.getId();
-                stringRedisTemplate.opsForValue().set(blacklistKey, "true", 15, TimeUnit.MINUTES);
-            }
+        
+        List<UserSession> sessionsToKill = oldSessions.stream()
+                .filter(s -> !s.getId().equals(keepSessionId)) // Bảo hiểm không kick session hiện hành
+                .filter(s -> {
+                    boolean isOldWeb = s.getDeviceId() != null && s.getDeviceId().toLowerCase().contains("web");
+                    return isWebLogin == isOldWeb; // Web kills Web, Mobile kills Mobile
+                })
+                .toList();
+
+        List<String> killedSessionIds = new java.util.ArrayList<>();
+        for (UserSession s : sessionsToKill) {
+            killedSessionIds.add(s.getId());
+            String blacklistKey = "BLACKLIST_SESSION:" + s.getId();
+            stringRedisTemplate.opsForValue().set(blacklistKey, "true", 15, TimeUnit.MINUTES);
         }
         
-        // Delete all old sessions from database
-        sessionRepository.deleteAllByAccountId(accountId);
-        
-        // Push Realtime Force Logout Event
-        if (!oldSessions.isEmpty()) {
-            rabbitMQPublisher.publishForceLogoutEvent(accountId, keepSessionId);
+        if (!sessionsToKill.isEmpty()) {
+            sessionRepository.deleteAll(sessionsToKill);
+            rabbitMQPublisher.publishForceLogoutEvent(accountId, killedSessionIds);
         }
     }
 

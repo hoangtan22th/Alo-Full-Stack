@@ -35,6 +35,14 @@ class SocketService {
     this.socket.on("connect_error", (error) => {
       console.error("⚠️ [Socket] Connection Error:", error.message);
     });
+
+    // Lắng nghe lệnh đá thiết bị từ hệ thống phòng khi dùng nhiều máy
+    this.socket.on("FORCE_LOGOUT", (data) => {
+      console.warn("⚠️ Received FORCE_LOGOUT from server:", data);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("force_logout"));
+      }
+    });
   }
 
   disconnect() {

@@ -22,13 +22,21 @@ export default function UserMenu({
 
     if (!isConfirmed) return;
     try {
+      const refreshToken = localStorage.getItem("refreshToken");
+      const accessToken = localStorage.getItem("accessToken");
+
       await fetch("http://localhost:8888/api/v1/auth/logout", {
         method: "POST",
-        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ refreshToken }),
+        credentials: "omit", // Token-based auth doesn't necessarily need cookies here
       }).catch(err => console.error(err));
 
-      // Use the global event that AuthProvider listens to
-      window.dispatchEvent(new Event("force_logout"));
+      // Gọi prop onLogout từ Sidebar để dọn dẹp state và chuyển về /login
+      onLogout();
     } catch (error) {
       console.error("Logout error:", error);
     }
