@@ -17,9 +17,18 @@ public class ChatController {
     }
 
     @PostMapping("/ask")
-    public ResponseEntity<ApiResponse<String>> ask(@RequestBody ChatRequest request) {
-        String result = chatService.chat(request);
-        // ✅ Xóa dấu " thừa nếu AI wrap thêm quotes
+    public ResponseEntity<ApiResponse<String>> ask(
+            @RequestBody ChatRequest request,
+            @RequestHeader(value = "X-User-Id", required = false) String headerUserId) {
+
+        String finalUserId = (request.userId() != null && !request.userId().isBlank())
+                ? request.userId() : headerUserId;
+        if (finalUserId == null || finalUserId.isBlank()) {
+            return ResponseEntity.status(401).body(ApiResponse.error(401, "Không xác định được người dùng"));
+        }
+
+        var fullRequest = new ChatRequest(request.message(), finalUserId);
+        String result = chatService.chat(fullRequest);
         result = result.replaceAll("^\"|\"$", "").replace("\\\"", "\"");
         return ResponseEntity.ok(ApiResponse.success(result));
     }

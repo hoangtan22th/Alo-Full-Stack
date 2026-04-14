@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import Conversation from "../models/Conversation";
 import { uploadImageToS3, deleteImageFromS3 } from "../services/s3Service";
+
 import rabbitMQProducer from "../services/rabbitMQProducer";
 
 // Helper lấy danh sách bạn bè
@@ -280,7 +281,9 @@ export const removeMember = async (
     await group.save();
 
     // Real-time Sync: Thông báo cho người bị gỡ rằng họ không còn trong nhóm
-    rabbitMQProducer.publishConversationRemoved(groupId, userId).catch(console.error);
+    rabbitMQProducer
+      .publishConversationRemoved(groupId, userId)
+      .catch(console.error);
 
     res.status(200).json({ message: "Thao tác thành công", data: group });
   } catch (error: any) {
@@ -401,7 +404,9 @@ export const deleteGroup = async (
     if (group.members) {
       for (const member of group.members) {
         if (member.userId) {
-          rabbitMQProducer.publishConversationRemoved(groupId, String(member.userId)).catch(console.error);
+          rabbitMQProducer
+            .publishConversationRemoved(groupId, String(member.userId))
+            .catch(console.error);
         }
       }
     }
@@ -864,7 +869,9 @@ export const getOrCreateDirectConversation = async (
     await newConversation.save();
 
     // Real-time Sync: Thông báo cho cả 2 người về cuộc hội thoại mới
-    rabbitMQProducer.publishConversationCreated(newConversation).catch(console.error);
+    rabbitMQProducer
+      .publishConversationCreated(newConversation)
+      .catch(console.error);
 
     res.status(201).json(newConversation);
   } catch (error: any) {
