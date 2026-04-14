@@ -311,7 +311,7 @@ export const groupService = {
 
   clearConversation: async (id: string) => {
     try {
-      return await api.post<any, any>(`/groups/clear-history/${id}`);
+      return await api.post<any, any>(`/groups/${id}/clear`);
     } catch (error) {
       console.error("Lỗi xoá lịch sử trò chuyện:", error);
       throw error;
