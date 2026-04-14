@@ -172,10 +172,9 @@ export async function editMessage(
 }
 
 /**
- * Delete message (soft delete)
- * Dùng cho thu hồi tin nhắn (xóa ở mọi người)
+ * Revoke message (soft delete for everyone)
  */
-export async function deleteMessage(
+export async function revokeMessage(
   req: Request,
   res: Response,
   next: NextFunction
@@ -194,21 +193,74 @@ export async function deleteMessage(
       res.status(401).json({ error: 'Unauthorized - no user id' });
       return;
     }
+    const message = await messageDataService.getMessageById(messageId);
+    if (!message) {
+      res.status(404).json({ error: 'Message not found' });
+      return;
+    }
 
-    const isOwner = await messageDataService.isMessageOwner(messageId, userId);
-    if (!isOwner) {
+    if (String(message.senderId) !== userId) {
       res.status(403).json({ error: 'Forbidden - you are not the message owner' });
       return;
     }
 
-    await messageDataService.revokeMessage(messageId);
+    // Check 24h limit (86400000 ms)
+    const timeDiff = Date.now() - new Date(message.createdAt).getTime();
+    if (timeDiff > 86400000) {
+      res.status(400).json({ error: 'Chỉ có thể thu hồi tin nhắn trong vòng 24 giờ kể từ khi gửi' });
+      return;
+    }
+
+
+    const updatedMessage = await messageDataService.revokeMessage(messageId);
+
+    if (updatedMessage) {
+      await rabbitMQProducer.publishMessageRevokedEvent({
+        messageId,
+        conversationId: updatedMessage.conversationId.toString(),
+      });
+    }
 
     res.json({
       status: 'success',
       messageId,
     });
   } catch (error) {
-    console.error('[MessageController] DELETE error:', error);
+    console.error('[MessageController] REVOKE error:', error);
+    next(error);
+  }
+}
+
+/**
+ * Delete message for me only
+ */
+export async function deleteMessageForMe(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { messageId } = req.params;
+    const userId = getUserIdFromHeader(req);
+
+    if (typeof messageId !== 'string') {
+      res.status(400).json({ error: 'Invalid or missing messageId' });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    await messageDataService.deleteMessageForMe(messageId, userId);
+
+    res.json({
+      status: 'success',
+      messageId,
+    });
+  } catch (error) {
+    console.error('[MessageController] DELETE for me error:', error);
     next(error);
   }
 }
@@ -294,8 +346,11 @@ export async function uploadFile(
       return;
     }
 
+    // Fix Vietnamese encoding for originalname (multer sometimes misinterprets UTF-8 as Latin-1)
+    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+
     // 1. Upload to S3
-    const fileUrl = await uploadFileToS3(file.buffer, file.mimetype, file.originalname);
+    const fileUrl = await uploadFileToS3(file.buffer, file.mimetype, originalName);
 
     // 2. Determine message type
     const isImage = file.mimetype.startsWith('image/');
@@ -308,7 +363,7 @@ export async function uploadFile(
       type,
       content: fileUrl, // For files, content is the URL
       metadata: {
-        fileName: file.originalname,
+        fileName: originalName,
         fileSize: file.size,
         fileType: file.mimetype,
       },

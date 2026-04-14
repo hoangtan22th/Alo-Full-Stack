@@ -8,9 +8,9 @@ export interface IMessage extends Document {
   metadata?: Record<string, any>; // For attachments, links, etc.
   isRead: boolean;
   readBy?: string[]; // Array of user IDs who read this message
-  deletedAt?: Date; // Soft delete
+  revokedAt?: Date; // Soft delete
   editedAt?: Date;
-  isDeleted: boolean; 
+  isRevoked: boolean; 
   deletedByUsers: string[];
   editHistory?: Array<{
     originalContent: string;
@@ -59,7 +59,7 @@ const messageSchema = new Schema<IMessage>(
       default: [],
     },
     // BẮT BUỘC PHẢI THÊM VÀO ĐÂY:
-    isDeleted: {
+    isRevoked: {
       type: Boolean,
       default: false,
     },
@@ -67,7 +67,7 @@ const messageSchema = new Schema<IMessage>(
       type: [String],
       default: [],
     },
-    deletedAt: {
+    revokedAt: {
       type: Date,
       default: null,
     },
