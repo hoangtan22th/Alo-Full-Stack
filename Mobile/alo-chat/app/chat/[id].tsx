@@ -455,6 +455,11 @@ export default function GlobalChatScreen() {
         setTimeout(() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
         }, 100);
+
+        // Đánh dấu đã đọc nếu tin nhắn từ người khác
+        if (currentUserId && String(newMsg.senderId) !== String(currentUserId)) {
+          messageService.markAsRead(resolvedConversationId).catch(() => {});
+        }
       }
     };
 

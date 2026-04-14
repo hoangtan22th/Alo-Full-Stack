@@ -11,6 +11,8 @@ import {
   Pressable,
   Dimensions,
   ActivityIndicator,
+  Alert,
+  DeviceEventEmitter,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -360,6 +362,11 @@ export default function MessagesScreen() {
             };
           }),
         );
+
+        // Tính tổng số cuộc hội thoại có tin nhắn chưa đọc
+        const totalUnreadCount = formattedGroups.filter(g => g.unread).length;
+        DeviceEventEmitter.emit("update_unread_count", totalUnreadCount);
+
         setConversations(formattedGroups);
       }
     } catch (error) {
