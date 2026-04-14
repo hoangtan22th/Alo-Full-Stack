@@ -103,6 +103,7 @@ export const messageService = {
   uploadFile: async (
     conversationId: string,
     file: File,
+    onProgress?: (percent: number) => void,
   ): Promise<MessageDTO | null> => {
     try {
       const formData = new FormData();
@@ -110,6 +111,14 @@ export const messageService = {
       formData.append("file", file);
       const raw = await api.post<any, any>(`/messages/upload`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (progressEvent) => {
+          if (onProgress && progressEvent.total) {
+            const percent = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total,
+            );
+            onProgress(percent);
+          }
+        },
       });
       return extractSentMessage(raw);
     } catch (error) {
