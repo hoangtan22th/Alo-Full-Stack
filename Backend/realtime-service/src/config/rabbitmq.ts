@@ -18,6 +18,10 @@ const ROUTING_KEYS = {
   MESSAGE_REACTION: "chat.message.reaction.updated",
   MESSAGE_REVOKED: "chat.message.revoked",
   CONVERSATION_UPDATED: "chat.conversation.updated",
+  CONVERSATION_CREATED: "chat.conversation.created",
+  CONVERSATION_REMOVED: "chat.conversation.removed",
+  CONVERSATION_PIN_UPDATED: "chat.conversation.pin_updated",
+  CONVERSATION_LABEL_UPDATED: "chat.conversation.label_updated",
 };
 
 // Queue chung cho toàn bộ cluster realtime khi có Redis Adapter
@@ -88,7 +92,7 @@ export async function initRabbitMQ(io: Server) {
               "CONVERSATION_UPDATED",
               data,
             );
-          } else if (routingKey === "chat.conversation.created") {
+          } else if (routingKey === ROUTING_KEYS.CONVERSATION_CREATED) {
             // Nhóm tạo mới -> Ép các thành viên join room để từ bây giờ nhận được tin nhắn realtime
             if (data.members) {
               data.members.forEach((m: any) => {
@@ -101,7 +105,7 @@ export async function initRabbitMQ(io: Server) {
                 });
               });
             }
-          } else if (routingKey === "chat.conversation.removed") {
+          } else if (routingKey === ROUTING_KEYS.CONVERSATION_REMOVED) {
              // Ai đó bị kick, hoặc rời nhóm -> Ép huỷ kết nối room
              io.in(`user_${data.userId}`).fetchSockets().then(sockets => {
                sockets.forEach(s => {
@@ -109,9 +113,9 @@ export async function initRabbitMQ(io: Server) {
                   s.emit("CONVERSATION_REMOVED", data); // Báo xuống client
                });
              });
-          } else if (routingKey === "chat.conversation.pin_updated") {
+          } else if (routingKey === ROUTING_KEYS.CONVERSATION_PIN_UPDATED) {
              io.to(`user_${data.userId}`).emit("CONVERSATION_PIN_UPDATED", data);
-          } else if (routingKey === "chat.conversation.label_updated") {
+          } else if (routingKey === ROUTING_KEYS.CONVERSATION_LABEL_UPDATED) {
              io.to(`user_${data.userId}`).emit("CONVERSATION_LABEL_UPDATED", data);
           }
         }
