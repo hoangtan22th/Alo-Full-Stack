@@ -14,7 +14,8 @@ export const socketAuthMiddleware = (
   if (!token) return next(new Error("Authentication error: No token provided"));
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret") as {
+    const secret = Buffer.from(process.env.JWT_SECRET || "secret", "base64");
+    const decoded = jwt.verify(token, secret) as {
       sub?: string;
       userId?: string;
     };
