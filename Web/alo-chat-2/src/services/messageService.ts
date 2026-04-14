@@ -14,7 +14,7 @@ export interface MessageDTO {
   isRead: boolean;
   isRevoked?: boolean;
   reactions?: any[];
-  createdAt: string;
+  revokedAt?: string;
   updatedAt?: string;
 }
 
@@ -127,13 +127,24 @@ export const messageService = {
     }
   },
 
-  // Xoá/thu hồi tin nhắn
-  deleteMessage: async (messageId: string): Promise<boolean> => {
+  // Thu hồi tin nhắn (cho tất cả mọi người)
+  revokeMessage: async (messageId: string): Promise<boolean> => {
     try {
-      await api.delete<any, any>(`/messages/${messageId}`);
+      await api.patch<any, any>(`/messages/${messageId}/revoke`);
       return true;
     } catch (error) {
-      console.error("Lỗi xoá tin nhắn:", error);
+      console.error("Lỗi thu hồi tin nhắn:", error);
+      return false;
+    }
+  },
+
+  // Xóa tin nhắn chỉ ở phía tôi
+  deleteMessageForMe: async (messageId: string): Promise<boolean> => {
+    try {
+      await api.delete<any, any>(`/messages/${messageId}/me`);
+      return true;
+    } catch (error) {
+      console.error("Lỗi xóa tin nhắn phía tôi:", error);
       return false;
     }
   },

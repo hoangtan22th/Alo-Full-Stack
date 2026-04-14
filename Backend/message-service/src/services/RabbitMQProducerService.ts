@@ -164,6 +164,28 @@ export class RabbitMQProducerService {
       console.error('[RabbitMQProducer] Failed to publish reaction update event:', error);
     }
   }
+
+  /**
+   * Đồng bộ sự kiện THU HỒI tin nhắn tới Realtime Service
+   */
+  async publishMessageRevokedEvent(data: {
+    messageId: string;
+    conversationId: string;
+  }): Promise<void> {
+    try {
+      await this.publishToRealtimeService('message-revoked', {
+        room: data.conversationId,
+        data: {
+          messageId: data.messageId,
+          isRevoked: true,
+          revokedAt: new Date().toISOString()
+        }
+      });
+      console.log(`[RabbitMQProducer] Message revoked event published: ${data.messageId}`);
+    } catch (error) {
+      console.error('[RabbitMQProducer] Failed to publish message revoked event:', error);
+    }
+  }
 }
 
 export default new RabbitMQProducerService();

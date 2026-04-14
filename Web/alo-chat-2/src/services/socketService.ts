@@ -155,6 +155,11 @@ class SocketService {
     this.socket?.on("CONVERSATION_REMOVED", callback);
   }
 
+  // Lắng nghe sự kiện thu hồi tin nhắn
+  onMessageRevoked(callback: (data: { messageId: string, revokedAt?: string }) => void) {
+    this.socket?.on("message-revoked", callback);
+  }
+
   // Hủy lắng nghe một sự kiện
   off(event: string) {
     this.socket?.off(event);
