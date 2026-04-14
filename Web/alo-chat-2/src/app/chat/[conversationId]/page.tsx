@@ -1,9 +1,10 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import axiosClient from "@/services/api";
 import { messageService, MessageDTO } from "@/services/messageService";
 import { groupService } from "@/services/groupService";
+import { socketService } from "@/services/socketService";
 import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import {
   PlusIcon,
@@ -24,6 +25,10 @@ import {
   NoSymbolIcon,
   ExclamationCircleIcon,
   ArrowPathIcon,
+  ClipboardDocumentIcon,
+  MapPinIcon,
+  TrashIcon,
+  ArrowUturnLeftIcon,
 } from "@heroicons/react/24/outline";
 
 /* ─────────────────────────────────────────
@@ -64,9 +69,16 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
   const [conversationInfo, setConversationInfo] = useState<any>(null);
+  // Hover tooltip & context menu
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Track conversationId in a ref so socket callback always has latest value
+  const conversationIdRef = useRef(conversationId);
+  useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
 
   /* ─── Fetch conversation list (sidebar) ─── */
   const fetchGroups = useCallback(async () => {
@@ -134,11 +146,10 @@ export default function ChatPage() {
     if (!conversationId) return;
     setLoadingMessages(true);
     try {
-      const res = await messageService.getMessageHistory(conversationId, 50, 0);
-      if (res?.messages) {
-        setMessages(res.messages);
-      }
-      // mark as read
+      // getMessageHistory trả về MessageDTO[] trực tiếp
+      const msgs = await messageService.getMessageHistory(conversationId, 50, 0);
+      setMessages(msgs);
+      // Đánh dấu đã đọc (fire-and-forget)
       messageService.markAsRead(conversationId);
     } catch (err) {
       console.error("Lỗi lấy tin nhắn:", err);
@@ -187,6 +198,72 @@ export default function ChatPage() {
     fetchGroups();
   }, [fetchGroups]);
 
+  /* ─── Socket: connect once on mount, cleanup on unmount ─── */
+  useEffect(() => {
+    socketService.connect();
+    return () => {
+      socketService.off("message-received");
+      socketService.off("messages-read");
+      socketService.off("TYPING");
+      socketService.off("STOP_TYPING");
+      socketService.off("USER_ONLINE");
+      socketService.off("USER_OFFLINE");
+    };
+  }, []);
+
+  /* ─── Socket: join room + listen messages khi conversationId thay đổi ─── */
+  useEffect(() => {
+    if (!conversationId) return;
+
+    // Join room mới
+    socketService.joinRoom(conversationId);
+
+    // Lắng nghe tin nhắn mới
+    socketService.off("message-received"); // remove listener cũ trước khi gắn mới
+    socketService.onMessageReceived((newMsg: any) => {
+      const activeConvoId = conversationIdRef.current;
+      if (String(newMsg.conversationId) === String(activeConvoId)) {
+        setMessages((prev) => {
+          // Tránh duplicate: nếu tin đã có trong list (do optimistic UI) thì replace
+          const existsIdx = prev.findIndex(
+            (m) => m._id === newMsg._id || m._id.startsWith("temp_")
+          );
+          if (existsIdx !== -1 && prev[existsIdx]._id.startsWith("temp_")) {
+            // Replace optimistic message bằng message thật từ socket
+            const updated = [...prev];
+            updated[existsIdx] = newMsg;
+            return updated;
+          }
+          // Duplicate bảo vệ — nếu đã có _id này thì bỏ qua
+          if (prev.some((m) => m._id === newMsg._id)) return prev;
+          return [...prev, newMsg];
+        });
+
+        // Nếu tin từ người khác → đánh dấu đã đọc
+        const myId =
+          currentUser?.id || currentUser?._id || currentUser?.userId;
+        if (myId && String(newMsg.senderId) !== String(myId)) {
+          messageService.markAsRead(activeConvoId).catch(console.error);
+        }
+      }
+    });
+
+    // Lắng nghe đối phương đã đọc
+    socketService.off("messages-read");
+    socketService.onMessagesRead((data) => {
+      if (String(data.conversationId) === String(conversationIdRef.current)) {
+        setMessages((prev) =>
+          prev.map((m) => ({ ...m, isRead: true }))
+        );
+      }
+    });
+
+    return () => {
+      socketService.off("message-received");
+      socketService.off("messages-read");
+    };
+  }, [conversationId, currentUser]);
+
   useEffect(() => {
     if (conversationId) {
       fetchMessages();
@@ -209,14 +286,18 @@ export default function ChatPage() {
     const text = messageText.trim();
     if (!text || !conversationId || sending) return;
 
+    const myId =
+      currentUser?.id || currentUser?._id || currentUser?.userId || "me";
+
     setSending(true);
     setMessageText("");
 
-    // Optimistic UI
+    // Optimistic UI — thêm tin tạm thời ngay lập tức
+    const tempId = `temp_${Date.now()}`;
     const tempMsg: MessageDTO = {
-      _id: `temp_${Date.now()}`,
+      _id: tempId,
       conversationId,
-      senderId: currentUser?.id || currentUser?._id || "me",
+      senderId: myId,
       type: "text",
       content: text,
       isRead: false,
@@ -225,29 +306,30 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, tempMsg]);
 
     try {
-      const sent = await messageService.sendMessage({
+      // Gọi REST API — socket sẽ bắn "message-received" về cho mọi người trong room
+      // (kể cả người gửi). Socket callback sẽ replace temp_ bằng message thật.
+      await messageService.sendMessage({
         conversationId,
         content: text,
         type: "text",
       });
-      if (sent) {
-        setMessages((prev) =>
-          prev.map((m) => (m._id === tempMsg._id ? sent : m)),
-        );
-      }
     } catch (err) {
       console.error("Lỗi gửi tin nhắn:", err);
-      // Rollback optimistic
-      setMessages((prev) => prev.filter((m) => m._id !== tempMsg._id));
+      // Rollback optimistic nếu gửi thất bại
+      setMessages((prev) => prev.filter((m) => m._id !== tempId));
       setMessageText(text);
     } finally {
       setSending(false);
-      inputRef.current?.focus();
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
     }
   };
 
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
+      if (e.nativeEvent.isComposing) return;
       e.preventDefault();
       handleSend();
     }
@@ -258,6 +340,31 @@ export default function ChatPage() {
   );
 
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+
+  // ─── Group messages: cùng sender + cách nhau < 5 phút = 1 group ───
+  interface MsgGroup {
+    isMine: boolean;
+    messages: MessageDTO[];
+  }
+  const messageGroups = useMemo((): MsgGroup[] => {
+    const FIVE_MIN = 5 * 60 * 1000;
+    const groups: MsgGroup[] = [];
+    for (const msg of messages) {
+      const isMine = msg.senderId === myId;
+      const last = groups[groups.length - 1];
+      const lastMsg = last?.messages[last.messages.length - 1];
+      const gap = lastMsg
+        ? new Date(msg.createdAt).getTime() -
+          new Date(lastMsg.createdAt).getTime()
+        : Infinity;
+      if (last && last.isMine === isMine && gap < FIVE_MIN) {
+        last.messages.push(msg);
+      } else {
+        groups.push({ isMine, messages: [msg] });
+      }
+    }
+    return groups;
+  }, [messages, myId]);
 
   /* ─────────────────────────────────────────
      RENDER
@@ -391,18 +498,49 @@ export default function ChatPage() {
 
         {/* Chat Header */}
         <div className="h-19 px-6 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md z-10">
-          <div>
-            <h2 className="text-[16px] font-black tracking-tight">
-              {conversationInfo?.displayName ||
-                conversationInfo?.name ||
-                "Đang tải..."}
-            </h2>
-            <p className="text-[12px] font-bold text-gray-400 mt-0.5">
-              {conversationInfo?.isGroup
-                ? `${conversationInfo?.members?.length ?? ""} thành viên`
-                : "Đang hoạt động"}
-            </p>
+          <div className="flex items-center gap-3">
+            {/* Avatar */}
+            <div className="relative shrink-0">
+              {conversationInfo?.displayAvatar ? (
+                <img
+                  src={conversationInfo.displayAvatar}
+                  alt={conversationInfo.displayName || ""}
+                  className="w-10 h-10 rounded-full object-cover"
+                />
+              ) : conversationInfo?.isGroup ? (
+                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold text-[15px]">
+                  {(conversationInfo?.displayName || conversationInfo?.name || "?")
+                    .charAt(0)
+                    .toUpperCase()}
+                </div>
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[15px]">
+                  {(conversationInfo?.displayName || conversationInfo?.name || "?")
+                    .charAt(0)
+                    .toUpperCase()}
+                </div>
+              )}
+              {/* Online dot — chỉ hiện với chat 1-1 */}
+              {!conversationInfo?.isGroup && (
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" />
+              )}
+            </div>
+
+            {/* Tên & trạng thái */}
+            <div>
+              <h2 className="text-[16px] font-black tracking-tight">
+                {conversationInfo?.displayName ||
+                  conversationInfo?.name ||
+                  "Đang tải..."}
+              </h2>
+              <p className="text-[12px] font-bold text-gray-400 mt-0.5">
+                {conversationInfo?.isGroup
+                  ? `${conversationInfo?.members?.length ?? ""} thành viên`
+                  : "Đang hoạt động"}
+              </p>
+            </div>
           </div>
+
           <div className="flex items-center gap-4 text-gray-400">
             <button className="hover:text-black transition">
               <PhoneIcon className="w-5 h-5" />
@@ -423,7 +561,7 @@ export default function ChatPage() {
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-hide">
           {loadingMessages ? (
             <div className="flex items-center justify-center h-full">
               <ArrowPathIcon className="w-6 h-6 text-gray-400 animate-spin" />
@@ -436,136 +574,251 @@ export default function ChatPage() {
               </p>
             </div>
           ) : (
-            <>
-              {messages.map((msg) => {
-                const isMine = msg.senderId === myId;
-                const isRevoked = msg.isRevoked;
+            <div className="flex flex-col gap-1">
+              {messageGroups.map((group, groupIdx) => {
+                const { isMine, messages: gMsgs } = group;
+                const senderAvatar = conversationInfo?.displayAvatar;
+                const senderName =
+                  conversationInfo?.displayName ||
+                  conversationInfo?.name ||
+                  "?";
 
-                if (isRevoked) {
-                  return (
-                    <div
-                      key={msg._id}
-                      className={`flex ${isMine ? "justify-end" : "justify-start"}`}
-                    >
-                      <span className="italic text-[12px] text-gray-400 bg-gray-100 px-4 py-2 rounded-2xl">
-                        Tin nhắn đã bị thu hồi
-                      </span>
-                    </div>
-                  );
-                }
+                // Tin cuối cùng của nhóm — chỉ đây mới hiện timestamp + avatar + trạng thái
+                const lastMsg = gMsgs[gMsgs.length - 1];
 
-                if (msg.type === "text") {
-                  return (
-                    <div
-                      key={msg._id}
-                      className={`flex ${isMine ? "justify-end" : "items-end gap-3"}`}
-                    >
-                      {!isMine && (
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px] shrink-0 mb-1">
-                          ?
-                        </div>
-                      )}
-                      <div className={`max-w-[70%] ${isMine ? "" : ""}`}>
+                return (
+                  <div
+                    key={`group-${groupIdx}`}
+                    className={`flex flex-col gap-0.5 ${isMine ? "items-end" : "items-start"} mb-3`}
+                  >
+                    {gMsgs.map((msg, msgIdx) => {
+                      const isLast = msgIdx === gMsgs.length - 1;
+                      const isFirst = msgIdx === 0;
+                      const isRevoked = msg.isRevoked;
+
+                      // Bo góc bubble
+                      const bubbleRadius = isMine
+                        ? [
+                            "rounded-2xl",
+                            isFirst && !isLast ? "rounded-br-md" : "",
+                            !isFirst && !isLast ? "rounded-r-md" : "",
+                            !isFirst && isLast ? "rounded-br-sm" : "",
+                          ].join(" ")
+                        : [
+                            "rounded-2xl",
+                            isFirst && !isLast ? "rounded-bl-md" : "",
+                            !isFirst && !isLast ? "rounded-l-md" : "",
+                            !isFirst && isLast ? "rounded-bl-sm" : "",
+                          ].join(" ");
+
+                      return (
                         <div
-                          className={`p-3.5 rounded-2xl text-[14px] font-medium leading-relaxed ${
-                            isMine
-                              ? "bg-black text-white rounded-br-sm shadow-md"
-                              : "bg-[#F5F5F5] text-gray-900 rounded-bl-sm"
+                          key={msg._id}
+                          className={`flex items-center gap-1.5 ${
+                            isMine ? "flex-row-reverse" : "flex-row"
                           }`}
+                          onMouseEnter={(e) => {
+                            setHoveredMsgId(msg._id);
+                            setMousePos({ x: e.clientX, y: e.clientY });
+                          }}
+                          onMouseMove={(e) =>
+                            setMousePos({ x: e.clientX, y: e.clientY })
+                          }
+                          onMouseLeave={() => {
+                            setHoveredMsgId(null);
+                            // Đóng menu ngay khi rời khỏi tin nhắn
+                            setActiveMenu(null);
+                          }}
                         >
-                          {msg.content}
-                        </div>
-                        <span
-                          className={`text-[10px] font-bold text-gray-400 mt-1 block ${isMine ? "text-right mr-1" : "ml-1"}`}
-                        >
-                          {formatTime(msg.createdAt)}
-                          {isMine && (
-                            <span className="ml-1">
-                              {msg.isRead ? "✓✓" : "✓"}
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                }
-
-                if (msg.type === "image") {
-                  return (
-                    <div
-                      key={msg._id}
-                      className={`flex ${isMine ? "justify-end" : "items-end gap-3"}`}
-                    >
-                      {!isMine && (
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px] shrink-0 mb-1">
-                          ?
-                        </div>
-                      )}
-                      <div className="max-w-[60%]">
-                        <img
-                          src={msg.content}
-                          alt="img"
-                          className="rounded-2xl object-cover max-h-64 w-full shadow"
-                        />
-                        <span
-                          className={`text-[10px] font-bold text-gray-400 mt-1 block ${isMine ? "text-right" : ""}`}
-                        >
-                          {formatTime(msg.createdAt)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                }
-
-                if (msg.type === "file") {
-                  return (
-                    <div
-                      key={msg._id}
-                      className={`flex ${isMine ? "justify-end" : "items-end gap-3"}`}
-                    >
-                      {!isMine && (
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px] shrink-0 mb-1">
-                          ?
-                        </div>
-                      )}
-                      <div className="max-w-[70%]">
-                        <a
-                          href={msg.content}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-3 bg-[#F5F5F5] p-3 rounded-2xl hover:bg-gray-200 transition"
-                        >
-                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
-                            <DocumentIcon className="w-5 h-5 text-gray-600" />
+                          {/* Avatar placeholder */}
+                          <div className="w-8 shrink-0">
+                            {!isMine && isLast && (
+                              senderAvatar ? (
+                                <img
+                                  src={senderAvatar}
+                                  alt={senderName}
+                                  className="w-8 h-8 rounded-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px]">
+                                  {senderName.charAt(0).toUpperCase()}
+                                </div>
+                              )
+                            )}
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-bold text-gray-900 truncate">
-                              {msg.metadata?.fileName || "Tệp đính kèm"}
-                            </p>
-                            <p className="text-[11px] font-bold text-gray-400">
-                              {msg.metadata?.fileSize
-                                ? `${(msg.metadata.fileSize / 1024).toFixed(1)} KB`
-                                : ""}
-                            </p>
-                          </div>
-                          <ArrowDownTrayIcon className="w-4 h-4 text-gray-500 shrink-0" />
-                        </a>
-                        <span
-                          className={`text-[10px] font-bold text-gray-400 mt-1 block ${isMine ? "text-right" : ""}`}
-                        >
-                          {formatTime(msg.createdAt)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                }
 
-                return null;
+                          {/* Bubble */}
+                          <div className="max-w-[70%]">
+                            {isRevoked ? (
+                              <span className="italic text-[12px] text-gray-400 bg-gray-100 px-4 py-2 rounded-2xl block">
+                                Tin nhắn đã bị thu hồi
+                              </span>
+                            ) : msg.type === "image" ? (
+                              <img
+                                src={msg.content}
+                                alt="img"
+                                className={`object-cover max-h-64 w-full shadow ${bubbleRadius}`}
+                              />
+                            ) : msg.type === "file" ? (
+                              <a
+                                href={msg.content}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`flex items-center gap-3 p-3 hover:opacity-80 transition ${
+                                  isMine ? "bg-black text-white" : "bg-[#F5F5F5] text-gray-900"
+                                } ${bubbleRadius}`}
+                              >
+                                <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+                                  <DocumentIcon className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-[13px] font-bold truncate">
+                                    {msg.metadata?.fileName || "Tệp đính kèm"}
+                                  </p>
+                                  <p className="text-[11px] opacity-60">
+                                    {msg.metadata?.fileSize
+                                      ? `${(msg.metadata.fileSize / 1024).toFixed(1)} KB`
+                                      : ""}
+                                  </p>
+                                </div>
+                                <ArrowDownTrayIcon className="w-4 h-4 shrink-0 opacity-60" />
+                              </a>
+                            ) : (
+                              <div
+                                className={`px-4 py-2.5 text-[14px] font-medium leading-relaxed ${
+                                  isMine
+                                    ? "bg-black text-white shadow-md"
+                                    : "bg-[#F5F5F5] text-gray-900"
+                                } ${bubbleRadius}`}
+                              >
+                                {msg.content}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Nút "..." — hướng vào giữa màn hình, chỉ hiện khi hover */}
+                          <div className={`relative ${
+                            hoveredMsgId === msg._id ? "opacity-100" : "opacity-0 pointer-events-none"
+                          } transition-opacity`}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenu(activeMenu === msg._id ? null : msg._id);
+                              }}
+                              className="w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
+                            >
+                              <EllipsisHorizontalIcon className="w-4 h-4" />
+                            </button>
+
+                            {/* Context Menu */}
+                            {activeMenu === msg._id && (
+                              <div
+                                className={`absolute z-50 bottom-full mb-1.5 w-46 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 overflow-hidden ${
+                                  isMine ? "right-0" : "left-0"
+                                }`}
+                                onMouseLeave={() => setActiveMenu(null)}
+                              >
+                                {!msg.isRevoked && msg.type === "text" && (
+                                  <button
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(msg.content);
+                                      setActiveMenu(null);
+                                    }}
+                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
+                                  >
+                                    <ClipboardDocumentIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                                    Copy tin nhắn
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => setActiveMenu(null)}
+                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
+                                >
+                                  <MapPinIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                                  Ghim tin nhắn
+                                </button>
+                                <div className="my-1 border-t border-gray-100" />
+                                {isMine && !msg.isRevoked && (
+                                  <button
+                                    onClick={async () => {
+                                      setActiveMenu(null);
+                                      const ok = await messageService.deleteMessage(msg._id);
+                                      if (ok) {
+                                        setMessages((prev) =>
+                                          prev.map((m) =>
+                                            m._id === msg._id
+                                              ? { ...m, isRevoked: true, content: "" }
+                                              : m
+                                          )
+                                        );
+                                      }
+                                    }}
+                                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-orange-500 hover:bg-orange-50 transition text-left"
+                                  >
+                                    <ArrowUturnLeftIcon className="w-4 h-4 shrink-0" />
+                                    Thu hồi tin nhắn
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => {
+                                    setActiveMenu(null);
+                                    setMessages((prev) =>
+                                      prev.filter((m) => m._id !== msg._id)
+                                    );
+                                  }}
+                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition text-left"
+                                >
+                                  <TrashIcon className="w-4 h-4 shrink-0" />
+                                  Xóa tin nhắn
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Footer: timestamp + trạng thái của nhóm — hiện 1 lần */}
+                    <div className={`flex items-center gap-1 mt-0.5 ${
+                      isMine ? "justify-end pr-10" : "pl-10"
+                    }`}>
+                      <span className="text-[10px] font-bold text-gray-400">
+                        {formatTime(lastMsg.createdAt)}
+                      </span>
+                      {isMine && (
+                        <span className={`text-[10px] font-bold ${
+                          lastMsg.isRead ? "text-blue-500" : "text-gray-400"
+                        }`}>
+                          {lastMsg.isRead ? "✓✓" : "✓"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
               })}
               <div ref={messagesEndRef} />
-            </>
+            </div>
           )}
         </div>
+
+        {/* Floating tooltip ─ hiện gần con trỏ khi hover tin nhắn */}
+        {hoveredMsgId && (() => {
+          const hMsg = messages.find((m) => m._id === hoveredMsgId);
+          return hMsg ? (
+            <div
+              style={{
+                position: "fixed",
+                left: mousePos.x + 14,
+                top: mousePos.y - 34,
+                pointerEvents: "none",
+                zIndex: 9999,
+              }}
+              className="bg-gray-800/90 text-white text-[10px] font-semibold px-2.5 py-1 rounded-lg shadow-lg backdrop-blur-sm whitespace-nowrap"
+            >
+              {formatTime(hMsg.createdAt)}
+            </div>
+          ) : null;
+        })()}
 
         {/* Message Input */}
         <div className="p-4 bg-white shrink-0">
@@ -580,8 +833,7 @@ export default function ChatPage() {
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={sending}
-              className="flex-1 bg-transparent border-none outline-none text-[14px] font-medium placeholder:text-gray-400 disabled:opacity-60"
+              className="flex-1 bg-transparent border-none outline-none text-[14px] font-medium placeholder:text-gray-400"
             />
             <button className="p-2 text-gray-400 hover:text-black transition">
               <FaceSmileIcon className="w-5 h-5" />

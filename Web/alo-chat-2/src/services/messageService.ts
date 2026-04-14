@@ -24,21 +24,59 @@ export interface SendMessagePayload {
   metadata?: Record<string, any>;
 }
 
+/**
+ * Chuẩn hóa response từ getMessageHistory.
+ *
+ * Backend message-service trả về:
+ *   { conversationId, messages: [...], count, limit, skip }
+ *
+ * API interceptor (api.ts) unwrap nếu response.data.data tồn tại:
+ *   - nếu KHÔNG có ".data" → interceptor trả về nguyên Axios Response object
+ *   - nếu CÓ ".data" → interceptor trả về response.data.data
+ *
+ * Đây là helper để lấy đúng mảng messages bất kể format.
+ */
+function extractMessages(raw: any): MessageDTO[] {
+  // Case 1: interceptor đã unwrap → raw = { conversationId, messages, count }
+  if (raw && Array.isArray(raw.messages)) return raw.messages;
+  // Case 2: interceptor KHÔNG unwrap → raw = Axios Response, raw.data = { conversationId, messages, count }
+  if (raw?.data && Array.isArray(raw.data.messages)) return raw.data.messages;
+  // Case 3: gateway thêm thêm wrapper
+  if (raw?.data?.data && Array.isArray(raw.data.data.messages))
+    return raw.data.data.messages;
+  return [];
+}
+
+/**
+ * Chuẩn hóa response từ sendMessage.
+ *
+ * Backend trả về: { status: 'success', data: messageEvent }
+ * API interceptor sẽ unwrap thành messageEvent vì có .data key.
+ * Nhưng cần kiểm tra thêm trường hợp intercept bị bỏ qua.
+ */
+function extractSentMessage(raw: any): MessageDTO | null {
+  // interceptor đã unwrap → raw = messageEvent trực tiếp (có _id)
+  if (raw && raw._id) return raw;
+  // có thêm wrapper
+  if (raw?.data?._id) return raw.data;
+  return null;
+}
+
 export const messageService = {
   // Lấy lịch sử tin nhắn của một cuộc hội thoại
   getMessageHistory: async (
     conversationId: string,
     limit = 50,
     skip = 0,
-  ): Promise<{ messages: MessageDTO[]; count: number } | null> => {
+  ): Promise<MessageDTO[]> => {
     try {
-      const data = await api.get<any, any>(`/messages/${conversationId}`, {
+      const raw = await api.get<any, any>(`/messages/${conversationId}`, {
         params: { limit, skip },
       });
-      return data;
+      return extractMessages(raw);
     } catch (error) {
       console.error("Lỗi lấy lịch sử tin nhắn:", error);
-      return null;
+      return [];
     }
   },
 
@@ -47,14 +85,13 @@ export const messageService = {
     payload: SendMessagePayload,
   ): Promise<MessageDTO | null> => {
     try {
-      const data = await api.post<any, any>(`/messages`, {
+      const raw = await api.post<any, any>(`/messages`, {
         conversationId: payload.conversationId,
         type: payload.type || "text",
         content: payload.content,
         metadata: payload.metadata || {},
       });
-      // API trả về { status, data: messageEvent }
-      return data?.data ?? data;
+      return extractSentMessage(raw);
     } catch (error) {
       console.error("Lỗi gửi tin nhắn:", error);
       return null;
@@ -70,10 +107,10 @@ export const messageService = {
       const formData = new FormData();
       formData.append("conversationId", conversationId);
       formData.append("file", file);
-      const data = await api.post<any, any>(`/messages/upload`, formData, {
+      const raw = await api.post<any, any>(`/messages/upload`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      return data?.data ?? data;
+      return extractSentMessage(raw);
     } catch (error) {
       console.error("Lỗi upload file:", error);
       return null;
@@ -97,10 +134,10 @@ export const messageService = {
     content: string,
   ): Promise<MessageDTO | null> => {
     try {
-      const data = await api.patch<any, any>(`/messages/${messageId}`, {
+      const raw = await api.patch<any, any>(`/messages/${messageId}`, {
         content,
       });
-      return data;
+      return extractSentMessage(raw) ?? raw;
     } catch (error) {
       console.error("Lỗi sửa tin nhắn:", error);
       return null;
