@@ -1,7 +1,7 @@
-// src/controllers/group.controller.ts
 import { Request, Response } from "express";
 import Conversation from "../models/Conversation";
 import { uploadImageToS3, deleteImageFromS3 } from "../services/s3Service";
+import rabbitMQProducer from "../services/rabbitMQProducer";
 
 // Helper lấy danh sách bạn bè
 async function getFriendIds(
@@ -139,6 +139,9 @@ export const createGroup = async (
       members: initialMembers,
     });
 
+    // Real-time Sync: Thông báo cho tất cả thành viên về nhóm mới
+    rabbitMQProducer.publishConversationCreated(newGroup).catch(console.error);
+
     res.status(201).json({ message: "Tạo nhóm thành công", data: newGroup });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -148,7 +151,7 @@ export const createGroup = async (
 // 2. Thêm Thành viên (Chỉ thêm người chưa có trong nhóm)
 export const addMember = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { groupId } = req.params;
+    const groupId = String(req.params.groupId || "");
     const { newUserId } = req.body;
     const requesterId = (req.headers["x-user-id"] || "").toString();
 
@@ -212,6 +215,9 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
     });
     await group.save();
 
+    // Real-time Sync: Thông báo cho thành viên mới về nhóm này
+    rabbitMQProducer.publishConversationCreated(group).catch(console.error);
+
     res.status(200).json({ message: "Đã thêm thành viên", data: group });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -224,7 +230,8 @@ export const removeMember = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { groupId, userId } = req.params; // userId bị kick hoặc tự rời
+    const groupId = String(req.params.groupId || "");
+    const userId = String(req.params.userId || "");
     const requesterId = req.headers["x-user-id"] as string; // Người bấm nút
 
     const group = await Conversation.findById(groupId);
@@ -271,6 +278,9 @@ export const removeMember = async (
     // Thực hiện xóa
     group.members = group.members.filter((m) => m.userId !== userId);
     await group.save();
+
+    // Real-time Sync: Thông báo cho người bị gỡ rằng họ không còn trong nhóm
+    rabbitMQProducer.publishConversationRemoved(groupId, userId).catch(console.error);
 
     res.status(200).json({ message: "Thao tác thành công", data: group });
   } catch (error: any) {
@@ -364,7 +374,7 @@ export const deleteGroup = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { groupId } = req.params;
+    const groupId = String(req.params.groupId || "");
     const requesterId = req.headers["x-user-id"] as string;
 
     const group = await Conversation.findById(groupId);
@@ -386,6 +396,16 @@ export const deleteGroup = async (
     }
 
     await Conversation.findByIdAndDelete(groupId);
+
+    // Real-time Sync: Thông báo cho tất cả thành viên rằng nhóm đã giải tán
+    if (group.members) {
+      for (const member of group.members) {
+        if (member.userId) {
+          rabbitMQProducer.publishConversationRemoved(groupId, String(member.userId)).catch(console.error);
+        }
+      }
+    }
+
     res.status(200).json({ message: "Nhóm đã được giải tán vĩnh viễn" });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -422,7 +442,7 @@ export const getGroupById = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { groupId } = req.params;
+    const groupId = String(req.params.groupId || "");
     const group = await Conversation.findById(groupId);
     if (!group) {
       res.status(404).json({ error: "Không tìm thấy nhóm" });
@@ -440,7 +460,7 @@ export const requestJoinGroup = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { groupId } = req.params;
+    const groupId = String(req.params.groupId || "");
     const requesterId = (req.headers["x-user-id"] || "").toString();
 
     if (!requesterId) {
@@ -529,7 +549,7 @@ export const getJoinRequests = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { groupId } = req.params;
+    const groupId = String(req.params.groupId || "");
     const requesterId = (req.headers["x-user-id"] || "").toString();
 
     const group = await Conversation.findById(groupId);
@@ -561,7 +581,8 @@ export const approveJoinRequest = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { groupId, userId } = req.params;
+    const groupId = String(req.params.groupId || "");
+    const userId = String(req.params.userId || "");
     const requesterId = (req.headers["x-user-id"] || "").toString();
 
     const group = await Conversation.findById(groupId);
@@ -606,6 +627,10 @@ export const approveJoinRequest = async (
     }
 
     await group.save();
+
+    // Real-time Sync: Thông báo cho người vừa được duyệt về hội thoại mới hiển thị
+    rabbitMQProducer.publishConversationCreated(group).catch(console.error);
+
     res.status(200).json({ message: "Đã phê duyệt yêu cầu", data: group });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -618,7 +643,8 @@ export const rejectJoinRequest = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { groupId, userId } = req.params;
+    const groupId = String(req.params.groupId || "");
+    const userId = String(req.params.userId || "");
     const requesterId = (req.headers["x-user-id"] || "").toString();
 
     const group = await Conversation.findById(groupId);
@@ -664,7 +690,7 @@ export const updateApprovalSetting = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { groupId } = req.params;
+    const groupId = String(req.params.groupId || "");
     const { isApprovalRequired } = req.body;
     const requesterId = (req.headers["x-user-id"] || "").toString();
 
@@ -708,7 +734,7 @@ export const updateLinkSetting = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { groupId } = req.params;
+    const groupId = String(req.params.groupId || "");
     const { isLinkEnabled } = req.body;
     const requesterId = (req.headers["x-user-id"] || "").toString();
 
@@ -750,7 +776,7 @@ export const updateGroup = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { groupId } = req.params;
+    const groupId = String(req.params.groupId || "");
     const { name } = req.body;
     const currentUserId = (req.headers["x-user-id"] || "").toString();
 
@@ -836,6 +862,10 @@ export const getOrCreateDirectConversation = async (
     });
 
     await newConversation.save();
+
+    // Real-time Sync: Thông báo cho cả 2 người về cuộc hội thoại mới
+    rabbitMQProducer.publishConversationCreated(newConversation).catch(console.error);
+
     res.status(201).json(newConversation);
   } catch (error: any) {
     res.status(500).json({ error: error.message });

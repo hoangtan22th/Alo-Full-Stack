@@ -48,6 +48,38 @@ export class RabbitMQProducerService {
       data: { conversationId, label }
     });
   }
+
+  /**
+   * Phát sự kiện khi hội thoại mới được tạo (Nhóm hoặc Chat 1-1)
+   */
+  async publishConversationCreated(conversation: any) {
+    if (!conversation?.members) return;
+
+    // Phát sự kiện cho từng thành viên trong hội thoại
+    for (const member of conversation.members) {
+      const memberId = member.userId;
+      if (!memberId) continue;
+
+      await this.publishToRealtimeService('CONVERSATION_CREATED', {
+        target: memberId.toString(),
+        data: conversation
+      });
+    }
+    
+    console.log(`[RabbitMQProducer] Event 'CONVERSATION_CREATED' published to all ${conversation.members.length} members for conversation: ${conversation._id}`);
+  }
+
+  /**
+   * Phát sự kiện khi một người dùng bị gỡ khỏi hội thoại (bị kick, rời nhóm, hoặc giải tán nhóm)
+   */
+  async publishConversationRemoved(conversationId: string, userId: string) {
+    await this.publishToRealtimeService('CONVERSATION_REMOVED', {
+      target: userId,
+      data: { conversationId }
+    });
+    
+    console.log(`[RabbitMQProducer] Event 'CONVERSATION_REMOVED' published for user: ${userId}, conversation: ${conversationId}`);
+  }
 }
 
 export default new RabbitMQProducerService();

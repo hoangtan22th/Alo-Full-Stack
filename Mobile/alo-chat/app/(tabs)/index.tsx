@@ -158,12 +158,51 @@ export default function MessagesScreen() {
       });
     };
 
+    const handleNewConversation = async (newConvo: any) => {
+      console.log("🆕 [Mobile Socket] Received CONVERSATION_CREATED:", newConvo);
+      
+      // Tránh duplicate
+      setConversations(prev => {
+        const exists = prev.some(c => c.id === newConvo._id);
+        if (exists) return prev;
+        
+        // Tạo object tạm thời theo format của list
+        // Lưu ý: Tên và Avatar cho chat 1-1 có thể chưa chuẩn do cần gọi user-service
+        // Nhưng tạm thời lấy dữ liệu thô từ newConvo
+        const formatted = {
+          id: newConvo._id,
+          name: newConvo.name || "Cuộc trò chuyện mới",
+          avatar: newConvo.groupAvatar,
+          isGroup: newConvo.isGroup,
+          membersCount: newConvo.members?.length,
+          message: "Mới tạo",
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          unread: true,
+          updatedAt: newConvo.updatedAt || new Date().toISOString(),
+        };
+
+        return [formatted, ...prev];
+      });
+
+      // Gọi fetchGroups lại để đảm bảo dữ liệu (như tên người chat 1-1) được load đầy đủ từ user-service
+      fetchGroups(); 
+    };
+
+    const handleConversationRemoved = (data: { conversationId: string }) => {
+      console.log("🗑️ [Mobile Socket] Received CONVERSATION_REMOVED:", data);
+      setConversations(prev => prev.filter(c => c.id !== data.conversationId));
+    };
+
     socket.on("CONVERSATION_PIN_UPDATED", handlePinUpdated);
     socket.on("CONVERSATION_LABEL_UPDATED", handleLabelUpdated);
+    socket.on("CONVERSATION_CREATED", handleNewConversation);
+    socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
 
     return () => {
       socket.off("CONVERSATION_PIN_UPDATED", handlePinUpdated);
       socket.off("CONVERSATION_LABEL_UPDATED", handleLabelUpdated);
+      socket.off("CONVERSATION_CREATED", handleNewConversation);
+      socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
     };
   }, [socket]);
 

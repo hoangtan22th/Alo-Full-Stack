@@ -146,6 +146,15 @@ class SocketService {
     this.socket?.on("CONVERSATION_LABEL_UPDATED", callback);
   }
 
+  // Lắng nghe sự kiện hội thoại mới được tạo
+  onConversationCreated(callback: (newConvo: any) => void) {
+    this.socket?.on("CONVERSATION_CREATED", callback);
+  }
+
+  onConversationRemoved(callback: (data: { conversationId: string }) => void) {
+    this.socket?.on("CONVERSATION_REMOVED", callback);
+  }
+
   // Hủy lắng nghe một sự kiện
   off(event: string) {
     this.socket?.off(event);

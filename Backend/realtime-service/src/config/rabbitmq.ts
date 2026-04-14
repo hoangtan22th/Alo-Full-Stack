@@ -36,8 +36,16 @@ export async function initRabbitMQ(io: Server) {
               });
             });
           } else {
-            console.log(`[Socket.IO] Emitting event '${payload.event}' to user room: user_${payload.target}`);
-            io.to(`user_${payload.target}`).emit(payload.event, payload.data);
+            const userRoom = `user_${payload.target}`;
+            // Kiểm tra xem có ai trong phòng này không
+            io.in(userRoom).fetchSockets().then(sockets => {
+              console.log(`[Socket.IO] Target Room: ${userRoom} | Connected Sockets: ${sockets.length} | Event: ${payload.event}`);
+              if (sockets.length > 0) {
+                io.to(userRoom).emit(payload.event, payload.data);
+              } else {
+                console.warn(`[Socket.IO] No active sockets found for room ${userRoom}. Message not delivered via Socket.`);
+              }
+            });
           }
         } else if (payload.room) {
           console.log(`[Socket.IO] Emitting event '${payload.event}' to room: room_${payload.room}`);

@@ -203,9 +203,29 @@ export default function ChatPage() {
       });
     });
 
+    socketService.onConversationCreated((newConvo: any) => {
+      console.log("🆕 [Socket] Received CONVERSATION_CREATED:", newConvo);
+      setConversations(prev => {
+        // Kiểm tra xem đã tồn tại trong list chưa (tránh duplicate)
+        const exists = prev.some(c => (c._id || c.id) === (newConvo._id || newConvo.id));
+        if (exists) return prev;
+        return [newConvo, ...prev];
+      });
+    });
+
+    socketService.onConversationRemoved((data: { conversationId: string }) => {
+      console.log("🗑️ [Socket] Received CONVERSATION_REMOVED:", data);
+      setConversations(prev => prev.filter(c => (c._id || c.id) !== data.conversationId));
+      
+      // Nếu đang mở chính cuộc hội thoại bị xóa, hãy đóng nó lại hoặc chuyển trang
+      // Tùy chọn: router.push('/chat') nếu chatId === conversationId
+    });
+
     return () => {
       socketService.off("CONVERSATION_PIN_UPDATED");
       socketService.off("CONVERSATION_LABEL_UPDATED");
+      socketService.off("CONVERSATION_CREATED");
+      socketService.off("CONVERSATION_REMOVED");
     };
   }, []);
 
