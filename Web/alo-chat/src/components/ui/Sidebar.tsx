@@ -60,7 +60,7 @@ export default function Sidebar() {
   }, []);
 
   // Xử lý avatar trên sidebar
-  const BASE_URL = "http://localhost:8888/api/v1/auth";
+  const BASE_URL = "http://localhost:8888/api/v1/users";
   const [avatarUrl, setAvatarUrl] = useState(
     "https://i.pravatar.cc/150?u=default",
   );
