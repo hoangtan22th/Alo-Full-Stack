@@ -14,7 +14,9 @@ public class RabbitMQConfig {
     public static final String ROUTING_KEY_REGISTRATION = "user.registered";
     public static final String QUEUE_AUTH_UPDATE = "auth.user.update.queue";
     public static final String ROUTING_KEY_UPDATE = "user.updated";
-    public static final String QUEUE_REALTIME_EVENTS = "realtime_events";
+    
+    // Exchange cho Realtime Chat System (dùng chung với realtime-service)
+    public static final String CHAT_EXCHANGE = "chat_exchange";
 
     @Bean
     public TopicExchange userExchange() {
@@ -42,8 +44,9 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public Queue realtimeEventsQueue() {
-        return new Queue(QUEUE_REALTIME_EVENTS, true);
+    public TopicExchange chatExchange() {
+        // Đảm bảo chat_exchange cũng được tạo nếu Auth service boot trước
+        return new TopicExchange(CHAT_EXCHANGE);
     }
 
     // Dùng JSON thay vì Binary serializer mặc định

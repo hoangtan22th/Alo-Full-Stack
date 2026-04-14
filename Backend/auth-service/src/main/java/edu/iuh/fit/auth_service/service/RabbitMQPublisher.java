@@ -36,16 +36,18 @@ public class RabbitMQPublisher {
     public void publishForceLogoutEvent(String userId, java.util.List<String> killedSessionIds) {
         try {
             java.util.Map<String, Object> payload = new java.util.HashMap<>();
-            payload.put("event", "FORCE_LOGOUT");
-            payload.put("target", userId); // Gửi đến room user_
-
+            payload.put("type", "FORCE_LOGOUT");
+            
             java.util.Map<String, Object> data = new java.util.HashMap<>();
-            data.put("message", "Tài khoản của bạn đã được đăng nhập ở một thiết bị khác");
+            data.put("userId", userId);
             data.put("killedSessionIds", killedSessionIds); // Những session bị tiêu diệt
+            data.put("message", "Tài khoản của bạn đã được đăng nhập ở một thiết bị khác");
             
             payload.put("data", data);
 
-            rabbitTemplate.convertAndSend(RabbitMQConfig.QUEUE_REALTIME_EVENTS, payload);
+            // Bắn vào Topic Exchange tiêu chuẩn của hệ thống chat
+            rabbitTemplate.convertAndSend("chat_exchange", "auth.session.force_logout", payload);
+            log.info("Published FORCE_LOGOUT to chat_exchange for user {}", userId);
         } catch (Exception e) {
             System.err.println("❌ Error publishing FORCE_LOGOUT event: " + e.getMessage());
         }
