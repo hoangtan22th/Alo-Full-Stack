@@ -496,6 +496,16 @@ export default function ChatPage() {
       alert("Chỉ được gửi tối đa 5 file mỗi lần!");
       return;
     }
+    // Kiểm tra từng file dưới 100MB
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.size > 100 * 1024 * 1024) {
+        alert(
+          `File "${file.name}" vượt quá 100MB, vui lòng chọn file nhỏ hơn.`,
+        );
+        return;
+      }
+    }
     setUploadingFile(true);
     const myId =
       currentUser?.id || currentUser?._id || currentUser?.userId || "me";
