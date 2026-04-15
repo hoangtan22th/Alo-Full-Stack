@@ -1,4 +1,4 @@
-import { Schema, model, Document, Types } from 'mongoose';
+import { Schema, model, Document, Types } from "mongoose";
 
 export interface IMessage extends Document {
   conversationId: Types.ObjectId;
@@ -10,8 +10,9 @@ export interface IMessage extends Document {
   readBy?: string[]; // Array of user IDs who read this message
   revokedAt?: Date; // Soft delete
   editedAt?: Date;
-  isRevoked: boolean; 
+  isRevoked: boolean;
   deletedByUsers: string[];
+  isPinned?: boolean; // <--- Thêm trường này
   editHistory?: Array<{
     originalContent: string;
     editedAt: Date;
@@ -29,7 +30,7 @@ const messageSchema = new Schema<IMessage>(
   {
     conversationId: {
       type: Schema.Types.ObjectId,
-      ref: 'Conversation',
+      ref: "Conversation",
       required: true,
       index: true,
     },
@@ -39,8 +40,8 @@ const messageSchema = new Schema<IMessage>(
     },
     type: {
       type: String,
-      enum: ['text', 'image', 'file', 'emoji', 'system'],
-      default: 'text',
+      enum: ["text", "image", "file", "emoji", "system"],
+      default: "text",
     },
     content: {
       type: String,
@@ -71,6 +72,11 @@ const messageSchema = new Schema<IMessage>(
       type: Date,
       default: null,
     },
+    isPinned: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     editedAt: {
       type: Date,
       default: null,
@@ -98,7 +104,7 @@ const messageSchema = new Schema<IMessage>(
   {
     timestamps: true,
     strict: true,
-  }
+  },
 );
 
 // Indexes for better query performance
@@ -113,4 +119,4 @@ messageSchema.methods.toJSON = function () {
   return obj;
 };
 
-export const Message = model<IMessage>('Message', messageSchema);
+export const Message = model<IMessage>("Message", messageSchema);

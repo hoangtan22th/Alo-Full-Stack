@@ -1,32 +1,34 @@
-import { Router } from 'express';
-import * as messageController from '../controllers/message.controller';
-import multer from 'multer';
+import { Router } from "express";
+import * as messageController from "../controllers/message.controller";
+import multer from "multer";
 
 const router = Router();
 
 // Cấu hình multer để lưu file vào bộ nhớ (memoryStorage) trước khi đẩy lên S3
 const storage = multer.memoryStorage();
-const upload = multer({ 
+const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 105 * 1024 * 1024 // Giới hạn 105MB (trừ hao config Gateway)
-  }
+    fileSize: 105 * 1024 * 1024, // Giới hạn 105MB (trừ hao config Gateway)
+  },
 });
 
-router.get('/:conversationId', messageController.getMessageHistory);
-router.post('/', messageController.sendMessage);
-router.patch('/:messageId/revoke', messageController.revokeMessage);
-router.delete('/:messageId/me', messageController.deleteMessageForMe);
-router.patch('/:messageId', messageController.editMessage);
+router.get("/:conversationId", messageController.getMessageHistory);
+router.patch("/:messageId/pin", messageController.pinMessage);
+router.patch("/:messageId/unpin", messageController.unpinMessage);
+router.post("/", messageController.sendMessage);
+router.patch("/:messageId/revoke", messageController.revokeMessage);
+router.delete("/:messageId/me", messageController.deleteMessageForMe);
+router.patch("/:messageId", messageController.editMessage);
 
 // Route upload file lên S3
-router.post('/upload', upload.single('file'), messageController.uploadFile);
+router.post("/upload", upload.single("file"), messageController.uploadFile);
 
 // Route đánh dấu đã đọc tin nhắn
-router.patch('/:conversationId/read', messageController.markMessagesAsRead);
+router.patch("/:conversationId/read", messageController.markMessagesAsRead);
 
 // Route cho cảm xúc (Reactions)
-router.post('/:messageId/reactions', messageController.reactToMessage);
-router.delete('/:messageId/reactions', messageController.clearReactions);
+router.post("/:messageId/reactions", messageController.reactToMessage);
+router.delete("/:messageId/reactions", messageController.clearReactions);
 
 export default router;

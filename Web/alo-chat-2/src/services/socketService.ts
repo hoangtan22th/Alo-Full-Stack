@@ -1,3 +1,4 @@
+// ...existing code...
 import { io, Socket } from "socket.io-client";
 
 const SOCKET_URL =
@@ -6,6 +7,16 @@ const SOCKET_URL =
   "http://localhost:8888";
 
 class SocketService {
+  // Lắng nghe ghim/bỏ ghim tin nhắn real-time
+  onMessagePinned(
+    callback: (data: {
+      messageId: string;
+      isPinned: boolean;
+      conversationId: string;
+    }) => void,
+  ) {
+    this.addListener("message-pinned", callback);
+  }
   private socket: Socket | null = null;
   private listeners: Map<string, Array<(data: any) => void>> = new Map();
 
@@ -16,7 +27,7 @@ class SocketService {
       typeof window !== "undefined"
         ? localStorage.getItem("accessToken")
         : null;
-        
+
     console.log(
       "🔌 [Socket] Attempting to connect with token:",
       token ? `${token.substring(0, 10)}...` : "NONE",
@@ -115,16 +126,12 @@ class SocketService {
   }
 
   // Lắng nghe sự kiện dừng gõ từ người khác
-  onStopTyping(
-    callback: (data: { actorId: string; roomId: string }) => void,
-  ) {
+  onStopTyping(callback: (data: { actorId: string; roomId: string }) => void) {
     this.addListener("STOP_TYPING", callback);
   }
 
   // Lắng nghe trạng thái Online
-  onUserOnline(
-    callback: (data: { userId: string; status: string }) => void,
-  ) {
+  onUserOnline(callback: (data: { userId: string; status: string }) => void) {
     this.addListener("USER_ONLINE", callback);
   }
 
@@ -158,11 +165,15 @@ class SocketService {
   }
 
   // Realtime Sync cho Ghim và Phân loại
-  onPinUpdated(callback: (data: { conversationId: string; isPinned: boolean }) => void) {
+  onPinUpdated(
+    callback: (data: { conversationId: string; isPinned: boolean }) => void,
+  ) {
     this.addListener("CONVERSATION_PIN_UPDATED", callback);
   }
 
-  onLabelUpdated(callback: (data: { conversationId: string; label: any }) => void) {
+  onLabelUpdated(
+    callback: (data: { conversationId: string; label: any }) => void,
+  ) {
     this.addListener("CONVERSATION_LABEL_UPDATED", callback);
   }
 
@@ -180,7 +191,9 @@ class SocketService {
   }
 
   // Lắng nghe sự kiện thu hồi tin nhắn
-  onMessageRevoked(callback: (data: { messageId: string, revokedAt?: string }) => void) {
+  onMessageRevoked(
+    callback: (data: { messageId: string; revokedAt?: string }) => void,
+  ) {
     this.addListener("message-revoked", callback);
   }
 

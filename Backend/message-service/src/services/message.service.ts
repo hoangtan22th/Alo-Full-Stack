@@ -1,7 +1,40 @@
-import { Message, IMessage } from '../models/Message';
-import { Types } from 'mongoose';
+import { Message, IMessage } from "../models/Message";
+import { Types } from "mongoose";
 
 export class MessageDataService {
+  /**
+   * Ghim tin nhắn
+   */
+  async pinMessage(messageId: string): Promise<IMessage | null> {
+    try {
+      const updated = await Message.findByIdAndUpdate(
+        messageId,
+        { $set: { isPinned: true } },
+        { new: true },
+      );
+      return updated;
+    } catch (error) {
+      console.error("[MessageDataService] Failed to pin message:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Bỏ ghim tin nhắn
+   */
+  async unpinMessage(messageId: string): Promise<IMessage | null> {
+    try {
+      const updated = await Message.findByIdAndUpdate(
+        messageId,
+        { $set: { isPinned: false } },
+        { new: true },
+      );
+      return updated;
+    } catch (error) {
+      console.error("[MessageDataService] Failed to unpin message:", error);
+      throw error;
+    }
+  }
   /**
    * Tạo tin nhắn mới
    */
@@ -10,7 +43,7 @@ export class MessageDataService {
     senderId: string;
     type: string;
     content: string;
-     
+
     metadata?: Record<string, any>;
   }): Promise<IMessage> {
     try {
@@ -21,15 +54,15 @@ export class MessageDataService {
         content: data.content,
         metadata: data.metadata || {},
         isRead: false,
-        isRevoked: false,    // Thu hồi (revoke)
-        deletedByUsers: [],    // Xóa 1 phía (delete)
+        isRevoked: false, // Thu hồi (revoke)
+        deletedByUsers: [], // Xóa 1 phía (delete)
       });
 
       await message.save();
       console.log(`[MessageDataService] Message created: ${message._id}`);
       return message;
     } catch (error) {
-      console.error('[MessageDataService] Failed to create message:', error);
+      console.error("[MessageDataService] Failed to create message:", error);
       throw error;
     }
   }
@@ -41,16 +74,18 @@ export class MessageDataService {
     try {
       const updated = await Message.findByIdAndUpdate(
         messageId,
-        { 
+        {
           $set: { isRevoked: true },
-          revokedAt: new Date() 
+          revokedAt: new Date(),
         },
-        { new: true }
+        { new: true },
       );
-      console.log(`[MessageDataService] Message revoked for everyone: ${messageId}`);
+      console.log(
+        `[MessageDataService] Message revoked for everyone: ${messageId}`,
+      );
       return updated;
     } catch (error) {
-      console.error('[MessageDataService] Failed to revoke message:', error);
+      console.error("[MessageDataService] Failed to revoke message:", error);
       throw error;
     }
   }
@@ -60,13 +95,15 @@ export class MessageDataService {
    */
   async deleteMessageForMe(messageId: string, userId: string): Promise<void> {
     try {
-      await Message.findByIdAndUpdate(
-        messageId,
-        { $addToSet: { deletedByUsers: userId } }
-      );
+      await Message.findByIdAndUpdate(messageId, {
+        $addToSet: { deletedByUsers: userId },
+      });
       console.log(`[MessageDataService] Message hidden for user ${userId}`);
     } catch (error) {
-      console.error('[MessageDataService] Failed to delete message for me:', error);
+      console.error(
+        "[MessageDataService] Failed to delete message for me:",
+        error,
+      );
       throw error;
     }
   }
@@ -79,12 +116,12 @@ export class MessageDataService {
     userId: string, // UserId của người yêu cầu
     limit: number = 50,
     skip: number = 0,
-    clearedAt?: Date
+    clearedAt?: Date,
   ): Promise<IMessage[]> {
     try {
       const query: any = {
         conversationId: new Types.ObjectId(conversationId),
-        deletedByUsers: { $ne: userId } // LỌC: Không lấy tin mà user này đã xóa phía mình
+        deletedByUsers: { $ne: userId }, // LỌC: Không lấy tin mà user này đã xóa phía mình
       };
 
       if (clearedAt) {
@@ -109,7 +146,10 @@ export class MessageDataService {
         return msg;
       });
     } catch (error) {
-      console.error('[MessageDataService] Failed to get message history:', error);
+      console.error(
+        "[MessageDataService] Failed to get message history:",
+        error,
+      );
       throw error;
     }
   }
@@ -127,21 +167,24 @@ export class MessageDataService {
       {
         $set: { isRead: true },
         $addToSet: { readBy: userId },
-      }
+      },
     );
   }
 
-  async markConversationAsRead(conversationId: string, userId: string): Promise<number> {
+  async markConversationAsRead(
+    conversationId: string,
+    userId: string,
+  ): Promise<number> {
     const result = await Message.updateMany(
-      { 
+      {
         conversationId: new Types.ObjectId(conversationId),
         senderId: { $ne: userId },
-        readBy: { $ne: userId }
+        readBy: { $ne: userId },
       },
-      { 
+      {
         $set: { isRead: true },
-        $addToSet: { readBy: userId }
-      }
+        $addToSet: { readBy: userId },
+      },
     );
     return result.modifiedCount;
   }
@@ -154,33 +197,37 @@ export class MessageDataService {
   /**
    * Thêm hoặc tăng số lượng cảm xúc (Spam logic)
    */
-  async addReaction(messageId: string, userId: string, emoji: string): Promise<IMessage | null> {
+  async addReaction(
+    messageId: string,
+    userId: string,
+    emoji: string,
+  ): Promise<IMessage | null> {
     try {
       // 1. Thử cập nhật nếu đã tồn tại tổ hợp userId + emoji bằng $elemMatch
       const result = await Message.updateOne(
-        { 
+        {
           _id: new Types.ObjectId(messageId),
-          reactions: { $elemMatch: { userId: userId, emoji: emoji } }
+          reactions: { $elemMatch: { userId: userId, emoji: emoji } },
         },
-        { $inc: { "reactions.$.count": 1 } }
+        { $inc: { "reactions.$.count": 1 } },
       );
 
       // 2. Nếu không tìm thấy để cập nhật, thực hiện push mới
       if (result.matchedCount === 0) {
         return await Message.findByIdAndUpdate(
           messageId,
-          { 
-            $push: { 
-              reactions: { userId, emoji, count: 1 } 
-            } 
+          {
+            $push: {
+              reactions: { userId, emoji, count: 1 },
+            },
           },
-          { new: true }
+          { new: true },
         );
       }
 
       return await Message.findById(messageId);
     } catch (error) {
-      console.error('[MessageDataService] Failed to add reaction:', error);
+      console.error("[MessageDataService] Failed to add reaction:", error);
       throw error;
     }
   }
@@ -188,19 +235,22 @@ export class MessageDataService {
   /**
    * Xóa toàn bộ cảm xúc của một user trên tin nhắn đó
    */
-  async clearReactions(messageId: string, userId: string): Promise<IMessage | null> {
+  async clearReactions(
+    messageId: string,
+    userId: string,
+  ): Promise<IMessage | null> {
     try {
       return await Message.findByIdAndUpdate(
         messageId,
-        { 
-          $pull: { 
-            reactions: { userId: userId } 
-          } 
+        {
+          $pull: {
+            reactions: { userId: userId },
+          },
         },
-        { new: true }
+        { new: true },
       );
     } catch (error) {
-      console.error('[MessageDataService] Failed to clear reactions:', error);
+      console.error("[MessageDataService] Failed to clear reactions:", error);
       throw error;
     }
   }

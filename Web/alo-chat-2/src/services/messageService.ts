@@ -15,6 +15,7 @@ export interface MessageDTO {
   isRevoked?: boolean;
   reactions?: any[];
   revokedAt?: string;
+  isPinned?: boolean; // Thêm trường này để nhận biết tin nhắn ghim
   createdAt: string;
   updatedAt?: string;
 }
@@ -65,6 +66,25 @@ function extractSentMessage(raw: any): MessageDTO | null {
 }
 
 export const messageService = {
+  // Ghim hoặc bỏ ghim tin nhắn, trả về MessageDTO mới nhất nếu backend trả về
+  pinMessage: async (
+    messageId: string,
+    pin: boolean = true,
+  ): Promise<MessageDTO | null> => {
+    try {
+      let raw;
+      if (pin) {
+        raw = await api.patch(`/messages/${messageId}/pin`);
+      } else {
+        raw = await api.patch(`/messages/${messageId}/unpin`);
+      }
+      // Nếu backend trả về message mới nhất
+      return extractSentMessage(raw);
+    } catch (error) {
+      console.error("Lỗi (bỏ)ghim tin nhắn:", error);
+      return null;
+    }
+  },
   // Lấy lịch sử tin nhắn của một cuộc hội thoại
   getMessageHistory: async (
     conversationId: string,
