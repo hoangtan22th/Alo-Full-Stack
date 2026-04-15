@@ -59,6 +59,10 @@ export default function ChatPage() {
   const router = useRouter();
   const conversationId = params?.conversationId as string;
 
+  // File upload state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+
   /* ---------- chat area state ---------- */
   const { user: currentUser } = useAuthStore();
   const [messages, setMessages] = useState<MessageDTO[]>([]);
@@ -370,13 +374,13 @@ const handleDownload = async (url: string, fileName: string) => {
   }
 };
 
+
   /* ─── Send message ─── */
   const handleSend = async () => {
     const text = messageText.trim();
     if (!text || !conversationId || sending) return;
 
-    const myId =
-      currentUser?.id || currentUser?._id || currentUser?.userId || "me";
+    const myId = currentUser?.id || currentUser?._id || currentUser?.userId || "me";
 
     setSending(true);
     setMessageText("");
@@ -395,8 +399,6 @@ const handleDownload = async (url: string, fileName: string) => {
     setMessages((prev) => [...prev, tempMsg]);
 
     try {
-      // Gọi REST API — socket sẽ bắn "message-received" về cho mọi người trong room
-      // (kể cả người gửi). Socket callback sẽ replace temp_ bằng message thật.
       await messageService.sendMessage({
         conversationId,
         content: text,
@@ -404,7 +406,6 @@ const handleDownload = async (url: string, fileName: string) => {
       });
     } catch (err) {
       console.error("Lỗi gửi tin nhắn:", err);
-      // Rollback optimistic nếu gửi thất bại
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
       setMessageText(text);
     } finally {
@@ -412,6 +413,54 @@ const handleDownload = async (url: string, fileName: string) => {
       setTimeout(() => {
         inputRef.current?.focus();
       }, 0);
+    }
+  };
+
+  // ─── Handle file upload ───
+  const handleFileButtonClick = () => {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !conversationId || uploadingFile) return;
+    if (files.length > 5) {
+      alert("Chỉ được gửi tối đa 5 file mỗi lần!");
+      return;
+    }
+    setUploadingFile(true);
+    const myId = currentUser?.id || currentUser?._id || currentUser?.userId || "me";
+    const tempIds: string[] = [];
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const tempId = `temp_file_${Date.now()}_${i}`;
+        tempIds.push(tempId);
+        const tempMsg: MessageDTO = {
+          _id: tempId,
+          conversationId,
+          senderId: myId,
+          type: "file",
+          content: "",
+          isRead: false,
+          createdAt: new Date().toISOString(),
+          metadata: {
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type,
+          },
+        };
+        setMessages((prev) => [...prev, tempMsg]);
+        try {
+          await messageService.uploadFile(conversationId, file);
+        } catch (err) {
+          console.error("Lỗi gửi file:", err);
+          setMessages((prev) => prev.filter((m) => m._id !== tempId));
+        }
+      }
+    } finally {
+      setUploadingFile(false);
     }
   };
 
@@ -1019,9 +1068,25 @@ const handleDownload = async (url: string, fileName: string) => {
         {/* Message Input */}
         <div className="p-4 bg-white shrink-0">
           <div className="flex items-center gap-3 bg-[#F5F5F5] p-2 rounded-full border border-transparent focus-within:border-gray-200 focus-within:bg-white transition-all">
-            <button className="p-2 text-gray-400 hover:text-black transition">
+            {/* Nút gửi file */}
+            <button
+              className="p-2 text-gray-400 hover:text-black transition"
+              onClick={handleFileButtonClick}
+              disabled={uploadingFile}
+              title="Gửi file"
+            >
               <PaperClipIcon className="w-5 h-5" />
             </button>
+            {/* Input file ẩn */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              style={{ display: "none" }}
+              onChange={handleFileChange}
+              disabled={uploadingFile}
+              multiple
+              max={5}
+            />
             <input
               ref={inputRef}
               type="text"
