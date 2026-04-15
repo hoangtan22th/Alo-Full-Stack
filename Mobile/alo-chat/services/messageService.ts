@@ -1,5 +1,12 @@
 import api from "./api";
 
+// Kiểu cho gửi file/ảnh từ mobile
+export interface SendFileMessagePayload {
+  conversationId: string;
+  file: any; // DocumentPicker hoặc ImagePicker asset
+  isImage?: boolean;
+}
+
 export interface MessageDTO {
   _id: string;
   conversationId: string;
@@ -78,6 +85,83 @@ export const messageService = {
     } catch (error) {
       console.error("Lỗi lấy lịch sử tin nhắn:", error);
       return [];
+    }
+  },
+
+  /**
+   * Bỏ ghim một tin nhắn (PATCH /messages/:messageId/unpin)
+   */
+  async unpinMessage(messageId: string): Promise<boolean> {
+    try {
+      await api.patch(`/messages/${messageId}/unpin`);
+      return true;
+    } catch (error) {
+      console.error("Lỗi bỏ ghim tin nhắn:", error);
+      return false;
+    }
+  },
+
+  /**
+   * Ghim một tin nhắn (PATCH /messages/:messageId/pin)
+   */
+  async pinMessage(messageId: string): Promise<boolean> {
+    try {
+      await api.patch(`/messages/${messageId}/pin`);
+      return true;
+    } catch (error) {
+      console.error("Lỗi ghim tin nhắn:", error);
+      return false;
+    }
+  },
+  /**
+   * Lấy tin nhắn đã ghim của hội thoại
+   */
+  async getPinnedMessage(conversationId: string): Promise<MessageDTO | null> {
+    try {
+      const raw = await api.get(`/conversations/${conversationId}/pinned`);
+      // Có thể cần điều chỉnh extractSentMessage hoặc parse lại nếu backend trả về khác
+      return extractSentMessage(raw);
+    } catch (error) {
+      return null;
+    }
+  },
+
+  /**
+   * Gửi file hoặc ảnh từ React Native (DocumentPicker/ImagePicker)
+   * file: asset từ DocumentPicker hoặc ImagePicker
+   * isImage: true nếu là ảnh
+   */
+  async sendFileMessage({
+    conversationId,
+    file,
+    isImage,
+  }: SendFileMessagePayload): Promise<MessageDTO | null> {
+    try {
+      // Chuẩn hóa file cho FormData
+      const formData = new FormData();
+      formData.append("conversationId", conversationId);
+      // Xử lý file từ DocumentPicker hoặc ImagePicker
+      if (file) {
+        // Expo DocumentPicker: { uri, name, mimeType }
+        // Expo ImagePicker: { uri, fileName, type }
+        const name = file.name || file.fileName || `file_${Date.now()}`;
+        const type =
+          file.mimeType ||
+          file.type ||
+          (isImage ? "image/jpeg" : "application/octet-stream");
+        formData.append("file", {
+          uri: file.uri,
+          name,
+          type,
+        } as any);
+      }
+      const raw = await api.post<any, any>(`/messages/upload`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return extractSentMessage(raw);
+    } catch (error) {
+      console.error("Lỗi gửi file/ảnh:", error);
+      return null;
     }
   },
 

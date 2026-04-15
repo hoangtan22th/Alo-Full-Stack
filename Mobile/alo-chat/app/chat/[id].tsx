@@ -1,5 +1,9 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState, useRef, useEffect, useMemo } from "react";
+// Thêm import cho gửi file
+import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
+
 import {
   View,
   Text,
@@ -274,9 +278,12 @@ export default function GlobalChatScreen() {
     const fetchMissingUsers = async () => {
       // 1. Lấy tất cả userId từ tin nhắn và reactions
       const messageSenderIds = messages.map((m) => m.senderId);
-      const reactionUserIds = reactionDetailMsg?.reactions?.map((r: any) => r.userId) || [];
-      
-      const allIds = Array.from(new Set([...messageSenderIds, ...reactionUserIds]));
+      const reactionUserIds =
+        reactionDetailMsg?.reactions?.map((r: any) => r.userId) || [];
+
+      const allIds = Array.from(
+        new Set([...messageSenderIds, ...reactionUserIds]),
+      );
       const missingIds = allIds.filter((id) => id && !userCache[id]);
 
       if (missingIds.length === 0) return;
@@ -458,7 +465,10 @@ export default function GlobalChatScreen() {
         }, 100);
 
         // Đánh dấu đã đọc nếu tin nhắn từ người khác
-        if (currentUserId && String(newMsg.senderId) !== String(currentUserId)) {
+        if (
+          currentUserId &&
+          String(newMsg.senderId) !== String(currentUserId)
+        ) {
           messageService.markAsRead(resolvedConversationId).catch(() => {});
         }
       }
@@ -484,17 +494,46 @@ export default function GlobalChatScreen() {
       }
     };
 
+    // Lắng nghe realtime ghim tin nhắn
+    const handleMessagePinned = (data: any) => {
+      // data: { message: MessageDTO, conversationId }
+      if (data.conversationId === resolvedConversationId && data.message) {
+        setPinnedMessages((prev) => {
+          if (prev.some((m) => m._id === data.message._id)) {
+            return prev.map((m) =>
+              m._id === data.message._id ? data.message : m,
+            );
+          }
+          return [...prev, data.message];
+        });
+      }
+    };
+
+    // Lắng nghe realtime bỏ ghim tin nhắn
+    const handleMessageUnpinned = (data: any) => {
+      // data: { messageId, conversationId }
+      if (data.conversationId === resolvedConversationId && data.messageId) {
+        setPinnedMessages((prev) =>
+          prev.filter((m) => m._id !== data.messageId),
+        );
+      }
+    };
+
     socket.on("message-received", handleMessageReceived);
     socket.on("message-reaction-updated", handleReactionUpdated);
     socket.on("messages-read", handleMessagesRead);
     socket.on("TYPING", handleTyping);
     socket.on("STOP_TYPING", handleStopTyping);
+    socket.on("message-pinned", handleMessagePinned);
+    socket.on("message-unpinned", handleMessageUnpinned);
     return () => {
       socket.off("message-received", handleMessageReceived);
       socket.off("message-reaction-updated", handleReactionUpdated);
       socket.off("messages-read", handleMessagesRead);
       socket.off("TYPING", handleTyping);
       socket.off("STOP_TYPING", handleStopTyping);
+      socket.off("message-pinned", handleMessagePinned);
+      socket.off("message-unpinned", handleMessageUnpinned);
     };
   }, [socket, resolvedConversationId, isGroupChat, targetUserId]);
 
@@ -575,7 +614,7 @@ export default function GlobalChatScreen() {
         ? new Date(msg.createdAt).getTime() -
           new Date(lastMsg.createdAt).getTime()
         : Infinity;
-      
+
       // Nhóm theo SENDER ID cụ thể (không chỉ là isSender) để tránh gộp nhiều người khác vào 1 khối
       if (last && last.senderId === msg.senderId && gap < FIVE_MIN) {
         last.messages.push(msg);
@@ -601,6 +640,90 @@ export default function GlobalChatScreen() {
       hideSub.remove();
     };
   }, []);
+
+  // Danh sách tin nhắn đã ghim
+  const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
+  const [showAllPinned, setShowAllPinned] = useState(false);
+  // Hàm gửi file (file hoặc ảnh)
+  const handleSendFile = async () => {
+    if (!resolvedConversationId) return;
+    try {
+      // Chọn file
+      const fileRes = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (fileRes.canceled || !fileRes.assets?.length) return;
+      const file = fileRes.assets[0];
+      // Gửi file qua messageService (cần có API nhận file dạng FormData)
+      const sentMessage = await messageService.sendFileMessage({
+        conversationId: resolvedConversationId,
+        file,
+      });
+      if (sentMessage) {
+        setMessages((prev) => {
+          if (prev.find((m) => m._id === sentMessage._id)) return prev;
+          return [...prev, sentMessage];
+        });
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    } catch (e) {
+      console.error("Lỗi gửi file:", e);
+    }
+  };
+
+  // Hàm gửi ảnh (tùy chọn, dùng ImagePicker)
+  const handleSendImage = async () => {
+    if (!resolvedConversationId) return;
+    try {
+      const imgRes = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+      if (imgRes.canceled || !imgRes.assets?.length) return;
+      const image = imgRes.assets[0];
+      const sentMessage = await messageService.sendFileMessage({
+        conversationId: resolvedConversationId,
+        file: image,
+        isImage: true,
+      });
+      if (sentMessage) {
+        setMessages((prev) => {
+          if (prev.find((m) => m._id === sentMessage._id)) return prev;
+          return [...prev, sentMessage];
+        });
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    } catch (e) {
+      console.error("Lỗi gửi ảnh:", e);
+    }
+  };
+
+  // Hàm ghim tin nhắn
+  const handlePinMessage = async () => {
+    if (!selectedMsg) return;
+    closeModal();
+    try {
+      const ok = await messageService.pinMessage(selectedMsg._id);
+      if (ok) {
+        setPinnedMessages((prev) => {
+          const newList = [...prev, selectedMsg];
+          return newList.filter(
+            (msg, idx, arr) => arr.findIndex((m) => m._id === msg._id) === idx,
+          );
+        });
+        Alert.alert("Đã ghim tin nhắn");
+      }
+    } catch (e) {
+      Alert.alert("Lỗi", "Không thể ghim tin nhắn");
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -729,6 +852,42 @@ export default function GlobalChatScreen() {
       {/* Body Messages */}
       <View className="flex-1">
         <View className="absolute top-0 left-0 right-0 bottom-0">
+          {/* Hiển thị danh sách tin nhắn đã ghim */}
+          {pinnedMessages.length > 0 && (
+            <View className="bg-yellow-50 border-l-4 border-yellow-400 px-4 py-2 mb-2 rounded-r-2xl mt-2">
+              <Text className="text-xs text-yellow-700 font-bold mb-1">
+                Tin nhắn đã ghim:
+              </Text>
+              {(showAllPinned
+                ? pinnedMessages
+                : pinnedMessages.slice(0, 2)
+              ).map((msg, idx) => (
+                <View key={msg._id} className="flex-row items-center mb-1">
+                  <Text className="text-xs text-gray-800" numberOfLines={1}>
+                    {msg.type === "text"
+                      ? msg.content
+                      : msg.type === "image"
+                        ? "[Ảnh]"
+                        : msg.type === "file"
+                          ? msg.metadata?.fileName || "[Tệp đính kèm]"
+                          : "[Tin nhắn]"}
+                  </Text>
+                </View>
+              ))}
+              {pinnedMessages.length > 2 && !showAllPinned && (
+                <TouchableOpacity onPress={() => setShowAllPinned(true)}>
+                  <Text className="text-xs text-blue-600 mt-1">
+                    Xem tất cả tin nhắn đã ghim
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {showAllPinned && pinnedMessages.length > 2 && (
+                <TouchableOpacity onPress={() => setShowAllPinned(false)}>
+                  <Text className="text-xs text-blue-600 mt-1">Ẩn bớt</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
           <ScrollView
             ref={scrollViewRef}
             className="flex-1 px-4"
@@ -746,7 +905,8 @@ export default function GlobalChatScreen() {
               const isSender = group.isSender;
               const senderId = group.messages[0].senderId;
               const sender = userCache[senderId];
-              const senderName = sender?.fullName || (sender as any)?.name || "Người dùng";
+              const senderName =
+                sender?.fullName || (sender as any)?.name || "Người dùng";
               const senderAvatar = sender?.avatar;
 
               return (
@@ -796,7 +956,10 @@ export default function GlobalChatScreen() {
                         : "";
 
                       return (
-                        <View key={msg._id} className={`${isLast ? "" : "mb-1"} w-full ${isSender ? "items-end" : "items-start"}`}>
+                        <View
+                          key={msg._id}
+                          className={`${isLast ? "" : "mb-1"} w-full ${isSender ? "items-end" : "items-start"}`}
+                        >
                           <TouchableOpacity
                             ref={(r) => {
                               if (r) messageRefs.current[msg._id] = r as any;
@@ -820,7 +983,9 @@ export default function GlobalChatScreen() {
                                 <Text
                                   className={
                                     "italic text-sm leading-6 " +
-                                    (isSender ? "text-gray-300" : "text-gray-400")
+                                    (isSender
+                                      ? "text-gray-300"
+                                      : "text-gray-400")
                                   }
                                 >
                                   Tin nhắn đã bị thu hồi
@@ -842,7 +1007,9 @@ export default function GlobalChatScreen() {
                                   <View>
                                     <Text
                                       className={`text-sm font-bold ${
-                                        isSender ? "text-white" : "text-gray-900"
+                                        isSender
+                                          ? "text-white"
+                                          : "text-gray-900"
                                       }`}
                                       numberOfLines={1}
                                     >
@@ -905,7 +1072,9 @@ export default function GlobalChatScreen() {
                               {isSender && (
                                 <Text
                                   className={`ml-1 text-[11px] font-bold ${
-                                    msg.isRead ? "text-blue-500" : "text-gray-400"
+                                    msg.isRead
+                                      ? "text-blue-500"
+                                      : "text-gray-400"
                                   }`}
                                 >
                                   {msg.isRead ? "✓✓" : "✓"}
@@ -944,7 +1113,7 @@ export default function GlobalChatScreen() {
             }}
           >
             <View className="flex-1 flex-row items-center bg-white rounded-full pl-2 pr-4 py-1.5 shadow-sm border border-gray-200 min-h-[50px]">
-              <TouchableOpacity className="p-2">
+              <TouchableOpacity className="p-2" onPress={handleSendFile}>
                 <PlusIcon size={24} color="#6b7280" />
               </TouchableOpacity>
               <TextInput
@@ -955,7 +1124,7 @@ export default function GlobalChatScreen() {
                 value={inputText}
                 onChangeText={handleInputChange}
               />
-              <TouchableOpacity className="p-2">
+              <TouchableOpacity className="p-2" onPress={handleSendImage}>
                 <FaceSmileIcon size={24} color="#6b7280" />
               </TouchableOpacity>
             </View>
@@ -1091,12 +1260,57 @@ export default function GlobalChatScreen() {
                           </TouchableOpacity>
                         )}
 
-                      <TouchableOpacity className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50">
-                        <MapPinIcon size={18} color="#4b5563" />
-                        <Text className="text-[14px] font-medium text-gray-700">
-                          Ghim tin nhắn
-                        </Text>
-                      </TouchableOpacity>
+                      {/* Menu ghim/bỏ ghim */}
+                      {pinnedMessages.some(
+                        (m) => m._id === selectedMsg?._id,
+                      ) ? (
+                        <TouchableOpacity
+                          onPress={async () => {
+                            closeModal();
+                            if (selectedMsg) {
+                              const ok = await messageService.unpinMessage(
+                                selectedMsg._id,
+                              );
+                              if (ok) {
+                                setPinnedMessages((prev) =>
+                                  prev.filter((m) => m._id !== selectedMsg._id),
+                                );
+                                Alert.alert("Đã bỏ ghim tin nhắn");
+                              }
+                            }
+                          }}
+                          className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
+                        >
+                          <MapPinIcon size={18} color="#f87171" />
+                          <Text className="text-[14px] font-medium text-red-500">
+                            Bỏ ghim
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          onPress={async () => {
+                            closeModal();
+                            if (selectedMsg) {
+                              const ok = await messageService.pinMessage(
+                                selectedMsg._id,
+                              );
+                              if (ok) {
+                                setPinnedMessages((prev) => [
+                                  ...prev,
+                                  selectedMsg,
+                                ]);
+                                Alert.alert("Đã ghim tin nhắn");
+                              }
+                            }
+                          }}
+                          className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
+                        >
+                          <MapPinIcon size={18} color="#4b5563" />
+                          <Text className="text-[14px] font-medium text-gray-700">
+                            Ghim tin nhắn
+                          </Text>
+                        </TouchableOpacity>
+                      )}
 
                       {selectedMsg.senderId === currentUserId &&
                         !selectedMsg.isRevoked && (
