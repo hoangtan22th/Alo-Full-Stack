@@ -718,17 +718,17 @@ export default function ChatPage() {
                     </div>
                   </div>
                   <button
+                    className="ml-2 px-2 py-1 rounded-lg bg-yellow-100 text-yellow-800 text-xs font-bold hover:bg-yellow-200"
+                    onClick={() => setShowPinnedModal(true)}
+                  >
+                    Xem {pinnedMessages.length} tin nhắn đã ghim
+                  </button>
+                  <button
                     className="ml-2 p-1 rounded-full hover:bg-yellow-100 text-yellow-700"
                     title="Bỏ ghim"
                     onClick={() => handlePinMessage(pinnedMessages[0])}
                   >
                     <XMarkIcon className="w-4 h-4" />
-                  </button>
-                  <button
-                    className="ml-2 px-2 py-1 rounded-lg bg-yellow-100 text-yellow-800 text-xs font-bold hover:bg-yellow-200"
-                    onClick={() => setShowPinnedModal(true)}
-                  >
-                    Xem {pinnedMessages.length} tin nhắn đã ghim
                   </button>
                 </div>
               </div>
@@ -971,7 +971,7 @@ export default function ChatPage() {
 
                                   {/* Hover Controls (Reaction & Menu & Redo) */}
                                   <div
-                                    className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1.5 py-4 ${
+                                    className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1.5 py-4 z-[1000] ${
                                       isMine
                                         ? "right-full pr-2"
                                         : "left-full pl-2"
