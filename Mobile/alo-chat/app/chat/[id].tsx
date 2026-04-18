@@ -1,33 +1,33 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 // Thêm import cho gửi file
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
+  Alert,
+  Dimensions,
   Image,
   Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
-  Dimensions,
-  Alert,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  UIManager,
+  LayoutAnimation,
 } from "react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  interpolate,
-  Extrapolation,
-  runOnJS,
-} from "react-native-reanimated";
+
+if (Platform.OS === "android") {
+  if (UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  }
+}
+
 import {
   Gesture,
   GestureDetector,
@@ -35,25 +35,36 @@ import {
 } from "react-native-gesture-handler";
 import {
   ArrowLeftIcon,
-  PhoneIcon,
-  VideoCameraIcon,
-  InformationCircleIcon,
-  FaceSmileIcon,
-  PlusIcon,
-  CheckCircleIcon,
-  XMarkIcon,
-  ClipboardDocumentIcon,
-  MapPinIcon,
   ArrowUturnLeftIcon,
+  ClipboardDocumentIcon,
+  DocumentIcon,
+  FaceSmileIcon,
+  InformationCircleIcon,
+  MapPinIcon,
+  MicrophoneIcon,
+  PhoneIcon,
+  PhotoIcon,
+  PlusIcon,
   TrashIcon,
+  VideoCameraIcon,
+  XMarkIcon,
+  ChevronDownIcon,
 } from "react-native-heroicons/outline";
 import { PaperAirplaneIcon } from "react-native-heroicons/solid";
+import Animated, {
+  Extrapolation,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useSocket } from "../../contexts/SocketContext";
 import { useAuth } from "../../contexts/AuthContext";
-import { messageService, MessageDTO } from "../../services/messageService";
-import { userService, UserProfileDTO } from "../../services/userService";
+import { useSocket } from "../../contexts/SocketContext";
 import { groupService } from "../../services/groupService";
+import { MessageDTO, messageService } from "../../services/messageService";
+import { UserProfileDTO, userService } from "../../services/userService";
 
 // Cấu hình chiều cao cho Bottom Sheet (Ngoài component để ổn định Reanimated)
 const { height: screenHeight } = Dimensions.get("window");
@@ -109,6 +120,15 @@ export default function GlobalChatScreen() {
     null,
   );
   const [activeReactionTabIdx, setActiveReactionTabIdx] = useState(0);
+
+  // Trạng thái cho Plus Menu (Các chức năng mở rộng Gửi ảnh/Gửi tệp/Gửi icon)
+  const [showExtensionMenu, setShowExtensionMenu] = useState(false);
+  const [expandedTimeMsgId, setExpandedTimeMsgId] = useState<string | null>(
+    null,
+  );
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [hasNewUnseenMessages, setHasNewUnseenMessages] = useState(false);
+  const messagesCountRef = useRef(0);
   const [userCache, setUserCache] = useState<Record<string, UserProfileDTO>>(
     {},
   );
@@ -461,9 +481,6 @@ export default function GlobalChatScreen() {
           if (prev.find((m) => m._id === newMsg._id)) return prev;
           return [...prev, newMsg];
         });
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
 
         // Đánh dấu đã đọc nếu tin nhắn từ người khác
         if (
@@ -523,16 +540,12 @@ export default function GlobalChatScreen() {
       // data: { messageId: string, revokedAt?: string }
       setMessages((prev) =>
         prev.map((m) =>
-          m._id === data.messageId
-            ? { ...m, isRevoked: true, content: "" }
-            : m,
+          m._id === data.messageId ? { ...m, isRevoked: true, content: "" } : m,
         ),
       );
 
       // Nếu tin nhắn đang được ghim bị thu hồi, tự động gỡ khỏi thanh ghim
-      setPinnedMessages((prev) =>
-        prev.filter((m) => m._id !== data.messageId),
-      );
+      setPinnedMessages((prev) => prev.filter((m) => m._id !== data.messageId));
     };
 
     socket.on("message-received", handleMessageReceived);
@@ -748,6 +761,19 @@ export default function GlobalChatScreen() {
     }
   };
 
+  // hàm xoay nút chọn menu gửi file
+  const spinMenu = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          rotate: withTiming(showExtensionMenu ? "45deg" : "0deg", {
+            duration: 250,
+          }),
+        },
+      ],
+    };
+  });
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: "#f9fafb" }}
@@ -880,23 +906,32 @@ export default function GlobalChatScreen() {
             <View className="flex-row items-center px-4 py-3 bg-yellow-50">
               <MapPinIcon size={20} color="#eab308" />
               <View className="flex-1 ml-3 mr-2">
-                <Text className="text-[13px] font-bold text-yellow-800" numberOfLines={1}>
+                <Text
+                  className="text-[13px] font-bold text-yellow-800"
+                  numberOfLines={1}
+                >
                   {pinnedMessages[pinnedMessages.length - 1].type === "text"
                     ? pinnedMessages[pinnedMessages.length - 1].content
                     : pinnedMessages[pinnedMessages.length - 1].type === "image"
                       ? "[Ảnh]"
-                      : pinnedMessages[pinnedMessages.length - 1].type === "file"
-                        ? pinnedMessages[pinnedMessages.length - 1].metadata?.fileName || "[Tệp đính kèm]"
+                      : pinnedMessages[pinnedMessages.length - 1].type ===
+                          "file"
+                        ? pinnedMessages[pinnedMessages.length - 1].metadata
+                            ?.fileName || "[Tệp đính kèm]"
                         : "[Tin nhắn]"}
                 </Text>
-                <Text className="text-[11px] text-yellow-700 mt-0.5 font-medium">Tin nhắn đã ghim</Text>
+                <Text className="text-[11px] text-yellow-700 mt-0.5 font-medium">
+                  Tin nhắn đã ghim
+                </Text>
               </View>
               {pinnedMessages.length > 1 && (
                 <TouchableOpacity
                   onPress={() => setShowAllPinned(true)}
                   className="bg-yellow-200 px-2 py-1 rounded"
                 >
-                  <Text className="text-[11px] font-bold text-yellow-800 tracking-tight">+{pinnedMessages.length - 1}</Text>
+                  <Text className="text-[11px] font-bold text-yellow-800 tracking-tight">
+                    +{pinnedMessages.length - 1}
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -915,19 +950,33 @@ export default function GlobalChatScreen() {
               <View className="flex-row items-center justify-between px-5 py-4 border-b border-gray-100">
                 <View className="flex-row items-center">
                   <MapPinIcon size={20} color="#eab308" />
-                  <Text className="ml-2 text-base font-bold text-gray-900">Danh sách đã ghim</Text>
+                  <Text className="ml-2 text-base font-bold text-gray-900">
+                    Danh sách đã ghim
+                  </Text>
                 </View>
                 <TouchableOpacity onPress={() => setShowAllPinned(false)}>
                   <XMarkIcon size={24} color="#6b7280" />
                 </TouchableOpacity>
               </View>
-              <ScrollView className="p-4" contentContainerStyle={{ paddingBottom: 20 }}>
-                {pinnedMessages.map(msg => (
-                  <View key={msg._id} className="bg-yellow-50 rounded-xl p-3 mb-3 border border-yellow-200">
+              <ScrollView
+                className="p-4"
+                contentContainerStyle={{ paddingBottom: 20 }}
+              >
+                {pinnedMessages.map((msg) => (
+                  <View
+                    key={msg._id}
+                    className="bg-yellow-50 rounded-xl p-3 mb-3 border border-yellow-200"
+                  >
                     <Text className="text-[14px] font-medium text-yellow-900 mb-1">
-                      {msg.type === "text" ? msg.content : msg.type === "image" ? "[Ảnh]" : msg.metadata?.fileName || "[Tệp đính kèm]"}
+                      {msg.type === "text"
+                        ? msg.content
+                        : msg.type === "image"
+                          ? "[Ảnh]"
+                          : msg.metadata?.fileName || "[Tệp đính kèm]"}
                     </Text>
-                    <Text className="text-[11px] text-yellow-700">Ghim lúc {new Date(msg.createdAt).toLocaleDateString()}</Text>
+                    <Text className="text-[11px] text-yellow-700">
+                      Ghim lúc {new Date(msg.createdAt).toLocaleDateString()}
+                    </Text>
                   </View>
                 ))}
               </ScrollView>
@@ -935,19 +984,47 @@ export default function GlobalChatScreen() {
           </View>
         </Modal>
 
-        <View className="absolute top-0 left-0 right-0 bottom-0" style={{ paddingTop: pinnedMessages.length > 0 ? 64 : 0 }}>
+        <View
+          className="absolute top-0 left-0 right-0 bottom-0"
+          style={{ paddingTop: pinnedMessages.length > 0 ? 64 : 0 }}
+        >
           <ScrollView
             ref={scrollViewRef}
             className="flex-1 px-4"
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 100 }}
             keyboardShouldPersistTaps="handled"
-            onLayout={() =>
-              scrollViewRef.current?.scrollToEnd({ animated: false })
-            }
-            onContentSizeChange={() =>
-              scrollViewRef.current?.scrollToEnd({ animated: false })
-            }
+            onLayout={() => {
+              if (messagesCountRef.current === 0) {
+                scrollViewRef.current?.scrollToEnd({ animated: false });
+              }
+            }}
+            onScroll={(e) => {
+              const { layoutMeasurement, contentOffset, contentSize } =
+                e.nativeEvent;
+              const closeToBottom =
+                layoutMeasurement.height + contentOffset.y >=
+                contentSize.height - 50;
+              setIsAtBottom(closeToBottom);
+              if (closeToBottom && hasNewUnseenMessages) {
+                setHasNewUnseenMessages(false);
+              }
+            }}
+            scrollEventThrottle={16}
+            onContentSizeChange={() => {
+              if (
+                messages.length > messagesCountRef.current ||
+                messagesCountRef.current === 0
+              ) {
+                const isInitialLoad = messagesCountRef.current === 0;
+                messagesCountRef.current = messages.length;
+                if (isAtBottom || isInitialLoad) {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                } else {
+                  setHasNewUnseenMessages(true);
+                }
+              }
+            }}
           >
             {messageGroups.map((group, groupIdx) => {
               const isSender = group.isSender;
@@ -996,12 +1073,12 @@ export default function GlobalChatScreen() {
 
                     {group.messages.map((msg, idx) => {
                       const isLast = idx === group.messages.length - 1;
-                      const timeString = isLast
-                        ? new Date(msg.createdAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "";
+                      const timeString = new Date(
+                        msg.createdAt,
+                      ).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      });
 
                       return (
                         <View
@@ -1014,6 +1091,16 @@ export default function GlobalChatScreen() {
                             }}
                             activeOpacity={0.8}
                             onLongPress={() => onLongPressMessage(msg._id)}
+                            onPress={() => {
+                              if (!isLast) {
+                                LayoutAnimation.configureNext(
+                                  LayoutAnimation.Presets.easeInEaseOut,
+                                );
+                                setExpandedTimeMsgId((prev) =>
+                                  prev === msg._id ? null : msg._id,
+                                );
+                              }
+                            }}
                             className={`relative ${
                               msg.reactions && msg.reactions.length > 0
                                 ? "mb-3"
@@ -1106,7 +1193,7 @@ export default function GlobalChatScreen() {
                             )}
                           </TouchableOpacity>
 
-                          {isLast && (
+                          {(isLast || expandedTimeMsgId === msg._id) && (
                             <View
                               className={`flex-row items-center mt-1 ${
                                 isSender
@@ -1150,7 +1237,58 @@ export default function GlobalChatScreen() {
           </ScrollView>
         </View>
 
-        {/* Bottom Input Area */}
+        {/* Nút lướt xuống đáy có tin nhắn mới */}
+        {hasNewUnseenMessages && !isAtBottom && (
+          <TouchableOpacity
+            className="absolute bottom-[90px] right-4 bg-white w-10 h-10 rounded-full items-center justify-center shadow-lg border border-gray-200 z-50 shadow-blue-500/20"
+            onPress={() => {
+              scrollViewRef.current?.scrollToEnd({ animated: true });
+              setHasNewUnseenMessages(false);
+            }}
+          >
+            <ChevronDownIcon size={24} color="#3b82f6" />
+            <View className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />
+          </TouchableOpacity>
+        )}
+
+        {/* Extension Menu Tích hợp (Hiện ra khi bấm dấu +) */}
+        {showExtensionMenu && (
+          <View className="absolute bottom-28 left-4 bg-white rounded-2xl shadow-xl w-48 border border-gray-100 overflow-hidden py-1 z-50">
+            <TouchableOpacity
+              className="flex-row items-center px-4 py-3 border-b border-gray-50"
+              onPress={() => {
+                setShowExtensionMenu(false);
+                handleSendImage();
+              }}
+            >
+              <PhotoIcon size={22} color="#10b981" />
+              <Text className="ml-3 font-medium text-gray-700">Gửi ảnh</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="flex-row items-center px-4 py-3 border-b border-gray-50"
+              onPress={() => {
+                setShowExtensionMenu(false);
+                handleSendFile();
+              }}
+            >
+              <DocumentIcon size={22} color="#3b82f6" />
+              <Text className="ml-3 font-medium text-gray-700">
+                Gửi tệp/File
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="flex-row items-center px-4 py-3"
+              onPress={() => {
+                setShowExtensionMenu(false); /* Logic gửi icon sau */
+              }}
+            >
+              <FaceSmileIcon size={22} color="#f59e0b" />
+              <Text className="ml-3 font-medium text-gray-700">Gửi icon</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Bottom Input Area mới */}
         <View className="flex-1 justify-end" pointerEvents="box-none">
           <View
             className="w-full flex-row items-end px-4 py-3 bg-transparent"
@@ -1160,29 +1298,45 @@ export default function GlobalChatScreen() {
                 : Math.max(insets.bottom, 12),
             }}
           >
-            <View className="flex-1 flex-row items-center bg-white rounded-full pl-2 pr-4 py-1.5 shadow-sm border border-gray-200 min-h-[50px]">
-              <TouchableOpacity className="p-2" onPress={handleSendFile}>
-                <PlusIcon size={24} color="#6b7280" />
-              </TouchableOpacity>
+            {/* Dấu + tròn độc lập kế bên trái */}
+            <TouchableOpacity
+              onPress={() => setShowExtensionMenu(!showExtensionMenu)}
+              className="mr-3 w-[46px] h-[46px] bg-white rounded-full items-center justify-center shadow-sm border border-gray-100 mb-0.5 active:bg-gray-50"
+            >
+              <Animated.View style={spinMenu}>
+                <PlusIcon size={24} color="#374151" />
+              </Animated.View>
+            </TouchableOpacity>
+
+            {/* Vùng nhập text với nút Gửi/Voice bên trong */}
+            <View className="flex-1 flex-row items-end bg-white rounded-[25px] pl-4 pr-1.5 py-1.5 shadow-sm border border-gray-200 min-h-[50px]">
               <TextInput
-                className="flex-1 mx-2 text-base max-h-24 pt-2 pb-2"
+                className="flex-1 text-[15px] text-gray-800 max-h-24 pt-2 pb-2 mt-0.5 mb-0.5"
                 placeholder="Nhập tin nhắn..."
                 placeholderTextColor="#9ca3af"
                 multiline
                 value={inputText}
                 onChangeText={handleInputChange}
               />
-              <TouchableOpacity className="p-2" onPress={handleSendImage}>
-                <FaceSmileIcon size={24} color="#6b7280" />
+              <TouchableOpacity
+                onPress={() => (inputText.trim() ? sendMessage() : null)}
+                className={`w-[36px] h-[36px] rounded-full items-center justify-center ml-2 ${
+                  inputText.trim() ? "bg-black" : "bg-gray-100"
+                }`}
+              >
+                {inputText.trim() ? (
+                  <PaperAirplaneIcon
+                    size={20}
+                    color="white"
+                    style={{
+                      transform: [{ translateX: 1 }, { translateY: 1 }],
+                    }}
+                  />
+                ) : (
+                  <MicrophoneIcon size={20} color="#374151" />
+                )}
               </TouchableOpacity>
             </View>
-
-            <TouchableOpacity
-              onPress={sendMessage}
-              className="ml-3 w-[50px] h-[50px] bg-black rounded-full items-center justify-center shadow-md pb-0.5 pr-0.5"
-            >
-              <PaperAirplaneIcon size={22} color="white" />
-            </TouchableOpacity>
           </View>
         </View>
       </View>
