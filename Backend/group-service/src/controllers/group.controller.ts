@@ -561,6 +561,9 @@ export const getMyGroups = async (
 
     // Lọc theo mốc thời gian xoá (clearedAt)
     const filteredGroups = groups.filter((g) => {
+      // Nếu là tab "Nhóm" (type != 'all') và là Group, thì luôn hiện
+      if (type !== "all" && g.isGroup) return true;
+
       const clearedAt = g.clearedAt ? g.clearedAt.get(currentUserId) : null;
       if (!clearedAt) return true; // Chưa từng xoá thì hiện bình thường
 
