@@ -60,6 +60,37 @@ async function getFriendIds(
   }
 }
 
+// Helper gửi thông báo hệ thống vào room chat
+async function postSystemMessage(
+  groupId: string,
+  requesterId: string,
+  content: string,
+  authHeader?: string | string[],
+): Promise<void> {
+  try {
+    const gatewayUrl = process.env.GATEWAY_URL || "http://127.0.0.1:8888";
+    const headers: any = {
+      "X-User-Id": requesterId,
+      "Content-Type": "application/json",
+    };
+    if (authHeader) {
+      headers["Authorization"] = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+    }
+
+    await fetch(`${gatewayUrl}/api/v1/messages`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        conversationId: groupId,
+        type: "system",
+        content,
+      }),
+    });
+  } catch (error) {
+    console.error(`[postSystemMessage] Failed to send system message:`, error);
+  }
+}
+
 // 1. Tạo Nhóm mới (Tạo nhóm từ 3 người)
 export const createGroup = async (
   req: Request,
@@ -219,6 +250,14 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
     // Real-time Sync: Thông báo cho thành viên mới về nhóm này
     rabbitMQProducer.publishConversationCreated(group).catch(console.error);
 
+    // Bắn tin nhắn hệ thống
+    await postSystemMessage(
+      groupId,
+      requesterId,
+      "Một thành viên mới đã được thêm vào nhóm",
+      authHeader,
+    );
+
     res.status(200).json({ message: "Đã thêm thành viên", data: group });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -284,6 +323,18 @@ export const removeMember = async (
     rabbitMQProducer
       .publishConversationRemoved(groupId, userId)
       .catch(console.error);
+
+    // Bắn tin nhắn hệ thống
+    const messageContent =
+      userId === requesterId
+        ? "Một thành viên đã rời khỏi nhóm"
+        : "Một thành viên đã bị mời ra khỏi nhóm";
+    await postSystemMessage(
+      groupId,
+      requesterId,
+      messageContent,
+      req.headers.authorization as string,
+    );
 
     res.status(200).json({ message: "Thao tác thành công", data: group });
   } catch (error: any) {
@@ -533,6 +584,15 @@ export const requestJoinGroup = async (
       }
 
       await group.save();
+
+      // Bắn tin nhắn hệ thống khi user trực tiếp join
+      await postSystemMessage(
+        groupId,
+        requesterId,
+        "Một thành viên mới đã tham gia nhóm",
+        req.headers.authorization as string,
+      );
+
       res.status(200).json({
         message: "Đã tham gia nhóm thành công",
         joined: true,
@@ -645,6 +705,14 @@ export const approveJoinRequest = async (
 
     // Real-time Sync: Thông báo cho người vừa được duyệt về hội thoại mới hiển thị
     rabbitMQProducer.publishConversationCreated(group).catch(console.error);
+
+    // Bắn tin nhắn hệ thống
+    await postSystemMessage(
+      groupId,
+      requesterId,
+      "Một người dùng đã được duyệt vào nhóm",
+      req.headers.authorization as string,
+    );
 
     res.status(200).json({ message: "Đã phê duyệt yêu cầu", data: group });
   } catch (error: any) {
@@ -806,7 +874,10 @@ export const updateGroup = async (
       (m: any) => m.userId.toString() === currentUserId,
     );
 
-    if (!currentMember || (currentMember.role !== "LEADER" && currentMember.role !== "DEPUTY")) {
+    if (
+      !currentMember ||
+      (currentMember.role !== "LEADER" && currentMember.role !== "DEPUTY")
+    ) {
       res.status(403).json({
         error: "Bạn không có quyền cập nhật thông tin nhóm này",
       });

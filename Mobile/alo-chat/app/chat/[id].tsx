@@ -1034,6 +1034,21 @@ export default function GlobalChatScreen() {
                 sender?.fullName || (sender as any)?.name || "Người dùng";
               const senderAvatar = sender?.avatar;
 
+              // [THÊM MỚI] Nếu toàn bộ group này là tin nhắn hệ thống
+              if (group.messages.length > 0 && group.messages[0].type === "system") {
+                return (
+                  <View key={groupIdx} className="items-center my-3 w-full">
+                    {group.messages.map((msg) => (
+                      <View key={msg._id} className="bg-gray-200/80 px-4 py-1.5 rounded-full mb-1">
+                        <Text className="text-[12px] text-gray-600 font-medium text-center">
+                          {msg.content}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                );
+              }
+
               return (
                 <View
                   key={groupIdx}
