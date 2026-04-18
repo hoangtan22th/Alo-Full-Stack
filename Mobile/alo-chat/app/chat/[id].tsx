@@ -2094,10 +2094,10 @@ export default function GlobalChatScreen() {
                         >
                           {tab.label}{" "}
                           {tab.key === "all"
-                            ? ""
+                            ? (reactionDetailMsg?.reactions ?? []).reduce((acc: number, r: any) => acc + (r.count || 1), 0)
                             : (reactionDetailMsg?.reactions ?? []).filter(
                                 (r: any) => r.emoji === tab.key,
-                              ).length}
+                              ).reduce((acc: number, r: any) => acc + (r.count || 1), 0)}
                         </Text>
                       </TouchableOpacity>
                     ))}
