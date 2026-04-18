@@ -1006,12 +1006,6 @@ export default function GlobalChatScreen() {
               justifyContent: "flex-end",
               paddingBottom: 100,
             }}
-            keyboardShouldPersistTaps="handled"
-            onLayout={() => {
-              if (messagesCountRef.current === 0) {
-                scrollViewRef.current?.scrollToEnd({ animated: false });
-              }
-            }}
             onScroll={(e) => {
               const { layoutMeasurement, contentOffset, contentSize } =
                 e.nativeEvent;
@@ -1031,8 +1025,18 @@ export default function GlobalChatScreen() {
               ) {
                 const isInitialLoad = messagesCountRef.current === 0;
                 messagesCountRef.current = messages.length;
+
                 if (isAtBottom || isInitialLoad) {
-                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                  const scrollAction = () =>
+                    scrollViewRef.current?.scrollToEnd({
+                      animated: !isInitialLoad,
+                    });
+
+                  if (isInitialLoad) {
+                    setTimeout(scrollAction, 100);
+                  } else {
+                    scrollAction();
+                  }
                 } else {
                   setHasNewUnseenMessages(true);
                 }
