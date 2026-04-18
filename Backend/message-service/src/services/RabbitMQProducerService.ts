@@ -228,6 +228,7 @@ export class RabbitMQProducerService {
         room: data.conversationId,
         data: {
           messageId: data.messageId,
+          conversationId: data.conversationId,
           reactions: data.reactions,
         },
       });

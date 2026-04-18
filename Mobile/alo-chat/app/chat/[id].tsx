@@ -651,8 +651,17 @@ export default function GlobalChatScreen() {
           new Date(lastMsg.createdAt).getTime()
         : Infinity;
 
-      // Nhóm theo SENDER ID cụ thể (không chỉ là isSender) để tránh gộp nhiều người khác vào 1 khối
-      if (last && last.senderId === msg.senderId && gap < FIVE_MIN) {
+      const isSystem = msg.type === "system";
+      const lastIsSystem = lastMsg?.type === "system";
+
+      // Nhóm theo SENDER ID cụ thể, NHƯNG tách riêng tin nhắn hệ thống
+      if (
+        last &&
+        last.senderId === msg.senderId &&
+        gap < FIVE_MIN &&
+        !isSystem &&
+        !lastIsSystem
+      ) {
         last.messages.push(msg);
       } else {
         groups.push({ isSender, senderId: msg.senderId, messages: [msg] });

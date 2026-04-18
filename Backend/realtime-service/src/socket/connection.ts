@@ -102,6 +102,12 @@ export function initSocketConnection(io: Server) {
       },
     );
 
+    // 5.1. Handle Manual Join Room (for newly created groups)
+    socket.on("joinRoom", (roomId: string) => {
+      console.log(`[Socket.IO] User ${userId} manually joining room: room_${roomId}`);
+      socket.join(`room_${roomId}`);
+    });
+
     // 6. Check User Status
     socket.on("CHECK_USER_STATUS", async (targetUserId: string) => {
       try {

@@ -207,6 +207,15 @@ export const createGroup = async (
     // Real-time Sync: Thông báo cho tất cả thành viên về nhóm mới
     rabbitMQProducer.publishConversationCreated(newGroup).catch(console.error);
 
+    // Bắn tin nhắn hệ thống: X đã tạo nhóm
+    const creatorName = await getUserFullName(creatorId, authHeader);
+    await postSystemMessage(
+      String(newGroup._id),
+      creatorId,
+      `${creatorName} đã tạo nhóm`,
+      authHeader,
+    );
+
     res.status(201).json({ message: "Tạo nhóm thành công", data: newGroup });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -537,7 +546,7 @@ export const getMyGroups = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const currentUserId = req.headers["x-user-id"] as string;
+    const currentUserId = String(req.headers["x-user-id"] || "");
     const type = req.query.type as string;
 
     const query: any = {
@@ -692,7 +701,7 @@ export const getJoinRequests = async (
 ): Promise<void> => {
   try {
     const groupId = String(req.params.groupId || "");
-    const requesterId = (req.headers["x-user-id"] || "").toString();
+    const requesterId = String(req.headers["x-user-id"] || "");
 
     const group = await Conversation.findById(groupId);
     if (!group) {
@@ -796,7 +805,7 @@ export const rejectJoinRequest = async (
   try {
     const groupId = String(req.params.groupId || "");
     const userId = String(req.params.userId || "");
-    const requesterId = (req.headers["x-user-id"] || "").toString();
+    const requesterId = String(req.headers["x-user-id"] || "");
 
     const group = await Conversation.findById(groupId);
     if (!group) {
@@ -992,7 +1001,7 @@ export const clearConversation = async (
 ): Promise<void> => {
   try {
     const { groupId } = req.params;
-    const userId = (req.headers["x-user-id"] || "").toString();
+    const userId = String(req.headers["x-user-id"] || "");
 
     if (!userId) {
       res.status(401).json({ error: "Unauthorized" });
