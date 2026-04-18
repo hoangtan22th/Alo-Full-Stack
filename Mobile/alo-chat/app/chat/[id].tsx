@@ -518,12 +518,30 @@ export default function GlobalChatScreen() {
       }
     };
 
+    // Lắng nghe realtime thu hồi tin nhắn
+    const handleMessageRevoked = (data: any) => {
+      // data: { messageId: string, revokedAt?: string }
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === data.messageId
+            ? { ...m, isRevoked: true, content: "" }
+            : m,
+        ),
+      );
+
+      // Nếu tin nhắn đang được ghim bị thu hồi, tự động gỡ khỏi thanh ghim
+      setPinnedMessages((prev) =>
+        prev.filter((m) => m._id !== data.messageId),
+      );
+    };
+
     socket.on("message-received", handleMessageReceived);
     socket.on("message-reaction-updated", handleReactionUpdated);
     socket.on("messages-read", handleMessagesRead);
     socket.on("TYPING", handleTyping);
     socket.on("STOP_TYPING", handleStopTyping);
     socket.on("message-pinned", handleMessagePinned);
+    socket.on("message-revoked", handleMessageRevoked);
     return () => {
       socket.off("message-received", handleMessageReceived);
       socket.off("message-reaction-updated", handleReactionUpdated);
@@ -531,8 +549,16 @@ export default function GlobalChatScreen() {
       socket.off("TYPING", handleTyping);
       socket.off("STOP_TYPING", handleStopTyping);
       socket.off("message-pinned", handleMessagePinned);
+      socket.off("message-revoked", handleMessageRevoked);
     };
   }, [socket, resolvedConversationId, isGroupChat, targetUserId]);
+
+  // Bước 4: Tự động kiểm tra trạng thái Online của người dùng khi chat 1-1
+  useEffect(() => {
+    if (socket && targetUserId && !isGroupChat) {
+      socket.emit("CHECK_USER_STATUS", targetUserId);
+    }
+  }, [socket, targetUserId, isGroupChat]);
 
   const handleInputChange = (text: string) => {
     setInputText(text);

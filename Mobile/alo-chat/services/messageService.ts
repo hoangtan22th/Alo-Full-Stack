@@ -206,10 +206,10 @@ export const messageService = {
   // Xoá/thu hồi tin nhắn
   deleteMessage: async (messageId: string): Promise<boolean> => {
     try {
-      await api.delete<any, any>(`/messages/${messageId}`);
+      await api.patch<any, any>(`/messages/${messageId}/revoke`);
       return true;
     } catch (error) {
-      console.error("Lỗi xoá tin nhắn:", error);
+      console.error("Lỗi thu hồi tin nhắn:", error);
       return false;
     }
   },
