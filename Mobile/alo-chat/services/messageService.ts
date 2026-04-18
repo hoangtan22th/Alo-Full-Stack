@@ -20,6 +20,7 @@ export interface MessageDTO {
   };
   isRead: boolean;
   isRevoked?: boolean;
+  isPinned?: boolean;
   reactions?: any[];
   createdAt: string;
   updatedAt?: string;

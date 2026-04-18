@@ -412,6 +412,7 @@ export default function GlobalChatScreen() {
           0,
         );
         setMessages(msgs);
+        setPinnedMessages(msgs.filter((m) => m.isPinned));
 
         // Đánh dấu đã đọc khi vừa load xong hội thoại
         messageService.markAsRead(resolvedConversationId).catch(() => {});
@@ -494,28 +495,26 @@ export default function GlobalChatScreen() {
       }
     };
 
-    // Lắng nghe realtime ghim tin nhắn
+    // Lắng nghe realtime ghim/bỏ ghim tin nhắn
     const handleMessagePinned = (data: any) => {
-      // data: { message: MessageDTO, conversationId }
-      if (data.conversationId === resolvedConversationId && data.message) {
-        setPinnedMessages((prev) => {
-          if (prev.some((m) => m._id === data.message._id)) {
-            return prev.map((m) =>
-              m._id === data.message._id ? data.message : m,
-            );
+      // data: { messageId, isPinned, message, conversationId }
+      if (data.conversationId === resolvedConversationId) {
+        if (data.isPinned) {
+          if (data.message) {
+            setPinnedMessages((prev) => {
+              if (prev.some((m) => m._id === data.message._id)) {
+                return prev.map((m) =>
+                  m._id === data.message._id ? data.message : m,
+                );
+              }
+              return [...prev, data.message];
+            });
           }
-          return [...prev, data.message];
-        });
-      }
-    };
-
-    // Lắng nghe realtime bỏ ghim tin nhắn
-    const handleMessageUnpinned = (data: any) => {
-      // data: { messageId, conversationId }
-      if (data.conversationId === resolvedConversationId && data.messageId) {
-        setPinnedMessages((prev) =>
-          prev.filter((m) => m._id !== data.messageId),
-        );
+        } else {
+          setPinnedMessages((prev) =>
+            prev.filter((m) => m._id !== data.messageId),
+          );
+        }
       }
     };
 
@@ -525,7 +524,6 @@ export default function GlobalChatScreen() {
     socket.on("TYPING", handleTyping);
     socket.on("STOP_TYPING", handleStopTyping);
     socket.on("message-pinned", handleMessagePinned);
-    socket.on("message-unpinned", handleMessageUnpinned);
     return () => {
       socket.off("message-received", handleMessageReceived);
       socket.off("message-reaction-updated", handleReactionUpdated);
@@ -533,7 +531,6 @@ export default function GlobalChatScreen() {
       socket.off("TYPING", handleTyping);
       socket.off("STOP_TYPING", handleStopTyping);
       socket.off("message-pinned", handleMessagePinned);
-      socket.off("message-unpinned", handleMessageUnpinned);
     };
   }, [socket, resolvedConversationId, isGroupChat, targetUserId]);
 
@@ -850,44 +847,69 @@ export default function GlobalChatScreen() {
       </View>
 
       {/* Body Messages */}
-      <View className="flex-1">
-        <View className="absolute top-0 left-0 right-0 bottom-0">
-          {/* Hiển thị danh sách tin nhắn đã ghim */}
-          {pinnedMessages.length > 0 && (
-            <View className="bg-yellow-50 border-l-4 border-yellow-400 px-4 py-2 mb-2 rounded-r-2xl mt-2">
-              <Text className="text-xs text-yellow-700 font-bold mb-1">
-                Tin nhắn đã ghim:
-              </Text>
-              {(showAllPinned
-                ? pinnedMessages
-                : pinnedMessages.slice(0, 2)
-              ).map((msg, idx) => (
-                <View key={msg._id} className="flex-row items-center mb-1">
-                  <Text className="text-xs text-gray-800" numberOfLines={1}>
-                    {msg.type === "text"
-                      ? msg.content
-                      : msg.type === "image"
-                        ? "[Ảnh]"
-                        : msg.type === "file"
-                          ? msg.metadata?.fileName || "[Tệp đính kèm]"
-                          : "[Tin nhắn]"}
-                  </Text>
-                </View>
-              ))}
-              {pinnedMessages.length > 2 && !showAllPinned && (
-                <TouchableOpacity onPress={() => setShowAllPinned(true)}>
-                  <Text className="text-xs text-blue-600 mt-1">
-                    Xem tất cả tin nhắn đã ghim
-                  </Text>
-                </TouchableOpacity>
-              )}
-              {showAllPinned && pinnedMessages.length > 2 && (
-                <TouchableOpacity onPress={() => setShowAllPinned(false)}>
-                  <Text className="text-xs text-blue-600 mt-1">Ẩn bớt</Text>
+      <View className="flex-1 relative">
+        {/* Floating Pinned Message Bar */}
+        {pinnedMessages.length > 0 && (
+          <View className="absolute top-2 left-4 right-4 z-20 bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+            <View className="flex-row items-center px-4 py-3 bg-yellow-50">
+              <MapPinIcon size={20} color="#eab308" />
+              <View className="flex-1 ml-3 mr-2">
+                <Text className="text-[13px] font-bold text-yellow-800" numberOfLines={1}>
+                  {pinnedMessages[pinnedMessages.length - 1].type === "text"
+                    ? pinnedMessages[pinnedMessages.length - 1].content
+                    : pinnedMessages[pinnedMessages.length - 1].type === "image"
+                      ? "[Ảnh]"
+                      : pinnedMessages[pinnedMessages.length - 1].type === "file"
+                        ? pinnedMessages[pinnedMessages.length - 1].metadata?.fileName || "[Tệp đính kèm]"
+                        : "[Tin nhắn]"}
+                </Text>
+                <Text className="text-[11px] text-yellow-700 mt-0.5 font-medium">Tin nhắn đã ghim</Text>
+              </View>
+              {pinnedMessages.length > 1 && (
+                <TouchableOpacity
+                  onPress={() => setShowAllPinned(true)}
+                  className="bg-yellow-200 px-2 py-1 rounded"
+                >
+                  <Text className="text-[11px] font-bold text-yellow-800 tracking-tight">+{pinnedMessages.length - 1}</Text>
                 </TouchableOpacity>
               )}
             </View>
-          )}
+          </View>
+        )}
+
+        {/* Modal Xem tất cả tin ghim */}
+        <Modal
+          visible={showAllPinned}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowAllPinned(false)}
+        >
+          <View className="flex-1 bg-black/50 justify-center items-center px-6">
+            <View className="bg-white w-full rounded-2xl overflow-hidden max-h-[70%]">
+              <View className="flex-row items-center justify-between px-5 py-4 border-b border-gray-100">
+                <View className="flex-row items-center">
+                  <MapPinIcon size={20} color="#eab308" />
+                  <Text className="ml-2 text-base font-bold text-gray-900">Danh sách đã ghim</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowAllPinned(false)}>
+                  <XMarkIcon size={24} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView className="p-4" contentContainerStyle={{ paddingBottom: 20 }}>
+                {pinnedMessages.map(msg => (
+                  <View key={msg._id} className="bg-yellow-50 rounded-xl p-3 mb-3 border border-yellow-200">
+                    <Text className="text-[14px] font-medium text-yellow-900 mb-1">
+                      {msg.type === "text" ? msg.content : msg.type === "image" ? "[Ảnh]" : msg.metadata?.fileName || "[Tệp đính kèm]"}
+                    </Text>
+                    <Text className="text-[11px] text-yellow-700">Ghim lúc {new Date(msg.createdAt).toLocaleDateString()}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        <View className="absolute top-0 left-0 right-0 bottom-0" style={{ paddingTop: pinnedMessages.length > 0 ? 64 : 0 }}>
           <ScrollView
             ref={scrollViewRef}
             className="flex-1 px-4"
