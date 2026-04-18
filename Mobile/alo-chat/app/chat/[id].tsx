@@ -1438,8 +1438,8 @@ export default function GlobalChatScreen() {
                             20,
                             selectedMsgLayout.y -
                               (selectedMsg.senderId === currentUserId
-                                ? 240
-                                : 180),
+                                ? 280
+                                : 200),
                           ),
                       alignItems:
                         selectedMsg.senderId === currentUserId
