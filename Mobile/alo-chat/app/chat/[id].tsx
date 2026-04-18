@@ -653,7 +653,7 @@ export default function GlobalChatScreen() {
         };
       }
       allUsersMap[r.userId].emojis.add(r.emoji);
-      allUsersMap[r.userId].total += 1;
+      allUsersMap[r.userId].total += (r.count || 1);
     });
 
     const allTabContent = Object.values(allUsersMap).sort(
@@ -1522,26 +1522,31 @@ export default function GlobalChatScreen() {
                                       const idx = chatImages.findIndex((img) => img._id === msg._id);
                                       if (idx !== -1) setViewerIndex(idx);
                                     }}
-                                    className={`relative ${msg.reactions && msg.reactions.length > 0 ? "mb-3" : ""}`}
+                                    className={`relative ${(msg.reactions?.length ?? 0) > 0 ? "mb-8 pb-1" : ""}`}
                                   >
                                     <Image
                                       source={{ uri: msg.content }}
                                       className="w-[128px] h-[128px] rounded-xl border border-gray-100/50"
                                       resizeMode="cover"
                                     />
-                                    {/* Hiển thị đếm Emoji dính dưới đáy bong bóng thoại */}
-                                    {msg.reactions && msg.reactions.length > 0 && (
+                                    {/* Hiển thị phân loại đếm Emoji dính dưới đáy bong bóng thoại */}
+                                    {(msg.reactions?.length ?? 0) > 0 && (
                                       <TouchableOpacity
                                         activeOpacity={0.7}
                                         onPress={() => openReactionDetails(msg._id)}
-                                        className={`absolute -bottom-2.5 ${isSender ? "right-2" : "left-2"} bg-white border border-gray-100 rounded-full px-2 py-0.5 flex-row items-center shadow-sm z-10`}
+                                        className={`absolute top-[115px] ${isSender ? "right-1" : "left-1"} bg-white border border-gray-100 rounded-[12px] px-1.5 py-0.5 flex-row flex-wrap items-center shadow-sm z-10 max-w-[100%]`}
                                       >
-                                        <View className="flex-row items-center">
-                                          {Array.from(new Set(msg.reactions.map((r: any) => r.emoji))).map((emojiKey: any) => (
-                                            <Text key={emojiKey} className="text-[11px] mr-1">{EMOJI_MAP[emojiKey] || "👍"}</Text>
-                                          ))}
+                                        <View className="flex-row flex-wrap items-center gap-1.5">
+                                          {Array.from(new Set((msg.reactions || []).map((r: any) => r.emoji))).map((emojiKey: any) => {
+                                            const count = (msg.reactions || []).filter((r: any) => r.emoji === emojiKey).reduce((acc: number, r: any) => acc + (r.count || 1), 0);
+                                            return (
+                                              <View key={emojiKey} className="flex-row items-center mt-0.5 mb-0.5">
+                                                <Text className="text-[11px] mr-0.5">{EMOJI_MAP[emojiKey] || "👍"}</Text>
+                                                <Text className="text-[10px] font-bold text-gray-500">{count}</Text>
+                                              </View>
+                                            );
+                                          })}
                                         </View>
-                                        <Text className="text-[10px] font-bold text-gray-500 ml-1">{msg.reactions.length}</Text>
                                       </TouchableOpacity>
                                     )}
                                   </TouchableOpacity>
@@ -1582,7 +1587,7 @@ export default function GlobalChatScreen() {
                                     setExpandedTimeMsgId((prev) => prev === msg._id ? null : msg._id);
                                   }
                                 }}
-                                className={`relative ${msg.reactions && msg.reactions.length > 0 ? "mb-3" : ""}`}
+                                className={`relative`}
                               >
                                 <View
                                   className={`shadow-sm ${
@@ -1628,22 +1633,28 @@ export default function GlobalChatScreen() {
                                   ) : null}
                                 </View>
 
-                                {/* Hiển thị đếm Emoji dính dưới đáy bong bóng thoại */}
-                                {msg.reactions && msg.reactions.length > 0 && (
+                                </TouchableOpacity>
+
+                                {/* Hiển thị phân loại đếm Emoji dính dưới đáy bong bóng thoại ở vị trí tương đối */}
+                                {(msg.reactions?.length ?? 0) > 0 && (
                                   <TouchableOpacity
                                     activeOpacity={0.7}
                                     onPress={() => openReactionDetails(msg._id)}
-                                    className={`absolute -bottom-2.5 ${isSender ? "right-2" : "left-2"} bg-white border border-gray-100 rounded-full px-2 py-0.5 flex-row items-center shadow-sm z-10`}
+                                    className={`bg-white border border-gray-100 rounded-[14px] px-1.5 py-0.5 flex-row flex-wrap items-center shadow-sm z-10 -mt-3.5 mb-2 max-w-[85%] ${isSender ? "mr-4" : "ml-4"}`}
                                   >
-                                    <View className="flex-row items-center">
-                                      {Array.from(new Set(msg.reactions.map((r: any) => r.emoji))).map((emojiKey: any) => (
-                                        <Text key={emojiKey} className="text-[11px] mr-1">{EMOJI_MAP[emojiKey] || "👍"}</Text>
-                                      ))}
+                                    <View className="flex-row flex-wrap items-center gap-1.5">
+                                      {Array.from(new Set((msg.reactions || []).map((r: any) => r.emoji))).map((emojiKey: any) => {
+                                        const count = (msg.reactions || []).filter((r: any) => r.emoji === emojiKey).reduce((acc: number, r: any) => acc + (r.count || 1), 0);
+                                        return (
+                                          <View key={emojiKey} className="flex-row items-center mt-0.5 mb-0.5">
+                                            <Text className="text-[11px] mr-0.5">{EMOJI_MAP[emojiKey] || "👍"}</Text>
+                                            <Text className="text-[10px] font-bold text-gray-500">{count}</Text>
+                                          </View>
+                                        );
+                                      })}
                                     </View>
-                                    <Text className="text-[10px] font-bold text-gray-500 ml-1">{msg.reactions.length}</Text>
                                   </TouchableOpacity>
                                 )}
-                              </TouchableOpacity>
 
                               {(isLast || expandedTimeMsgId === msg._id) && (
                                 <View className={`flex-row items-center mt-1 ${isSender ? "justify-end pr-2" : "justify-start pl-2"}`}>
@@ -2152,8 +2163,13 @@ export default function GlobalChatScreen() {
                                 )}
                               </View>
                               {tab.key === "all" && item.total > 0 && (
-                                <Text className="text-gray-400 font-medium">
+                                <Text className="text-gray-400 font-medium text-lg">
                                   {item.total}
+                                </Text>
+                              )}
+                              {tab.key !== "all" && (item.count || 1) > 1 && (
+                                <Text className="text-gray-400 font-medium text-lg">
+                                  x{item.count || 1}
                                 </Text>
                               )}
                             </View>
