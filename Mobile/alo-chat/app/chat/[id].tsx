@@ -1001,7 +1001,11 @@ export default function GlobalChatScreen() {
             ref={scrollViewRef}
             className="flex-1 px-4"
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 100 }}
+            contentContainerStyle={{
+              flexGrow: 1,
+              justifyContent: "flex-end",
+              paddingBottom: 100,
+            }}
             keyboardShouldPersistTaps="handled"
             onLayout={() => {
               if (messagesCountRef.current === 0) {
