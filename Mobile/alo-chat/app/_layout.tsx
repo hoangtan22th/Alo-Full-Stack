@@ -5,6 +5,9 @@ import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import { SocketProvider } from "../contexts/SocketContext";
 import AppLockWrapper from "./components/AppLockWrapper";
 import "../global.css";
+import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
+configureReanimatedLogger({ strict: false, level: ReanimatedLogLevel.error });
+
 // import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 function RootLayoutNav() {
