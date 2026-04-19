@@ -1,4 +1,4 @@
-import { 
+import {
   MagnifyingGlassIcon,
   ArrowDownTrayIcon,
   UserPlusIcon,
@@ -7,7 +7,7 @@ import {
   PencilIcon,
   EllipsisVerticalIcon,
   ChevronLeftIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -143,30 +143,49 @@ export default function UserManagementPage() {
 
         {/* Pagination Wrapper */}
         <div className="bg-surface-container-low/50 border-t border-outline-variant/10 px-6 py-4 flex items-center justify-between">
-          <Button variant="ghost" disabled className="text-sm font-medium text-on-surface-variant hover:text-on-surface">
+          <Button
+            variant="ghost"
+            disabled
+            className="text-sm font-medium text-on-surface-variant hover:text-on-surface"
+          >
             <ChevronLeftIcon className="w-5 h-5 mr-1" />
             Previous
           </Button>
 
           <div className="flex space-x-1">
-            <Button variant="outline" className="h-8 w-8 p-0 bg-surface-container-lowest border-outline-variant/20 text-on-surface font-bold">
+            <Button
+              variant="outline"
+              className="h-8 w-8 p-0 bg-surface-container-lowest border-outline-variant/20 text-on-surface font-bold"
+            >
               1
             </Button>
-            <Button variant="ghost" className="h-8 w-8 p-0 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-medium">
+            <Button
+              variant="ghost"
+              className="h-8 w-8 p-0 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-medium"
+            >
               2
             </Button>
-            <Button variant="ghost" className="h-8 w-8 p-0 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-medium">
+            <Button
+              variant="ghost"
+              className="h-8 w-8 p-0 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-medium"
+            >
               3
             </Button>
             <span className="h-8 w-8 flex items-center justify-center text-on-surface-variant">
               ...
             </span>
-            <Button variant="ghost" className="h-8 w-8 p-0 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-medium">
+            <Button
+              variant="ghost"
+              className="h-8 w-8 p-0 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-medium"
+            >
               24
             </Button>
           </div>
 
-          <Button variant="ghost" className="text-sm font-medium text-on-surface-variant hover:text-on-surface">
+          <Button
+            variant="ghost"
+            className="text-sm font-medium text-on-surface-variant hover:text-on-surface"
+          >
             Next
             <ChevronRightIcon className="w-5 h-5 ml-1" />
           </Button>
@@ -191,15 +210,16 @@ function UserRow({
 
   // Badges status mapping perfectly mimicking the bespoke design requirement
   const statusBadge = () => {
-    if (isBanned)
-      return "bg-error-container/30 text-error";
+    if (isBanned) return "bg-error-container/30 text-error";
     if (isInactive)
       return "bg-surface-container-highest text-on-surface-variant";
     return "bg-tertiary-container text-on-tertiary-container";
   };
 
   return (
-    <tr className={`hover:bg-surface-container-low/30 transition-colors group ${isBanned ? 'opacity-75' : ''}`}>
+    <tr
+      className={`hover:bg-surface-container-low/30 transition-colors group ${isBanned ? "opacity-75" : ""}`}
+    >
       <td className="py-4 px-6">
         <div className="flex items-center">
           <Avatar className="h-10 w-10 bg-surface-container-highest font-bold text-sm text-on-surface-variant border-none">
@@ -229,13 +249,25 @@ function UserRow({
         </span>
       </td>
       <td className="py-4 px-6 text-right whitespace-nowrap">
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-on-surface-variant hover:text-on-surface mx-0.5">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-on-surface-variant hover:text-on-surface mx-0.5"
+        >
           <EyeIcon className="w-5 h-5" />
         </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-on-surface-variant hover:text-on-surface mx-0.5">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-on-surface-variant hover:text-on-surface mx-0.5"
+        >
           <PencilIcon className="w-5 h-5" />
         </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-on-surface-variant hover:text-error mx-0.5">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-on-surface-variant hover:text-error mx-0.5"
+        >
           <EllipsisVerticalIcon className="w-5 h-5" />
         </Button>
       </td>
