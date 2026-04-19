@@ -80,9 +80,37 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
               title: "Yêu cầu tham gia nhóm",
               message: `${data.requesterName} muốn tham gia nhóm ${data.groupName}`,
               data: { groupId: data.groupId },
-              type: "JOIN_REQUEST"
+              type: "JOIN_REQUEST",
             });
           });
+
+          // Duyệt thành viên (Dành cho Member được duyệt)
+          newSocket.on(
+            "JOIN_REQUEST_APPROVED",
+            (data: {
+              groupId: string;
+              groupName: string;
+              groupAvatar: string;
+              membersCount: number;
+            }) => {
+              console.log(
+                "📥 [Mobile Socket] Received JOIN_REQUEST_APPROVED:",
+                data,
+              );
+              DeviceEventEmitter.emit("show_in_app_notification", {
+                title: "Yêu cầu đã được duyệt",
+                message: `Chúc mừng! Bạn đã trở thành thành viên của nhóm ${data.groupName}`,
+                avatar: data.groupAvatar,
+                data: {
+                  groupId: data.groupId,
+                  name: data.groupName,
+                  avatar: data.groupAvatar,
+                  membersCount: data.membersCount,
+                },
+                type: "JOIN_APPROVED",
+              });
+            },
+          );
 
           // Lắng nghe trạng thái Online/Offline chung của các User khác
           newSocket.on(

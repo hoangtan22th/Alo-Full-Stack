@@ -109,6 +109,23 @@ export class RabbitMQProducerService {
     }
     console.log(`[RabbitMQProducer] Event 'NEW_JOIN_REQUEST' published to ${adminIds.length} admins for group: ${groupId}`);
   }
+
+  /**
+   * Phát sự kiện khi yêu cầu tham gia nhóm được duyệt.
+   * Gửi riêng cho người dùng đã gửi yêu cầu.
+   */
+  async publishJoinRequestApproved(userId: string, group: any) {
+    await this.publishToRealtimeService('JOIN_REQUEST_APPROVED', {
+      target: userId,
+      data: {
+        groupId: group._id.toString(),
+        groupName: group.name,
+        groupAvatar: group.groupAvatar || '',
+        membersCount: group.members.length
+      }
+    });
+    console.log(`[RabbitMQProducer] Event 'JOIN_REQUEST_APPROVED' published to user: ${userId} for group: ${group._id}`);
+  }
 }
 
 export default new RabbitMQProducerService();

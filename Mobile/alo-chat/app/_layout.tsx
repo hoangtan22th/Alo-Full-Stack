@@ -36,11 +36,13 @@ function RootLayoutNav() {
     visible: boolean;
     title: string;
     message: string;
+    type: string;
     data: any;
   }>({
     visible: false,
     title: "",
     message: "",
+    type: "",
     data: null,
   });
 
@@ -52,6 +54,7 @@ function RootLayoutNav() {
           visible: true,
           title: data.title,
           message: data.message,
+          type: data.type,
           data: data.data,
         });
       },
@@ -94,11 +97,25 @@ function RootLayoutNav() {
         message={notification.message}
         onHide={() => setNotification((prev) => ({ ...prev, visible: false }))}
         onPress={() => {
-          if (notification.data?.groupId) {
-            router.push({
-              pathname: "/chat/pending-members",
-              params: { id: notification.data.groupId },
-            });
+          if (notification.type === "JOIN_REQUEST") {
+            if (notification.data?.groupId) {
+              router.push({
+                pathname: "/chat/pending-members",
+                params: { id: notification.data.groupId },
+              });
+            }
+          } else if (notification.type === "JOIN_APPROVED") {
+            if (notification.data?.groupId) {
+              router.push({
+                pathname: `/chat/${notification.data.groupId}` as any,
+                params: {
+                  name: notification.data.name,
+                  avatar: notification.data.avatar,
+                  membersCount: String(notification.data.membersCount),
+                  isGroup: "true",
+                },
+              });
+            }
           }
         }}
       />

@@ -817,6 +817,8 @@ export const approveJoinRequest = async (
 
     // Real-time Sync: Thông báo cho người vừa được duyệt về hội thoại mới hiển thị
     rabbitMQProducer.publishConversationCreated(group).catch(console.error);
+    // Thông báo đẩy (In-app) cho người dùng được duyệt
+    rabbitMQProducer.publishJoinRequestApproved(userId, group).catch(console.error);
 
     // Bắn tin nhắn hệ thống
     const targetName = await getUserFullName(userId, req.headers.authorization);
