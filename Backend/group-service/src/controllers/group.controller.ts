@@ -702,6 +702,23 @@ export const requestJoinGroup = async (
     group.joinRequests.push({ userId: requesterId, requestedAt: new Date() });
     await group.save();
 
+    // Bắn tin cho admin
+    try {
+      const requesterName = await getUserFullName(
+        requesterId,
+        req.headers.authorization,
+      );
+      const admins = group.members
+        .filter((m: any) => m.role === "LEADER" || m.role === "DEPUTY")
+        .map((m: any) => m.userId);
+
+      rabbitMQProducer
+        .publishNewJoinRequest(groupId, requesterName, admins, group.name)
+        .catch(console.error);
+    } catch (notifErr) {
+      console.error("[RequestJoinGroup] Notification Error:", notifErr);
+    }
+
     res.status(200).json({
       message: "Đã gửi yêu cầu tham gia, vui lòng chờ duyệt",
       joined: false,

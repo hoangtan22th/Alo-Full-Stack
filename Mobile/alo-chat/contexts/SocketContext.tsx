@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { DeviceEventEmitter } from "react-native";
+import { DeviceEventEmitter, Alert } from "react-native";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "./AuthContext";
 
@@ -70,6 +70,26 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           newSocket.on("FORCE_LOGOUT", (data) => {
             console.warn("⚠️ Received FORCE_LOGOUT from server:", data);
             DeviceEventEmitter.emit("force_logout");
+          });
+
+          // Lắng nghe yêu cầu tham gia nhóm mới (Dành cho Admin)
+          newSocket.on("NEW_JOIN_REQUEST", (data: { groupId: string, requesterName: string, groupName: string }) => {
+            console.log("📥 [Mobile Socket] Received NEW_JOIN_REQUEST:", data);
+            Alert.alert(
+              "Yêu cầu tham gia nhóm",
+              `${data.requesterName} muốn tham gia nhóm ${data.groupName} của bạn.`,
+              [
+                { text: "Để sau", style: "cancel" },
+                { 
+                  text: "Xem ngay", 
+                  onPress: () => {
+                    // Có thể điều hướng đến màn hình Pending Members hoặc Group Info
+                    // Vì đây là Context nên điều hướng có thể hơi phức tạp tùy router setup
+                    // Tạm thời chỉ thông báo, admin có thể vào Group Info để duyệt
+                  } 
+                }
+              ]
+            );
           });
 
           // Lắng nghe trạng thái Online/Offline chung của các User khác

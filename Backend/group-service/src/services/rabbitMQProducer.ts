@@ -95,6 +95,20 @@ export class RabbitMQProducerService {
 
     console.log(`[RabbitMQProducer] Event 'GROUP_UPDATED' published to room: ${conversation._id}`);
   }
+
+  /**
+   * Phát sự kiện khi có người yêu cầu tham gia nhóm (cần duyệt).
+   * Gửi riêng cho các quản trị viên (LEADER, DEPUTY).
+   */
+  async publishNewJoinRequest(groupId: string, requesterName: string, adminIds: string[], groupName: string) {
+    for (const adminId of adminIds) {
+      await this.publishToRealtimeService('NEW_JOIN_REQUEST', {
+        target: adminId,
+        data: { groupId, requesterName, groupName }
+      });
+    }
+    console.log(`[RabbitMQProducer] Event 'NEW_JOIN_REQUEST' published to ${adminIds.length} admins for group: ${groupId}`);
+  }
 }
 
 export default new RabbitMQProducerService();

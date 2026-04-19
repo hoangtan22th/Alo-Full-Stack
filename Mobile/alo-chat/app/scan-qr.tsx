@@ -111,17 +111,15 @@ export default function UniversalQrScannerScreen() {
           const mCount = groupInfo?.members?.length || 1;
 
           const navigateToChat = () => {
-            router.back();
-            setTimeout(() => {
-              router.push({
-                pathname: `/chat/${groupId}` as any,
-                params: {
-                  name: groupName,
-                  avatar: groupAvatar,
-                  membersCount: mCount,
-                },
-              });
-            }, 300);
+            router.replace({
+              pathname: `/chat/${groupId}` as any,
+              params: {
+                name: groupName,
+                avatar: groupAvatar,
+                membersCount: String(mCount),
+                isGroup: "true",
+              },
+            });
           };
 
           if (resData?.alreadyMember) {
@@ -138,17 +136,30 @@ export default function UniversalQrScannerScreen() {
             [{ text: "Đóng", onPress: () => router.back() }],
           );
         }
-      } catch (error) {
-        console.error(error);
-        Alert.alert("Lỗi", "Không thể tham gia nhóm. Vui lòng thử lại sau.", [
-          {
-            text: "Quét lại",
-            onPress: () => {
-              scannedRef.current = false;
-              setScanned(false);
+      } catch (error: any) {
+        // console.error(error);
+        const errorMsg =
+          error.response?.data?.error ||
+          error.response?.data?.message ||
+          "Không thể tham gia nhóm. Vui lòng thử lại sau.";
+
+        if (errorMsg === "Bạn đã gửi yêu cầu tham gia rồi") {
+          Alert.alert(
+            "Yêu cầu đã gửi",
+            "Bạn đã gửi yêu cầu tham gia nhóm này rồi. Vui lòng chờ Quản trị viên phê duyệt.",
+            [{ text: "Đóng", onPress: () => router.back() }],
+          );
+        } else {
+          Alert.alert("Thông báo", errorMsg, [
+            {
+              text: "Quét lại",
+              onPress: () => {
+                scannedRef.current = false;
+                setScanned(false);
+              },
             },
-          },
-        ]);
+          ]);
+        }
       } finally {
         setLoading(false);
       }
@@ -275,11 +286,15 @@ export default function UniversalQrScannerScreen() {
         }}
         onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
       >
-        <View style={StyleSheet.absoluteFillObject} className="bg-black/50">
-          <View className="flex-1" />
-          <View className="flex-row">
-            <View className="flex-1" />
-            <View className="w-64 h-64 border-2 border-white bg-transparent rounded-2xl relative">
+        {/* Overlay với lỗ hổng ở giữa (Transparent cutout) */}
+        <View style={StyleSheet.absoluteFillObject}>
+          {/* Top Mask */}
+          <View className="flex-1 bg-black/60" />
+
+          {/* Center Mask */}
+          <View className="flex-row h-64">
+            <View className="flex-1 bg-black/60" />
+            <View className="w-64 border-2 border-white rounded-2xl relative bg-transparent">
               <View className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-xl -m-0.5" />
               <View className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-xl -m-0.5" />
               <View className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-xl -m-0.5" />
@@ -294,9 +309,11 @@ export default function UniversalQrScannerScreen() {
                 </View>
               )}
             </View>
-            <View className="flex-1" />
+            <View className="flex-1 bg-black/60" />
           </View>
-          <View className="flex-1 items-center pt-8">
+
+          {/* Bottom Mask */}
+          <View className="flex-1 bg-black/60 items-center pt-8">
             <Text className="text-white text-center mt-6 px-8 leading-6 bg-black/60 py-2 rounded-lg">
               Hướng camera về phía mã QR để quét
             </Text>

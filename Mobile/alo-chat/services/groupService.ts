@@ -151,7 +151,7 @@ export const groupService = {
       const data = await api.post<any, any>(`/groups/${groupId}/join-requests`);
       return data;
     } catch (error) {
-      console.error("Lỗi yêu cầu tham gia nhóm:", error);
+      // console.error("Lỗi yêu cầu tham gia nhóm:", error);
       throw error;
     }
   },
