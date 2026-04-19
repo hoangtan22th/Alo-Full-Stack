@@ -41,18 +41,28 @@ export class MessageDataService {
   async createMessage(data: {
     conversationId: string;
     senderId: string;
+    senderName?: string;
     type: string;
     content: string;
 
     metadata?: Record<string, any>;
+    replyTo?: {
+      messageId: string;
+      senderId: string;
+      senderName: string;
+      content: string;
+      type: string;
+    };
   }): Promise<IMessage> {
     try {
       const message = new Message({
         conversationId: new Types.ObjectId(data.conversationId),
         senderId: data.senderId,
+        senderName: data.senderName,
         type: data.type,
         content: data.content,
         metadata: data.metadata || {},
+        replyTo: data.replyTo,
         isRead: false,
         isRevoked: false, // Thu hồi (revoke)
         deletedByUsers: [], // Xóa 1 phía (delete)
