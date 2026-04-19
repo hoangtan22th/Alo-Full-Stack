@@ -75,21 +75,13 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           // Lắng nghe yêu cầu tham gia nhóm mới (Dành cho Admin)
           newSocket.on("NEW_JOIN_REQUEST", (data: { groupId: string, requesterName: string, groupName: string }) => {
             console.log("📥 [Mobile Socket] Received NEW_JOIN_REQUEST:", data);
-            Alert.alert(
-              "Yêu cầu tham gia nhóm",
-              `${data.requesterName} muốn tham gia nhóm ${data.groupName} của bạn.`,
-              [
-                { text: "Để sau", style: "cancel" },
-                { 
-                  text: "Xem ngay", 
-                  onPress: () => {
-                    // Có thể điều hướng đến màn hình Pending Members hoặc Group Info
-                    // Vì đây là Context nên điều hướng có thể hơi phức tạp tùy router setup
-                    // Tạm thời chỉ thông báo, admin có thể vào Group Info để duyệt
-                  } 
-                }
-              ]
-            );
+            // Thay vì dùng Alert.alert (popup), bắn event để UI hiển thị sliding notification
+            DeviceEventEmitter.emit("show_in_app_notification", {
+              title: "Yêu cầu tham gia nhóm",
+              message: `${data.requesterName} muốn tham gia nhóm ${data.groupName}`,
+              data: { groupId: data.groupId },
+              type: "JOIN_REQUEST"
+            });
           });
 
           // Lắng nghe trạng thái Online/Offline chung của các User khác

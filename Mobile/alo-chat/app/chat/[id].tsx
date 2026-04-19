@@ -949,8 +949,17 @@ export default function GlobalChatScreen() {
           setRealtimeMembersCount(updatedGroup.members.length.toString());
       }
     };
-    const handleConversationRemoved = (data: { conversationId: string }) => {
+    const handleConversationRemoved = (data: {
+      conversationId: string;
+      reason?: "leave" | "kick" | "delete";
+    }) => {
       if (data.conversationId === resolvedConversationId) {
+        if (data.reason === "leave") {
+          // User tự rời, đã có thông báo ở Info screen hoặc tự biết rồi
+          router.replace("/(tabs)");
+          return;
+        }
+
         Alert.alert("Thông báo", "Bạn đã không còn ở trong nhóm này nữa.", [
           {
             text: "OK",

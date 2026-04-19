@@ -1,9 +1,10 @@
-import { View, ActivityIndicator } from "react-native";
+import { View, ActivityIndicator, DeviceEventEmitter } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import { SocketProvider } from "../contexts/SocketContext";
 import AppLockWrapper from "./components/AppLockWrapper";
+import InAppNotification from "../components/ui/InAppNotification";
 import "../global.css";
 import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
 configureReanimatedLogger({ strict: false, level: ReanimatedLogLevel.error });
@@ -31,6 +32,36 @@ function RootLayoutNav() {
     }
   }, [isReady, isAuthenticated, segments]);
 
+  const [notification, setNotification] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    data: any;
+  }>({
+    visible: false,
+    title: "",
+    message: "",
+    data: null,
+  });
+
+  useEffect(() => {
+    const showSub = DeviceEventEmitter.addListener(
+      "show_in_app_notification",
+      (data) => {
+        setNotification({
+          visible: true,
+          title: data.title,
+          message: data.message,
+          data: data.data,
+        });
+      },
+    );
+
+    return () => {
+      showSub.remove();
+    };
+  }, []);
+
   if (!isReady) {
     return (
       <View
@@ -47,14 +78,31 @@ function RootLayoutNav() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="login" />
-      <Stack.Screen name="register" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="chat/[id]" />
-      <Stack.Screen name="groups/create-group" />
-    </Stack>
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="register" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="chat/[id]" />
+        <Stack.Screen name="groups/create-group" />
+      </Stack>
+
+      <InAppNotification
+        visible={notification.visible}
+        title={notification.title}
+        message={notification.message}
+        onHide={() => setNotification((prev) => ({ ...prev, visible: false }))}
+        onPress={() => {
+          if (notification.data?.groupId) {
+            router.push({
+              pathname: "/chat/pending-members",
+              params: { id: notification.data.groupId },
+            });
+          }
+        }}
+      />
+    </>
   );
 }
 

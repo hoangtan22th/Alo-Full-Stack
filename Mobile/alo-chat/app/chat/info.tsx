@@ -215,8 +215,15 @@ export default function ChatInfoScreen() {
       }
     };
 
-    const handleConversationRemoved = (data: { conversationId: string }) => {
+    const handleConversationRemoved = (data: {
+      conversationId: string;
+      reason?: string;
+    }) => {
       if (data.conversationId === id) {
+        if (data.reason === "leave") {
+          router.replace("/(tabs)");
+          return;
+        }
         Alert.alert("Thông báo", "Bạn đã không còn ở trong nhóm này nữa.", [
           {
             text: "OK",
