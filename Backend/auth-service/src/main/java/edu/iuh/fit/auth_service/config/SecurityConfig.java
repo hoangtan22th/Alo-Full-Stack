@@ -36,6 +36,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/forgot-password/**",
                                 "/api/v1/chatbot/**"
                         ).permitAll()
+                        .requestMatchers("/api/v1/admin/auth/login").permitAll()
 
                         // 2. Với Microservices, ta không tin tưởng hoàn toàn mọi request.
                         // Yêu cầu xác thực với các endpoint khác.
