@@ -8,8 +8,8 @@ export async function pinMessage(
 ): Promise<void> {
   try {
     const { messageId } = req.params;
-    if (!messageId) {
-      res.status(400).json({ error: "Missing messageId" });
+    if (!messageId || typeof messageId !== "string") {
+      res.status(400).json({ error: "Missing or invalid messageId" });
       return;
     }
     const updated = await messageDataService.pinMessage(messageId);
@@ -19,8 +19,8 @@ export async function pinMessage(
     }
     // Phát sự kiện realtime
     await rabbitMQProducer.publishMessagePinEvent({
-      messageId: updated._id,
-      conversationId: updated.conversationId,
+      messageId: updated._id.toString(),
+      conversationId: updated.conversationId.toString(),
       isPinned: true,
       pinnedAt: new Date().toISOString(),
       message: updated,
@@ -41,8 +41,8 @@ export async function unpinMessage(
 ): Promise<void> {
   try {
     const { messageId } = req.params;
-    if (!messageId) {
-      res.status(400).json({ error: "Missing messageId" });
+    if (!messageId || typeof messageId !== "string") {
+      res.status(400).json({ error: "Missing or invalid messageId" });
       return;
     }
     const updated = await messageDataService.unpinMessage(messageId);
@@ -52,8 +52,8 @@ export async function unpinMessage(
     }
     // Phát sự kiện realtime
     await rabbitMQProducer.publishMessagePinEvent({
-      messageId: updated._id,
-      conversationId: updated.conversationId,
+      messageId: updated._id.toString(),
+      conversationId: updated.conversationId.toString(),
       isPinned: false,
       pinnedAt: new Date().toISOString(),
       message: updated,
@@ -100,6 +100,7 @@ export async function getMessageHistory(
       100,
     );
     const skip = Math.max(parseInt(req.query.skip as string) || 0, 0);
+    const type = req.query.type as string | undefined;
     const userId = getUserIdFromHeader(req);
 
     if (!userId) {
@@ -144,6 +145,7 @@ export async function getMessageHistory(
       limit,
       skip,
       clearedAt,
+      type,
     );
 
     res.json({
@@ -525,6 +527,11 @@ export async function markMessagesAsRead(
     const { conversationId } = req.params;
     const userId = getUserIdFromHeader(req);
 
+    if (typeof conversationId !== "string") {
+      res.status(400).json({ error: "Invalid or missing conversationId" });
+      return;
+    }
+
     if (!conversationId) {
       res
         .status(400)
@@ -547,7 +554,7 @@ export async function markMessagesAsRead(
       await rabbitMQProducer.publishMessageReadEvent({
         conversationId,
         userId,
-        readAt: new Date(),
+        timestamp: new Date(),
       });
     }
 
@@ -574,6 +581,11 @@ export async function reactToMessage(
     const { emoji } = req.body;
     const userId = getUserIdFromHeader(req);
 
+    if (typeof messageId !== "string") {
+      res.status(400).json({ error: "Invalid or missing messageId" });
+      return;
+    }
+
     if (!userId) {
       res.status(401).json({ error: "Unauthorized" });
       return;
@@ -593,7 +605,7 @@ export async function reactToMessage(
     if (updatedMessage) {
       // Bắn sự kiện realtime
       await rabbitMQProducer.publishReactionUpdateEvent({
-        messageId,
+        messageId: messageId as string,
         conversationId: updatedMessage.conversationId.toString(),
         reactions: updatedMessage.reactions,
       });
@@ -621,6 +633,11 @@ export async function clearReactions(
     const { messageId } = req.params;
     const userId = getUserIdFromHeader(req);
 
+    if (typeof messageId !== "string") {
+      res.status(400).json({ error: "Invalid or missing messageId" });
+      return;
+    }
+
     if (!userId) {
       res.status(401).json({ error: "Unauthorized" });
       return;
@@ -634,7 +651,7 @@ export async function clearReactions(
     if (updatedMessage) {
       // Bắn sự kiện realtime
       await rabbitMQProducer.publishReactionUpdateEvent({
-        messageId,
+        messageId: messageId,
         conversationId: updatedMessage.conversationId.toString(),
         reactions: updatedMessage.reactions,
       });

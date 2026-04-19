@@ -4,6 +4,7 @@ import { groupService } from "../../services/groupService";
 import { userService } from "../../services/userService";
 import { contactService } from "../../services/contactService";
 import { useAuth } from "../../contexts/AuthContext";
+import { messageService, MessageDTO } from "../../services/messageService";
 import {
   View,
   Text,
@@ -62,6 +63,10 @@ export default function ChatInfoScreen() {
     null,
   );
   const [isLinkEnabled, setIsLinkEnabled] = useState(false);
+  const [mediaList, setMediaList] = useState<MessageDTO[]>([]);
+  const [fileList, setFileList] = useState<MessageDTO[]>([]);
+  const [mediaCount, setMediaCount] = useState(0);
+  const [fileCount, setFileCount] = useState(0);
 
   const fetchGroupDetails = async () => {
     try {
@@ -106,8 +111,27 @@ export default function ChatInfoScreen() {
     }
   };
 
+  const fetchMediaAndFiles = async () => {
+    try {
+      if (!id) return;
+      
+      // Lấy danh sách ảnh/video (tối đa 6 để hiện tóm tắt)
+      const media = await messageService.getMessageHistory(id as string, 50, 0, "image");
+      setMediaList(media);
+      setMediaCount(media.length);
+
+      // Lấy danh sách file (tối đa các file gần nhất)
+      const files = await messageService.getMessageHistory(id as string, 50, 0, "file");
+      setFileList(files);
+      setFileCount(files.length);
+    } catch (error) {
+      console.error("Lỗi lấy media/files:", error);
+    }
+  };
+
   useEffect(() => {
     fetchGroupDetails();
+    fetchMediaAndFiles();
   }, [id]);
 
   const currentUserRole = members.find((m) => m.id === currentUserId)?.role;
@@ -374,26 +398,29 @@ export default function ChatInfoScreen() {
           </View>
 
           <View className="flex-row flex-wrap justify-between">
-            {images.slice(0, 5).map((img, idx) => (
+            {mediaList.slice(0, 5).map((msg, idx) => (
               <Image
-                key={idx}
-                source={{ uri: img }}
+                key={msg._id}
+                source={{ uri: msg.content }}
                 className="w-[31.5%] aspect-square rounded-2xl mb-3 bg-gray-200"
               />
             ))}
-            {/* The "+12" overlay for the last image */}
-            <TouchableOpacity
-              className="w-[31.5%] aspect-square rounded-2xl mb-3 bg-gray-300 items-center justify-center overflow-hidden"
-              activeOpacity={0.8}
-            >
-              <Image
-                source={{ uri: images[5] }}
-                className="w-full h-full absolute opacity-40"
-              />
-              <Text className="text-white font-bold text-[22px] z-10 shadow-sm">
-                +12
-              </Text>
-            </TouchableOpacity>
+            {mediaList.length > 5 ? (
+              <TouchableOpacity
+                className="w-[31.5%] aspect-square rounded-2xl mb-3 bg-gray-300 items-center justify-center overflow-hidden"
+                activeOpacity={0.8}
+              >
+                <Image
+                  source={{ uri: mediaList[5].content }}
+                  className="w-full h-full absolute opacity-40"
+                />
+                <Text className="text-white font-bold text-[22px] z-10 shadow-sm">
+                  +{mediaList.length - 5}
+                </Text>
+              </TouchableOpacity>
+            ) : mediaList.length === 0 ? (
+              <Text className="text-gray-400 text-[13px] italic py-2">Chưa có ảnh hoặc video</Text>
+            ) : null}
           </View>
         </View>
 
@@ -412,18 +439,34 @@ export default function ChatInfoScreen() {
 
           {/* Wrapper for cards */}
           <View className="bg-[#f5f6f8] rounded-[24px]">
-            <FileItem
-              icon={<DocumentTextIcon size={24} color="#10b981" />}
-              title="Bao_cao_du_an_Q4.pdf"
-              info="12.5 MB • 22/10/2023"
-            />
-            {/* Divider */}
-            <View className="h-[1px] bg-white w-[90%] self-end" />
-            <FileItem
-              icon={<TableCellsIcon size={24} color="#3b82f6" />}
-              title="Danh_sach_nhan_su.xlsx"
-              info="2.1 MB • 15/10/2023"
-            />
+            {fileList.length > 0 ? (
+              fileList.slice(0, 3).map((file, index) => (
+                <View key={file._id}>
+                  <FileItem
+                    icon={
+                      file.metadata?.fileType?.includes("pdf") ? (
+                        <DocumentTextIcon size={24} color="#10b981" />
+                      ) : (
+                        <TableCellsIcon size={24} color="#3b82f6" />
+                      )
+                    }
+                    title={file.metadata?.fileName || "Không tên"}
+                    info={`${
+                      file.metadata?.fileSize
+                        ? (file.metadata.fileSize / (1024 * 1024)).toFixed(1) + " MB"
+                        : "0 MB"
+                    } • ${new Date(file.createdAt).toLocaleDateString("vi-VN")}`}
+                  />
+                  {index < Math.min(fileList.length, 3) - 1 && (
+                    <View className="h-[1px] bg-white w-[90%] self-end" />
+                  )}
+                </View>
+              ))
+            ) : (
+              <View className="p-5 items-center">
+                <Text className="text-gray-400 text-[13px] italic">Chưa có file nào</Text>
+              </View>
+            )}
           </View>
         </View>
 

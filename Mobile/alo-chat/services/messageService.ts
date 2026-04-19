@@ -77,10 +77,11 @@ export const messageService = {
     conversationId: string,
     limit = 50,
     skip = 0,
+    type?: string,
   ): Promise<MessageDTO[]> => {
     try {
       const raw = await api.get<any, any>(`/messages/${conversationId}`, {
-        params: { limit, skip },
+        params: { limit, skip, type },
       });
       return extractMessages(raw);
     } catch (error) {

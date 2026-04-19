@@ -39,7 +39,7 @@ export interface UserPresenceChange {
 }
 
 export interface MessageReadEvent {
-  messageId: string;
+  messageId?: string;
   messageIds?: string[];
   conversationId: string;
   userId: string;

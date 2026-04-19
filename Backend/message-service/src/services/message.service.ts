@@ -117,6 +117,7 @@ export class MessageDataService {
     limit: number = 50,
     skip: number = 0,
     clearedAt?: Date,
+    type?: string,
   ): Promise<IMessage[]> {
     try {
       const query: any = {
@@ -126,6 +127,10 @@ export class MessageDataService {
 
       if (clearedAt) {
         query.createdAt = { $gt: new Date(clearedAt) };
+      }
+
+      if (type) {
+        query.type = type;
       }
 
       const messages = await Message.find(query)
@@ -191,7 +196,43 @@ export class MessageDataService {
 
   async isMessageOwner(messageId: string, userId: string): Promise<boolean> {
     const message = await Message.findById(messageId);
-    return message?.senderId === userId && !message?.isDeleted;
+    return message?.senderId === userId && !message?.isRevoked;
+  }
+
+  async getUnreadCount(conversationId: string, userId: string): Promise<number> {
+    try {
+      return await Message.countDocuments({
+        conversationId: new Types.ObjectId(conversationId),
+        senderId: { $ne: userId },
+        readBy: { $ne: userId },
+        deletedByUsers: { $ne: userId },
+      });
+    } catch (error) {
+      console.error("[MessageDataService] Failed to get unread count:", error);
+      throw error;
+    }
+  }
+
+  async editMessage(messageId: string, content: string): Promise<IMessage | null> {
+    try {
+      const updated = await Message.findByIdAndUpdate(
+        messageId,
+        {
+          $set: { content, editedAt: new Date() },
+          $push: {
+            editHistory: {
+              originalContent: (await Message.findById(messageId))?.content || "",
+              editedAt: new Date(),
+            },
+          },
+        },
+        { new: true },
+      );
+      return updated;
+    } catch (error) {
+      console.error("[MessageDataService] Failed to edit message:", error);
+      throw error;
+    }
   }
 
   /**
