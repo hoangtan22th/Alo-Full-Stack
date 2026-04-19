@@ -14,6 +14,7 @@ import Animated, {
   withTiming,
   runOnJS,
 } from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BellIcon, XMarkIcon } from "react-native-heroicons/solid";
 import { Image } from "expo-image";
@@ -41,9 +42,11 @@ const InAppNotification: React.FC<InAppNotificationProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(-200);
+  const offsetY = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
+      offsetY.value = 0; // Reset displacement from previous swipe
       translateY.value = withSpring(insets.top + 10, {
         damping: 15,
         stiffness: 100,
@@ -65,64 +68,87 @@ const InAppNotification: React.FC<InAppNotificationProps> = ({
     });
   };
 
+  const panGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      // Chỉ cho phép vuốt lên (giá trị âm)
+      if (e.translationY < 0) {
+        offsetY.value = e.translationY;
+      }
+    })
+    .onEnd((e) => {
+      if (e.translationY < -40 || e.velocityY < -500) {
+        runOnJS(hide)();
+      } else {
+        offsetY.value = withSpring(0);
+      }
+    });
+
   const animatedStyle = useAnimatedStyle(() => {
     return {
-      transform: [{ translateY: translateY.value }],
+      transform: [{ translateY: translateY.value + offsetY.value }],
     };
   });
 
   if (!visible && translateY.value === -200) return null;
 
   return (
-    <Animated.View
-      style={[styles.container, animatedStyle]}
-      className="absolute left-4 right-4 z-[9999]"
-    >
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={() => {
-          onPress?.();
-          hide();
-        }}
-        className="bg-white/95 items-center flex-row p-4 rounded-3xl shadow-2xl border border-gray-100"
-        style={styles.shadow}
+    <GestureDetector gesture={panGesture}>
+      <Animated.View
+        style={[styles.container, animatedStyle]}
+        className="absolute left-4 right-4 z-[9999]"
       >
-        <View className="relative">
-          {avatar ? (
-            <Image
-              source={{ uri: avatar }}
-              style={{ width: 48, height: 48 }}
-              className="rounded-2xl"
-              contentFit="cover"
-            />
-          ) : (
-            <View className="w-12 h-12 rounded-2xl bg-blue-500 items-center justify-center">
-              <BellIcon color="white" size={24} />
-            </View>
-          )}
-          <View className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white" />
-        </View>
-
-        <View className="flex-1 ml-4 mr-2">
-          <Text className="text-gray-900 font-bold text-[15px] mb-0.5" numberOfLines={1}>
-            {title}
-          </Text>
-          <Text className="text-gray-500 text-[13px] leading-4" numberOfLines={2}>
-            {message}
-          </Text>
-        </View>
-
-        <TouchableOpacity 
-          onPress={(e) => {
-            e.stopPropagation();
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => {
+            onPress?.();
             hide();
           }}
-          className="bg-gray-100 p-2 rounded-full"
+          className="bg-white/95 items-center flex-row p-4 rounded-3xl shadow-2xl border border-gray-100"
+          style={styles.shadow}
         >
-          <XMarkIcon color="#9ca3af" size={16} />
+          <View className="relative">
+            {avatar ? (
+              <Image
+                source={{ uri: avatar }}
+                style={{ width: 48, height: 48 }}
+                className="rounded-2xl"
+                contentFit="cover"
+              />
+            ) : (
+              <View className="w-12 h-12 rounded-2xl bg-blue-500 items-center justify-center">
+                <BellIcon color="white" size={24} />
+              </View>
+            )}
+            <View className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white" />
+          </View>
+
+          <View className="flex-1 ml-4 mr-2">
+            <Text
+              className="text-gray-900 font-bold text-[15px] mb-0.5"
+              numberOfLines={1}
+            >
+              {title}
+            </Text>
+            <Text
+              className="text-gray-500 text-[13px] leading-4"
+              numberOfLines={2}
+            >
+              {message}
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation();
+              hide();
+            }}
+            className="bg-gray-100 p-2 rounded-full"
+          >
+            <XMarkIcon color="#9ca3af" size={16} />
+          </TouchableOpacity>
         </TouchableOpacity>
-      </TouchableOpacity>
-    </Animated.View>
+      </Animated.View>
+    </GestureDetector>
   );
 };
 

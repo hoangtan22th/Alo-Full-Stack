@@ -1,4 +1,5 @@
 import { View, ActivityIndicator, DeviceEventEmitter } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Stack, useRouter, useSegments, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
@@ -155,12 +156,14 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <AuthProvider>
-      <SocketProvider>
-        <AppLockWrapper>
-          <RootLayoutNav />
-        </AppLockWrapper>
-      </SocketProvider>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <SocketProvider>
+          <AppLockWrapper>
+            <RootLayoutNav />
+          </AppLockWrapper>
+        </SocketProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
