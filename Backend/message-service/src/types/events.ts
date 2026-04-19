@@ -6,10 +6,18 @@ export interface MessageEvent {
   _id: string;
   conversationId: string;
   senderId: string;
+  senderName?: string;
   type: string;
   content: string;
   metadata?: Record<string, any>;
   isRead: boolean;
+  replyTo?: {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    type: string;
+  };
   createdAt: Date;
   updatedAt?: Date;
 }

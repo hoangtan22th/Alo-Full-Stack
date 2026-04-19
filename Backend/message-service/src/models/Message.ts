@@ -3,6 +3,7 @@ import { Schema, model, Document, Types } from "mongoose";
 export interface IMessage extends Document {
   conversationId: Types.ObjectId;
   senderId: string; // User ID from auth-service
+  senderName?: string; // Tên người gửi tại thời điểm gửi tin nhắn
   type: string; // 'text', 'image', 'file', etc.
   content: string;
   metadata?: Record<string, any>; // For attachments, links, etc.
@@ -22,6 +23,13 @@ export interface IMessage extends Document {
     emoji: string;
     count: number;
   }>;
+  replyTo?: {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    type: string;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,6 +45,10 @@ const messageSchema = new Schema<IMessage>(
     senderId: {
       type: String,
       required: true,
+    },
+    senderName: {
+      type: String,
+      default: "",
     },
     type: {
       type: String,
@@ -99,6 +111,13 @@ const messageSchema = new Schema<IMessage>(
         },
       ],
       default: [],
+    },
+    replyTo: {
+      messageId: String,
+      senderId: String,
+      senderName: String,
+      content: String,
+      type: { type: String, enum: ["text", "image", "file", "emoji", "system"] },
     },
   },
   {

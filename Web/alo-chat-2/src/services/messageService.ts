@@ -4,6 +4,7 @@ export interface MessageDTO {
   _id: string;
   conversationId: string;
   senderId: string;
+  senderName?: string;
   type: "text" | "image" | "file" | "system";
   content: string;
   metadata?: {
@@ -16,6 +17,13 @@ export interface MessageDTO {
   reactions?: any[];
   revokedAt?: string;
   isPinned?: boolean; // Thêm trường này để nhận biết tin nhắn ghim
+  replyTo?: {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    type: string;
+  };
   createdAt: string;
   updatedAt?: string;
 }
@@ -24,7 +32,15 @@ export interface SendMessagePayload {
   conversationId: string;
   type?: "text" | "image" | "file";
   content: string;
+  senderName?: string;
   metadata?: Record<string, any>;
+  replyTo?: {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    type: string;
+  };
 }
 
 /**
@@ -111,7 +127,9 @@ export const messageService = {
         conversationId: payload.conversationId,
         type: payload.type || "text",
         content: payload.content,
+        senderName: payload.senderName,
         metadata: payload.metadata || {},
+        replyTo: payload.replyTo,
       });
       return extractSentMessage(raw);
     } catch (error) {
@@ -124,12 +142,20 @@ export const messageService = {
   uploadFile: async (
     conversationId: string,
     file: File,
+    replyTo?: any,
+    senderName?: string,
     onProgress?: (percent: number) => void,
   ): Promise<MessageDTO | null> => {
     try {
       const formData = new FormData();
       formData.append("conversationId", conversationId);
       formData.append("file", file);
+      if (senderName) {
+        formData.append("senderName", senderName);
+      }
+      if (replyTo) {
+        formData.append("replyTo", JSON.stringify(replyTo));
+      }
       const raw = await api.post<any, any>(`/messages/upload`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (progressEvent) => {
