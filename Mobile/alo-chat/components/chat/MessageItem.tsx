@@ -2,6 +2,7 @@ import React from "react";
 import {
   Image,
   LayoutAnimation,
+  Platform,
   Text,
   TouchableOpacity,
   View,
@@ -9,6 +10,9 @@ import {
 import { InformationCircleIcon } from "react-native-heroicons/outline";
 import { MessageDTO } from "../../services/messageService";
 import { EMOJI_MAP } from "../../constants/Chat";
+import { openRemoteFile } from "../../utils/fileUtils";
+import { WebView } from "react-native-webview";
+// import Pdf from "react-native-pdf";
 
 interface MessageItemProps {
   msg: MessageDTO;
@@ -62,7 +66,7 @@ export const MessageItem = ({
       >
         <View
           className={`shadow-sm ${
-            msg.type === "image" && !msg.isRevoked
+            (msg.type === "image" || msg.type === "file") && !msg.isRevoked
               ? "p-0 bg-transparent"
               : "px-5 py-3 " +
                 (isSender
@@ -95,22 +99,102 @@ export const MessageItem = ({
               />
             </TouchableOpacity>
           ) : msg.type === "file" ? (
-            <View className="flex-row items-center gap-2">
-              <View className="w-10 h-10 bg-gray-200/20 items-center justify-center rounded-lg">
-                <InformationCircleIcon
-                  size={24}
-                  color={isSender ? "#fff" : "#000"}
-                />
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() =>
+                openRemoteFile(
+                  msg.content,
+                  msg.metadata?.fileName || `file_${msg._id}`,
+                )
+              }
+              className={`overflow-hidden rounded-2xl ${
+                isSender ? "bg-white" : "bg-white"
+              }`}
+              style={{ width: 260 }}
+            >
+              {/* Top Section: Preview */}
+              <View className="h-36 bg-gray-100/50 justify-center overflow-hidden border-b border-gray-100">
+                {(() => {
+                  const fileName =
+                    msg.metadata?.fileName ||
+                    msg.content.split("/").pop() ||
+                    "";
+                  const ext = fileName.split(".").pop()?.toLowerCase();
+                  const isText = [
+                    "txt",
+                    "js",
+                    "ts",
+                    "json",
+                    "html",
+                    "css",
+                    "py",
+                    "java",
+                    "cpp",
+                    "md",
+                    "sql",
+                    "sh",
+                  ].includes(ext || "");
+                  const isPdf = ext === "pdf";
+
+                  if (isText) {
+                    return <FileTextPreview url={msg.content} />;
+                  } else if (isPdf) {
+                    return <FilePdfPreview url={msg.content} />;
+                  } else {
+                    return (
+                      <View className="flex-1 items-center justify-center bg-gray-50">
+                        <InformationCircleIcon size={64} color="#CBD5E1" />
+                        <Text className="text-[10px] text-gray-400 mt-2 font-medium">
+                          Bản xem trước không khả dụng
+                        </Text>
+                      </View>
+                    );
+                  }
+                })()}
               </View>
-              <View>
-                <Text
-                  className={`text-sm font-bold ${isSender ? "text-white" : "text-gray-900"}`}
-                  numberOfLines={1}
+
+              {/* Bottom Section: Info Bar */}
+              <View className="flex-row items-center p-3 bg-sky-50">
+                <View
+                  className="w-12 h-12 items-center justify-center rounded-xl mr-3"
+                  style={{
+                    backgroundColor: (() => {
+                      const ext = msg.metadata?.fileName
+                        ?.split(".")
+                        .pop()
+                        ?.toLowerCase();
+                      if (ext === "pdf") return "#ef4444";
+                      if (["doc", "docx"].includes(ext || "")) return "#3b82f6";
+                      if (["xls", "xlsx"].includes(ext || "")) return "#22c55e";
+                      if (["ppt", "pptx"].includes(ext || "")) return "#f97316";
+                      return "#6b7280";
+                    })(),
+                  }}
                 >
-                  {msg.metadata?.fileName || "Tệp đính kèm"}
-                </Text>
+                  <Text className="text-white text-[10px] font-black uppercase">
+                    {msg.metadata?.fileName?.split(".").pop() || "FILE"}
+                  </Text>
+                </View>
+                <View className="flex-1">
+                  <Text
+                    className="text-[15px] font-medium text-gray-900"
+                    numberOfLines={1}
+                  >
+                    {msg.metadata?.fileName || "Tệp đính kèm"}
+                  </Text>
+                  <Text className="text-[12px] text-gray-500 mt-0.5 uppercase">
+                    {msg.metadata?.fileName?.split(".").pop() || "FILE"}
+                    {" • "}
+                    {msg.metadata?.fileSize
+                      ? msg.metadata.fileSize < 1024 * 1024
+                        ? (msg.metadata.fileSize / 1024).toFixed(0) + " KB"
+                        : (msg.metadata.fileSize / (1024 * 1024)).toFixed(1) +
+                          " MB"
+                      : "0 KB"}
+                  </Text>
+                </View>
               </View>
-            </View>
+            </TouchableOpacity>
           ) : msg.type === "text" ? (
             <Text
               className={`text-base leading-6 ${isSender ? "text-white" : "text-gray-900"}`}
@@ -167,6 +251,87 @@ export const MessageItem = ({
           )}
         </View>
       )}
+    </View>
+  );
+};
+
+const FileTextPreview = ({ url }: { url: string }) => {
+  const [content, setContent] = React.useState<string>("Đang tải nội dung...");
+
+  React.useEffect(() => {
+    let isMounted = true;
+    fetch(url)
+      .then((res) => res.text())
+      .then((text) => {
+        if (isMounted) setContent(text.slice(0, 500).trim() || "Tệp tin trống");
+      })
+      .catch((err) => {
+        console.error("[FilePreview] Fetch error:", err);
+        if (isMounted) setContent("Không thể tải nội dung xem trước");
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [url]);
+
+  return (
+    <View className="flex-1 p-3 bg-gray-50/80" style={{ minHeight: 128 }}>
+      <Text
+        className="text-[10px] text-gray-500 leading-4"
+        style={{
+          fontFamily: Platform.select({ ios: "Courier", android: "monospace" }),
+        }}
+        numberOfLines={7}
+      >
+        {content}
+      </Text>
+    </View>
+  );
+};
+
+// const FilePdfPreview = ({ url }: { url: string }) => {
+//   return (
+//     <View className="flex-1 overflow-hidden bg-white" pointerEvents="none">
+//       <Pdf
+//         source={{ uri: url, cache: true }}
+//         singlePage={true} // Rất quan trọng: Chỉ render trang 1 làm thumbnail để tối ưu RAM cho FlatList
+//         fitPolicy={0} // Fit theo chiều rộng
+//         style={{
+//           flex: 1,
+//           backgroundColor: "white",
+//           width: "100%",
+//           height: "100%",
+//         }}
+//         onError={(error) => {
+//           console.warn("[FilePdfPreview] Lỗi render PDF:", error);
+//         }}
+//       />
+//     </View>
+//   );
+// };
+
+const FilePdfPreview = ({ url }: { url: string }) => {
+  // iOS đọc trực tiếp URL, Android dùng Google Docs
+  const previewUrl =
+    Platform.OS === "android"
+      ? `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`
+      : url;
+
+  return (
+    <View className="flex-1 overflow-hidden bg-white">
+      <WebView
+        source={{ uri: previewUrl }}
+        scrollEnabled={false}
+        pointerEvents="none"
+        javaScriptEnabled={true} // Cần thiết cho Google Docs trên Android
+        domStorageEnabled={true} // Cần thiết cho Google Docs trên Android
+        startInLoadingState={true}
+        style={{ flex: 1, backgroundColor: "white" }}
+        onHttpError={(syntheticEvent) => {
+          const { nativeEvent } = syntheticEvent;
+          console.warn("WebView HTTP error: ", nativeEvent);
+        }}
+      />
     </View>
   );
 };

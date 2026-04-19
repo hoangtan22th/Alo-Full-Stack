@@ -19,6 +19,7 @@ import {
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { messageService, MessageDTO } from "../../services/messageService";
+import { openRemoteFile } from "../../utils/fileUtils";
 
 const { width } = Dimensions.get("window");
 const COLUMN_WIDTH = width / 3;
@@ -228,7 +229,10 @@ export default function MediaScreen() {
             const createdDate = formatDate(item.createdAt);
 
             return (
-              <View className="flex-row items-center px-5 py-4 border-b border-gray-50">
+              <TouchableOpacity
+                onPress={() => openRemoteFile(item.content, fileName)}
+                className="flex-row items-center px-5 py-4 border-b border-gray-50 active:bg-gray-50"
+              >
                 <View className="w-12 h-12 bg-gray-100 rounded-xl items-center justify-center mr-4">
                   <Text className="text-[10px] font-bold text-gray-500 uppercase">
                     {fileType}
@@ -245,7 +249,7 @@ export default function MediaScreen() {
                     {fileSize} • {createdDate}
                   </Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           }}
           showsVerticalScrollIndicator={false}

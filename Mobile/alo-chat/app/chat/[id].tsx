@@ -432,29 +432,71 @@ export default function GlobalChatScreen() {
   const handleSendFile = async () => {
     if (!resolvedConversationId) return;
     try {
-      const fileRes = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true, multiple: false });
+      const fileRes = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
+        multiple: true,
+      });
+
       if (fileRes.canceled || !fileRes.assets?.length) return;
-      const file = fileRes.assets[0];
-      const sentMessage = await messageService.sendFileMessage({ conversationId: resolvedConversationId, file });
-      if (sentMessage) {
-        setMessages((prev: MessageDTO[]) => (prev.find((m: MessageDTO) => m._id === sentMessage._id) ? prev : [...prev, sentMessage]));
+
+      const sentMessages: MessageDTO[] = [];
+      for (const asset of fileRes.assets) {
+        const sentMessage = await messageService.sendFileMessage({
+          conversationId: resolvedConversationId,
+          file: asset,
+        });
+        if (sentMessage) {
+          sentMessages.push(sentMessage);
+        }
+      }
+
+      if (sentMessages.length > 0) {
+        setMessages((prev: MessageDTO[]) => {
+          const newOnes = sentMessages.filter((sm) => !prev.find((m) => m._id === sm._id));
+          return [...prev, ...newOnes];
+        });
         setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("Lỗi gửi nhiều file:", e);
+    }
   };
 
   const handleSendImage = async () => {
     if (!resolvedConversationId) return;
     try {
-      const imgRes = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: false, quality: 0.8 });
+      const imgRes = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+        allowsMultipleSelection: true,
+      });
+
       if (imgRes.canceled || !imgRes.assets?.length) return;
-      const image = imgRes.assets[0];
-      const sentMessage = await messageService.sendFileMessage({ conversationId: resolvedConversationId, file: image, isImage: true });
-      if (sentMessage) {
-        setMessages((prev: MessageDTO[]) => (prev.find((m: MessageDTO) => m._id === sentMessage._id) ? prev : [...prev, sentMessage]));
+
+      const sentMessages: MessageDTO[] = [];
+      for (const asset of imgRes.assets) {
+        const sentMessage = await messageService.sendFileMessage({
+          conversationId: resolvedConversationId,
+          file: asset,
+          isImage: true,
+        });
+        if (sentMessage) {
+          sentMessages.push(sentMessage);
+        }
+      }
+
+      if (sentMessages.length > 0) {
+        setMessages((prev: MessageDTO[]) => {
+          const newOnes = sentMessages.filter((sm) => !prev.find((m) => m._id === sm._id));
+          return [...prev, ...newOnes];
+        });
         setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("Lỗi gửi nhiều ảnh:", e);
+    }
   };
 
   interface MsgGroup { isSender: boolean; senderId: string; messages: MessageDTO[]; }
