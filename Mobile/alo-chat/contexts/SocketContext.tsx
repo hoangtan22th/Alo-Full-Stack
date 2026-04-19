@@ -137,6 +137,31 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             },
           );
 
+          // Bị mời khỏi nhóm / Giải tán nhóm
+          newSocket.on(
+            "CONVERSATION_REMOVED",
+            (data: {
+              conversationId: string;
+              groupName: string;
+              reason: "kick" | "leave" | "delete";
+            }) => {
+              console.log("📥 [Mobile Socket] Received CONVERSATION_REMOVED:", data);
+              // Chỉ hiện notification nếu lý do không phải là User tự rời
+              if (data.reason !== "leave") {
+                DeviceEventEmitter.emit("show_in_app_notification", {
+                  title:
+                    data.reason === "delete" ? "Nhóm đã giải tán" : "Thông báo",
+                  message:
+                    data.reason === "delete"
+                      ? `Nhóm ${data.groupName} đã ngừng hoạt động`
+                      : `Bạn không còn là thành viên của nhóm ${data.groupName}`,
+                  data: { groupId: data.conversationId },
+                  type: "REMOVED",
+                });
+              }
+            },
+          );
+
           // Lắng nghe trạng thái Online/Offline chung của các User khác
           newSocket.on(
             "USER_ONLINE",

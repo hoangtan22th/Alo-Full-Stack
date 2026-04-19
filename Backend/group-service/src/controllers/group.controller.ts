@@ -372,7 +372,7 @@ export const removeMember = async (
     // Real-time Sync: Thông báo cho người bị gỡ rằng họ không còn trong nhóm
     const reason = userId === requesterId ? "leave" : "kick";
     rabbitMQProducer
-      .publishConversationRemoved(groupId, userId, reason)
+      .publishConversationRemoved(groupId, userId, group.name || "Nhóm", reason)
       .catch(console.error);
 
     // Bắn tin nhắn hệ thống
@@ -549,7 +549,7 @@ export const deleteGroup = async (
       for (const member of group.members) {
         if (member.userId) {
           rabbitMQProducer
-            .publishConversationRemoved(groupId, String(member.userId))
+            .publishConversationRemoved(groupId, String(member.userId), group.name || "Nhóm", "delete")
             .catch(console.error);
         }
       }

@@ -72,13 +72,13 @@ export class RabbitMQProducerService {
   /**
    * Phát sự kiện khi một người dùng bị gỡ khỏi hội thoại (bị kick, rời nhóm, hoặc giải tán nhóm)
    */
-  async publishConversationRemoved(conversationId: string, userId: string, reason: 'kick' | 'leave' | 'delete' = 'kick') {
+  async publishConversationRemoved(conversationId: string, userId: string, groupName: string, reason: 'kick' | 'leave' | 'delete' = 'kick') {
     await this.publishToRealtimeService('CONVERSATION_REMOVED', {
       target: userId,
-      data: { conversationId, reason }
+      data: { conversationId, groupName, reason }
     });
     
-    console.log(`[RabbitMQProducer] Event 'CONVERSATION_REMOVED' published for user: ${userId}, conversation: ${conversationId}, reason: ${reason}`);
+    console.log(`[RabbitMQProducer] Event 'CONVERSATION_REMOVED' published for user: ${userId}, group: ${groupName}, reason: ${reason}`);
   }
 
   /**

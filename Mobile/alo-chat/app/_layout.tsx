@@ -1,5 +1,5 @@
 import { View, ActivityIndicator, DeviceEventEmitter } from "react-native";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import { SocketProvider } from "../contexts/SocketContext";
@@ -15,6 +15,7 @@ function RootLayoutNav() {
   const { isAuthenticated, isReady } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+  const searchParams = useLocalSearchParams();
 
   useEffect(() => {
     if (!isReady) return;
@@ -50,6 +51,28 @@ function RootLayoutNav() {
     const showSub = DeviceEventEmitter.addListener(
       "show_in_app_notification",
       (data) => {
+        // Kiểm tra nếu là thông báo bị mời ra khỏi nhóm
+        if (data.type === "REMOVED") {
+          const groupId = data.data?.groupId;
+          const currentPathId = segments[1];
+          const queryId = searchParams.id;
+
+          // Nếu đang ở màn hình chat của nhóm đó hoặc màn hình info của nhóm đó
+          // ['chat', 'id'] hoặc ['chat', 'info'] với ?id=...
+          const isAtChat = segments[0] === "chat" && currentPathId === groupId;
+          const isAtInfo =
+            segments[0] === "chat" &&
+            currentPathId === "info" &&
+            queryId === groupId;
+
+          if (isAtChat || isAtInfo) {
+            console.log(
+              "User is currently on the group screen, letting local Alert handle it.",
+            );
+            return;
+          }
+        }
+
         setNotification({
           visible: true,
           title: data.title,
