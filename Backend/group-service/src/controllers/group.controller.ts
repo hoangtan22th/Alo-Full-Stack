@@ -206,6 +206,10 @@ export const createGroup = async (
 
     // Real-time Sync: Thông báo cho tất cả thành viên về nhóm mới
     rabbitMQProducer.publishConversationCreated(newGroup).catch(console.error);
+    // Thông báo đẩy (In-app) cho các thành viên được thêm (ngoại trừ người tạo)
+    userIds.forEach((uId: string) => {
+      rabbitMQProducer.publishAddedToGroup(uId, newGroup).catch(console.error);
+    });
 
     // Bắn tin nhắn hệ thống: X đã tạo nhóm
     const creatorName = await getUserFullName(creatorId, authHeader);
@@ -291,6 +295,8 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
 
     // Real-time Sync: Thông báo cho thành viên mới về nhóm này
     rabbitMQProducer.publishConversationCreated(group).catch(console.error);
+    // Thông báo đẩy (In-app) cho thành viên mới
+    rabbitMQProducer.publishAddedToGroup(String(newUserId), group).catch(console.error);
 
     // Bắn tin nhắn hệ thống
     const newUserName = await getUserFullName(String(newUserId), authHeader);

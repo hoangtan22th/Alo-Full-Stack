@@ -126,6 +126,22 @@ export class RabbitMQProducerService {
     });
     console.log(`[RabbitMQProducer] Event 'JOIN_REQUEST_APPROVED' published to user: ${userId} for group: ${group._id}`);
   }
+
+  /**
+   * Phát sự kiện khi một người dùng được thêm vào nhóm (trực tiếp hoặc lúc tạo nhóm)
+   */
+  async publishAddedToGroup(userId: string, group: any) {
+    await this.publishToRealtimeService('ADDED_TO_GROUP', {
+      target: userId,
+      data: {
+        groupId: group._id.toString(),
+        groupName: group.name,
+        groupAvatar: group.groupAvatar || '',
+        membersCount: group.members.length
+      }
+    });
+    console.log(`[RabbitMQProducer] Event 'ADDED_TO_GROUP' published to user: ${userId} for group: ${group._id}`);
+  }
 }
 
 export default new RabbitMQProducerService();

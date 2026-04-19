@@ -112,6 +112,31 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             },
           );
 
+          // Được thêm vào nhóm (trực tiếp)
+          newSocket.on(
+            "ADDED_TO_GROUP",
+            (data: {
+              groupId: string;
+              groupName: string;
+              groupAvatar: string;
+              membersCount: number;
+            }) => {
+              console.log("📥 [Mobile Socket] Received ADDED_TO_GROUP:", data);
+              DeviceEventEmitter.emit("show_in_app_notification", {
+                title: "Nhóm mới",
+                message: `Bạn đã được thêm vào nhóm ${data.groupName}`,
+                avatar: data.groupAvatar,
+                data: {
+                  groupId: data.groupId,
+                  name: data.groupName,
+                  avatar: data.groupAvatar,
+                  membersCount: data.membersCount,
+                },
+                type: "JOIN_APPROVED",
+              });
+            },
+          );
+
           // Lắng nghe trạng thái Online/Offline chung của các User khác
           newSocket.on(
             "USER_ONLINE",
