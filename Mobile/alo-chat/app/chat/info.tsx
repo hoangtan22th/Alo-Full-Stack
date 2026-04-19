@@ -1,8 +1,9 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState, useEffect } from "react";
+// Cần đảm bảo các thư viện như "expo-router", "react-native" đã được cấu hình trong môi trường thật của dự án.
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import React, { useState, useCallback, useEffect } from "react";
+import { useSocket } from "../../contexts/SocketContext";
 import { groupService } from "../../services/groupService";
 import { userService } from "../../services/userService";
-import { contactService } from "../../services/contactService";
 import { useAuth } from "../../contexts/AuthContext";
 import { messageService, MessageDTO } from "../../services/messageService";
 import {
@@ -11,10 +12,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
-  Platform,
   Alert,
   Modal,
-  TextInput,
 } from "react-native";
 import {
   ArrowLeftIcon,
@@ -29,7 +28,6 @@ import {
   EyeSlashIcon,
   TrashIcon,
   ChevronRightIcon,
-  UserPlusIcon,
   ArrowRightOnRectangleIcon,
   XMarkIcon,
   PencilIcon,
@@ -73,7 +71,6 @@ export default function ChatInfoScreen() {
       if (!isGroup || !id) return;
       const res = await groupService.getGroupById(id as string);
 
-      // Xử lý dữ liệu trả về từ API (Axios response)
       let groupData = res;
       if (res?.data?.data) {
         groupData = res.data.data;
@@ -99,7 +96,7 @@ export default function ChatInfoScreen() {
           return {
             id: m.userId,
             name: userData?.fullName || "Người dùng",
-            role: m.role.toLowerCase(), // "leader", "deputy", "member"
+            role: m.role.toLowerCase(),
             avatar: userData?.avatar || "",
           };
         });
@@ -114,29 +111,105 @@ export default function ChatInfoScreen() {
   const fetchMediaAndFiles = async () => {
     try {
       if (!id) return;
-      
-      // Lấy danh sách ảnh/video (tối đa 6 để hiện tóm tắt)
-      const media = await messageService.getMessageHistory(id as string, 50, 0, "image");
-      setMediaList(media);
+
+      const media = await messageService.getMessageHistory(
+        id as string,
+        100,
+        0,
+        "image",
+      );
+
+      const getSafeTime = (item: any) => {
+        const dateValue = item.createdAt || item.timestamp || item.updatedAt;
+        if (!dateValue) return Date.now() + 9999999;
+
+        const time = new Date(dateValue).getTime();
+        return isNaN(time) ? Date.now() + 9999999 : time;
+      };
+
+      const sortedMedia = [...media].sort((a, b) => {
+        const timeA = getSafeTime(a);
+        const timeB = getSafeTime(b);
+        return timeB - timeA;
+      });
+
+      setMediaList(sortedMedia);
       setMediaCount(media.length);
 
-      // Lấy danh sách file (tối đa các file gần nhất)
-      const files = await messageService.getMessageHistory(id as string, 50, 0, "file");
-      setFileList(files);
+      const files = await messageService.getMessageHistory(
+        id as string,
+        100,
+        0,
+        "file",
+      );
+
+      const sortedFiles = [...files].sort((a, b) => {
+        const timeA = getSafeTime(a);
+        const timeB = getSafeTime(b);
+        return timeB - timeA;
+      });
+
+      setFileList(sortedFiles);
       setFileCount(files.length);
     } catch (error) {
       console.error("Lỗi lấy media/files:", error);
     }
   };
 
+  useFocusEffect(
+    useCallback(() => {
+      if (id) {
+        fetchGroupDetails();
+        fetchMediaAndFiles();
+      }
+    }, [id]),
+  );
+
+  const { socket } = useSocket();
+
   useEffect(() => {
-    fetchGroupDetails();
-    fetchMediaAndFiles();
-  }, [id]);
+    if (!socket || !id) return;
+
+    const handleMessageReceived = (data: any) => {
+      const newMsg = data.message ? data.message : data;
+      // Socket trả về cho toàn bộ cuộc trò chuyện mà user tham gia,
+      // nên cần lọc đúng conversationId đang xem
+      if (newMsg.conversationId === id && !newMsg.isRevoked) {
+        if (newMsg.type === "image") {
+          setMediaList((prev) => {
+            if (prev.find((m) => m._id === newMsg._id)) return prev;
+            const updated = [newMsg, ...prev];
+            // Sắp xếp lại để mục mới nhất ở đầu
+            return updated
+              .sort((a, b) =>
+                (b.createdAt || "").localeCompare(a.createdAt || ""),
+              )
+              .slice(0, 100);
+          });
+          setMediaCount((prev) => prev + 1);
+        } else if (newMsg.type === "file") {
+          setFileList((prev) => {
+            if (prev.find((f) => f._id === newMsg._id)) return prev;
+            const updated = [newMsg, ...prev];
+            return updated
+              .sort((a, b) =>
+                (b.createdAt || "").localeCompare(a.createdAt || ""),
+              )
+              .slice(0, 100);
+          });
+          setFileCount((prev) => prev + 1);
+        }
+      }
+    };
+
+    socket.on("message-received", handleMessageReceived);
+    return () => {
+      socket.off("message-received", handleMessageReceived);
+    };
+  }, [socket, id]);
 
   const currentUserRole = members.find((m) => m.id === currentUserId)?.role;
   const isAdmin = currentUserRole === "leader";
-  const isDeputy = currentUserRole === "deputy";
 
   const handleLeaveGroup = () => {
     if (isAdmin) {
@@ -266,16 +339,6 @@ export default function ChatInfoScreen() {
     );
   };
 
-  // Dummy images... (Keep the rest of the file)
-  const images = [
-    "https://images.unsplash.com/photo-1541698444083-023c97d3f4b6?q=80&w=400",
-    "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=400",
-    "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=400",
-    "https://images.unsplash.com/photo-1498050108023-c5249f4df085?q=80&w=400",
-    "https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=400",
-    "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?q=80&w=400",
-  ];
-
   return (
     <View className="flex-1 bg-[#fcfcfc]" style={{ paddingTop: insets.top }}>
       {/* Header */}
@@ -390,36 +453,52 @@ export default function ChatInfoScreen() {
             <Text className="text-[11px] font-bold text-gray-500 uppercase tracking-[1px]">
               Ảnh / Video
             </Text>
-            <TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push(`/chat/media?id=${id}`)}
+            >
               <Text className="text-[12px] font-bold text-gray-900">
                 Xem tất cả
               </Text>
             </TouchableOpacity>
           </View>
 
-          <View className="flex-row flex-wrap justify-between">
-            {mediaList.slice(0, 5).map((msg, idx) => (
-              <Image
-                key={msg._id}
-                source={{ uri: msg.content }}
-                className="w-[31.5%] aspect-square rounded-2xl mb-3 bg-gray-200"
-              />
-            ))}
+          <View className="flex-row flex-wrap -mx-[6px]">
+            {mediaList.slice(0, 5).map((msg, idx) => {
+              const uniqueKey = msg._id
+                ? `${msg._id}-${idx}`
+                : `media-fallback-${idx}-${Math.random().toString(36).substring(2)}`;
+              return (
+                <View key={uniqueKey} className="w-1/3 px-[6px] mb-3">
+                  <Image
+                    source={{ uri: msg.content }}
+                    className="w-full aspect-square rounded-2xl bg-gray-200"
+                  />
+                </View>
+              );
+            })}
+
             {mediaList.length > 5 ? (
-              <TouchableOpacity
-                className="w-[31.5%] aspect-square rounded-2xl mb-3 bg-gray-300 items-center justify-center overflow-hidden"
-                activeOpacity={0.8}
-              >
-                <Image
-                  source={{ uri: mediaList[5].content }}
-                  className="w-full h-full absolute opacity-40"
-                />
-                <Text className="text-white font-bold text-[22px] z-10 shadow-sm">
-                  +{mediaList.length - 5}
-                </Text>
-              </TouchableOpacity>
+              <View className="w-1/3 px-[6px] mb-3">
+                <TouchableOpacity
+                  className="w-full aspect-square rounded-2xl bg-gray-300 items-center justify-center overflow-hidden"
+                  activeOpacity={0.8}
+                  onPress={() => router.push(`/chat/media?id=${id}`)}
+                >
+                  <Image
+                    source={{ uri: mediaList[5].content }}
+                    className="w-full h-full absolute opacity-40"
+                  />
+                  <Text className="text-white font-bold text-[22px] z-10 shadow-sm">
+                    +{mediaList.length - 5}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             ) : mediaList.length === 0 ? (
-              <Text className="text-gray-400 text-[13px] italic py-2">Chưa có ảnh hoặc video</Text>
+              <View className="w-full px-[6px]">
+                <Text className="text-gray-400 text-[13px] italic py-2">
+                  Chưa có ảnh hoặc video
+                </Text>
+              </View>
             ) : null}
           </View>
         </View>
@@ -440,31 +519,40 @@ export default function ChatInfoScreen() {
           {/* Wrapper for cards */}
           <View className="bg-[#f5f6f8] rounded-[24px]">
             {fileList.length > 0 ? (
-              fileList.slice(0, 3).map((file, index) => (
-                <View key={file._id}>
-                  <FileItem
-                    icon={
-                      file.metadata?.fileType?.includes("pdf") ? (
-                        <DocumentTextIcon size={24} color="#10b981" />
-                      ) : (
-                        <TableCellsIcon size={24} color="#3b82f6" />
-                      )
-                    }
-                    title={file.metadata?.fileName || "Không tên"}
-                    info={`${
-                      file.metadata?.fileSize
-                        ? (file.metadata.fileSize / (1024 * 1024)).toFixed(1) + " MB"
-                        : "0 MB"
-                    } • ${new Date(file.createdAt).toLocaleDateString("vi-VN")}`}
-                  />
-                  {index < Math.min(fileList.length, 3) - 1 && (
-                    <View className="h-[1px] bg-white w-[90%] self-end" />
-                  )}
-                </View>
-              ))
+              fileList.slice(0, 3).map((file, index) => {
+                const uniqueKey = file._id
+                  ? `${file._id}-${index}`
+                  : `file-fallback-${index}-${Math.random().toString(36).substring(2)}`;
+                return (
+                  <View key={uniqueKey}>
+                    <FileItem
+                      icon={
+                        file.metadata?.fileType?.includes("pdf") ? (
+                          <DocumentTextIcon size={24} color="#10b981" />
+                        ) : (
+                          <TableCellsIcon size={24} color="#3b82f6" />
+                        )
+                      }
+                      title={file.metadata?.fileName || "Không tên"}
+                      info={`${
+                        file.metadata?.fileSize
+                          ? (file.metadata.fileSize / (1024 * 1024)).toFixed(
+                              1,
+                            ) + " MB"
+                          : "0 MB"
+                      } • ${file.createdAt ? new Date(file.createdAt).toLocaleDateString("vi-VN") : "Vừa xong"}`}
+                    />
+                    {index < Math.min(fileList.length, 3) - 1 && (
+                      <View className="h-[1px] bg-white w-[90%] self-end" />
+                    )}
+                  </View>
+                );
+              })
             ) : (
               <View className="p-5 items-center">
-                <Text className="text-gray-400 text-[13px] italic">Chưa có file nào</Text>
+                <Text className="text-gray-400 text-[13px] italic">
+                  Chưa có file nào
+                </Text>
               </View>
             )}
           </View>

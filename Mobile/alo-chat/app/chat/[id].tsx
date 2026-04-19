@@ -1199,7 +1199,7 @@ export default function GlobalChatScreen() {
                   router.push({
                     pathname: "/chat/info",
                     params: {
-                      id: id,
+                      id: resolvedConversationId || id,
                       name: name,
                       avatar: avatar,
                       membersCount: membersCount,
@@ -1271,7 +1271,7 @@ export default function GlobalChatScreen() {
                 router.push({
                   pathname: "/chat/info",
                   params: {
-                    id: id,
+                    id: resolvedConversationId || id,
                     name: name,
                     avatar: avatar,
                     membersCount: membersCount,
