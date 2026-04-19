@@ -1021,7 +1021,8 @@ export default function GlobalChatScreen() {
 
       setHasMore(hasMoreData);
       setSkip((prev) => (reset ? newMsgs.length : prev + newMsgs.length));
-      setPinnedMessages(newMsgs.filter((m) => m.isPinned));
+      // BỎ: Không lấy pinned từ history nữa, đã có fetchPinnedMessages riêng
+      // setPinnedMessages(newMsgs.filter((m) => m.isPinned));
 
       if (reset) {
         messageService.markAsRead(resolvedConversationId).catch(() => {});
@@ -1034,8 +1035,19 @@ export default function GlobalChatScreen() {
     }
   };
 
+  const fetchPinnedMessages = async () => {
+    if (!resolvedConversationId) return;
+    try {
+      const pins = await messageService.getPinnedMessages(resolvedConversationId);
+      setPinnedMessages(pins || []);
+    } catch (error) {
+      console.error("Lỗi lấy tin nhắn ghim:", error);
+    }
+  };
+
   useEffect(() => {
     fetchMsgs(true);
+    fetchPinnedMessages();
   }, [resolvedConversationId]);
 
   const handleLoadMore = () => {
@@ -1919,27 +1931,46 @@ export default function GlobalChatScreen() {
           />
         </View>
 
-        {/* Banner thông báo tin nhắn mới ở ngay trên ô nhập */}
-        {hasNewUnseenMessages && !isAtBottom && (
+        {/* Khu vực nút cuộn xuống & Thông báo tin nhắn mới */}
+        {!isAtBottom && (
           <View className="absolute bottom-24 left-0 right-0 items-center z-50">
-            <TouchableOpacity
-              onPress={() => {
-                flatListRef.current?.scrollToOffset({
-                  offset: 0,
-                  animated: true,
-                });
-                setHasNewUnseenMessages(false);
-              }}
-              activeOpacity={0.9}
-              className="bg-blue-600 flex-row items-center px-5 py-2.5 rounded-full shadow-xl shadow-blue-500/30 border border-blue-400 group"
-            >
-              <View className="bg-white/20 w-5 h-5 rounded-full items-center justify-center mr-2">
-                <ChevronDownIcon size={14} color="white" />
+            {hasNewUnseenMessages ? (
+              // Case 1: Có tin nhắn mới -> Hiện banner to
+              <TouchableOpacity
+                onPress={() => {
+                  flatListRef.current?.scrollToOffset({
+                    offset: 0,
+                    animated: true,
+                  });
+                  setHasNewUnseenMessages(false);
+                }}
+                activeOpacity={0.9}
+                className="bg-blue-600 flex-row items-center px-5 py-2.5 rounded-full shadow-xl shadow-blue-500/30 border border-blue-400 group"
+              >
+                <View className="bg-white/20 w-5 h-5 rounded-full items-center justify-center mr-2">
+                  <ChevronDownIcon size={14} color="white" />
+                </View>
+                <Text className="text-white font-bold text-[13px]">
+                  Có tin nhắn mới
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              // Case 2: Chỉ đơn giản là đang lướt lên trên -> Hiện nút tròn nhỏ bên phải
+              <View className="w-full flex-row justify-end px-6">
+                <TouchableOpacity
+                  onPress={() => {
+                    flatListRef.current?.scrollToOffset({
+                      offset: 0,
+                      animated: true,
+                    });
+                  }}
+                  activeOpacity={0.8}
+                  className="bg-white w-10 h-10 rounded-full items-center justify-center shadow-lg border border-gray-100"
+                >
+                  <ChevronDownIcon size={20} color="#3b82f6" />
+                </TouchableOpacity>
               </View>
-              <Text className="text-white font-bold text-[13px]">
-                Có tin nhắn mới
-              </Text>
-            </TouchableOpacity>
+            )}
           </View>
         )}
 

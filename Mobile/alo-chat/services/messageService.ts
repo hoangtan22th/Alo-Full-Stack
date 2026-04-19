@@ -130,15 +130,18 @@ export const messageService = {
     }
   },
   /**
-   * Lấy tin nhắn đã ghim của hội thoại
+   * Lấy tất cả tin nhắn đã ghim của hội thoại
    */
-  async getPinnedMessage(conversationId: string): Promise<MessageDTO | null> {
+  async getPinnedMessages(conversationId: string): Promise<MessageDTO[]> {
     try {
-      const raw = await api.get(`/conversations/${conversationId}/pinned`);
-      // Có thể cần điều chỉnh extractSentMessage hoặc parse lại nếu backend trả về khác
-      return extractSentMessage(raw);
+      const raw = await api.get<any, any>(`/messages/${conversationId}/pinned`);
+      // Backend trả về { status: 'success', data: IMessage[] }
+      if (Array.isArray(raw?.data)) return raw.data;
+      if (Array.isArray(raw)) return raw;
+      return [];
     } catch (error) {
-      return null;
+      console.error("Lỗi lấy danh sách tin nhắn ghim:", error);
+      return [];
     }
   },
 

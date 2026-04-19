@@ -311,6 +311,21 @@ export class MessageDataService {
       throw error;
     }
   }
+
+  /**
+   * Lấy tất cả tin nhắn đã ghim trong một cuộc hội thoại
+   */
+  async getPinnedMessages(conversationId: string): Promise<IMessage[]> {
+    try {
+      return await Message.find({
+        conversationId: new Types.ObjectId(conversationId),
+        isPinned: true,
+      }).sort({ createdAt: -1 });
+    } catch (error) {
+      console.error("[MessageDataService] Failed to get pinned messages:", error);
+      throw error;
+    }
+  }
 }
 
 export default new MessageDataService();

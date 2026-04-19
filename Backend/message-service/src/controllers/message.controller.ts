@@ -686,3 +686,32 @@ export async function clearReactions(
     next(error);
   }
 }
+
+/**
+ * Lấy tất cả tin nhắn đã ghim trong hội thoại
+ */
+export async function getPinnedMessages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId } = req.params;
+
+    if (typeof conversationId !== "string") {
+      res.status(400).json({ error: "Invalid or missing conversationId" });
+      return;
+    }
+
+    const pinnedMessages =
+      await messageDataService.getPinnedMessages(conversationId);
+
+    res.json({
+      status: "success",
+      data: pinnedMessages,
+    });
+  } catch (error) {
+    console.error("[MessageController] GET pinned messages error:", error);
+    next(error);
+  }
+}
