@@ -471,16 +471,19 @@ export default function MessagesScreen() {
   );
 
   // Helper renderer for Chat Item to reuse in list and modal
-  const renderChatItemContent = (chat: any, isHighlighted: boolean = false) => {
+  const renderChatItemContent = (chat: any, isHighlighted: boolean = false, isPressed: boolean = false) => {
     return (
       <View
         className={`flex-row items-center p-3 rounded-2xl ${
           isHighlighted
             ? "bg-white"
-            : pinnedIds.has(chat.id)
-              ? "bg-blue-50/50"
-              : ""
+            : isPressed
+              ? "bg-gray-100/80"
+              : pinnedIds.has(chat.id)
+                ? "bg-blue-50/50"
+                : ""
         }`}
+        style={isPressed ? { opacity: 0.7 } : {}}
       >
         <View className="relative">
           {chat.avatar ? (
@@ -635,7 +638,7 @@ export default function MessagesScreen() {
             <Text className="mt-4 text-gray-400">Đang tải tin nhắn...</Text>
           </View>
         ) : (
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView showsVerticalScrollIndicator={false} scrollEnabled={!selectedChat}>
             <View className="px-4 pb-32">
               {filteredConversations.map((chat) => (
                 <View
@@ -645,9 +648,9 @@ export default function MessagesScreen() {
                   }}
                   className="mb-3"
                 >
-                  <TouchableOpacity
-                    activeOpacity={0.8}
+                  <Pressable
                     onLongPress={() => onLongPressItem(chat)}
+                    delayLongPress={300}
                     onPress={() =>
                       router.push({
                         pathname: `/chat/${chat.id}` as any,
@@ -661,8 +664,8 @@ export default function MessagesScreen() {
                       })
                     }
                   >
-                    {renderChatItemContent(chat)}
-                  </TouchableOpacity>
+                    {({ pressed }) => renderChatItemContent(chat, false, pressed)}
+                  </Pressable>
                 </View>
               ))}
 
@@ -689,7 +692,8 @@ export default function MessagesScreen() {
           {selectedChat &&
             selectedChatLayout &&
             (() => {
-              const isTopHalf = selectedChatLayout.y < screenHeight / 2;
+              // Dịch chuyển ngưỡng phân chia lên cao hơn một chút để Menu Above có nhiều không gian hơn
+              const isTopHalf = selectedChatLayout.y < 350;
 
               return (
                 <View className="flex-1">
@@ -713,8 +717,8 @@ export default function MessagesScreen() {
                       left: 20,
                       right: 20,
                       top: isTopHalf
-                        ? selectedChatLayout.y + selectedChatLayout.height + 10
-                        : Math.max(20, selectedChatLayout.y - 120),
+                        ? selectedChatLayout.y + selectedChatLayout.height + 14
+                        : Math.max(insets.top + 10, selectedChatLayout.y - 160), // Tăng offset lên 190 để tránh đè item
                       alignItems: "center",
                     }}
                   >

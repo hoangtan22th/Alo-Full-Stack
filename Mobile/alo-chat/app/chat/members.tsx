@@ -116,12 +116,23 @@ export default function GroupMembersScreen() {
     // Lắng nghe nếu bị mời khỏi nhóm hoặc nhóm giải tán
     const handleConversationRemoved = (data: {
       conversationId: string;
+      groupName: string;
       reason: string;
     }) => {
       console.log("🔴 [Members] Received CONVERSATION_REMOVED:", data);
-      if (data.conversationId === id) {
-        // Nếu chính mình bị kick hoặc nhóm bị xóa thì văng ra ngoài
-        router.replace("/(tabs)");
+      if (data.conversationId === id && data.reason !== "leave") {
+        Alert.alert(
+          "Thông báo",
+          data.reason === "delete"
+            ? `Nhóm ${data.groupName} đã được giải tán`
+            : `Bạn đã bị mời ra khỏi nhóm ${data.groupName}`,
+          [{ text: "OK", onPress: () => {
+            if (router.canDismiss()) {
+              router.dismissAll();
+            }
+            router.replace("/(tabs)");
+          }}]
+        );
       }
     };
 

@@ -2,6 +2,7 @@
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import React, { useState, useCallback, useEffect } from "react";
 import { useSocket } from "../../contexts/SocketContext";
+import { GalleryViewerModal } from "../../components/chat/GalleryViewer";
 import { groupService } from "../../services/groupService";
 import { userService } from "../../services/userService";
 import { useAuth } from "../../contexts/AuthContext";
@@ -70,6 +71,7 @@ export default function ChatInfoScreen() {
   const [realtimeMembersCount, setRealtimeMembersCount] = useState<string>(
     (membersCount as string) || "0",
   );
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const fetchGroupDetails = async () => {
     try {
@@ -222,22 +224,17 @@ export default function ChatInfoScreen() {
 
     const handleConversationRemoved = (data: {
       conversationId: string;
-      reason?: string;
+      groupName: string;
+      reason: string;
     }) => {
-      if (data.conversationId === id) {
-        if (data.reason === "leave") {
-          router.replace("/(tabs)");
-          return;
-        }
-        Alert.alert("Thông báo", "Bạn đã không còn ở trong nhóm này nữa.", [
-          {
-            text: "OK",
-            onPress: () => router.replace("/(tabs)"),
-          },
-        ]);
-        setTimeout(() => {
-          router.replace("/(tabs)");
-        }, 3000);
+      if (data.conversationId === id && data.reason !== "leave") {
+        Alert.alert(
+          "Thông báo",
+          data.reason === "delete"
+            ? `Nhóm ${data.groupName} đã được giải tán`
+            : `Bạn đã bị mời ra khỏi nhóm ${data.groupName}`,
+          [{ text: "OK", onPress: () => router.replace("/(tabs)") }]
+        );
       }
     };
 
@@ -290,6 +287,41 @@ export default function ChatInfoScreen() {
         },
       },
     ]);
+  };
+
+  const handleClearHistory = () => {
+    Alert.alert(
+      "Xoá lịch sử trò chuyện",
+      "Bạn có chắc chắn muốn xoá lịch sử trò chuyện này? Các tin nhắn cũ sẽ biến mất đối với bạn.",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xoá",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await groupService.clearConversation(id as string);
+              Alert.alert("Thông báo", "Đã xoá lịch sử trò chuyện.", [
+                {
+                  text: "OK",
+                  onPress: () => {
+                    if (router.canDismiss()) {
+                      router.dismissAll();
+                    }
+                    router.replace("/(tabs)");
+                  },
+                },
+              ]);
+              setMediaList([]);
+              setFileList([]);
+            } catch (err) {
+              console.error("Lỗi xoá lịch sử:", err);
+              Alert.alert("Lỗi", "Không thể xoá lịch sử trò chuyện.");
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleTransferAndLeave = async () => {
@@ -515,12 +547,17 @@ export default function ChatInfoScreen() {
                 ? `${msg._id}-${idx}`
                 : `media-fallback-${idx}-${Math.random().toString(36).substring(2)}`;
               return (
-                <View key={uniqueKey} className="w-1/3 px-[6px] mb-3">
+                <TouchableOpacity
+                  key={uniqueKey}
+                  className="w-1/3 px-[6px] mb-3"
+                  activeOpacity={0.8}
+                  onPress={() => setViewerIndex(idx)}
+                >
                   <Image
                     source={{ uri: msg.content }}
                     className="w-full aspect-square rounded-2xl bg-gray-200"
                   />
-                </View>
+                </TouchableOpacity>
               );
             })}
 
@@ -654,6 +691,7 @@ export default function ChatInfoScreen() {
               icon={<TrashIcon size={24} color="#ef4444" />}
               title="Xóa lịch sử trò chuyện"
               isDestructive
+              onPress={handleClearHistory}
             />
           </View>
         </View>
@@ -748,6 +786,14 @@ export default function ChatInfoScreen() {
           </View>
         </View>
       </Modal>
+
+      <GalleryViewerModal
+        images={mediaList}
+        initialIndex={viewerIndex ?? 0}
+        visible={viewerIndex !== null}
+        onClose={() => setViewerIndex(null)}
+        onIndexChange={(idx) => setViewerIndex(idx)}
+      />
     </View>
   );
 }

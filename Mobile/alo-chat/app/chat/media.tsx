@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState, useEffect, useCallback } from "react";
 import { useSocket } from "../../contexts/SocketContext";
+import { GalleryViewerModal } from "../../components/chat/GalleryViewer";
 import {
   View,
   Text,
@@ -256,28 +257,13 @@ export default function MediaScreen() {
         />
       )}
 
-      {/* Basic Image Viewer Modal */}
-      <Modal
+      <GalleryViewerModal
+        images={mediaList}
+        initialIndex={viewerIndex ?? 0}
         visible={viewerIndex !== null}
-        transparent={true}
-        animationType="fade"
-      >
-        <View className="flex-1 bg-black justify-center items-center">
-          <TouchableOpacity
-            className="absolute top-10 right-5 z-50 p-3"
-            onPress={() => setViewerIndex(null)}
-          >
-            <XMarkIcon size={30} color="white" />
-          </TouchableOpacity>
-          {viewerIndex !== null && (
-            <Image
-              source={{ uri: mediaList[viewerIndex].content }}
-              className="w-full h-full"
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      </Modal>
+        onClose={() => setViewerIndex(null)}
+        onIndexChange={(idx) => setViewerIndex(idx)}
+      />
     </View>
   );
 }
