@@ -121,7 +121,7 @@ export default function ChatInfoScreen() {
     try {
       if (!id) return;
 
-      const media = await messageService.getMessageHistory(
+      const { messages: media } = await messageService.getMessageHistory(
         id as string,
         100,
         0,
@@ -145,7 +145,7 @@ export default function ChatInfoScreen() {
       setMediaList(sortedMedia);
       setMediaCount(media.length);
 
-      const files = await messageService.getMessageHistory(
+      const { messages: files } = await messageService.getMessageHistory(
         id as string,
         100,
         0,

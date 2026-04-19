@@ -33,27 +33,35 @@ export interface SendMessagePayload {
   metadata?: Record<string, any>;
 }
 
+export interface MessageHistoryResponse {
+  conversationId: string;
+  messages: MessageDTO[];
+  count: number;
+  limit: number;
+  skip: number;
+  hasMore?: boolean;
+}
+
 /**
  * Chuẩn hóa response từ getMessageHistory.
- *
- * Backend message-service trả về:
- *   { conversationId, messages: [...], count, limit, skip }
- *
- * API interceptor (api.ts) unwrap nếu response.data.data tồn tại:
- *   - nếu KHÔNG có ".data" → interceptor trả về nguyên Axios Response object
- *   - nếu CÓ ".data" → interceptor trả về response.data.data
- *
- * Đây là helper để lấy đúng mảng messages bất kể format.
  */
-function extractMessages(raw: any): MessageDTO[] {
-  // Case 1: interceptor đã unwrap → raw = { conversationId, messages, count }
-  if (raw && Array.isArray(raw.messages)) return raw.messages;
-  // Case 2: interceptor KHÔNG unwrap → raw = Axios Response, raw.data = { conversationId, messages, count }
-  if (raw?.data && Array.isArray(raw.data.messages)) return raw.data.messages;
-  // Case 3: gateway thêm thêm wrapper
+function extractHistory(raw: any): MessageHistoryResponse {
+  // Case 1: interceptor đã unwrap
+  if (raw && Array.isArray(raw.messages)) return raw;
+  // Case 2: interceptor KHÔNG unwrap
+  if (raw?.data && Array.isArray(raw.data.messages)) return raw.data;
+  // Case 3: gateway wrapper
   if (raw?.data?.data && Array.isArray(raw.data.data.messages))
     return raw.data.data.messages;
-  return [];
+
+  return {
+    conversationId: "",
+    messages: [],
+    count: 0,
+    limit: 0,
+    skip: 0,
+    hasMore: false,
+  };
 }
 
 /**
@@ -72,21 +80,27 @@ function extractSentMessage(raw: any): MessageDTO | null {
 }
 
 export const messageService = {
-  // Lấy lịch sử tin nhắn của một cuộc hội thoại
   getMessageHistory: async (
     conversationId: string,
     limit = 50,
     skip = 0,
     type?: string,
-  ): Promise<MessageDTO[]> => {
+  ): Promise<MessageHistoryResponse> => {
     try {
       const raw = await api.get<any, any>(`/messages/${conversationId}`, {
         params: { limit, skip, type },
       });
-      return extractMessages(raw);
+      return extractHistory(raw);
     } catch (error) {
       console.error("Lỗi lấy lịch sử tin nhắn:", error);
-      return [];
+      return {
+        conversationId,
+        messages: [],
+        count: 0,
+        limit,
+        skip,
+        hasMore: false,
+      };
     }
   },
 

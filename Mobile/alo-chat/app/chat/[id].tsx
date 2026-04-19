@@ -21,6 +21,7 @@ import {
   UIManager,
   LayoutAnimation,
   FlatList,
+  ActivityIndicator,
 } from "react-native";
 
 if (Platform.OS === "android") {
@@ -100,7 +101,7 @@ const GalleryPager = ({
 }) => {
   const windowWidth = Dimensions.get("window").width;
   const insets = useSafeAreaInsets();
-  
+
   const pagerX = useSharedValue(-initialIndex * windowWidth);
   const viewerIndexRef = useSharedValue(initialIndex);
   const [localIndex, setLocalIndex] = useState(initialIndex);
@@ -129,16 +130,21 @@ const GalleryPager = ({
     .onEnd((event) => {
       const currentPagerX = pagerX.value;
       const totalImages = images.length;
-      
+
       // Tính toán index mục tiêu dựa trên vận tốc hoặc vị trí
       let nextIndex = viewerIndexRef.value;
       if (event.velocityX > 500 || event.translationX > windowWidth / 3) {
         nextIndex = Math.max(0, viewerIndexRef.value - 1);
-      } else if (event.velocityX < -500 || event.translationX < -windowWidth / 3) {
+      } else if (
+        event.velocityX < -500 ||
+        event.translationX < -windowWidth / 3
+      ) {
         nextIndex = Math.min(totalImages - 1, viewerIndexRef.value + 1);
       }
 
-      pagerX.value = withSpring(-nextIndex * windowWidth, { overshootClamping: true });
+      pagerX.value = withSpring(-nextIndex * windowWidth, {
+        overshootClamping: true,
+      });
       viewerIndexRef.value = nextIndex;
       runOnJS(setLocalIndex)(nextIndex);
       runOnJS(onIndexChange)(nextIndex);
@@ -167,8 +173,8 @@ const GalleryPager = ({
       </View>
 
       <GestureDetector gesture={panGesture}>
-        <Animated.View 
-          className="flex-row items-center" 
+        <Animated.View
+          className="flex-row items-center"
           style={[{ width: windowWidth * images.length }, pagerAnimatedStyle]}
         >
           {images.map((img, idx) => (
@@ -219,12 +225,14 @@ const GalleryPager = ({
                 localIndex === index ? "border-white" : "border-transparent"
               }`}
             >
-               <Image
+              <Image
                 source={{ uri: item.content }}
                 className="w-12 h-12"
                 resizeMode="cover"
               />
-              {localIndex !== index && <View className="absolute inset-0 bg-black/40" />}
+              {localIndex !== index && (
+                <View className="absolute inset-0 bg-black/40" />
+              )}
             </TouchableOpacity>
           )}
         />
@@ -357,12 +365,15 @@ const GalleryItem = ({
     })
     .onEnd((event) => {
       if (scale.value <= 1.1) {
-        if (Math.abs(event.velocityY) > 800 || Math.abs(event.translationY) > 150) {
+        if (
+          Math.abs(event.velocityY) > 800 ||
+          Math.abs(event.translationY) > 150
+        ) {
           // Thoát màn hình
           translateY.value = withTiming(
             event.translationY > 0 ? windowHeight : -windowHeight,
             {},
-            () => runOnJS(onClose)()
+            () => runOnJS(onClose)(),
           );
         } else {
           // Quay lại vị trí cũ
@@ -380,8 +391,10 @@ const GalleryItem = ({
 
         if (Math.abs(diff) > windowWidth * 0.2) {
           const nextIndex = diff > 0 ? index - 1 : index + 1;
-          if (nextIndex >= 0 && nextIndex < 100) { 
-            pagerX.value = withSpring(-nextIndex * windowWidth, { overshootClamping: true });
+          if (nextIndex >= 0 && nextIndex < 100) {
+            pagerX.value = withSpring(-nextIndex * windowWidth, {
+              overshootClamping: true,
+            });
             viewerIndexRef.value = nextIndex;
             runOnJS(onIndexChange)(nextIndex);
           } else {
@@ -389,14 +402,14 @@ const GalleryItem = ({
           }
         } else {
           pagerX.value = withSpring(basePagerX);
-          
+
           // Thêm GIA TỐC (Momentum) cực mượt cho ảnh khi đang zoom
           translateX.value = withDecay({
             velocity: event.velocityX,
             clamp: [-maxTranslateX, maxTranslateX],
             rubberBandEffect: true,
           });
-          
+
           translateY.value = withDecay({
             velocity: event.velocityY,
             clamp: [-maxTranslateY, maxTranslateY],
@@ -421,7 +434,9 @@ const GalleryItem = ({
   }));
 
   return (
-    <GestureDetector gesture={Gesture.Simultaneous(pinchGesture, panGesture, doubleTap)}>
+    <GestureDetector
+      gesture={Gesture.Simultaneous(pinchGesture, panGesture, doubleTap)}
+    >
       <Animated.View
         style={[
           {
@@ -443,6 +458,166 @@ const GalleryItem = ({
   );
 };
 
+// --- Component hiển thị từng tin nhắn đơn lẻ ---
+const MessageItem = ({
+  msg,
+  isSender,
+  isLastInBlock,
+  onLongPress,
+  openReactionDetails,
+  chatImages,
+  setViewerIndex,
+  messageRefs,
+  expandedTimeMsgId,
+  setExpandedTimeMsgId,
+}: {
+  msg: MessageDTO;
+  isSender: boolean;
+  isLastInBlock: boolean;
+  onLongPress: () => void;
+  openReactionDetails: () => void;
+  chatImages: MessageDTO[];
+  setViewerIndex: (idx: number) => void;
+  messageRefs: React.MutableRefObject<Record<string, View>>;
+  expandedTimeMsgId: string | null;
+  setExpandedTimeMsgId: React.Dispatch<React.SetStateAction<string | null>>;
+}) => {
+  const timeString = new Date(msg.createdAt).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return (
+    <View
+      className={`${isLastInBlock ? "" : "mb-1"} w-full ${isSender ? "items-end" : "items-start"}`}
+    >
+      <TouchableOpacity
+        ref={(r) => {
+          if (r) messageRefs.current[msg._id] = r as any;
+        }}
+        activeOpacity={0.8}
+        onLongPress={onLongPress}
+        onPress={() => {
+          if (!isLastInBlock) {
+            LayoutAnimation.configureNext(
+              LayoutAnimation.Presets.easeInEaseOut,
+            );
+            setExpandedTimeMsgId((prev) => (prev === msg._id ? null : msg._id));
+          }
+        }}
+        className="relative"
+      >
+        <View
+          className={`shadow-sm ${
+            msg.type === "image" && !msg.isRevoked
+              ? "p-0 bg-transparent"
+              : "px-5 py-3 " +
+                (isSender
+                  ? "bg-black rounded-3xl rounded-br-lg"
+                  : "bg-white rounded-3xl rounded-bl-lg")
+          }`}
+        >
+          {msg.isRevoked ? (
+            <Text
+              className={
+                "italic text-sm leading-6 " +
+                (isSender ? "text-gray-300" : "text-gray-400")
+              }
+            >
+              Tin nhắn đã bị thu hồi
+            </Text>
+          ) : msg.type === "image" ? (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => {
+                const idx = chatImages.findIndex((img) => img._id === msg._id);
+                if (idx !== -1) setViewerIndex(idx);
+              }}
+              onLongPress={onLongPress}
+            >
+              <Image
+                source={{ uri: msg.content }}
+                className="w-[260px] h-[200px] rounded-[22px] border border-gray-100/50 self-center"
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          ) : msg.type === "file" ? (
+            <View className="flex-row items-center gap-2">
+              <View className="w-10 h-10 bg-gray-200/20 items-center justify-center rounded-lg">
+                <InformationCircleIcon
+                  size={24}
+                  color={isSender ? "#fff" : "#000"}
+                />
+              </View>
+              <View>
+                <Text
+                  className={`text-sm font-bold ${isSender ? "text-white" : "text-gray-900"}`}
+                  numberOfLines={1}
+                >
+                  {msg.metadata?.fileName || "Tệp đính kèm"}
+                </Text>
+              </View>
+            </View>
+          ) : msg.type === "text" ? (
+            <Text
+              className={`text-base leading-6 ${isSender ? "text-white" : "text-gray-900"}`}
+            >
+              {msg.content}
+            </Text>
+          ) : null}
+        </View>
+      </TouchableOpacity>
+
+      {/* Hiển thị phân loại đếm Emoji dính dưới đáy bong bóng thoại */}
+      {(msg.reactions?.length ?? 0) > 0 && (
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={openReactionDetails}
+          className={`bg-white border border-gray-100 rounded-[14px] px-1.5 py-0.5 flex-row flex-wrap items-center shadow-sm z-10 -mt-3.5 mb-2 max-w-[85%] ${isSender ? "mr-4" : "ml-4"}`}
+        >
+          <View className="flex-row flex-wrap items-center gap-1.5">
+            {Array.from(
+              new Set((msg.reactions || []).map((r: any) => r.emoji)),
+            ).map((emojiKey: any) => {
+              const count = (msg.reactions || [])
+                .filter((r: any) => r.emoji === emojiKey)
+                .reduce((acc: number, r: any) => acc + (r.count || 1), 0);
+              return (
+                <View
+                  key={emojiKey}
+                  className="flex-row items-center mt-0.5 mb-0.5"
+                >
+                  <Text className="text-[11px] mr-0.5">
+                    {EMOJI_MAP[emojiKey] || "👍"}
+                  </Text>
+                  <Text className="text-[10px] font-bold text-gray-500">
+                    {count}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {(isLastInBlock || expandedTimeMsgId === msg._id) && (
+        <View
+          className={`flex-row items-center mt-1 ${isSender ? "justify-end pr-2" : "justify-start pl-2"}`}
+        >
+          <Text className="text-[11px] text-gray-500">{timeString}</Text>
+          {isSender && (
+            <Text
+              className={`ml-1 text-[11px] font-bold ${msg.isRead ? "text-blue-500" : "text-gray-400"}`}
+            >
+              {msg.isRead ? "✓✓" : "✓"}
+            </Text>
+          )}
+        </View>
+      )}
+    </View>
+  );
+};
+
 export default function GlobalChatScreen() {
   const {
     id,
@@ -454,14 +629,18 @@ export default function GlobalChatScreen() {
   } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const scrollViewRef = useRef<ScrollView>(null);
+
   const { socket, onlineUsers } = useSocket();
   const { user } = useAuth();
   const currentUserId = user?.id || user?._id || user?.userId;
   const messageRefs = useRef<Record<string, View>>({});
+  const flatListRef = useRef<FlatList>(null);
 
-  const [inputText, setInputText] = useState("");
   const [messages, setMessages] = useState<MessageDTO[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [skip, setSkip] = useState(0);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -664,7 +843,7 @@ export default function GlobalChatScreen() {
         };
       }
       allUsersMap[r.userId].emojis.add(r.emoji);
-      allUsersMap[r.userId].total += (r.count || 1);
+      allUsersMap[r.userId].total += r.count || 1;
     });
 
     const allTabContent = Object.values(allUsersMap).sort(
@@ -811,30 +990,59 @@ export default function GlobalChatScreen() {
   }, [id, isGroup, paramsTargetUserId]);
 
   // Bước 2: Lấy lịch sử tin nhắn khi đã có resolvedConversationId
-  useEffect(() => {
+  const fetchMsgs = async (reset = false) => {
     if (!resolvedConversationId) return;
-
-    const fetchMsgs = async () => {
+    if (reset) {
       setLoadingMessages(true);
-      try {
-        const msgs = await messageService.getMessageHistory(
-          resolvedConversationId,
-          50,
-          0,
-        );
-        setMessages(msgs);
-        setPinnedMessages(msgs.filter((m) => m.isPinned));
+      setSkip(0);
+    } else {
+      setLoadingMore(true);
+    }
 
-        // Đánh dấu đã đọc khi vừa load xong hội thoại
-        messageService.markAsRead(resolvedConversationId).catch(() => {});
-      } catch (e) {
-        console.error("Lỗi tải tin nhắn:", e);
-      } finally {
-        setLoadingMessages(false);
+    try {
+      const currentSkip = reset ? 0 : skip;
+      const response = await messageService.getMessageHistory(
+        resolvedConversationId,
+        50,
+        currentSkip,
+      );
+
+      const newMsgs = response.messages || [];
+      const hasMoreData = response.hasMore ?? newMsgs.length === 50;
+
+      if (reset) {
+        setMessages(newMsgs);
+      } else {
+        // Prepend tin nhắn cũ vào đầu mảng (Nếu ScrollView bình thường)
+        // Nhưng nếu FlatList inverted, it's simpler to manage array order.
+        // Ở đây ta giữ [oldest -> newest] trong state 'messages'
+        setMessages((prev) => [...newMsgs, ...prev]);
       }
-    };
-    fetchMsgs();
+
+      setHasMore(hasMoreData);
+      setSkip((prev) => (reset ? newMsgs.length : prev + newMsgs.length));
+      setPinnedMessages(newMsgs.filter((m) => m.isPinned));
+
+      if (reset) {
+        messageService.markAsRead(resolvedConversationId).catch(() => {});
+      }
+    } catch (e) {
+      console.error("Lỗi tải tin nhắn:", e);
+    } finally {
+      setLoadingMessages(false);
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMsgs(true);
   }, [resolvedConversationId]);
+
+  const handleLoadMore = () => {
+    if (!loadingMore && hasMore && !loadingMessages) {
+      fetchMsgs(false);
+    }
+  };
 
   // Bước 3: Quản lý Socket bằng resolvedConversationId
   useEffect(() => {
@@ -879,6 +1087,13 @@ export default function GlobalChatScreen() {
           String(newMsg.senderId) !== String(currentUserId)
         ) {
           messageService.markAsRead(resolvedConversationId).catch(() => {});
+          // Không tự động cuộn xuống, chỉ hiện thông báo
+          setHasNewUnseenMessages(true);
+        } else {
+          // Tin nhắn của chính mình -> Cuộn xuống đáy ngay
+          setTimeout(() => {
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+          }, 100);
         }
       }
     };
@@ -1056,7 +1271,7 @@ export default function GlobalChatScreen() {
           return [...prev, sentMessage];
         });
         setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
         }, 100);
       }
     } catch (e) {
@@ -1104,7 +1319,7 @@ export default function GlobalChatScreen() {
   useEffect(() => {
     const showSub = Keyboard.addListener("keyboardDidShow", () => {
       setKeyboardVisible(true);
-      scrollViewRef.current?.scrollToEnd({ animated: true });
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     });
     const hideSub = Keyboard.addListener("keyboardDidHide", () => {
       setKeyboardVisible(false);
@@ -1142,7 +1357,7 @@ export default function GlobalChatScreen() {
           return [...prev, sentMessage];
         });
         setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
         }, 100);
       }
     } catch (e) {
@@ -1172,7 +1387,7 @@ export default function GlobalChatScreen() {
           return [...prev, sentMessage];
         });
         setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
         }, 100);
       }
     } catch (e) {
@@ -1429,53 +1644,52 @@ export default function GlobalChatScreen() {
           className="absolute top-0 left-0 right-0 bottom-0"
           style={{ paddingTop: pinnedMessages.length > 0 ? 64 : 0 }}
         >
-          <ScrollView
-            ref={scrollViewRef}
-            className="flex-1 px-4"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{
-              flexGrow: 1,
-              justifyContent: "flex-end",
-              paddingBottom: 100,
+          <FlatList
+            ref={flatListRef as any}
+            data={[...messageGroups].reverse()}
+            keyExtractor={(item) => item.messages[0]?._id + "_group"}
+            inverted
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.5}
+            // 👉 Ngăn chặn hiện tượng "giật" tin nhắn khi có tin mới tới lúc đang xem tin cũ
+            maintainVisibleContentPosition={{
+              minIndexForVisible: 0,
             }}
+            automaticallyAdjustContentInsets={false}
+            maxToRenderPerBatch={10}
+            windowSize={10}
+            className="flex-1 px-4"
+            contentContainerStyle={{
+              paddingTop: 80, // Tăng padding ở đáy (visual bottom) để không bị che
+              paddingBottom: 0,
+            }}
+            ListHeaderComponent={
+              typingUsers.length > 0 ? (
+                <View className="mb-6 self-start flex-row items-center px-5 py-3 shadow-sm bg-white rounded-3xl rounded-bl-lg">
+                  <Text className="text-gray-500 italic text-sm">
+                    {typingUsers.length === 1
+                      ? "Có người đang nhắn tin..."
+                      : "Nhiều người đang nhắn tin..."}
+                  </Text>
+                </View>
+              ) : null
+            }
+            ListFooterComponent={
+              loadingMore ? (
+                <View className="py-4 items-center">
+                  <ActivityIndicator color="#3b82f6" />
+                </View>
+              ) : null
+            }
             onScroll={(e) => {
-              const { layoutMeasurement, contentOffset, contentSize } =
-                e.nativeEvent;
-              const closeToBottom =
-                layoutMeasurement.height + contentOffset.y >=
-                contentSize.height - 50;
+              const { contentOffset } = e.nativeEvent;
+              const closeToBottom = contentOffset.y < 50;
               setIsAtBottom(closeToBottom);
               if (closeToBottom && hasNewUnseenMessages) {
                 setHasNewUnseenMessages(false);
               }
             }}
-            scrollEventThrottle={16}
-            onContentSizeChange={() => {
-              if (
-                messages.length > messagesCountRef.current ||
-                messagesCountRef.current === 0
-              ) {
-                const isInitialLoad = messagesCountRef.current === 0;
-                messagesCountRef.current = messages.length;
-
-                if (isAtBottom || isInitialLoad) {
-                  const scrollAction = () =>
-                    scrollViewRef.current?.scrollToEnd({
-                      animated: !isInitialLoad,
-                    });
-
-                  if (isInitialLoad) {
-                    setTimeout(scrollAction, 100);
-                  } else {
-                    scrollAction();
-                  }
-                } else {
-                  setHasNewUnseenMessages(true);
-                }
-              }
-            }}
-          >
-            {messageGroups.map((group, groupIdx) => {
+            renderItem={({ item: group }) => {
               const isSender = group.isSender;
               const senderId = group.messages[0].senderId;
               const sender = userCache[senderId];
@@ -1483,12 +1697,17 @@ export default function GlobalChatScreen() {
                 sender?.fullName || (sender as any)?.name || "Người dùng";
               const senderAvatar = sender?.avatar;
 
-              // [THÊM MỚI] Nếu toàn bộ group này là tin nhắn hệ thống
-              if (group.messages.length > 0 && group.messages[0].type === "system") {
+              if (
+                group.messages.length > 0 &&
+                group.messages[0].type === "system"
+              ) {
                 return (
-                  <View key={groupIdx} className="items-center my-3 w-full">
+                  <View className="items-center my-3 w-full">
                     {group.messages.map((msg) => (
-                      <View key={msg._id} className="bg-gray-200/80 px-4 py-1.5 rounded-full mb-1">
+                      <View
+                        key={msg._id}
+                        className="bg-gray-200/80 px-4 py-1.5 rounded-full mb-1"
+                      >
                         <Text className="text-[12px] text-gray-600 font-medium text-center">
                           {msg.content}
                         </Text>
@@ -1500,12 +1719,10 @@ export default function GlobalChatScreen() {
 
               return (
                 <View
-                  key={groupIdx}
                   className={`mb-6 flex-row ${
                     isSender ? "justify-end" : "justify-start"
                   }`}
                 >
-                  {/* Cột Avatar (chỉ hiện cho người khác trong nhóm) */}
                   {!isSender && (
                     <View className="w-10 items-center justify-end mr-2">
                       {senderAvatar ? (
@@ -1528,7 +1745,6 @@ export default function GlobalChatScreen() {
                       isSender ? "items-end" : "items-start"
                     }`}
                   >
-                    {/* Tên người gửi (chỉ hiện cho người khác trong nhóm) */}
                     {!isSender && isGroupChat && (
                       <Text className="text-[11px] font-bold text-gray-500 mb-1 ml-1">
                         {senderName}
@@ -1536,7 +1752,11 @@ export default function GlobalChatScreen() {
                     )}
 
                     {(() => {
-                      const blocks: { type: string, items: MessageDTO[], id: string }[] = [];
+                      const blocks: {
+                        type: string;
+                        items: MessageDTO[];
+                        id: string;
+                      }[] = [];
                       let currentImages: MessageDTO[] = [];
                       for (let i = 0; i < group.messages.length; i++) {
                         const m = group.messages[i];
@@ -1544,57 +1764,116 @@ export default function GlobalChatScreen() {
                           currentImages.push(m);
                         } else {
                           if (currentImages.length > 0) {
-                            blocks.push({ type: "image_group", items: currentImages, id: currentImages[0]._id + "_grp" });
+                            blocks.push({
+                              type: "image_group",
+                              items: currentImages,
+                              id: currentImages[0]._id + "_grp",
+                            });
                             currentImages = [];
                           }
-                          blocks.push({ type: "single", items: [m], id: m._id });
+                          blocks.push({
+                            type: "single",
+                            items: [m],
+                            id: m._id,
+                          });
                         }
                       }
                       if (currentImages.length > 0) {
-                        blocks.push({ type: "image_group", items: currentImages, id: currentImages[0]._id + "_grp" });
+                        blocks.push({
+                          type: "image_group",
+                          items: currentImages,
+                          id: currentImages[0]._id + "_grp",
+                        });
                       }
 
                       return blocks.map((block, blockIdx) => {
                         const isLastBlock = blockIdx === blocks.length - 1;
-
-                        if (block.type === "image_group" && block.items.length > 1) {
-                          // RENDER DẠNG LƯỚI
+                        if (
+                          block.type === "image_group" &&
+                          block.items.length > 1
+                        ) {
                           const lastMsg = block.items[block.items.length - 1];
-                          const timeString = new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                          const timeString = new Date(
+                            lastMsg.createdAt,
+                          ).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          });
                           return (
-                            <View key={block.id} className={`${isLastBlock ? "" : "mb-1"} w-full ${isSender ? "items-end" : "items-start"}`}>
-                              <View className={`flex-row flex-wrap w-[260px] max-w-[260px] ${isSender ? "justify-end" : "justify-start"} gap-1`}>
+                            <View
+                              key={block.id}
+                              className={`${isLastBlock ? "" : "mb-1"} w-full ${isSender ? "items-end" : "items-start"}`}
+                            >
+                              <View
+                                className={`flex-row flex-wrap w-[260px] max-w-[260px] ${isSender ? "justify-end" : "justify-start"} gap-1`}
+                              >
                                 {block.items.map((msg) => (
                                   <TouchableOpacity
                                     key={msg._id}
-                                    ref={(r) => { if (r) messageRefs.current[msg._id] = r as any; }}
+                                    ref={(r) => {
+                                      if (r)
+                                        messageRefs.current[msg._id] = r as any;
+                                    }}
                                     activeOpacity={0.9}
-                                    onLongPress={() => onLongPressMessage(msg._id)}
+                                    onLongPress={() =>
+                                      onLongPressMessage(msg._id)
+                                    }
                                     onPress={() => {
-                                      const idx = chatImages.findIndex((img) => img._id === msg._id);
+                                      const idx = chatImages.findIndex(
+                                        (img) => img._id === msg._id,
+                                      );
                                       if (idx !== -1) setViewerIndex(idx);
                                     }}
-                                    className={`relative ${(msg.reactions?.length ?? 0) > 0 ? "mb-8 pb-1" : ""}`}
+                                    className={`relative ${
+                                      (msg.reactions?.length ?? 0) > 0
+                                        ? "mb-8 pb-1"
+                                        : ""
+                                    }`}
                                   >
                                     <Image
                                       source={{ uri: msg.content }}
                                       className="w-[128px] h-[128px] rounded-xl border border-gray-100/50"
                                       resizeMode="cover"
                                     />
-                                    {/* Hiển thị phân loại đếm Emoji dính dưới đáy bong bóng thoại */}
                                     {(msg.reactions?.length ?? 0) > 0 && (
                                       <TouchableOpacity
                                         activeOpacity={0.7}
-                                        onPress={() => openReactionDetails(msg._id)}
-                                        className={`absolute top-[115px] ${isSender ? "right-1" : "left-1"} bg-white border border-gray-100 rounded-[12px] px-1.5 py-0.5 flex-row flex-wrap items-center shadow-sm z-10 max-w-[100%]`}
+                                        onPress={() =>
+                                          openReactionDetails(msg._id)
+                                        }
+                                        className={`absolute top-[115px] ${
+                                          isSender ? "right-1" : "left-1"
+                                        } bg-white border border-gray-100 rounded-[12px] px-1.5 py-0.5 flex-row flex-wrap items-center shadow-sm z-10 max-w-[100%]`}
                                       >
                                         <View className="flex-row flex-wrap items-center gap-1.5">
-                                          {Array.from(new Set((msg.reactions || []).map((r: any) => r.emoji))).map((emojiKey: any) => {
-                                            const count = (msg.reactions || []).filter((r: any) => r.emoji === emojiKey).reduce((acc: number, r: any) => acc + (r.count || 1), 0);
+                                          {Array.from(
+                                            new Set(
+                                              (msg.reactions || []).map(
+                                                (r: any) => r.emoji,
+                                              ),
+                                            ),
+                                          ).map((emojiKey: any) => {
+                                            const count = (msg.reactions || [])
+                                              .filter(
+                                                (r: any) =>
+                                                  r.emoji === emojiKey,
+                                              )
+                                              .reduce(
+                                                (acc: number, r: any) =>
+                                                  acc + (r.count || 1),
+                                                0,
+                                              );
                                             return (
-                                              <View key={emojiKey} className="flex-row items-center mt-0.5 mb-0.5">
-                                                <Text className="text-[11px] mr-0.5">{EMOJI_MAP[emojiKey] || "👍"}</Text>
-                                                <Text className="text-[10px] font-bold text-gray-500">{count}</Text>
+                                              <View
+                                                key={emojiKey}
+                                                className="flex-row items-center mt-0.5 mb-0.5"
+                                              >
+                                                <Text className="text-[11px] mr-1">
+                                                  {EMOJI_MAP[emojiKey] || "👍"}
+                                                </Text>
+                                                <Text className="text-[10px] font-bold text-gray-500">
+                                                  {count}
+                                                </Text>
                                               </View>
                                             );
                                           })}
@@ -1604,154 +1883,64 @@ export default function GlobalChatScreen() {
                                   </TouchableOpacity>
                                 ))}
                               </View>
-                              
-                              {/* Thời gian khối */}
-                              {(isLastBlock || expandedTimeMsgId === lastMsg._id) && (
-                                <View className={`flex-row items-center mt-1 ${isSender ? "justify-end pr-2" : "justify-start pl-2"}`}>
-                                  <Text className="text-[11px] text-gray-500">{timeString}</Text>
-                                  {isSender && (
-                                    <Text className={`ml-1 text-[11px] font-bold ${lastMsg.isRead ? "text-blue-500" : "text-gray-400"}`}>
-                                      {lastMsg.isRead ? "✓✓" : "✓"}
-                                    </Text>
-                                  )}
-                                </View>
-                              )}
-                            </View>
-                          );
-                        } else {
-                          // SINGLES (Văn bản, File, Hoặc 1 ảnh duy nhất)
-                          const msg = block.items[0];
-                          const isLast = isLastBlock;
-                          const timeString = new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-                          return (
-                            <View
-                              key={msg._id}
-                              className={`${isLast ? "" : "mb-1"} w-full ${isSender ? "items-end" : "items-start"}`}
-                            >
-                              <TouchableOpacity
-                                ref={(r) => { if (r) messageRefs.current[msg._id] = r as any; }}
-                                activeOpacity={0.8}
-                                onLongPress={() => onLongPressMessage(msg._id)}
-                                onPress={() => {
-                                  if (!isLast) {
-                                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                                    setExpandedTimeMsgId((prev) => prev === msg._id ? null : msg._id);
-                                  }
-                                }}
-                                className={`relative`}
-                              >
-                                <View
-                                  className={`shadow-sm ${
-                                    msg.type === "image" && !msg.isRevoked
-                                      ? "p-0 bg-transparent"
-                                      : "px-5 py-4 " + (isSender ? "bg-black rounded-3xl rounded-br-lg" : "bg-white rounded-3xl rounded-bl-lg")
-                                  }`}
-                                >
-                                  {msg.isRevoked ? (
-                                    <Text className={"italic text-sm leading-6 " + (isSender ? "text-gray-300" : "text-gray-400")}>
-                                      Tin nhắn đã bị thu hồi
-                                    </Text>
-                                  ) : msg.type === "image" ? (
-                                    <TouchableOpacity
-                                      activeOpacity={0.9}
-                                      onPress={() => {
-                                        const idx = chatImages.findIndex((img) => img._id === msg._id);
-                                        if (idx !== -1) setViewerIndex(idx);
-                                      }}
-                                      onLongPress={() => onLongPressMessage(msg._id)}
-                                    >
-                                      <Image
-                                        source={{ uri: msg.content }}
-                                        className="w-[260px] h-[200px] rounded-[22px] border border-gray-100/50 self-center"
-                                        resizeMode="cover"
-                                      />
-                                    </TouchableOpacity>
-                                  ) : msg.type === "file" ? (
-                                    <View className="flex-row items-center gap-2">
-                                      <View className="w-10 h-10 bg-gray-200/20 items-center justify-center rounded-lg">
-                                        <InformationCircleIcon size={24} color={isSender ? "#fff" : "#000"} />
-                                      </View>
-                                      <View>
-                                        <Text className={`text-sm font-bold ${isSender ? "text-white" : "text-gray-900"}`} numberOfLines={1}>
-                                          {msg.metadata?.fileName || "Tệp đính kèm"}
-                                        </Text>
-                                      </View>
-                                    </View>
-                                  ) : msg.type === "text" ? (
-                                    <Text className={`text-base leading-6 ${isSender ? "text-white" : "text-gray-900"}`}>
-                                      {msg.content}
-                                    </Text>
-                                  ) : null}
-                                </View>
-
-                                </TouchableOpacity>
-
-                                {/* Hiển thị phân loại đếm Emoji dính dưới đáy bong bóng thoại ở vị trí tương đối */}
-                                {(msg.reactions?.length ?? 0) > 0 && (
-                                  <TouchableOpacity
-                                    activeOpacity={0.7}
-                                    onPress={() => openReactionDetails(msg._id)}
-                                    className={`bg-white border border-gray-100 rounded-[14px] px-1.5 py-0.5 flex-row flex-wrap items-center shadow-sm z-10 -mt-3.5 mb-2 max-w-[85%] ${isSender ? "mr-4" : "ml-4"}`}
-                                  >
-                                    <View className="flex-row flex-wrap items-center gap-1.5">
-                                      {Array.from(new Set((msg.reactions || []).map((r: any) => r.emoji))).map((emojiKey: any) => {
-                                        const count = (msg.reactions || []).filter((r: any) => r.emoji === emojiKey).reduce((acc: number, r: any) => acc + (r.count || 1), 0);
-                                        return (
-                                          <View key={emojiKey} className="flex-row items-center mt-0.5 mb-0.5">
-                                            <Text className="text-[11px] mr-0.5">{EMOJI_MAP[emojiKey] || "👍"}</Text>
-                                            <Text className="text-[10px] font-bold text-gray-500">{count}</Text>
-                                          </View>
-                                        );
-                                      })}
-                                    </View>
-                                  </TouchableOpacity>
-                                )}
-
-                              {(isLast || expandedTimeMsgId === msg._id) && (
-                                <View className={`flex-row items-center mt-1 ${isSender ? "justify-end pr-2" : "justify-start pl-2"}`}>
-                                  <Text className="text-[11px] text-gray-500">{timeString}</Text>
-                                  {isSender && (
-                                    <Text className={`ml-1 text-[11px] font-bold ${msg.isRead ? "text-blue-500" : "text-gray-400"}`}>
-                                      {msg.isRead ? "✓✓" : "✓"}
-                                    </Text>
-                                  )}
-                                </View>
+                              {isLastBlock && (
+                                <Text className="text-[10px] text-gray-400 mt-1 mr-1">
+                                  {timeString}
+                                </Text>
                               )}
                             </View>
                           );
                         }
+
+                        const msg = block.items[0];
+                        return (
+                          <MessageItem
+                            key={msg._id}
+                            msg={msg}
+                            isSender={isSender}
+                            isLastInBlock={isLastBlock}
+                            onLongPress={() => onLongPressMessage(msg._id)}
+                            openReactionDetails={() =>
+                              openReactionDetails(msg._id)
+                            }
+                            chatImages={chatImages}
+                            setViewerIndex={setViewerIndex}
+                            messageRefs={messageRefs}
+                            expandedTimeMsgId={expandedTimeMsgId}
+                            setExpandedTimeMsgId={setExpandedTimeMsgId}
+                          />
+                        );
                       });
                     })()}
                   </View>
                 </View>
               );
-            })}
-
-            {typingUsers.length > 0 && (
-              <View className="mb-6 self-start flex-row items-center px-5 py-3 shadow-sm bg-white rounded-3xl rounded-bl-lg">
-                <Text className="text-gray-500 italic text-sm">
-                  {typingUsers.length === 1
-                    ? "Có người đang nhắn tin..."
-                    : "Nhiều người đang nhắn tin..."}
-                </Text>
-              </View>
-            )}
-          </ScrollView>
+            }}
+          />
         </View>
 
-        {/* Nút lướt xuống đáy có tin nhắn mới */}
+        {/* Banner thông báo tin nhắn mới ở ngay trên ô nhập */}
         {hasNewUnseenMessages && !isAtBottom && (
-          <TouchableOpacity
-            className="absolute bottom-[90px] right-4 bg-white w-10 h-10 rounded-full items-center justify-center shadow-lg border border-gray-200 z-50 shadow-blue-500/20"
-            onPress={() => {
-              scrollViewRef.current?.scrollToEnd({ animated: true });
-              setHasNewUnseenMessages(false);
-            }}
-          >
-            <ChevronDownIcon size={24} color="#3b82f6" />
-            <View className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />
-          </TouchableOpacity>
+          <View className="absolute bottom-24 left-0 right-0 items-center z-50">
+            <TouchableOpacity
+              onPress={() => {
+                flatListRef.current?.scrollToOffset({
+                  offset: 0,
+                  animated: true,
+                });
+                setHasNewUnseenMessages(false);
+              }}
+              activeOpacity={0.9}
+              className="bg-blue-600 flex-row items-center px-5 py-2.5 rounded-full shadow-xl shadow-blue-500/30 border border-blue-400 group"
+            >
+              <View className="bg-white/20 w-5 h-5 rounded-full items-center justify-center mr-2">
+                <ChevronDownIcon size={14} color="white" />
+              </View>
+              <Text className="text-white font-bold text-[13px]">
+                Có tin nhắn mới
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* Extension Menu Tích hợp (Hiện ra khi bấm dấu +) */}
@@ -1861,7 +2050,7 @@ export default function GlobalChatScreen() {
                 onIndexChange={(idx) => setViewerIndex(idx)}
               />
             )}
-        </View>
+          </View>
         </GestureHandlerRootView>
       </Modal>
 
@@ -1895,7 +2084,7 @@ export default function GlobalChatScreen() {
                       className={`shadow-2xl ${
                         selectedMsg.type === "image" && !selectedMsg.isRevoked
                           ? "p-0 bg-transparent"
-                          : "px-5 py-4 " +
+                          : "px-5 py-3 " +
                             (selectedMsg.senderId === currentUserId
                               ? "bg-black rounded-3xl rounded-br-lg"
                               : "bg-white rounded-3xl rounded-bl-lg")
@@ -1938,11 +2127,11 @@ export default function GlobalChatScreen() {
                             selectedMsgLayout.y -
                               (selectedMsg.senderId === currentUserId
                                 ? selectedMsg.type === "image"
-                                  ? 230
-                                  : 280
+                                  ? 200
+                                  : 230
                                 : selectedMsg.type === "image"
                                   ? 150
-                                  : 200),
+                                  : 190),
                           ),
                       alignItems:
                         selectedMsg.senderId === currentUserId
@@ -2146,10 +2335,16 @@ export default function GlobalChatScreen() {
                         >
                           {tab.label}{" "}
                           {tab.key === "all"
-                            ? (reactionDetailMsg?.reactions ?? []).reduce((acc: number, r: any) => acc + (r.count || 1), 0)
-                            : (reactionDetailMsg?.reactions ?? []).filter(
-                                (r: any) => r.emoji === tab.key,
-                              ).reduce((acc: number, r: any) => acc + (r.count || 1), 0)}
+                            ? (reactionDetailMsg?.reactions ?? []).reduce(
+                                (acc: number, r: any) => acc + (r.count || 1),
+                                0,
+                              )
+                            : (reactionDetailMsg?.reactions ?? [])
+                                .filter((r: any) => r.emoji === tab.key)
+                                .reduce(
+                                  (acc: number, r: any) => acc + (r.count || 1),
+                                  0,
+                                )}
                         </Text>
                       </TouchableOpacity>
                     ))}

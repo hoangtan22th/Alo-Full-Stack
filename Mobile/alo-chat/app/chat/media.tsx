@@ -49,13 +49,13 @@ export default function MediaScreen() {
   const fetchMedia = async () => {
     try {
       setLoading(true);
-      const res = await messageService.getMessageHistory(
+      const { messages } = await messageService.getMessageHistory(
         id as string,
         200,
         0,
         "image",
       );
-      const sortedRes = [...res].sort((a, b) =>
+      const sortedRes = [...messages].sort((a, b) =>
         (b.createdAt || "").localeCompare(a.createdAt || ""),
       );
       setMediaList(sortedRes);
@@ -68,13 +68,13 @@ export default function MediaScreen() {
 
   const fetchFiles = async () => {
     try {
-      const res = await messageService.getMessageHistory(
+      const { messages } = await messageService.getMessageHistory(
         id as string,
         100,
         0,
         "file",
       );
-      const sortedRes = [...res].sort((a, b) =>
+      const sortedRes = [...messages].sort((a, b) =>
         (b.createdAt || "").localeCompare(a.createdAt || ""),
       );
       setFileList(sortedRes);

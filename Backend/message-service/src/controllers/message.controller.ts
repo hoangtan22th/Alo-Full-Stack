@@ -165,6 +165,7 @@ export async function getMessageHistory(
       count: messages.length,
       limit,
       skip,
+      hasMore: messages.length === limit,
     });
   } catch (error) {
     console.error("[MessageController] GET history error:", error);
