@@ -11,8 +11,10 @@ import {
   ChatBubbleLeftEllipsisIcon,
   PresentationChartLineIcon,
 } from "@heroicons/react/24/outline";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { ReportRow } from "@/components/reports/ReportRow";
+import { ModeratorRow } from "@/components/reports/ModeratorRow";
+import { BarColumn } from "@/components/reports/BarColumn";
 
 export default function ReportsModerationPage() {
   return (
@@ -238,98 +240,5 @@ export default function ReportsModerationPage() {
         </div>
       </div>
     </>
-  );
-}
-
-function BarColumn({ day, b1, b2 }: { day: string; b1: string; b2: string }) {
-  return (
-    <div className="flex-1 flex flex-col justify-end gap-1 relative group cursor-pointer">
-      <div
-        className="w-full bg-secondary-container rounded-t-sm transition-colors group-hover:bg-tertiary-container"
-        style={{ height: b1 }}
-      ></div>
-      <div
-        className="w-full bg-primary rounded-t-sm transition-colors group-hover:bg-primary-dim"
-        style={{ height: b2 }}
-      ></div>
-      <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-on-surface-variant font-medium">
-        {day}
-      </span>
-    </div>
-  );
-}
-
-function ModeratorRow({ name, status, count, image, initials }: any) {
-  return (
-    <div className="flex items-center justify-between group">
-      <div className="flex items-center gap-3">
-        <Avatar className="w-10 h-10 border-none bg-surface-container-high text-on-surface-variant font-bold text-sm">
-          {image && <AvatarImage src={image} className="object-cover" />}
-          <AvatarFallback>{initials}</AvatarFallback>
-        </Avatar>
-        <div>
-          <h4 className="text-sm font-bold text-on-surface">{name}</h4>
-          <p className="text-xs text-on-surface-variant">{status}</p>
-        </div>
-      </div>
-      <div className="text-right">
-        <div className="text-sm font-bold text-primary">{count}</div>
-        <div className="text-[10px] uppercase tracking-wider text-on-surface-variant font-semibold">
-          Resolved
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ReportRow({ type, target, time, severity, reporter }: any) {
-  const badgeColor = () => {
-    if (severity === "Critical" || severity === "High")
-      return "text-error bg-error-container";
-    if (severity === "Medium") return "text-tertiary bg-tertiary-container";
-    return "text-secondary bg-secondary-container";
-  };
-
-  return (
-    <div className="p-6 hover:bg-surface-container-lowest/50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div className="flex items-start gap-4">
-        {severity === "High" || severity === "Critical" ? (
-          <ExclamationTriangleIcon className="w-8 h-8 text-error p-1 bg-error/10 rounded-full" />
-        ) : (
-          <FlagIcon className="w-8 h-8 text-tertiary p-1 bg-tertiary/10 rounded-full" />
-        )}
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h4 className="text-sm font-bold text-on-surface">{type}</h4>
-            <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${badgeColor()}`}
-            >
-              {severity}
-            </span>
-          </div>
-          <p className="text-xs text-on-surface-variant font-medium">
-            Reported in {target} • {time} • By:{" "}
-            <span className="text-on-surface underline decoration-outline-variant/30 cursor-pointer">
-              {reporter}
-            </span>
-          </p>
-        </div>
-      </div>
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-xs font-semibold border-outline-variant text-on-surface-variant hover:text-on-surface"
-        >
-          Decline
-        </Button>
-        <Button
-          size="sm"
-          className="bg-surface-container-highest text-on-surface text-xs font-bold hover:bg-surface-variant"
-        >
-          Review Case
-        </Button>
-      </div>
-    </div>
   );
 }
