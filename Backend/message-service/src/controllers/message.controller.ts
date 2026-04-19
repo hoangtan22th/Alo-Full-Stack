@@ -165,6 +165,7 @@ export async function getMessageHistory(
       count: messages.length,
       limit,
       skip,
+      hasMore: messages.length === limit,
     });
   } catch (error) {
     console.error("[MessageController] GET history error:", error);
@@ -400,7 +401,8 @@ export async function sendMessage(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const { conversationId, type, content, metadata, replyTo, senderName } = req.body;
+    const { conversationId, type, content, metadata, replyTo, senderName } =
+      req.body;
     const userId = getUserIdFromHeader(req);
 
     if (!userId) {
@@ -704,12 +706,18 @@ export async function uploadImages(
       return;
     }
 
-    if (!conversationId || !files || !Array.isArray(files) || files.length === 0) {
+    if (
+      !conversationId ||
+      !files ||
+      !Array.isArray(files) ||
+      files.length === 0
+    ) {
       res.status(400).json({ error: "Missing conversationId or images" });
       return;
     }
 
-    const parsedWidths = typeof widths === "string" ? JSON.parse(widths) : widths;
+    const parsedWidths =
+      typeof widths === "string" ? JSON.parse(widths) : widths;
     const parsedHeights =
       typeof heights === "string" ? JSON.parse(heights) : heights;
 
@@ -718,7 +726,11 @@ export async function uploadImages(
       const originalName = Buffer.from(file.originalname, "latin1").toString(
         "utf8",
       );
-      const url = await uploadFileToS3(file.buffer, file.mimetype, originalName);
+      const url = await uploadFileToS3(
+        file.buffer,
+        file.mimetype,
+        originalName,
+      );
       return {
         url,
         width: parsedWidths ? parsedWidths[index] : 0,
@@ -795,7 +807,9 @@ export async function revokeImageInGroup(
       return;
     }
 
-    const message = await messageDataService.getMessageById(messageId as string);
+    const message = await messageDataService.getMessageById(
+      messageId as string,
+    );
     if (!message) {
       res.status(404).json({ error: "Message not found" });
       return;
@@ -880,6 +894,35 @@ export async function deleteImageInGroupForMe(
       "[MessageController] DELETE deleteImageInGroupForMe error:",
       error,
     );
+    next(error);
+  }
+}
+
+/**
+ * Lấy tất cả tin nhắn đã ghim trong hội thoại
+ */
+export async function getPinnedMessages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId } = req.params;
+
+    if (typeof conversationId !== "string") {
+      res.status(400).json({ error: "Invalid or missing conversationId" });
+      return;
+    }
+
+    const pinnedMessages =
+      await messageDataService.getPinnedMessages(conversationId);
+
+    res.json({
+      status: "success",
+      data: pinnedMessages,
+    });
+  } catch (error) {
+    console.error("[MessageController] GET pinned messages error:", error);
     next(error);
   }
 }
