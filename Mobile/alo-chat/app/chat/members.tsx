@@ -49,7 +49,7 @@ export default function GroupMembersScreen() {
   const [activeTab, setActiveTab] = useState<"all" | "managers" | "blocked">(
     "all",
   );
-  const [canViewHistory, setCanViewHistory] = useState(false);
+  const [canViewHistory, setCanViewHistory] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
 
   const fetchGroupDetails = async () => {
@@ -66,6 +66,9 @@ export default function GroupMembersScreen() {
 
       if (groupData && groupData.members) {
         setPendingCount(groupData.joinRequests?.length || 0);
+        if (typeof groupData.isHistoryVisible === "boolean") {
+          setCanViewHistory(groupData.isHistoryVisible);
+        }
         const memberPromises = groupData.members.map(async (m: any) => {
           const userRes = await userService.getUserById(m.userId);
           const userData =
@@ -177,12 +180,17 @@ export default function GroupMembersScreen() {
     }
 
     try {
+      // Dùng canViewHistory làm một override duy nhất cho đợt thêm này
       for (const friendId of selectedFriendIds) {
-        await groupService.addMember(id as string, friendId);
+        await groupService.addMember(id as string, friendId, canViewHistory);
       }
       Alert.alert("Thành công", "Đã thêm thành viên vào nhóm.");
+      
+      // Reset về trạng thái mặc định của nhóm sau khi thêm xong
+      // ( fetchGroupDetails sẽ cập nhật lại canViewHistory từ groupData.isHistoryVisible )
       setIsAddModalVisible(false);
       fetchGroupDetails();
+      setSelectedFriendIds([]);
     } catch (error) {
       Alert.alert("Lỗi", "Không thể thêm một số thành viên.");
     }
@@ -579,11 +587,17 @@ export default function GroupMembersScreen() {
                   <PaperAirplaneIcon size={24} color="#FFF" />
                 </TouchableOpacity>
               </View>
-              {/* Toggle new members can view recent messages history */}
-              <View className="flex-row items-center justify-between px-4 mt-2">
-                <Text className="text-[15px] text-gray-700 font-medium">
-                  Thành viên mới xem được tin gửi gần đây
-                </Text>
+            {/* Toggle new members can view recent messages history */}
+            {isManager && (
+              <View className="flex-row items-center justify-between px-4 mt-4 mb-2">
+                <View className="flex-1 mr-4">
+                  <Text className="text-[15px] text-gray-700 font-medium">
+                    Xem lại tin nhắn cũ
+                  </Text>
+                  <Text className="text-[12px] text-gray-500">
+                    Cho phép thành viên mới này thấy lịch sử hội thoại
+                  </Text>
+                </View>
                 <Switch
                   value={canViewHistory}
                   onValueChange={setCanViewHistory}
@@ -591,6 +605,7 @@ export default function GroupMembersScreen() {
                   thumbColor={"#ffffff"}
                 />
               </View>
+            )}
             </View>
           )}
         </View>

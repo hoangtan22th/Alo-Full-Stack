@@ -14,6 +14,7 @@ import {
   Image,
   Alert,
   Modal,
+  Switch,
 } from "react-native";
 import {
   ArrowLeftIcon,
@@ -61,6 +62,7 @@ export default function ChatInfoScreen() {
     null,
   );
   const [isLinkEnabled, setIsLinkEnabled] = useState(false);
+  const [isHistoryVisible, setIsHistoryVisible] = useState(true);
   const [mediaList, setMediaList] = useState<MessageDTO[]>([]);
   const [fileList, setFileList] = useState<MessageDTO[]>([]);
   const [mediaCount, setMediaCount] = useState(0);
@@ -89,6 +91,9 @@ export default function ChatInfoScreen() {
       }
       if (typeof groupData?.isLinkEnabled === "boolean") {
         setIsLinkEnabled(groupData.isLinkEnabled);
+      }
+      if (typeof groupData?.isHistoryVisible === "boolean") {
+        setIsHistoryVisible(groupData.isHistoryVisible);
       }
 
       if (groupData && groupData.members) {
@@ -248,6 +253,8 @@ export default function ChatInfoScreen() {
 
   const currentUserRole = members.find((m) => m.id === currentUserId)?.role;
   const isAdmin = currentUserRole === "leader";
+  const isDeputy = currentUserRole === "deputy";
+  const isManager = isAdmin || isDeputy;
 
   const handleLeaveGroup = () => {
     if (isAdmin) {
@@ -617,7 +624,7 @@ export default function ChatInfoScreen() {
                       (groupName as string) || "",
                     )}&avatar=${encodeURIComponent(
                       (groupAvatar as string) || "",
-                    )}&isLinkEnabled=${isLinkEnabled}`,
+                    )}&isLinkEnabled=${isLinkEnabled}&isHistoryVisible=${isHistoryVisible}&isAdmin=${isAdmin || isDeputy}`,
                   )
                 }
               />

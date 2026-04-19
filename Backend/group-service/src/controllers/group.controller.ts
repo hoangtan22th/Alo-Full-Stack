@@ -286,10 +286,19 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const { isHistoryVisible: overrideIsHistoryVisible } = req.body;
+
+    // Xác định xem user mới này có được xem lịch sử không
+    // Ưu tiên override từ request, nếu không thì lấy mặc định của nhóm
+    const canViewHistory =
+      typeof overrideIsHistoryVisible === "boolean"
+        ? overrideIsHistoryVisible
+        : group.isHistoryVisible;
+
     group.members.push({
       userId: newUserId,
       role: "MEMBER",
-      joinedAt: new Date(),
+      joinedAt: canViewHistory ? group.createdAt || new Date() : new Date(),
     });
     await group.save();
 
@@ -669,7 +678,7 @@ export const requestJoinGroup = async (
       group.members.push({
         userId: requesterId,
         role: "MEMBER",
-        joinedAt: new Date(),
+        joinedAt: group.isHistoryVisible ? group.createdAt || new Date() : new Date(),
       });
 
       // Xoá join requests nếu lỡ có trễ (ví dụ họ đã từng gửi trước khi nhóm tắt phê duyệt)
@@ -815,7 +824,7 @@ export const approveJoinRequest = async (
       group.members.push({
         userId: String(userId),
         role: "MEMBER",
-        joinedAt: new Date(),
+        joinedAt: group.isHistoryVisible ? group.createdAt || new Date() : new Date(),
       });
     }
 
@@ -1120,6 +1129,50 @@ export const getOrCreateDirectConversation = async (
       .catch(console.error);
 
     res.status(201).json(newConversation);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 18. Cập nhật cài đặt xem lịch sử tin nhắn (Chỉ LEADER/DEPUTY)
+export const updateHistorySetting = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const groupId = String(req.params.groupId || "");
+    const { isHistoryVisible } = req.body;
+    const requesterId = (req.headers["x-user-id"] || "").toString();
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    // Check quyền
+    const member = group.members.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (!member || (member.role !== "LEADER" && member.role !== "DEPUTY")) {
+      res.status(403).json({ error: "Bạn không có quyền thay đổi thiết lập này" });
+      return;
+    }
+
+    if (typeof isHistoryVisible !== "boolean") {
+      res.status(400).json({ error: "Tham số isHistoryVisible không hợp lệ" });
+      return;
+    }
+
+    group.isHistoryVisible = isHistoryVisible;
+    await group.save();
+
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
+
+    res.status(200).json({
+      message: "Đã cập nhật thiết lập xem lịch sử",
+      data: { isHistoryVisible: group.isHistoryVisible },
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

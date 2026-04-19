@@ -29,9 +29,15 @@ export default function GroupLinkScreen() {
   const name = params.name as string;
   const avatar = params.avatar as string;
   const initialIsLinkEnabled = params.isLinkEnabled as string;
+  const isAdminParam = params.isAdmin as string;
+  const isAdmin = isAdminParam === "true";
 
   const [isLinkEnabled, setIsLinkEnabled] = useState(
     initialIsLinkEnabled === "true",
+  );
+  const initialIsHistoryVisible = params.isHistoryVisible as string;
+  const [isHistoryVisible, setIsHistoryVisible] = useState(
+    initialIsHistoryVisible !== "false", // Default to true if not specified
   );
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -47,6 +53,19 @@ export default function GroupLinkScreen() {
       setIsLinkEnabled(value);
     } catch (error) {
       Alert.alert("Lỗi", "Không thể cập nhật cấu hình link lúc này");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleToggleHistory = async (value: boolean) => {
+    if (!id) return;
+    try {
+      setIsLoading(true);
+      await groupService.updateHistorySetting(id, value);
+      setIsHistoryVisible(value);
+    } catch (error) {
+      Alert.alert("Lỗi", "Không thể cập nhật cấu hình lịch sử");
     } finally {
       setIsLoading(false);
     }
@@ -217,6 +236,30 @@ export default function GroupLinkScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+
+            {/* History Toggle */}
+            {isAdmin && (
+              <View className="mt-10 w-full bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-1 mr-4">
+                    <Text className="text-[16px] font-semibold text-gray-900 mb-1">
+                      Xem lại tin nhắn cũ
+                    </Text>
+                    <Text className="text-[13px] text-gray-500">
+                      Cho phép thành viên mới xem các tin nhắn từ trước khi tham
+                      gia nhóm
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isHistoryVisible}
+                    onValueChange={handleToggleHistory}
+                    disabled={isLoading}
+                    trackColor={{ false: "#e5e7eb", true: "#10b981" }}
+                    thumbColor="#fff"
+                  />
+                </View>
+              </View>
+            )}
           </View>
         )}
       </View>

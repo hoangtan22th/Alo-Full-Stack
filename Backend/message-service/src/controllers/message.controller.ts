@@ -108,8 +108,9 @@ export async function getMessageHistory(
       return;
     }
 
-    // 0. Gọi sang group-service để lấy thông tin clearedAt (nếu có)
+    // 0. Gọi sang group-service để lấy thông tin clearedAt và joinedAt
     let clearedAt: Date | undefined = undefined;
+    let joinedAt: Date | undefined = undefined;
     try {
       const gatewayUrl = process.env.GATEWAY_URL || "http://127.0.0.1:8888";
       const response = await fetch(
@@ -124,12 +125,20 @@ export async function getMessageHistory(
       if (response.ok) {
         const result = await response.json();
         const conversation = result.data;
-        if (
-          conversation &&
-          conversation.clearedAt &&
-          conversation.clearedAt[userId]
-        ) {
-          clearedAt = new Date(conversation.clearedAt[userId]);
+        if (conversation) {
+          // Lấy clearedAt
+          if (conversation.clearedAt && conversation.clearedAt[userId]) {
+            clearedAt = new Date(conversation.clearedAt[userId]);
+          }
+          // Lấy joinedAt
+          if (Array.isArray(conversation.members)) {
+            const member = conversation.members.find(
+              (m: any) => String(m.userId) === userId,
+            );
+            if (member && member.joinedAt) {
+              joinedAt = new Date(member.joinedAt);
+            }
+          }
         }
       }
     } catch (err) {
@@ -146,6 +155,7 @@ export async function getMessageHistory(
       skip,
       clearedAt,
       type,
+      joinedAt,
     );
 
     res.json({
