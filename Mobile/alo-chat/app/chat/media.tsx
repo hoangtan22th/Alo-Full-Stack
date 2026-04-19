@@ -22,12 +22,25 @@ import { messageService, MessageDTO } from "../../services/messageService";
 const { width } = Dimensions.get("window");
 const COLUMN_WIDTH = width / 3;
 
+// Hàm hỗ trợ định dạng ngày tháng an toàn, tránh lỗi crash nếu dữ liệu không hợp lệ
+const formatDate = (dateStr?: string) => {
+  if (!dateStr) return "Không rõ ngày";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "Ngày không lệ";
+    return d.toLocaleDateString("vi-VN");
+  } catch (e) {
+    return "Lỗi ngày";
+  }
+};
+
 export default function MediaScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams();
+  const { id, tab } = useLocalSearchParams();
+  const initialTab = tab === "file" ? "file" : "media";
 
-  const [activeTab, setActiveTab] = useState<"media" | "file">("media");
+  const [activeTab, setActiveTab] = useState<"media" | "file">(initialTab);
   const [mediaList, setMediaList] = useState<MessageDTO[]>([]);
   const [fileList, setFileList] = useState<MessageDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,6 +198,7 @@ export default function MediaScreen() {
         </View>
       ) : activeTab === "media" ? (
         <FlatList
+          key="media-list"
           data={mediaList}
           keyExtractor={(item) => item._id}
           renderItem={renderMediaItem}
@@ -198,31 +212,41 @@ export default function MediaScreen() {
         />
       ) : (
         <FlatList
+          key="file-list"
           data={fileList}
-          keyExtractor={(item) => item._id}
-          renderItem={({ item }) => (
-            <View className="flex-row items-center px-5 py-4 border-b border-gray-50">
-              <View className="w-12 h-12 bg-gray-100 rounded-xl items-center justify-center mr-4">
-                <Text className="text-[10px] font-bold text-gray-500 uppercase">
-                  {item.metadata?.fileType?.split("/")[1] || "FILE"}
-                </Text>
+          keyExtractor={(item, index) =>
+            item._id || `file-${index}-${item.createdAt || Math.random()}`
+          }
+          renderItem={({ item }) => {
+            const fileName = item.metadata?.fileName || "Không tên";
+            const fileType =
+              item.metadata?.fileType?.split("/")[1]?.toUpperCase() || "FILE";
+            const fileSize = item.metadata?.fileSize
+              ? (item.metadata.fileSize / (1024 * 1024)).toFixed(1) + " MB"
+              : "0 MB";
+            const createdDate = formatDate(item.createdAt);
+
+            return (
+              <View className="flex-row items-center px-5 py-4 border-b border-gray-50">
+                <View className="w-12 h-12 bg-gray-100 rounded-xl items-center justify-center mr-4">
+                  <Text className="text-[10px] font-bold text-gray-500 uppercase">
+                    {fileType}
+                  </Text>
+                </View>
+                <View className="flex-1">
+                  <Text
+                    className="text-[15px] font-medium text-gray-800"
+                    numberOfLines={1}
+                  >
+                    {fileName}
+                  </Text>
+                  <Text className="text-[12px] text-gray-500 mt-0.5">
+                    {fileSize} • {createdDate}
+                  </Text>
+                </View>
               </View>
-              <View className="flex-1">
-                <Text
-                  className="text-[15px] font-medium text-gray-800"
-                  numberOfLines={1}
-                >
-                  {item.metadata?.fileName || "Không tên"}
-                </Text>
-                <Text className="text-[12px] text-gray-500 mt-0.5">
-                  {item.metadata?.fileSize
-                    ? (item.metadata.fileSize / (1024 * 1024)).toFixed(1)
-                    : "0"}{" "}
-                  MB • {new Date(item.createdAt).toLocaleDateString("vi-VN")}
-                </Text>
-              </View>
-            </View>
-          )}
+            );
+          }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View className="flex-1 items-center justify-center mt-20">

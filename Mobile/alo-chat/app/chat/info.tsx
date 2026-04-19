@@ -509,7 +509,9 @@ export default function ChatInfoScreen() {
             <Text className="text-[11px] font-bold text-gray-500 uppercase tracking-[1px]">
               File
             </Text>
-            <TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push(`/chat/media?id=${id}&tab=file`)}
+            >
               <Text className="text-[12px] font-bold text-gray-900">
                 Xem tất cả
               </Text>
