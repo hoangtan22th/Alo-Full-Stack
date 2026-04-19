@@ -399,7 +399,7 @@ export async function sendMessage(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const { conversationId, type, content, metadata } = req.body;
+    const { conversationId, type, content, metadata, replyTo, senderName } = req.body;
     const userId = getUserIdFromHeader(req);
 
     if (!userId) {
@@ -416,9 +416,11 @@ export async function sendMessage(
     const messageDoc = await messageDataService.createMessage({
       conversationId,
       senderId: userId,
+      senderName: senderName,
       type: type || "text",
       content: content || "",
       metadata: metadata || {},
+      replyTo: replyTo,
     });
 
     // 2. Chuẩn bị event để bắn sang RabbitMQ
@@ -426,9 +428,11 @@ export async function sendMessage(
       _id: messageDoc._id.toString(),
       conversationId,
       senderId: userId,
+      senderName: messageDoc.senderName,
       type: messageDoc.type,
       content: messageDoc.content,
       metadata: messageDoc.metadata || {},
+      replyTo: messageDoc.replyTo,
       isRead: false,
       createdAt: messageDoc.createdAt,
     };
@@ -456,7 +460,7 @@ export async function uploadFile(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const { conversationId } = req.body;
+    const { conversationId, replyTo, senderName } = req.body;
     const userId = getUserIdFromHeader(req);
     const file = req.file;
 
@@ -490,6 +494,7 @@ export async function uploadFile(
     const messageDoc = await messageDataService.createMessage({
       conversationId,
       senderId: userId,
+      senderName: senderName,
       type,
       content: fileUrl, // For files, content is the URL
       metadata: {
@@ -497,6 +502,7 @@ export async function uploadFile(
         fileSize: file.size,
         fileType: file.mimetype,
       },
+      replyTo: replyTo ? JSON.parse(replyTo) : undefined,
     });
 
     // 4. Prepare event for RabbitMQ
@@ -504,9 +510,11 @@ export async function uploadFile(
       _id: messageDoc._id.toString(),
       conversationId,
       senderId: userId,
+      senderName: messageDoc.senderName,
       type: messageDoc.type,
       content: messageDoc.content,
       metadata: messageDoc.metadata || {},
+      replyTo: messageDoc.replyTo,
       isRead: false,
       createdAt: messageDoc.createdAt,
     };

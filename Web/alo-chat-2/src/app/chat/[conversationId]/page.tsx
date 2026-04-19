@@ -82,6 +82,7 @@ export default function ChatPage() {
   const [menuPosition, setMenuPosition] = useState<"top" | "bottom">("top");
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [replyingTo, setReplyingTo] = useState<MessageDTO | null>(null);
 
   // Reaction viewers
 
@@ -95,6 +96,36 @@ export default function ChatPage() {
   >({});
   const [isMounted, setIsMounted] = useState(false);
   const fetchingUsersRef = useRef<Set<string>>(new Set());
+
+  const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+
+  // Helper lấy tên người dùng ưu tiên dữ liệu "trực tiếp" (senderName trong msg, currentUser, conversationInfo) trước khi dùng cache
+  const getSenderDisplayName = (userId: string, msg?: MessageDTO) => {
+    if (msg?.senderName) return msg.senderName;
+    if (!userId) return "Người dùng";
+    const currentMyId = currentUser?.id || currentUser?._id || currentUser?.userId;
+
+    if (String(userId) === String(currentMyId)) {
+      return currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi";
+    }
+
+    if (conversationInfo) {
+      if (!conversationInfo.isGroup) {
+        const otherMember = conversationInfo.members?.find((m: any) => String(m.userId) === String(userId));
+        if (otherMember && String(userId) === String(otherMember.userId)) {
+          return conversationInfo.displayName || "Người dùng";
+        }
+      } else {
+        const member = conversationInfo.members?.find((m: any) => String(m.userId) === String(userId) || String(m._id) === String(userId));
+        if (member) {
+          const name = member.fullName || member.displayName || member.name;
+          if (name) return name;
+        }
+      }
+    }
+
+    return userCache[userId]?.name || "Người dùng";
+  };
 
   useEffect(() => {
     setIsMounted(true);
@@ -116,7 +147,7 @@ export default function ChatPage() {
           },
         }));
       }
-    } catch {}
+    } catch { }
   };
 
   // Đảm bảo userCache luôn có thông tin user cho các tin nhắn ghim (bao gồm cả chính mình)
@@ -129,6 +160,23 @@ export default function ChatPage() {
       if (id && !userCache[id]) fetchUserInfo(id);
     });
   }, [pinnedMessages, userCache]);
+
+  // Đồng bộ thông tin của mình vào userCache để các phần reply/hiển thị luôn có tên chính xác
+  useEffect(() => {
+    const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+    if (myId) {
+      setUserCache((prev) => {
+        if (prev[myId]) return prev;
+        return {
+          ...prev,
+          [myId]: {
+            name: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+            avatar: currentUser?.avatar || "",
+          },
+        };
+      });
+    }
+  }, [currentUser]);
 
   const EMOJI_MAP: Record<string, string> = {
     like: "👍",
@@ -193,7 +241,7 @@ export default function ChatPage() {
               displayName = u.fullName || u.username || u.name || "Người dùng";
               displayAvatar = u.avatar || displayAvatar;
             }
-          } catch {}
+          } catch { }
         }
       }
 
@@ -268,10 +316,10 @@ export default function ChatPage() {
         prev.map((m) =>
           m._id === data.messageId
             ? {
-                ...m,
-                isRevoked: true,
-                revokedAt: data.revokedAt || new Date().toISOString(),
-              }
+              ...m,
+              isRevoked: true,
+              revokedAt: data.revokedAt || new Date().toISOString(),
+            }
             : m,
         ),
       );
@@ -450,6 +498,8 @@ export default function ChatPage() {
 
     setSending(true);
     setMessageText("");
+    const currentReply = replyingTo;
+    setReplyingTo(null);
 
     // Optimistic UI — thêm tin tạm thời ngay lập tức
     const tempId = `temp_${Date.now()}`;
@@ -457,9 +507,19 @@ export default function ChatPage() {
       _id: tempId,
       conversationId,
       senderId: myId,
+      senderName: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
       type: "text",
       content: text,
       isRead: false,
+      replyTo: currentReply
+        ? {
+          messageId: currentReply._id,
+          senderId: currentReply.senderId,
+          senderName: getSenderDisplayName(currentReply.senderId, currentReply),
+          content: currentReply.type === 'file' ? (currentReply.metadata?.fileName || currentReply.content) : currentReply.content,
+          type: currentReply.type,
+        }
+        : undefined,
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, tempMsg]);
@@ -469,11 +529,22 @@ export default function ChatPage() {
         conversationId,
         content: text,
         type: "text",
+        senderName: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+        replyTo: currentReply
+          ? {
+            messageId: currentReply._id,
+            senderId: currentReply.senderId,
+            senderName: getSenderDisplayName(currentReply.senderId, currentReply),
+            content: currentReply.type === 'file' ? (currentReply.metadata?.fileName || currentReply.content) : currentReply.content,
+            type: currentReply.type,
+          }
+          : undefined,
       });
     } catch (err) {
       console.error("Lỗi gửi tin nhắn:", err);
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
       setMessageText(text);
+      setReplyingTo(currentReply);
     } finally {
       setSending(false);
       setTimeout(() => {
@@ -510,6 +581,9 @@ export default function ChatPage() {
     const myId =
       currentUser?.id || currentUser?._id || currentUser?.userId || "me";
     const tempIds: string[] = [];
+    const currentReply = replyingTo;
+    setReplyingTo(null);
+
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -519,9 +593,19 @@ export default function ChatPage() {
           _id: tempId,
           conversationId,
           senderId: myId,
+          senderName: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
           type: "file",
           content: "",
           isRead: false,
+          replyTo: currentReply
+            ? {
+              messageId: currentReply._id,
+              senderId: currentReply.senderId,
+              senderName: getSenderDisplayName(currentReply.senderId, currentReply),
+              content: currentReply.type === 'file' ? (currentReply.metadata?.fileName || currentReply.content) : currentReply.content,
+              type: currentReply.type,
+            }
+            : undefined,
           createdAt: new Date().toISOString(),
           metadata: {
             fileName: file.name,
@@ -531,7 +615,13 @@ export default function ChatPage() {
         };
         setMessages((prev) => [...prev, tempMsg]);
         try {
-          await messageService.uploadFile(conversationId, file);
+          await messageService.uploadFile(conversationId, file, currentReply ? {
+            messageId: currentReply._id,
+            senderId: currentReply.senderId,
+            senderName: getSenderDisplayName(currentReply.senderId, currentReply),
+            content: currentReply.type === 'file' ? (currentReply.metadata?.fileName || currentReply.content) : currentReply.content,
+            type: currentReply.type,
+          } : undefined, currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi");
         } catch (err) {
           console.error("Lỗi gửi file:", err);
           setMessages((prev) => prev.filter((m) => m._id !== tempId));
@@ -550,7 +640,6 @@ export default function ChatPage() {
     }
   };
 
-  const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
 
   // ─── Group messages: cùng sender + cách nhau < 5 phút = 1 group ───
   interface MsgGroup {
@@ -567,7 +656,7 @@ export default function ChatPage() {
       const lastMsg = last?.messages[last.messages.length - 1];
       const gap = lastMsg
         ? new Date(msg.createdAt).getTime() -
-          new Date(lastMsg.createdAt).getTime()
+        new Date(lastMsg.createdAt).getTime()
         : Infinity;
 
       // Nhóm theo SENDER ID để tránh gộp nhiều người khác vào 1 khối trong group chat
@@ -685,14 +774,13 @@ export default function ChatPage() {
                         ? pinnedMessages[0].content
                         : pinnedMessages[0].type === "file"
                           ? pinnedMessages[0].metadata?.fileName ||
-                            "Tệp đính kèm"
+                          "Tệp đính kèm"
                           : pinnedMessages[0].type === "image"
                             ? "[Ảnh]"
                             : "[Tin nhắn hệ thống]"}
                     </div>
                     <div className="text-[11px] text-yellow-700">
-                      {userCache[pinnedMessages[0].senderId]?.name ||
-                        "Người dùng"}{" "}
+                      {getSenderDisplayName(pinnedMessages[0].senderId)}{" "}
                       • {formatTime(pinnedMessages[0].createdAt)}
                     </div>
                   </div>
@@ -716,14 +804,13 @@ export default function ChatPage() {
                         ? pinnedMessages[0].content
                         : pinnedMessages[0].type === "file"
                           ? pinnedMessages[0].metadata?.fileName ||
-                            "Tệp đính kèm"
+                          "Tệp đính kèm"
                           : pinnedMessages[0].type === "image"
                             ? "[Ảnh]"
                             : "[Tin nhắn hệ thống]"}
                     </div>
                     <div className="text-[11px] text-yellow-700">
-                      {userCache[pinnedMessages[0].senderId]?.name ||
-                        "Người dùng"}{" "}
+                      {getSenderDisplayName(pinnedMessages[0].senderId)}{" "}
                       • {formatTime(pinnedMessages[0].createdAt)}
                     </div>
                   </div>
@@ -775,7 +862,7 @@ export default function ChatPage() {
                                   : "[Tin nhắn hệ thống]"}
                           </div>
                           <div className="text-[11px] text-yellow-700">
-                            {userCache[msg.senderId]?.name || "Người dùng"} •{" "}
+                            {getSenderDisplayName(msg.senderId)} •{" "}
                             {formatTime(msg.createdAt)}
                           </div>
                         </div>
@@ -794,7 +881,7 @@ export default function ChatPage() {
             )}
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-hide">
+            <div className="flex-1 overflow-y-auto px-5 py-4 scrollbar-hide">
               {loadingMessages ? (
                 <div className="flex items-center justify-center h-full">
                   <ArrowPathIcon className="w-6 h-6 text-gray-400 animate-spin" />
@@ -811,27 +898,16 @@ export default function ChatPage() {
                   {messageGroups.map((group, groupIdx) => {
                     const { isMine, messages: gMsgs, senderId } = group;
 
-                    let senderName = "?";
+                    // Tin cuối cùng của nhóm — để lấy senderName/avatar và timestamp + trạng thái
+                    const lastMsg = gMsgs[gMsgs.length - 1];
+                    const senderName = getSenderDisplayName(senderId, lastMsg);
                     let senderAvatar = "";
 
                     if (conversationInfo?.isGroup && !isMine) {
-                      const cachedUser = userCache[senderId];
-                      if (cachedUser) {
-                        senderName = cachedUser.name;
-                        senderAvatar = cachedUser.avatar;
-                      } else {
-                        senderName = `Người dùng (${senderId.substring(0, 4)})`;
-                      }
+                      senderAvatar = userCache[senderId]?.avatar || "";
                     } else {
-                      senderAvatar = conversationInfo?.displayAvatar;
-                      senderName =
-                        conversationInfo?.displayName ||
-                        conversationInfo?.name ||
-                        "?";
+                      senderAvatar = conversationInfo?.displayAvatar || "";
                     }
-
-                    // Tin cuối cùng của nhóm — chỉ đây mới hiện timestamp + avatar + trạng thái
-                    const lastMsg = gMsgs[gMsgs.length - 1];
 
                     return (
                       <div
@@ -846,24 +922,24 @@ export default function ChatPage() {
                           // Bo góc bubble
                           const bubbleRadius = isMine
                             ? [
-                                "rounded-2xl",
-                                isFirst && !isLast ? "rounded-br-md" : "",
-                                !isFirst && !isLast ? "rounded-r-md" : "",
-                                !isFirst && isLast ? "rounded-br-sm" : "",
-                              ].join(" ")
+                              "rounded-2xl",
+                              isFirst && !isLast ? "rounded-br-md" : "",
+                              !isFirst && !isLast ? "rounded-r-md" : "",
+                              !isFirst && isLast ? "rounded-br-sm" : "",
+                            ].join(" ")
                             : [
-                                "rounded-2xl",
-                                isFirst && !isLast ? "rounded-bl-md" : "",
-                                !isFirst && !isLast ? "rounded-l-md" : "",
-                                !isFirst && isLast ? "rounded-bl-sm" : "",
-                              ].join(" ");
+                              "rounded-2xl",
+                              isFirst && !isLast ? "rounded-bl-md" : "",
+                              !isFirst && !isLast ? "rounded-l-md" : "",
+                              !isFirst && isLast ? "rounded-bl-sm" : "",
+                            ].join(" ");
 
                           return (
                             <div
                               key={msg._id}
-                              className={`flex items-center gap-1.5 ${
-                                isMine ? "flex-row-reverse" : "flex-row"
-                              }`}
+                              id={`msg-${msg._id}`}
+                              className={`flex items-center gap-1.5 transition-colors duration-500 ${isMine ? "flex-row-reverse" : "flex-row"
+                                }`}
                               onMouseEnter={(e) => {
                                 setHoveredMsgId(msg._id);
                                 setMousePos({ x: e.clientX, y: e.clientY });
@@ -898,13 +974,52 @@ export default function ChatPage() {
                               </div>
                               {/* Bubble */}
                               <div
-                                className={`max-w-[70%] flex flex-col ${isMine ? "items-end" : "items-start"}`}
+                                className={`relative max-w-[75%] flex flex-col ${isMine ? "items-end" : "items-start"}`}
                               >
                                 {/* Wrapper cho Bubble content và Hover controls để nó luôn căn giữa text */}
-                                <div className="relative max-w-full">
+                                <div
+                                  className={`relative max-w-full overflow-hidden flex flex-col p-1.5 px-2 border shadow-sm ${isMine
+                                    ? "bg-blue-50/80 border-blue-100 shadow-blue-900/5 items-end"
+                                    : "bg-white border-gray-100 shadow-gray-900/5 items-start"
+                                    } ${bubbleRadius}`}
+                                >
+                                  {/* Reply Quote Box */}
+                                  {msg.replyTo && msg.replyTo.messageId && !isRevoked && (
+                                    <div
+                                      className={`mb-2 px-3 py-2 border-l-[3px] border-blue-600 ${isMine ? "bg-white/50" : "bg-blue-50/50"
+                                        } rounded-r-lg text-left cursor-pointer hover:bg-white/80 transition-colors w-full min-w-[150px] max-w-full overflow-hidden`}
+                                      onClick={() => {
+                                        const targetMsg = document.getElementById(`msg-${msg.replyTo?.messageId}`);
+                                        targetMsg?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        targetMsg?.classList.add('bg-yellow-100/50');
+                                        setTimeout(() => targetMsg?.classList.remove('bg-yellow-100/50'), 2000);
+                                      }}
+                                    >
+                                      <div className="flex gap-2.5 items-center">
+                                        {msg.replyTo.type === 'image' && (
+                                          <img
+                                            src={msg.replyTo.content}
+                                            alt="reply"
+                                            className="w-10 h-10 object-cover rounded-md shrink-0 border border-gray-100"
+                                          />
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-[13px] font-bold text-gray-800 truncate">
+                                            {getSenderDisplayName(msg.replyTo.senderId)}
+                                          </p>
+                                          <p className="text-[13px] text-gray-500 line-clamp-1 leading-tight mt-0.5 whitespace-normal">
+                                            {msg.replyTo.type === 'image' ? '[Hình ảnh]' :
+                                              msg.replyTo.type === 'file' ? (msg.replyTo.content.startsWith('http') ? '[Tệp tin]' : msg.replyTo.content) :
+                                                msg.replyTo.content}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
                                   {isRevoked ? (
-                                    <div className="flex items-center gap-2 group/revoked">
-                                      <span className="italic text-[12px] text-gray-400 bg-gray-100 px-4 py-2 rounded-2xl block w-fit">
+                                    <div className="flex items-center gap-2 group/revoked px-2 py-1">
+                                      <span className="italic text-[12px] text-gray-400 block w-fit">
                                         Tin nhắn đã được thu hồi
                                       </span>
                                     </div>
@@ -912,302 +1027,199 @@ export default function ChatPage() {
                                     <img
                                       src={msg.content}
                                       alt="img"
-                                      className={`object-cover max-h-64 shadow ${bubbleRadius}`}
+                                      className="object-cover max-h-64 rounded-lg"
                                     />
                                   ) : msg.type === "file" ? (
                                     <div
-                                      className={`flex items-center justify-between gap-4 px-4 py-2 transition w-87.5 max-w-full group ${
-                                        isMine
-                                          ? "bg-blue-50 border-blue-100"
-                                          : "bg-white border-gray-100"
-                                      } border rounded-2xl shadow-sm`}
+                                      className={`flex items-center justify-between gap-4 px-2 py-1 transition w-80 max-w-full group`}
                                     >
                                       <div
-                                        className="flex items-center gap-4 flex-1 min-w-0"
+                                        className="flex items-center gap-3 flex-1 min-w-0"
                                         onClick={() =>
                                           window.open(msg.content, "_blank")
                                         }
                                       >
-                                        {/* File Type Icon */}
-                                        <div className="w-12 h-14 bg-[#70CDBF] rounded-xl flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
-                                          <div className="absolute top-0 right-0 w-4 h-4 bg-white/30 rounded-bl-lg"></div>
-                                          <DocumentIcon className="w-7 h-7 text-white" />
+                                        <div className="w-10 h-12 bg-blue-500 rounded-lg flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
+                                          <DocumentIcon className="w-6 h-6 text-white" />
                                         </div>
-
-                                        {/* Info */}
                                         <div className="min-w-0 flex-1">
-                                          <p className="text-[15px] font-bold text-[#1A237E] truncate leading-tight mb-1">
-                                            {msg.metadata?.fileName ||
-                                              "Tệp đính kèm"}
+                                          <p className="text-[14px] font-bold text-gray-800 truncate leading-tight">
+                                            {msg.metadata?.fileName || "Tệp đính kèm"}
                                           </p>
-                                          <div className="flex items-center gap-1.5 text-[12px]">
-                                            <span className="text-gray-500">
-                                              {msg.metadata?.fileSize
-                                                ? `${(msg.metadata.fileSize / 1024).toFixed(2)} KB`
-                                                : "N/A"}
-                                            </span>
-                                          </div>
                                         </div>
                                       </div>
-
-                                      {/* Actions */}
-                                      <div className="flex items-center gap-2 shrink-0">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDownload(
-                                              msg.content,
-                                              msg.metadata?.fileName || "file",
-                                            );
-                                          }}
-                                          className="w-9 h-9 bg-white border border-gray-200 rounded-lg flex items-center justify-center text-gray-600 hover:bg-gray-50 transition shadow-sm"
-                                          title="Lưu về máy"
-                                        >
-                                          <ArrowDownTrayIcon className="w-5 h-5" />
-                                        </button>
-                                      </div>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDownload(msg.content, msg.metadata?.fileName || "file");
+                                        }}
+                                        className="w-8 h-8 bg-white border border-gray-100 rounded-md flex items-center justify-center text-gray-600 hover:bg-gray-50 transition"
+                                      >
+                                        <ArrowDownTrayIcon className="w-4 h-4" />
+                                      </button>
                                     </div>
                                   ) : (
-                                    <div
-                                      className={`px-4 py-2.5 text-[14px] font-medium leading-relaxed w-fit max-w-full ${
-                                        isMine
-                                          ? "bg-black text-white shadow-md"
-                                          : "bg-[#F5F5F5] text-gray-900"
-                                      } ${bubbleRadius}`}
-                                    >
+                                    <div className={`px-2 py-1 text-[15px] font-medium leading-relaxed text-gray-900 break-words whitespace-pre-wrap ${isMine ? "text-right" : "text-left"}`}>
                                       {msg.content}
                                     </div>
                                   )}
+                                </div>
 
-                                  {/* Hover Controls (Reaction & Menu & Redo) */}
-                                  <div
-                                    className={`absolute top-1/2 -translate-y-1/2 flex items-center gap-1.5 py-4 z-[1000] ${
-                                      isMine
-                                        ? "right-full pr-2"
-                                        : "left-full pl-2"
-                                    } ${
-                                      hoveredMsgId === msg._id
-                                        ? "opacity-100"
-                                        : "opacity-0 pointer-events-none"
-                                    } transition-opacity`}
-                                  >
-                                    {/* 1. Reaction Button (Hide if revoked) */}
-                                    {!msg.isRevoked && (
-                                      <div className="relative">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveMenu(null);
-                                            const rect =
-                                              e.currentTarget.getBoundingClientRect();
-                                            setMenuPosition(
-                                              rect.top < window.innerHeight / 2
-                                                ? "bottom"
-                                                : "top",
-                                            );
-                                            setActiveReactionMenu(
-                                              activeReactionMenu === msg._id
-                                                ? null
-                                                : msg._id,
-                                            );
-                                          }}
-                                          className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
-                                        >
-                                          <FaceSmileIcon className="w-4 h-4" />
-                                        </button>
-
-                                        {/* Emoji Picker */}
-                                        {activeReactionMenu === msg._id && (
-                                          <div
-                                            className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 ${
-                                              isMine ? "right-0" : "left-0"
-                                            } ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
-                                            onMouseLeave={() =>
-                                              setActiveReactionMenu(null)
-                                            }
-                                          >
-                                            {msg.reactions?.some(
-                                              (r: any) =>
-                                                String(r.userId) ===
-                                                String(
-                                                  currentUser?.id ||
-                                                    currentUser?._id ||
-                                                    currentUser?.userId,
-                                                ),
-                                            ) && (
-                                              <div className="border-r border-gray-200 pr-1 flex items-center">
-                                                <button
-                                                  onClick={async () => {
-                                                    setActiveReactionMenu(null);
-                                                    await messageService.clearReactions(
-                                                      msg._id,
-                                                    );
-                                                  }}
-                                                  className="w-8 h-8 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all rounded-full text-gray-400"
-                                                  title="Xoá cảm xúc"
-                                                >
-                                                  <XMarkIcon className="w-5 h-5" />
-                                                </button>
-                                              </div>
-                                            )}
-
-                                            {Object.entries(EMOJI_MAP).map(
-                                              ([key, icon]) => (
-                                                <button
-                                                  key={key}
-                                                  onClick={() =>
-                                                    handleToggleReaction(
-                                                      msg._id,
-                                                      key,
-                                                    )
-                                                  }
-                                                  className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 hover:scale-125 transition-all rounded-full text-lg"
-                                                >
-                                                  {icon}
-                                                </button>
-                                              ),
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                    {/* 2. Context Menu Button (...) */}
+                                {/* Hover Controls (Reaction & Menu & Redo) */}
+                                <div
+                                  className={`absolute bottom-0 ${isMine ? "right-full pr-2" : "left-full pl-2"} flex items-center gap-1 z-[1000] ${hoveredMsgId === msg._id
+                                    ? "opacity-100 translate-y-0"
+                                    : "opacity-0 translate-y-2 pointer-events-none"
+                                    } transition-all duration-200`}
+                                >
+                                  {/* 1. Reaction Button */}
+                                  {!msg.isRevoked && (
                                     <div className="relative">
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          setActiveReactionMenu(null);
-                                          const rect =
-                                            e.currentTarget.getBoundingClientRect();
-                                          setMenuPosition(
-                                            rect.top < window.innerHeight / 2
-                                              ? "bottom"
-                                              : "top",
-                                          );
-                                          setActiveMenu(
-                                            activeMenu === msg._id
-                                              ? null
-                                              : msg._id,
-                                          );
+                                          setActiveMenu(null);
+                                          const rect = e.currentTarget.getBoundingClientRect();
+                                          setMenuPosition(rect.top < window.innerHeight / 2 ? "bottom" : "top");
+                                          setActiveReactionMenu(activeReactionMenu === msg._id ? null : msg._id);
                                         }}
-                                        className="w-7 h-7 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition"
+                                        className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
                                       >
-                                        <EllipsisHorizontalIcon className="w-4 h-4" />
+                                        <FaceSmileIcon className="w-4 h-4" />
                                       </button>
 
-                                      {/* Context Menu Content */}
-                                      {activeMenu === msg._id && (
+                                      {activeReactionMenu === msg._id && (
                                         <div
-                                          className={`absolute z-50 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 overflow-hidden ${
-                                            isMine ? "right-0" : "left-0"
-                                          } ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
-                                          onMouseLeave={() =>
-                                            setActiveMenu(null)
-                                          }
+                                          className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                                          onMouseLeave={() => setActiveReactionMenu(null)}
                                         >
-                                          {!msg.isRevoked &&
-                                            msg.type === "text" && (
-                                              <button
-                                                onClick={() => {
-                                                  navigator.clipboard.writeText(
-                                                    msg.content,
-                                                  );
-                                                  setActiveMenu(null);
-                                                }}
-                                                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
-                                              >
-                                                <ClipboardDocumentIcon className="w-4 h-4 text-gray-400 shrink-0" />
-                                                Copy tin nhắn
-                                              </button>
-                                            )}
-                                          {!msg.isRevoked && (
+                                          {msg.reactions?.some((r: any) => String(r.userId) === String(currentUser?.id || currentUser?._id || currentUser?.userId)) && (
                                             <button
-                                              onClick={() =>
-                                                handlePinMessage(msg)
-                                              }
-                                              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-yellow-700 hover:bg-yellow-50 transition text-left"
+                                              onClick={async () => {
+                                                setActiveReactionMenu(null);
+                                                await messageService.clearReactions(msg._id);
+                                              }}
+                                              className="w-8 h-8 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all rounded-full text-gray-400"
                                             >
-                                              <MapPinIcon
-                                                className={`w-4 h-4 shrink-0 ${msg.isPinned ? "text-yellow-500" : "text-gray-400"}`}
-                                              />
-                                              {msg.isPinned
-                                                ? "Bỏ ghim tin nhắn"
-                                                : "Ghim tin nhắn"}
+                                              <XMarkIcon className="w-5 h-5" />
                                             </button>
                                           )}
-                                          {!msg.isRevoked &&
-                                            (msg.type === "image" ||
-                                              msg.type === "file") && (
-                                              <button
-                                                onClick={() => {
-                                                  setActiveMenu(null);
-                                                  handleDownload(
-                                                    msg.content,
-                                                    msg.metadata?.fileName ||
-                                                      (msg.type === "image"
-                                                        ? "image.png"
-                                                        : "file"),
-                                                  );
-                                                }}
-                                                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-blue-600 hover:bg-blue-50 transition text-left"
-                                              >
-                                                <ArrowDownTrayIcon className="w-4 h-4 shrink-0" />
-                                                Lưu về máy
-                                              </button>
-                                            )}
-                                          {/* Xóa chỉ ở phía tôi: chỉ giữ lại một nút, đã có bên dưới */}
-                                          {isMine &&
-                                            !msg.isRevoked &&
-                                            new Date().getTime() -
-                                              new Date(
-                                                msg.createdAt,
-                                              ).getTime() <
-                                              86400000 && (
-                                              <button
-                                                onClick={() =>
-                                                  handleRevoke(msg._id)
-                                                }
-                                                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-orange-500 hover:bg-orange-50 transition text-left"
-                                              >
-                                                <ArrowUturnLeftIcon className="w-4 h-4 shrink-0" />
-                                                Thu hồi tin nhắn
-                                              </button>
-                                            )}
-                                          <button
-                                            onClick={() =>
-                                              handleDeleteForMe(msg._id)
-                                            }
-                                            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition text-left"
-                                          >
-                                            <TrashIcon className="w-4 h-4 shrink-0" />
-                                            Xóa chỉ ở phía tôi
-                                          </button>
+                                          {Object.entries(EMOJI_MAP).map(([key, icon]) => (
+                                            <button
+                                              key={key}
+                                              onClick={() => handleToggleReaction(msg._id, key)}
+                                              className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 hover:scale-125 transition-all rounded-full text-lg"
+                                            >
+                                              {icon}
+                                            </button>
+                                          ))}
                                         </div>
                                       )}
-                                    </div>{" "}
-                                    {/* Nút "..." menu */}
-                                    {/* 3. Redo Button (Pencil Icon) - Nằm cạnh nút menu ... */}
-                                    {isMounted &&
-                                      isMine &&
-                                      msg.isRevoked &&
-                                      msg.revokedAt &&
-                                      new Date().getTime() -
-                                        new Date(msg.revokedAt).getTime() <
-                                        60000 && (
+                                    </div>
+                                  )}
+
+                                  {/* 2. Reply Button */}
+                                  {!msg.isRevoked && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setReplyingTo(msg);
+                                        inputRef.current?.focus();
+                                      }}
+                                      className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
+                                      title="Trả lời"
+                                    >
+                                      <ArrowUturnLeftIcon className="w-4 h-4" />
+                                    </button>
+                                  )}
+
+                                  {/* 3. Context Menu Button */}
+                                  <div className="relative">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveReactionMenu(null);
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        setMenuPosition(rect.top < window.innerHeight / 2 ? "bottom" : "top");
+                                        setActiveMenu(activeMenu === msg._id ? null : msg._id);
+                                      }}
+                                      className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
+                                    >
+                                      <EllipsisHorizontalIcon className="w-4 h-4" />
+                                    </button>
+
+                                    {activeMenu === msg._id && (
+                                      <div
+                                        className={`absolute z-50 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 overflow-hidden right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                                        onMouseLeave={() => setActiveMenu(null)}
+                                      >
+                                        {!msg.isRevoked && msg.type === "text" && (
+                                          <button
+                                            onClick={() => {
+                                              navigator.clipboard.writeText(msg.content);
+                                              setActiveMenu(null);
+                                            }}
+                                            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
+                                          >
+                                            <ClipboardDocumentIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                                            Copy tin nhắn
+                                          </button>
+                                        )}
+                                        {!msg.isRevoked && (
+                                          <button
+                                            onClick={() => handlePinMessage(msg)}
+                                            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-yellow-700 hover:bg-yellow-50 transition text-left"
+                                          >
+                                            <MapPinIcon className={`w-4 h-4 shrink-0 ${msg.isPinned ? "text-yellow-500" : "text-gray-400"}`} />
+                                            {msg.isPinned ? "Bỏ ghim tin nhắn" : "Ghim tin nhắn"}
+                                          </button>
+                                        )}
+                                        {!msg.isRevoked && (msg.type === "image" || msg.type === "file") && (
+                                          <button
+                                            onClick={() => {
+                                              setActiveMenu(null);
+                                              handleDownload(msg.content, msg.metadata?.fileName || (msg.type === "image" ? "image.png" : "file"));
+                                            }}
+                                            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-blue-600 hover:bg-blue-50 transition text-left"
+                                          >
+                                            <ArrowDownTrayIcon className="w-4 h-4 shrink-0" />
+                                            Lưu về máy
+                                          </button>
+                                        )}
+                                        {isMine && !msg.isRevoked && new Date().getTime() - new Date(msg.createdAt).getTime() < 86400000 && (
+                                          <button
+                                            onClick={() => handleRevoke(msg._id)}
+                                            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-orange-500 hover:bg-orange-50 transition text-left"
+                                          >
+                                            <ArrowUturnLeftIcon className="w-4 h-4 shrink-0" />
+                                            Thu hồi tin nhắn
+                                          </button>
+                                        )}
                                         <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setMessageText(msg.content);
-                                          }}
-                                          className="w-7 h-7 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-blue-500 hover:bg-blue-50 transition"
-                                          title="Sửa nhanh (Hoàn tác)"
+                                          onClick={() => handleDeleteForMe(msg._id)}
+                                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition text-left"
                                         >
-                                          <PencilIcon className="w-4 h-4" />
+                                          <TrashIcon className="w-4 h-4 shrink-0" />
+                                          Xóa chỉ ở phía tôi
                                         </button>
-                                      )}
+                                      </div>
+                                    )}
                                   </div>
-                                </div>{" "}
-                                {/* Đóng thẻ Wrapper cho nội dung và hover controls */}
+
+                                  {/* 4. Redo Button */}
+                                  {isMounted && isMine && msg.isRevoked && msg.revokedAt && new Date().getTime() - new Date(msg.revokedAt).getTime() < 60000 && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMessageText(msg.content);
+                                      }}
+                                      className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-blue-500 hover:bg-blue-50 transition"
+                                      title="Sửa nhanh (Hoàn tác)"
+                                    >
+                                      <PencilIcon className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
                                 {/* Hiển thị các cảm xúc đã thả */}
                                 {msg.reactions && msg.reactions.length > 0 && (
                                   <div
@@ -1243,24 +1255,22 @@ export default function ChatPage() {
                                           title={peopleReacted
                                             .map(
                                               (r) =>
-                                                userCache[r.userId]?.name ||
-                                                `User #${r.userId.substring(0, 4)}`,
+                                                getSenderDisplayName(r.userId),
                                             )
                                             .join(", ")}
-                                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] cursor-pointer transition ${
-                                            msg.reactions!.some(
-                                              (r: any) =>
-                                                r.emoji === emojiKey &&
-                                                String(r.userId) ===
-                                                  String(
-                                                    currentUser?.id ||
-                                                      currentUser?._id ||
-                                                      currentUser?.userId,
-                                                  ),
-                                            )
-                                              ? "bg-blue-100 text-blue-600 border border-blue-200"
-                                              : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
-                                          }`}
+                                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] cursor-pointer transition ${msg.reactions!.some(
+                                            (r: any) =>
+                                              r.emoji === emojiKey &&
+                                              String(r.userId) ===
+                                              String(
+                                                currentUser?.id ||
+                                                currentUser?._id ||
+                                                currentUser?.userId,
+                                              ),
+                                          )
+                                            ? "bg-blue-100 text-blue-600 border border-blue-200"
+                                            : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
+                                            }`}
                                         >
                                           <span>
                                             {EMOJI_MAP[emojiKey as string] ||
@@ -1278,28 +1288,25 @@ export default function ChatPage() {
                                     })}
                                   </div>
                                 )}
-                              </div>{" "}
-                              {/* Đóng thẻ Bubble */}
+                              </div>
                             </div>
                           );
                         })}
 
                         {/* Footer: timestamp + trạng thái của nhóm — hiện 1 lần */}
                         <div
-                          className={`flex items-center gap-1 mt-0.5 ${
-                            isMine ? "justify-end pr-10" : "pl-10"
-                          }`}
+                          className={`flex items-center gap-1 mt-0.5 ${isMine ? "justify-end pr-10" : "pl-10"
+                            }`}
                         >
                           <span className="text-[10px] font-bold text-gray-400">
                             {formatTime(lastMsg.createdAt)}
                           </span>
                           {isMine && (
                             <span
-                              className={`text-[10px] font-bold ${
-                                lastMsg.isRead
-                                  ? "text-blue-500"
-                                  : "text-gray-400"
-                              }`}
+                              className={`text-[10px] font-bold ${lastMsg.isRead
+                                ? "text-blue-500"
+                                : "text-gray-400"
+                                }`}
                             >
                               {lastMsg.isRead ? "✓✓" : "✓"}
                             </span>
@@ -1333,51 +1340,105 @@ export default function ChatPage() {
                 ) : null;
               })()}
 
-            {/* Message Input */}
-            <div className="p-4 bg-white shrink-0">
-              <div className="flex items-center gap-3 bg-[#F5F5F5] p-2 rounded-full border border-transparent focus-within:border-gray-200 focus-within:bg-white transition-all">
-                {/* Nút gửi file */}
+            {/* Message Input Container */}
+            <div className="bg-white border-t border-gray-200 shrink-0">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                multiple
+              />
+              {/* Toolbar Section */}
+              <div className="flex items-center gap-1 px-4 py-2">
                 <button
-                  className="p-2 text-gray-400 hover:text-black transition"
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition"
                   onClick={handleFileButtonClick}
-                  disabled={uploadingFile}
                   title="Gửi file"
                 >
                   <PaperClipIcon className="w-5 h-5" />
                 </button>
-                {/* Input file ẩn */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  style={{ display: "none" }}
-                  onChange={handleFileChange}
-                  disabled={uploadingFile}
-                  multiple
-                  max={5}
-                />
-                <input
-                  ref={inputRef}
-                  type="text"
-                  placeholder="Nhập tin nhắn..."
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="flex-1 bg-transparent border-none outline-none text-[14px] font-medium placeholder:text-gray-400"
-                />
-                <button className="p-2 text-gray-400 hover:text-black transition">
-                  <FaceSmileIcon className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={handleSend}
-                  disabled={!messageText.trim() || sending}
-                  className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-800 transition active:scale-95 shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sending ? (
-                    <ArrowPathIcon className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <PaperAirplaneIcon className="w-4 h-4 -mr-0.5" />
+                {/* 
+                  Note: The user image shows more icons like Emoji, Photo, etc.
+                  We keep only existing PaperClipIcon as per "đừng thêm gì" instruction.
+                */}
+              </div>
+
+              {/* Reply Preview Section */}
+              {replyingTo && (
+                <div className="mx-4 mb-2 p-3 bg-[#F0F2F5] border-l-[3px] border-blue-600 rounded-sm flex items-center gap-3 animate-in slide-in-from-bottom-1 duration-200 w-fit max-w-[75%]">
+                  {replyingTo.type === 'image' && (
+                    <img
+                      src={replyingTo.content}
+                      alt="reply"
+                      className="w-10 h-10 object-cover rounded-md shrink-0 border border-gray-200"
+                    />
                   )}
-                </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        className="w-3.5 h-3.5 text-gray-500"
+                      >
+                        <path d="M14.017 21L14.017 18C14.017 16.8954 14.9125 16 16.0171 16H19.0171C20.1217 16 21.0171 16.8954 21.0171 18V21M14.017 21H21.0171M14.017 21C12.9125 21 12.017 20.1046 12.017 19V15M3.01709 21H10.0171M10.0171 21V18C10.0171 16.8954 10.9125 16 12.0171 16H15.0171M10.0171 21C8.91253 21 8.01709 20.1046 8.01709 19V15M12.017 15V13C12.017 11.8954 12.9125 11 14.0171 11H17.0171C18.1217 11 19.0171 11.8954 19.0171 13V15M12.017 15C10.9125 15 10.0171 14.1046 10.0171 13V9M3.01709 15H10.0171M10.0171 15V12C10.0171 10.8954 10.9125 10 12.0171 10H15.0171M10.0171 15C8.91253 15 8.01709 14.1046 8.01709 13V9" />
+                        <path d="M11.1892 5.07107C10.0175 3.8994 8.11805 3.8994 6.94639 5.07107C5.77473 6.24274 5.77473 8.14224 6.94639 9.31391L11.1892 13.5567L15.432 9.31391C16.6037 8.14224 16.6037 6.24274 15.432 5.07107C14.2603 3.8994 12.3608 3.8994 11.1892 5.07107Z" fill="currentColor" />
+                      </svg>
+                      {/* Using the text character directly is often more faithful to these chat UIs */}
+                      <span className="text-[14px] text-gray-500 font-medium">
+                        Trả lời <span className="font-bold text-gray-800">{getSenderDisplayName(replyingTo.senderId, replyingTo)}</span>
+                      </span>
+                    </div>
+                    <p className="text-[13px] text-gray-600 truncate ml-1">
+                      {replyingTo.type === 'image' ? '[Hình ảnh]' :
+                        replyingTo.type === 'file' ? (replyingTo.metadata?.fileName || '[Tệp tin]') :
+                          replyingTo.content}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setReplyingTo(null)}
+                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <XMarkIcon className="w-5 h-5" strokeWidth={2.5} />
+                  </button>
+                </div>
+              )}
+
+              {/* Input section */}
+              <div className="px-4 pb-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    placeholder={replyingTo
+                      ? `Nhập @, tin nhắn tới ${userCache[replyingTo.senderId]?.name || "người dùng"}`
+                      : "Nhập tin nhắn..."
+                    }
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
+                  />
+                  <div className="flex items-center gap-1">
+                    <button className="p-2 text-gray-500 hover:text-black transition">
+                      <FaceSmileIcon className="w-6 h-6" />
+                    </button>
+                    {messageText.trim() ? (
+                      <button
+                        onClick={handleSend}
+                        disabled={sending}
+                        className="p-2 text-blue-600 hover:text-blue-700 transition active:scale-95 disabled:opacity-40"
+                      >
+                        <PaperAirplaneIcon className="w-6 h-6" />
+                      </button>
+                    ) : (
+                      <button className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90">
+                        {/* This matches the Like/Thumb icon in the image */}
+                        <span className="text-2xl">👍</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1422,8 +1483,8 @@ export default function ChatPage() {
                         viewingReactions.activeTab === "all"
                           ? rList
                           : rList.filter(
-                              (r) => r.emoji === viewingReactions.activeTab,
-                            );
+                            (r) => r.emoji === viewingReactions.activeTab,
+                          );
 
                       // Group by user for the right column
                       const userEmoteMap = activeFilters.reduce(
@@ -1572,11 +1633,10 @@ export default function ChatPage() {
 
           {/* ═══ CỘT PHẢI: THÔNG TIN CHI TIẾT ═══ */}
           <div
-            className={`hidden lg:flex flex-col shrink-0 bg-[#FAFAFA] h-full transition-all duration-300 ease-in-out overflow-hidden ${
-              showInfoPanel
-                ? "w-[320px] xl:w-85 opacity-100 border-l border-gray-100"
-                : "w-0 opacity-0 border-l-0"
-            }`}
+            className={`hidden lg:flex flex-col shrink-0 bg-[#FAFAFA] h-full transition-all duration-300 ease-in-out overflow-hidden ${showInfoPanel
+              ? "w-[320px] xl:w-85 opacity-100 border-l border-gray-100"
+              : "w-0 opacity-0 border-l-0"
+              }`}
           >
             <div className="w-[320px] xl:w-85 h-full flex flex-col">
               <div className="flex-1 overflow-y-auto scrollbar-hide">
