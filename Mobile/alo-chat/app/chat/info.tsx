@@ -14,6 +14,7 @@ import {
   Image,
   Alert,
   Modal,
+  Switch,
 } from "react-native";
 import {
   ArrowLeftIcon,
@@ -61,10 +62,14 @@ export default function ChatInfoScreen() {
     null,
   );
   const [isLinkEnabled, setIsLinkEnabled] = useState(false);
+  const [isHistoryVisible, setIsHistoryVisible] = useState(true);
   const [mediaList, setMediaList] = useState<MessageDTO[]>([]);
   const [fileList, setFileList] = useState<MessageDTO[]>([]);
   const [mediaCount, setMediaCount] = useState(0);
   const [fileCount, setFileCount] = useState(0);
+  const [realtimeMembersCount, setRealtimeMembersCount] = useState<string>(
+    (membersCount as string) || "0",
+  );
 
   const fetchGroupDetails = async () => {
     try {
@@ -87,6 +92,9 @@ export default function ChatInfoScreen() {
       if (typeof groupData?.isLinkEnabled === "boolean") {
         setIsLinkEnabled(groupData.isLinkEnabled);
       }
+      if (typeof groupData?.isHistoryVisible === "boolean") {
+        setIsHistoryVisible(groupData.isHistoryVisible);
+      }
 
       if (groupData && groupData.members) {
         const memberPromises = groupData.members.map(async (m: any) => {
@@ -102,6 +110,7 @@ export default function ChatInfoScreen() {
         });
         const membersList = await Promise.all(memberPromises);
         setMembers(membersList);
+        setRealtimeMembersCount(membersList.length.toString());
       }
     } catch (error) {
       console.error("Lỗi lấy chi tiết nhóm:", error);
@@ -203,13 +212,49 @@ export default function ChatInfoScreen() {
     };
 
     socket.on("message-received", handleMessageReceived);
+
+    const handleGroupUpdated = (updatedGroup: any) => {
+      if (updatedGroup._id === id) {
+        console.log("Group updated, fetching new details...");
+        fetchGroupDetails();
+      }
+    };
+
+    const handleConversationRemoved = (data: {
+      conversationId: string;
+      reason?: string;
+    }) => {
+      if (data.conversationId === id) {
+        if (data.reason === "leave") {
+          router.replace("/(tabs)");
+          return;
+        }
+        Alert.alert("Thông báo", "Bạn đã không còn ở trong nhóm này nữa.", [
+          {
+            text: "OK",
+            onPress: () => router.replace("/(tabs)"),
+          },
+        ]);
+        setTimeout(() => {
+          router.replace("/(tabs)");
+        }, 3000);
+      }
+    };
+
+    socket.on("GROUP_UPDATED", handleGroupUpdated);
+    socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
+
     return () => {
       socket.off("message-received", handleMessageReceived);
+      socket.off("GROUP_UPDATED", handleGroupUpdated);
+      socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
     };
   }, [socket, id]);
 
   const currentUserRole = members.find((m) => m.id === currentUserId)?.role;
   const isAdmin = currentUserRole === "leader";
+  const isDeputy = currentUserRole === "deputy";
+  const isManager = isAdmin || isDeputy;
 
   const handleLeaveGroup = () => {
     if (isAdmin) {
@@ -405,7 +450,9 @@ export default function ChatInfoScreen() {
           </View>
 
           <Text className="text-[13px] text-gray-500 font-medium">
-            {isGroup ? `${membersCount || ""} thành viên` : "Đang hoạt động"}
+            {isGroup
+              ? `${realtimeMembersCount || ""} thành viên`
+              : "Đang hoạt động"}
           </Text>
         </View>
 
@@ -577,7 +624,7 @@ export default function ChatInfoScreen() {
                       (groupName as string) || "",
                     )}&avatar=${encodeURIComponent(
                       (groupAvatar as string) || "",
-                    )}&isLinkEnabled=${isLinkEnabled}`,
+                    )}&isLinkEnabled=${isLinkEnabled}&isHistoryVisible=${isHistoryVisible}&isAdmin=${isAdmin || isDeputy}`,
                   )
                 }
               />

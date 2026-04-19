@@ -206,6 +206,10 @@ export const createGroup = async (
 
     // Real-time Sync: Thông báo cho tất cả thành viên về nhóm mới
     rabbitMQProducer.publishConversationCreated(newGroup).catch(console.error);
+    // Thông báo đẩy (In-app) cho các thành viên được thêm (ngoại trừ người tạo)
+    userIds.forEach((uId: string) => {
+      rabbitMQProducer.publishAddedToGroup(uId, newGroup).catch(console.error);
+    });
 
     // Bắn tin nhắn hệ thống: X đã tạo nhóm
     const creatorName = await getUserFullName(creatorId, authHeader);
@@ -282,15 +286,26 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const { isHistoryVisible: overrideIsHistoryVisible } = req.body;
+
+    // Xác định xem user mới này có được xem lịch sử không
+    // Ưu tiên override từ request, nếu không thì lấy mặc định của nhóm
+    const canViewHistory =
+      typeof overrideIsHistoryVisible === "boolean"
+        ? overrideIsHistoryVisible
+        : group.isHistoryVisible;
+
     group.members.push({
       userId: newUserId,
       role: "MEMBER",
-      joinedAt: new Date(),
+      joinedAt: canViewHistory ? group.createdAt || new Date() : new Date(),
     });
     await group.save();
 
     // Real-time Sync: Thông báo cho thành viên mới về nhóm này
     rabbitMQProducer.publishConversationCreated(group).catch(console.error);
+    // Thông báo đẩy (In-app) cho thành viên mới
+    rabbitMQProducer.publishAddedToGroup(String(newUserId), group).catch(console.error);
 
     // Bắn tin nhắn hệ thống
     const newUserName = await getUserFullName(String(newUserId), authHeader);
@@ -301,6 +316,7 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
       authHeader,
     );
 
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
     res.status(200).json({ message: "Đã thêm thành viên", data: group });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -363,8 +379,9 @@ export const removeMember = async (
     await group.save();
 
     // Real-time Sync: Thông báo cho người bị gỡ rằng họ không còn trong nhóm
+    const reason = userId === requesterId ? "leave" : "kick";
     rabbitMQProducer
-      .publishConversationRemoved(groupId, userId)
+      .publishConversationRemoved(groupId, userId, group.name || "Nhóm", reason)
       .catch(console.error);
 
     // Bắn tin nhắn hệ thống
@@ -380,6 +397,7 @@ export const removeMember = async (
       req.headers.authorization,
     );
 
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
     res.status(200).json({ message: "Thao tác thành công", data: group });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -437,6 +455,12 @@ export const updateRole = async (
       req.headers.authorization,
     );
 
+    // Emit update event
+    const updatedGroup = await Conversation.findById(groupId);
+    if (updatedGroup) {
+      rabbitMQProducer.publishGroupUpdated(updatedGroup).catch(console.error);
+    }
+
     res.status(200).json({ message: "Cập nhật quyền thành công" });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -488,6 +512,12 @@ export const assignNewLeader = async (
       req.headers.authorization,
     );
 
+    // Emit update event
+    const updatedGroup = await Conversation.findById(groupId);
+    if (updatedGroup) {
+      rabbitMQProducer.publishGroupUpdated(updatedGroup).catch(console.error);
+    }
+
     res.status(200).json({ message: "Đã chuyển nhượng quyền Trưởng nhóm" });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -528,7 +558,7 @@ export const deleteGroup = async (
       for (const member of group.members) {
         if (member.userId) {
           rabbitMQProducer
-            .publishConversationRemoved(groupId, String(member.userId))
+            .publishConversationRemoved(groupId, String(member.userId), group.name || "Nhóm", "delete")
             .catch(console.error);
         }
       }
@@ -648,7 +678,7 @@ export const requestJoinGroup = async (
       group.members.push({
         userId: requesterId,
         role: "MEMBER",
-        joinedAt: new Date(),
+        joinedAt: group.isHistoryVisible ? group.createdAt || new Date() : new Date(),
       });
 
       // Xoá join requests nếu lỡ có trễ (ví dụ họ đã từng gửi trước khi nhóm tắt phê duyệt)
@@ -672,6 +702,7 @@ export const requestJoinGroup = async (
         req.headers.authorization,
       );
 
+      rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
       res.status(200).json({
         message: "Đã tham gia nhóm thành công",
         joined: true,
@@ -686,6 +717,23 @@ export const requestJoinGroup = async (
 
     group.joinRequests.push({ userId: requesterId, requestedAt: new Date() });
     await group.save();
+
+    // Bắn tin cho admin
+    try {
+      const requesterName = await getUserFullName(
+        requesterId,
+        req.headers.authorization,
+      );
+      const admins = group.members
+        .filter((m: any) => m.role === "LEADER" || m.role === "DEPUTY")
+        .map((m: any) => m.userId);
+
+      rabbitMQProducer
+        .publishNewJoinRequest(groupId, requesterName, admins, group.name)
+        .catch(console.error);
+    } catch (notifErr) {
+      console.error("[RequestJoinGroup] Notification Error:", notifErr);
+    }
 
     res.status(200).json({
       message: "Đã gửi yêu cầu tham gia, vui lòng chờ duyệt",
@@ -776,7 +824,7 @@ export const approveJoinRequest = async (
       group.members.push({
         userId: String(userId),
         role: "MEMBER",
-        joinedAt: new Date(),
+        joinedAt: group.isHistoryVisible ? group.createdAt || new Date() : new Date(),
       });
     }
 
@@ -784,6 +832,8 @@ export const approveJoinRequest = async (
 
     // Real-time Sync: Thông báo cho người vừa được duyệt về hội thoại mới hiển thị
     rabbitMQProducer.publishConversationCreated(group).catch(console.error);
+    // Thông báo đẩy (In-app) cho người dùng được duyệt
+    rabbitMQProducer.publishJoinRequestApproved(userId, group).catch(console.error);
 
     // Bắn tin nhắn hệ thống
     const targetName = await getUserFullName(userId, req.headers.authorization);
@@ -794,6 +844,7 @@ export const approveJoinRequest = async (
       req.headers.authorization,
     );
 
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
     res.status(200).json({ message: "Đã phê duyệt yêu cầu", data: group });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -840,6 +891,11 @@ export const rejectJoinRequest = async (
     group.joinRequests = requests;
 
     await group.save();
+
+    // Thông báo cho người dùng bị từ chối
+    rabbitMQProducer
+      .publishJoinRequestRejected(userId, group.name || "Nhóm")
+      .catch(console.error);
 
     res.status(200).json({ message: "Đã từ chối yêu cầu", data: group });
   } catch (error: any) {
@@ -987,6 +1043,7 @@ export const updateGroup = async (
 
     await group.save();
 
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
     res.status(200).json({
       message: "Cập nhật thông tin nhóm thành công",
       data: group,
@@ -1072,6 +1129,50 @@ export const getOrCreateDirectConversation = async (
       .catch(console.error);
 
     res.status(201).json(newConversation);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 18. Cập nhật cài đặt xem lịch sử tin nhắn (Chỉ LEADER/DEPUTY)
+export const updateHistorySetting = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const groupId = String(req.params.groupId || "");
+    const { isHistoryVisible } = req.body;
+    const requesterId = (req.headers["x-user-id"] || "").toString();
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    // Check quyền
+    const member = group.members.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (!member || (member.role !== "LEADER" && member.role !== "DEPUTY")) {
+      res.status(403).json({ error: "Bạn không có quyền thay đổi thiết lập này" });
+      return;
+    }
+
+    if (typeof isHistoryVisible !== "boolean") {
+      res.status(400).json({ error: "Tham số isHistoryVisible không hợp lệ" });
+      return;
+    }
+
+    group.isHistoryVisible = isHistoryVisible;
+    await group.save();
+
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
+
+    res.status(200).json({
+      message: "Đã cập nhật thiết lập xem lịch sử",
+      data: { isHistoryVisible: group.isHistoryVisible },
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

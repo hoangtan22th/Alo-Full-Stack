@@ -4,6 +4,7 @@ import { groupService } from "../../services/groupService";
 import { userService } from "../../services/userService";
 import { contactService } from "../../services/contactService";
 import { useAuth } from "../../contexts/AuthContext";
+import { useSocket } from "../../contexts/SocketContext";
 import {
   View,
   Text,
@@ -48,7 +49,8 @@ export default function GroupMembersScreen() {
   const [activeTab, setActiveTab] = useState<"all" | "managers" | "blocked">(
     "all",
   );
-  const [canViewHistory, setCanViewHistory] = useState(false);
+  const [canViewHistory, setCanViewHistory] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const fetchGroupDetails = async () => {
     try {
@@ -63,6 +65,10 @@ export default function GroupMembersScreen() {
       }
 
       if (groupData && groupData.members) {
+        setPendingCount(groupData.joinRequests?.length || 0);
+        if (typeof groupData.isHistoryVisible === "boolean") {
+          setCanViewHistory(groupData.isHistoryVisible);
+        }
         const memberPromises = groupData.members.map(async (m: any) => {
           const userRes = await userService.getUserById(m.userId);
           const userData =
@@ -82,9 +88,53 @@ export default function GroupMembersScreen() {
     }
   };
 
+  const { socket } = useSocket();
+
   useEffect(() => {
     fetchGroupDetails();
   }, [id]);
+
+  useEffect(() => {
+    if (!socket || !id) return;
+
+    // Lắng nghe yêu cầu tham gia mới (để cập nhật số lượng chờ duyệt)
+    const handleNewJoinRequest = (data: { groupId: string }) => {
+      console.log("📥 [Members] Received NEW_JOIN_REQUEST:", data.groupId);
+      if (data.groupId === id) {
+        fetchGroupDetails();
+      }
+    };
+
+    // Lắng nghe thay đổi thông tin nhóm (thêm thành viên, đổi role...)
+    const handleGroupUpdated = (data: any) => {
+      console.log("🔄 [Members] Received GROUP_UPDATED:", data._id);
+      if (data._id === id) {
+        fetchGroupDetails();
+      }
+    };
+
+    // Lắng nghe nếu bị mời khỏi nhóm hoặc nhóm giải tán
+    const handleConversationRemoved = (data: {
+      conversationId: string;
+      reason: string;
+    }) => {
+      console.log("🔴 [Members] Received CONVERSATION_REMOVED:", data);
+      if (data.conversationId === id) {
+        // Nếu chính mình bị kick hoặc nhóm bị xóa thì văng ra ngoài
+        router.replace("/(tabs)");
+      }
+    };
+
+    socket.on("NEW_JOIN_REQUEST", handleNewJoinRequest);
+    socket.on("GROUP_UPDATED", handleGroupUpdated);
+    socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
+
+    return () => {
+      socket.off("NEW_JOIN_REQUEST", handleNewJoinRequest);
+      socket.off("GROUP_UPDATED", handleGroupUpdated);
+      socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
+    };
+  }, [socket, id]);
 
   const currentUserRole = members.find((m) => m.id === currentUserId)?.role;
   const isAdmin = currentUserRole === "leader";
@@ -130,12 +180,17 @@ export default function GroupMembersScreen() {
     }
 
     try {
+      // Dùng canViewHistory làm một override duy nhất cho đợt thêm này
       for (const friendId of selectedFriendIds) {
-        await groupService.addMember(id as string, friendId);
+        await groupService.addMember(id as string, friendId, canViewHistory);
       }
       Alert.alert("Thành công", "Đã thêm thành viên vào nhóm.");
+      
+      // Reset về trạng thái mặc định của nhóm sau khi thêm xong
+      // ( fetchGroupDetails sẽ cập nhật lại canViewHistory từ groupData.isHistoryVisible )
       setIsAddModalVisible(false);
       fetchGroupDetails();
+      setSelectedFriendIds([]);
     } catch (error) {
       Alert.alert("Lỗi", "Không thể thêm một số thành viên.");
     }
@@ -325,7 +380,16 @@ export default function GroupMembersScreen() {
                 Duyệt thành viên
               </Text>
             </View>
-            <ChevronRightIcon size={20} color="#9ca3af" />
+            <View className="flex-row items-center">
+              {pendingCount > 0 && (
+                <View className="bg-red-500 min-w-[20px] h-5 rounded-full items-center justify-center px-1.5 mr-2">
+                  <Text className="text-white text-[12px] font-bold">
+                    {pendingCount}
+                  </Text>
+                </View>
+              )}
+              <ChevronRightIcon size={20} color="#9ca3af" />
+            </View>
           </TouchableOpacity>
         )}
 
@@ -523,11 +587,17 @@ export default function GroupMembersScreen() {
                   <PaperAirplaneIcon size={24} color="#FFF" />
                 </TouchableOpacity>
               </View>
-              {/* Toggle new members can view recent messages history */}
-              <View className="flex-row items-center justify-between px-4 mt-2">
-                <Text className="text-[15px] text-gray-700 font-medium">
-                  Thành viên mới xem được tin gửi gần đây
-                </Text>
+            {/* Toggle new members can view recent messages history */}
+            {isManager && (
+              <View className="flex-row items-center justify-between px-4 mt-4 mb-2">
+                <View className="flex-1 mr-4">
+                  <Text className="text-[15px] text-gray-700 font-medium">
+                    Xem lại tin nhắn cũ
+                  </Text>
+                  <Text className="text-[12px] text-gray-500">
+                    Cho phép thành viên mới này thấy lịch sử hội thoại
+                  </Text>
+                </View>
                 <Switch
                   value={canViewHistory}
                   onValueChange={setCanViewHistory}
@@ -535,6 +605,7 @@ export default function GroupMembersScreen() {
                   thumbColor={"#ffffff"}
                 />
               </View>
+            )}
             </View>
           )}
         </View>

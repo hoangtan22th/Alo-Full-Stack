@@ -24,6 +24,7 @@ export interface IConversation extends Document {
   isBanned: boolean;
   isApprovalRequired: boolean;
   isLinkEnabled: boolean; // Add isLinkEnabled field
+  isHistoryVisible: boolean; // Add isHistoryVisible field
   clearedAt: Map<string, Date>; // userId -> timestamp
   unreadCount: Map<string, number>; // userId -> count
   // Các trường do timestamps tự sinh ra:
@@ -64,6 +65,7 @@ const conversationSchema = new Schema<IConversation>(
     ],
     isApprovalRequired: { type: Boolean, default: false },
     isLinkEnabled: { type: Boolean, default: false }, // Add isLinkEnabled schema logic
+    isHistoryVisible: { type: Boolean, default: true }, // Add isHistoryVisible schema logic
     isBanned: { type: Boolean, default: false },
     unreadCount: {
       type: Map,

@@ -72,13 +72,86 @@ export class RabbitMQProducerService {
   /**
    * Phát sự kiện khi một người dùng bị gỡ khỏi hội thoại (bị kick, rời nhóm, hoặc giải tán nhóm)
    */
-  async publishConversationRemoved(conversationId: string, userId: string) {
+  async publishConversationRemoved(conversationId: string, userId: string, groupName: string, reason: 'kick' | 'leave' | 'delete' = 'kick') {
     await this.publishToRealtimeService('CONVERSATION_REMOVED', {
       target: userId,
-      data: { conversationId }
+      data: { conversationId, groupName, reason }
     });
     
-    console.log(`[RabbitMQProducer] Event 'CONVERSATION_REMOVED' published for user: ${userId}, conversation: ${conversationId}`);
+    console.log(`[RabbitMQProducer] Event 'CONVERSATION_REMOVED' published for user: ${userId}, group: ${groupName}, reason: ${reason}`);
+  }
+
+  /**
+   * Phát sự kiện khi thông tin nhóm (tên, avatar, thành viên...) thay đổi.
+   * Gửi đến tất cả mọi người đang ở trong room của hội thoại đó.
+   */
+  async publishGroupUpdated(conversation: any) {
+    if (!conversation?._id) return;
+
+    await this.publishToRealtimeService('GROUP_UPDATED', {
+      room: conversation._id.toString(),
+      data: conversation
+    });
+
+    console.log(`[RabbitMQProducer] Event 'GROUP_UPDATED' published to room: ${conversation._id}`);
+  }
+
+  /**
+   * Phát sự kiện khi có người yêu cầu tham gia nhóm (cần duyệt).
+   * Gửi riêng cho các quản trị viên (LEADER, DEPUTY).
+   */
+  async publishNewJoinRequest(groupId: string, requesterName: string, adminIds: string[], groupName: string) {
+    for (const adminId of adminIds) {
+      await this.publishToRealtimeService('NEW_JOIN_REQUEST', {
+        target: adminId,
+        data: { groupId, requesterName, groupName }
+      });
+    }
+    console.log(`[RabbitMQProducer] Event 'NEW_JOIN_REQUEST' published to ${adminIds.length} admins for group: ${groupId}`);
+  }
+
+  /**
+   * Phát sự kiện khi yêu cầu tham gia nhóm được duyệt.
+   * Gửi riêng cho người dùng đã gửi yêu cầu.
+   */
+  async publishJoinRequestApproved(userId: string, group: any) {
+    await this.publishToRealtimeService('JOIN_REQUEST_APPROVED', {
+      target: userId,
+      data: {
+        groupId: group._id.toString(),
+        groupName: group.name,
+        groupAvatar: group.groupAvatar || '',
+        membersCount: group.members.length
+      }
+    });
+    console.log(`[RabbitMQProducer] Event 'JOIN_REQUEST_APPROVED' published to user: ${userId} for group: ${group._id}`);
+  }
+
+  /**
+   * Phát sự kiện khi một người dùng được thêm vào nhóm (trực tiếp hoặc lúc tạo nhóm)
+   */
+  async publishAddedToGroup(userId: string, group: any) {
+    await this.publishToRealtimeService('ADDED_TO_GROUP', {
+      target: userId,
+      data: {
+        groupId: group._id.toString(),
+        groupName: group.name,
+        groupAvatar: group.groupAvatar || '',
+        membersCount: group.members.length
+      }
+    });
+    console.log(`[RabbitMQProducer] Event 'ADDED_TO_GROUP' published to user: ${userId} for group: ${group._id}`);
+  }
+
+  /**
+   * Phát sự kiện khi yêu cầu tham gia nhóm bị từ chối.
+   */
+  async publishJoinRequestRejected(userId: string, groupName: string) {
+    await this.publishToRealtimeService('JOIN_REQUEST_REJECTED', {
+      target: userId,
+      data: { groupName }
+    });
+    console.log(`[RabbitMQProducer] Event 'JOIN_REQUEST_REJECTED' published to user: ${userId} for group: ${groupName}`);
   }
 }
 

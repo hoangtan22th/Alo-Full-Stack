@@ -86,10 +86,15 @@ export const groupService = {
     }
   },
 
-  addMember: async (groupId: string, newUserId: string) => {
+  addMember: async (
+    groupId: string,
+    newUserId: string,
+    isHistoryVisible?: boolean,
+  ) => {
     try {
       const data = await api.post<any, any>(`/groups/${groupId}/members`, {
         newUserId,
+        isHistoryVisible,
       });
       return data;
     } catch (error) {
@@ -151,7 +156,7 @@ export const groupService = {
       const data = await api.post<any, any>(`/groups/${groupId}/join-requests`);
       return data;
     } catch (error) {
-      console.error("Lỗi yêu cầu tham gia nhóm:", error);
+      // console.error("Lỗi yêu cầu tham gia nhóm:", error);
       throw error;
     }
   },
@@ -214,6 +219,19 @@ export const groupService = {
       return data;
     } catch (error) {
       console.error("Lỗi cập nhật cấu hình link:", error);
+      throw error;
+    }
+  },
+
+  updateHistorySetting: async (groupId: string, isHistoryVisible: boolean) => {
+    try {
+      const data = await api.put<any, any>(
+        `/groups/${groupId}/history-setting`,
+        { isHistoryVisible },
+      );
+      return data;
+    } catch (error) {
+      console.error("Lỗi cập nhật cấu hình lịch sử:", error);
       throw error;
     }
   },

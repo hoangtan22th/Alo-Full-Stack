@@ -128,6 +128,7 @@ export class MessageDataService {
     skip: number = 0,
     clearedAt?: Date,
     type?: string,
+    joinedAt?: Date,
   ): Promise<IMessage[]> {
     try {
       const query: any = {
@@ -135,8 +136,13 @@ export class MessageDataService {
         deletedByUsers: { $ne: userId }, // LỌC: Không lấy tin mà user này đã xóa phía mình
       };
 
-      if (clearedAt) {
-        query.createdAt = { $gt: new Date(clearedAt) };
+      // Xác định mốc thời gian bắt đầu có thể xem tin nhắn
+      let startTime = 0;
+      if (clearedAt) startTime = Math.max(startTime, new Date(clearedAt).getTime());
+      if (joinedAt) startTime = Math.max(startTime, new Date(joinedAt).getTime());
+
+      if (startTime > 0) {
+        query.createdAt = { $gt: new Date(startTime) };
       }
 
       if (type) {

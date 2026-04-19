@@ -11,6 +11,7 @@ export default function ScanQRScreen() {
   const [scanned, setScanned] = useState(false);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const scannedRef = React.useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -26,6 +27,8 @@ export default function ScanQRScreen() {
     type: string;
     data: string;
   }) => {
+    if (scannedRef.current) return;
+    scannedRef.current = true;
     setScanned(true);
 
     try {
@@ -36,7 +39,13 @@ export default function ScanQRScreen() {
         Alert.alert(
           "Mã QR không hợp lệ",
           "Đây không phải là mã QR tham gia nhóm của Alo.",
-          [{ text: "Quét lại", onPress: () => setScanned(false) }],
+          [{ 
+            text: "Quét lại", 
+            onPress: () => {
+              scannedRef.current = false;
+              setScanned(false);
+            } 
+          }],
         );
         return;
       }
@@ -56,17 +65,15 @@ export default function ScanQRScreen() {
         const mCount = groupInfo?.members?.length || 1;
 
         const navigateToChat = () => {
-          router.back(); // Trở về danh sách nhóm
-          setTimeout(() => {
-            router.push({
-              pathname: `/chat/${groupId}` as any,
-              params: {
-                name: groupName,
-                avatar: groupAvatar,
-                membersCount: mCount,
-              },
-            });
-          }, 300); // Thêm delay nhỏ để tránh đụng độ animation chuyển cảnh
+          router.replace({
+            pathname: `/chat/${groupId}` as any,
+            params: {
+              name: groupName,
+              avatar: groupAvatar,
+              membersCount: String(mCount),
+              isGroup: "true",
+            },
+          });
         };
 
         if (resData?.alreadyMember) {
@@ -90,10 +97,25 @@ export default function ScanQRScreen() {
     } catch (error: any) {
       const errorMsg =
         error?.response?.data?.error || "Không thể tham gia nhóm";
-      Alert.alert("Lỗi", errorMsg, [
-        { text: "Quét lại", onPress: () => setScanned(false) },
-        { text: "Huỷ", onPress: () => router.back() },
-      ]);
+      
+      if (errorMsg === "Bạn đã gửi yêu cầu tham gia rồi") {
+        Alert.alert(
+          "Yêu cầu đã gửi",
+          "Bạn đã gửi yêu cầu tham gia nhóm này rồi. Vui lòng chờ Quản trị viên phê duyệt.",
+          [{ text: "Đóng", onPress: () => router.back() }],
+        );
+      } else {
+        Alert.alert("Thông báo", errorMsg, [
+          { 
+            text: "Quét lại", 
+            onPress: () => {
+              scannedRef.current = false;
+              setScanned(false);
+            } 
+          },
+          { text: "Huỷ", onPress: () => router.back() },
+        ]);
+      }
     }
   };
 

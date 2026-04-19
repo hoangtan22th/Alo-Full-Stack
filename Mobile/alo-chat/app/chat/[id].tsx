@@ -498,6 +498,17 @@ export default function GlobalChatScreen() {
   >(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
+  // Real-time Group Info
+  const [realtimeGroupName, setRealtimeGroupName] = useState<string>(
+    (name as string) || "",
+  );
+  const [realtimeAvatar, setRealtimeAvatar] = useState<string>(
+    (avatar as string) || "",
+  );
+  const [realtimeMembersCount, setRealtimeMembersCount] = useState<string>(
+    (membersCount as string) || "0",
+  );
+
   const chatImages = useMemo(() => {
     return messages.filter((m) => m.type === "image" && !m.isRevoked);
   }, [messages]);
@@ -928,6 +939,40 @@ export default function GlobalChatScreen() {
       setPinnedMessages((prev) => prev.filter((m) => m._id !== data.messageId));
     };
 
+    // Lắng nghe sự kiện cập nhật nhóm (thành viên, tên, avatar)
+    const handleGroupUpdated = (updatedGroup: any) => {
+      if (updatedGroup._id === resolvedConversationId) {
+        if (updatedGroup.name) setRealtimeGroupName(updatedGroup.name);
+        if (updatedGroup.groupAvatar !== undefined)
+          setRealtimeAvatar(updatedGroup.groupAvatar);
+        if (updatedGroup.members)
+          setRealtimeMembersCount(updatedGroup.members.length.toString());
+      }
+    };
+    const handleConversationRemoved = (data: {
+      conversationId: string;
+      reason?: "leave" | "kick" | "delete";
+    }) => {
+      if (data.conversationId === resolvedConversationId) {
+        if (data.reason === "leave") {
+          // User tự rời, đã có thông báo ở Info screen hoặc tự biết rồi
+          router.replace("/(tabs)");
+          return;
+        }
+
+        Alert.alert("Thông báo", "Bạn đã không còn ở trong nhóm này nữa.", [
+          {
+            text: "OK",
+            onPress: () => router.replace("/(tabs)"),
+          },
+        ]);
+        // Tự động chuyển sau 3 giây nếu không bấm OK
+        setTimeout(() => {
+          router.replace("/(tabs)");
+        }, 3000);
+      }
+    };
+
     socket.on("message-received", handleMessageReceived);
     socket.on("message-reaction-updated", handleReactionUpdated);
     socket.on("messages-read", handleMessagesRead);
@@ -935,6 +980,9 @@ export default function GlobalChatScreen() {
     socket.on("STOP_TYPING", handleStopTyping);
     socket.on("message-pinned", handleMessagePinned);
     socket.on("message-revoked", handleMessageRevoked);
+    socket.on("GROUP_UPDATED", handleGroupUpdated);
+    socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
+
     return () => {
       socket.off("message-received", handleMessageReceived);
       socket.off("message-reaction-updated", handleReactionUpdated);
@@ -943,6 +991,8 @@ export default function GlobalChatScreen() {
       socket.off("STOP_TYPING", handleStopTyping);
       socket.off("message-pinned", handleMessagePinned);
       socket.off("message-revoked", handleMessageRevoked);
+      socket.off("GROUP_UPDATED", handleGroupUpdated);
+      socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
     };
   }, [socket, resolvedConversationId, isGroupChat, targetUserId]);
 
@@ -1224,15 +1274,17 @@ export default function GlobalChatScreen() {
               }}
             >
               <View className="relative">
-                {avatar ? (
+                {realtimeAvatar ? (
                   <Image
-                    source={{ uri: avatar as string }}
+                    source={{ uri: realtimeAvatar }}
                     className="w-11 h-11 rounded-full"
                   />
                 ) : (
                   <View className="w-11 h-11 rounded-full bg-gray-900 items-center justify-center">
                     <Text className="text-white font-bold text-lg">
-                      {((name as string) || "G").charAt(0).toUpperCase()}
+                      {((realtimeGroupName as string) || "G")
+                        .charAt(0)
+                        .toUpperCase()}
                     </Text>
                   </View>
                 )}
@@ -1246,11 +1298,11 @@ export default function GlobalChatScreen() {
                   className="text-base font-bold text-gray-900"
                   numberOfLines={1}
                 >
-                  {name || `Nhóm ${id}`}
+                  {realtimeGroupName || `Nhóm ${id}`}
                 </Text>
                 <Text className="text-xs text-gray-500 mt-0.5">
                   {isGroupChat
-                    ? `${membersCount} thành viên`
+                    ? `${realtimeMembersCount} thành viên`
                     : isOnline
                       ? "Đang hoạt động"
                       : getOfflineText(userStatus?.last_active)}

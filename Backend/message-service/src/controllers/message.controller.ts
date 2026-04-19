@@ -1,3 +1,18 @@
+import { Request, Response, NextFunction } from "express";
+import { Types } from "mongoose";
+import messageDataService from "../services/message.service.js";
+import { uploadFileToS3 } from "../services/s3Service.js";
+import rabbitMQProducer from "../services/RabbitMQProducerService.js";
+import { MessageEvent } from "../types/events.js";
+
+/**
+ * Extract userId from x-user-id header (set by Gateway)
+ */
+function getUserIdFromHeader(req: Request): string | null {
+  const userId = req.headers["x-user-id"];
+  return typeof userId === "string" ? userId : null;
+}
+
 /**
  * Ghim tin nhắn
  */
@@ -63,20 +78,6 @@ export async function unpinMessage(
     next(error);
   }
 }
-import messageDataService from "../services/message.service.js";
-import { uploadFileToS3 } from "../services/s3Service.js";
-import { Types } from "mongoose";
-import rabbitMQProducer from "../services/RabbitMQProducerService.js";
-import { MessageEvent } from "../types/events.js";
-import { Request, Response, NextFunction } from "express";
-
-/**
- * Extract userId from x-user-id header (set by Gateway)
- */
-function getUserIdFromHeader(req: Request): string | null {
-  const userId = req.headers["x-user-id"];
-  return typeof userId === "string" ? userId : null;
-}
 
 /**
  * Get message history for a conversation
@@ -108,8 +109,9 @@ export async function getMessageHistory(
       return;
     }
 
-    // 0. Gọi sang group-service để lấy thông tin clearedAt (nếu có)
+    // 0. Gọi sang group-service để lấy thông tin clearedAt và joinedAt
     let clearedAt: Date | undefined = undefined;
+    let joinedAt: Date | undefined = undefined;
     try {
       const gatewayUrl = process.env.GATEWAY_URL || "http://127.0.0.1:8888";
       const response = await fetch(
@@ -124,12 +126,20 @@ export async function getMessageHistory(
       if (response.ok) {
         const result = await response.json();
         const conversation = result.data;
-        if (
-          conversation &&
-          conversation.clearedAt &&
-          conversation.clearedAt[userId]
-        ) {
-          clearedAt = new Date(conversation.clearedAt[userId]);
+        if (conversation) {
+          // Lấy clearedAt
+          if (conversation.clearedAt && conversation.clearedAt[userId]) {
+            clearedAt = new Date(conversation.clearedAt[userId]);
+          }
+          // Lấy joinedAt
+          if (Array.isArray(conversation.members)) {
+            const member = conversation.members.find(
+              (m: any) => String(m.userId) === userId,
+            );
+            if (member && member.joinedAt) {
+              joinedAt = new Date(member.joinedAt);
+            }
+          }
         }
       }
     } catch (err) {
@@ -146,6 +156,7 @@ export async function getMessageHistory(
       skip,
       clearedAt,
       type,
+      joinedAt,
     );
 
     res.json({
@@ -416,15 +427,15 @@ export async function sendMessage(
     // 2. Chuẩn bị event để bắn sang RabbitMQ
     const messageEvent: MessageEvent = {
       _id: messageDoc._id.toString(),
-      conversationId,
+      conversationId: String(conversationId),
       senderId: userId,
-      senderName: messageDoc.senderName,
       type: messageDoc.type,
       content: messageDoc.content,
-      metadata: messageDoc.metadata || {},
-      replyTo: messageDoc.replyTo,
       isRead: false,
       createdAt: messageDoc.createdAt,
+      ...(messageDoc.senderName && { senderName: messageDoc.senderName }),
+      ...(messageDoc.metadata && { metadata: messageDoc.metadata }),
+      ...(messageDoc.replyTo && { replyTo: messageDoc.replyTo as any }),
     };
 
     // 3. Đẩy sang RabbitMQ cho Realtime Service tiêu thụ
@@ -498,15 +509,15 @@ export async function uploadFile(
     // 4. Prepare event for RabbitMQ
     const messageEvent: MessageEvent = {
       _id: messageDoc._id.toString(),
-      conversationId,
+      conversationId: String(conversationId),
       senderId: userId,
-      senderName: messageDoc.senderName,
       type: messageDoc.type,
       content: messageDoc.content,
-      metadata: messageDoc.metadata || {},
-      replyTo: messageDoc.replyTo,
       isRead: false,
       createdAt: messageDoc.createdAt,
+      ...(messageDoc.senderName && { senderName: messageDoc.senderName }),
+      ...(messageDoc.metadata && { metadata: messageDoc.metadata }),
+      ...(messageDoc.replyTo && { replyTo: messageDoc.replyTo as any }),
     };
 
     // 5. Publish to RabbitMQ
