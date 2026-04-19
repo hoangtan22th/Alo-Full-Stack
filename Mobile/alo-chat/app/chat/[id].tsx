@@ -1038,7 +1038,9 @@ export default function GlobalChatScreen() {
   const fetchPinnedMessages = async () => {
     if (!resolvedConversationId) return;
     try {
-      const pins = await messageService.getPinnedMessages(resolvedConversationId);
+      const pins = await messageService.getPinnedMessages(
+        resolvedConversationId,
+      );
       setPinnedMessages(pins || []);
     } catch (error) {
       console.error("Lỗi lấy tin nhắn ghim:", error);
@@ -1933,7 +1935,7 @@ export default function GlobalChatScreen() {
 
         {/* Khu vực nút cuộn xuống & Thông báo tin nhắn mới */}
         {!isAtBottom && (
-          <View className="absolute bottom-24 left-0 right-0 items-center z-50">
+          <View className="absolute bottom-28 left-0 right-0 items-center z-50">
             {hasNewUnseenMessages ? (
               // Case 1: Có tin nhắn mới -> Hiện banner to
               <TouchableOpacity
