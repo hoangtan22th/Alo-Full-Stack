@@ -142,6 +142,17 @@ export class RabbitMQProducerService {
     });
     console.log(`[RabbitMQProducer] Event 'ADDED_TO_GROUP' published to user: ${userId} for group: ${group._id}`);
   }
+
+  /**
+   * Phát sự kiện khi yêu cầu tham gia nhóm bị từ chối.
+   */
+  async publishJoinRequestRejected(userId: string, groupName: string) {
+    await this.publishToRealtimeService('JOIN_REQUEST_REJECTED', {
+      target: userId,
+      data: { groupName }
+    });
+    console.log(`[RabbitMQProducer] Event 'JOIN_REQUEST_REJECTED' published to user: ${userId} for group: ${groupName}`);
+  }
 }
 
 export default new RabbitMQProducerService();

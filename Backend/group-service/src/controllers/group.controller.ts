@@ -883,6 +883,11 @@ export const rejectJoinRequest = async (
 
     await group.save();
 
+    // Thông báo cho người dùng bị từ chối
+    rabbitMQProducer
+      .publishJoinRequestRejected(userId, group.name || "Nhóm")
+      .catch(console.error);
+
     res.status(200).json({ message: "Đã từ chối yêu cầu", data: group });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

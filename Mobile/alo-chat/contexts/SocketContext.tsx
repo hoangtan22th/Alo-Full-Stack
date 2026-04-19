@@ -137,6 +137,16 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             },
           );
 
+          // Phê duyệt bị từ chối
+          newSocket.on("JOIN_REQUEST_REJECTED", (data: { groupName: string }) => {
+            console.log("📥 [Mobile Socket] Received JOIN_REQUEST_REJECTED:", data);
+            DeviceEventEmitter.emit("show_in_app_notification", {
+              title: "Yêu cầu bị từ chối",
+              message: `Rất tiếc, yêu cầu tham gia nhóm ${data.groupName} của bạn đã bị từ chối.`,
+              type: "REJECTED",
+            });
+          });
+
           // Bị mời khỏi nhóm / Giải tán nhóm
           newSocket.on(
             "CONVERSATION_REMOVED",
