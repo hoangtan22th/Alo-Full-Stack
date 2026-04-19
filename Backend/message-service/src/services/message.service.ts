@@ -119,6 +119,60 @@ export class MessageDataService {
   }
 
   /**
+   * Thu hồi một ảnh trong album
+   */
+  async revokeImageInGroup(
+    messageId: string,
+    index: number,
+  ): Promise<IMessage | null> {
+    try {
+      const updateKey = `metadata.imageGroup.${index}.isRevoked`;
+      const timeKey = `metadata.imageGroup.${index}.revokedAt`;
+      const updated = await Message.findByIdAndUpdate(
+        messageId,
+        {
+          $set: {
+            [updateKey]: true,
+            [timeKey]: new Date(),
+          },
+        },
+        { new: true },
+      );
+      return updated;
+    } catch (error) {
+      console.error("[MessageDataService] Failed to revoke image in group:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Xóa một ảnh trong album chỉ ở phía tôi
+   */
+  async deleteImageInGroupForMe(
+    messageId: string,
+    index: number,
+    userId: string,
+  ): Promise<IMessage | null> {
+    try {
+      const updateKey = `metadata.imageGroup.${index}.deletedByUsers`;
+      const updated = await Message.findByIdAndUpdate(
+        messageId,
+        {
+          $addToSet: { [updateKey]: userId },
+        },
+        { new: true },
+      );
+      return updated;
+    } catch (error) {
+      console.error(
+        "[MessageDataService] Failed to delete image in group for me:",
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Lấy lịch sử tin nhắn (Có lọc những tin đã xóa 1 phía và xử lý thu hồi)
    */
   async getMessageHistory(
