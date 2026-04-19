@@ -214,11 +214,28 @@ export default function ChatInfoScreen() {
         fetchGroupDetails();
       }
     };
+
+    const handleConversationRemoved = (data: { conversationId: string }) => {
+      if (data.conversationId === id) {
+        Alert.alert("Thông báo", "Bạn đã không còn ở trong nhóm này nữa.", [
+          {
+            text: "OK",
+            onPress: () => router.replace("/(tabs)"),
+          },
+        ]);
+        setTimeout(() => {
+          router.replace("/(tabs)");
+        }, 3000);
+      }
+    };
+
     socket.on("GROUP_UPDATED", handleGroupUpdated);
+    socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
 
     return () => {
       socket.off("message-received", handleMessageReceived);
       socket.off("GROUP_UPDATED", handleGroupUpdated);
+      socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
     };
   }, [socket, id]);
 

@@ -949,6 +949,20 @@ export default function GlobalChatScreen() {
           setRealtimeMembersCount(updatedGroup.members.length.toString());
       }
     };
+    const handleConversationRemoved = (data: { conversationId: string }) => {
+      if (data.conversationId === resolvedConversationId) {
+        Alert.alert("Thông báo", "Bạn đã không còn ở trong nhóm này nữa.", [
+          {
+            text: "OK",
+            onPress: () => router.replace("/(tabs)"),
+          },
+        ]);
+        // Tự động chuyển sau 3 giây nếu không bấm OK
+        setTimeout(() => {
+          router.replace("/(tabs)");
+        }, 3000);
+      }
+    };
 
     socket.on("message-received", handleMessageReceived);
     socket.on("message-reaction-updated", handleReactionUpdated);
@@ -958,6 +972,7 @@ export default function GlobalChatScreen() {
     socket.on("message-pinned", handleMessagePinned);
     socket.on("message-revoked", handleMessageRevoked);
     socket.on("GROUP_UPDATED", handleGroupUpdated);
+    socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
 
     return () => {
       socket.off("message-received", handleMessageReceived);
@@ -968,6 +983,7 @@ export default function GlobalChatScreen() {
       socket.off("message-pinned", handleMessagePinned);
       socket.off("message-revoked", handleMessageRevoked);
       socket.off("GROUP_UPDATED", handleGroupUpdated);
+      socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
     };
   }, [socket, resolvedConversationId, isGroupChat, targetUserId]);
 
