@@ -80,6 +80,21 @@ export class RabbitMQProducerService {
     
     console.log(`[RabbitMQProducer] Event 'CONVERSATION_REMOVED' published for user: ${userId}, conversation: ${conversationId}`);
   }
+
+  /**
+   * Phát sự kiện khi thông tin nhóm (tên, avatar, thành viên...) thay đổi.
+   * Gửi đến tất cả mọi người đang ở trong room của hội thoại đó.
+   */
+  async publishGroupUpdated(conversation: any) {
+    if (!conversation?._id) return;
+
+    await this.publishToRealtimeService('GROUP_UPDATED', {
+      room: conversation._id.toString(),
+      data: conversation
+    });
+
+    console.log(`[RabbitMQProducer] Event 'GROUP_UPDATED' published to room: ${conversation._id}`);
+  }
 }
 
 export default new RabbitMQProducerService();

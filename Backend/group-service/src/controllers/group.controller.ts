@@ -301,6 +301,7 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
       authHeader,
     );
 
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
     res.status(200).json({ message: "Đã thêm thành viên", data: group });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -380,6 +381,7 @@ export const removeMember = async (
       req.headers.authorization,
     );
 
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
     res.status(200).json({ message: "Thao tác thành công", data: group });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -437,6 +439,12 @@ export const updateRole = async (
       req.headers.authorization,
     );
 
+    // Emit update event
+    const updatedGroup = await Conversation.findById(groupId);
+    if (updatedGroup) {
+      rabbitMQProducer.publishGroupUpdated(updatedGroup).catch(console.error);
+    }
+
     res.status(200).json({ message: "Cập nhật quyền thành công" });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -487,6 +495,12 @@ export const assignNewLeader = async (
       `${newLeaderName} đã trở thành TRƯỞNG NHÓM mới`,
       req.headers.authorization,
     );
+
+    // Emit update event
+    const updatedGroup = await Conversation.findById(groupId);
+    if (updatedGroup) {
+      rabbitMQProducer.publishGroupUpdated(updatedGroup).catch(console.error);
+    }
 
     res.status(200).json({ message: "Đã chuyển nhượng quyền Trưởng nhóm" });
   } catch (error: any) {
@@ -672,6 +686,7 @@ export const requestJoinGroup = async (
         req.headers.authorization,
       );
 
+      rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
       res.status(200).json({
         message: "Đã tham gia nhóm thành công",
         joined: true,
@@ -794,6 +809,7 @@ export const approveJoinRequest = async (
       req.headers.authorization,
     );
 
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
     res.status(200).json({ message: "Đã phê duyệt yêu cầu", data: group });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -987,6 +1003,7 @@ export const updateGroup = async (
 
     await group.save();
 
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
     res.status(200).json({
       message: "Cập nhật thông tin nhóm thành công",
       data: group,
