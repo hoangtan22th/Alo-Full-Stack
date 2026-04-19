@@ -562,7 +562,29 @@ export default function GlobalChatScreen() {
           isOnline={isOnline}
           userStatus={userStatus}
           onBack={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))}
-          onInfo={() => router.push({ pathname: "/chat/info", params: { id: resolvedConversationId || id, name: realtimeGroupName, avatar: realtimeAvatar, membersCount: realtimeMembersCount, isGroup: isGroupChat ? "true" : "false", targetUserId } })}
+          onInfo={() => {
+            if (isGroupChat) {
+              router.push({
+                pathname: "/chat/info",
+                params: {
+                  id: resolvedConversationId || id,
+                  name: realtimeGroupName,
+                  avatar: realtimeAvatar,
+                  membersCount: realtimeMembersCount,
+                  isGroup: "true",
+                  targetUserId,
+                },
+              });
+            } else {
+              router.push({
+                pathname: "/(tabs)/contacts/send-request",
+                params: {
+                  userId: targetUserId,
+                  from: "chat",
+                },
+              });
+            }
+          }}
         />
       </View>
 

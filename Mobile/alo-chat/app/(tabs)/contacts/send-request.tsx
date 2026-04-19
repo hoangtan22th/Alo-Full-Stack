@@ -52,10 +52,51 @@ export default function UserProfileScreen() {
   );
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [currentRequestId, setCurrentRequestId] = useState<string>(
+    (requestId as string) || "",
+  );
 
   useEffect(() => {
-    if (userId) fetchUserDetail();
+    if (userId) {
+      fetchUserDetail();
+      if (!relationStatus) {
+        checkFriendshipStatus();
+      }
+    }
   }, [userId]);
+
+  const checkFriendshipStatus = async () => {
+    try {
+      // 1. Kiểm tra trong danh sách bạn bè
+      const friends = await contactService.getFriendsList();
+      const friendship = friends.find(
+        (f: any) => f.requesterId === userId || f.recipientId === userId,
+      );
+      if (friendship) {
+        setCurrentStatus("ACCEPTED");
+        return;
+      }
+
+      // 2. Kiểm tra lời mời đã nhận
+      const pending = await contactService.getPendingRequests();
+      const receivedReq = pending.find((r: any) => String(r.requesterId) === String(userId));
+      if (receivedReq) {
+        setCurrentStatus("THEY_SENT_REQUEST");
+        setCurrentRequestId(receivedReq.id);
+        return;
+      }
+
+      // 3. Kiểm tra lời mời đã gửi
+      const sent = await contactService.getSentRequests();
+      const sentReq = sent.find((r: any) => r.recipientId === userId);
+      if (sentReq) {
+        setCurrentStatus("I_SENT_REQUEST");
+        return;
+      }
+    } catch (error) {
+      console.log("Lỗi kiểm tra trạng thái quan hệ:", error);
+    }
+  };
 
   const fetchUserDetail = async () => {
     setLoading(true);
@@ -91,10 +132,10 @@ export default function UserProfileScreen() {
   };
 
   const handleAcceptRequest = async () => {
-    if (!requestId) return;
+    if (!currentRequestId) return;
     setActionLoading(true);
     try {
-      const res = await contactService.acceptRequest(requestId as string);
+      const res = await contactService.acceptRequest(currentRequestId);
       if (res) {
         Alert.alert("Thành công", "Đã trở thành bạn bè");
         setCurrentStatus("ACCEPTED");
@@ -109,10 +150,10 @@ export default function UserProfileScreen() {
   };
 
   const handleDeclineRequest = async () => {
-    if (!requestId) return;
+    if (!currentRequestId) return;
     setActionLoading(true);
     try {
-      const res = await contactService.declineRequest(requestId as string);
+      const res = await contactService.declineRequest(currentRequestId);
       if (res) {
         Alert.alert("Thành công", "Đã từ chối lời mời");
         setCurrentStatus("NOT_FRIEND");
