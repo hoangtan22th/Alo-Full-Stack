@@ -13,6 +13,8 @@ import {
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
+import { FilterSelect } from "@/components/logs/FilterSelect";
+import { LogR } from "@/components/logs/LogR";
 
 export default function SystemLogsPage() {
   return (
@@ -252,73 +254,5 @@ export default function SystemLogsPage() {
         </div>
       </div>
     </>
-  );
-}
-
-function FilterSelect({ icon, defaultValue }: any) {
-  return (
-    <div className="relative group">
-      <select className="appearance-none bg-surface-container border-none text-on-surface text-sm rounded-xl py-3 pl-10 pr-10 focus:ring-1 focus:ring-primary focus:bg-surface-container-lowest focus:outline-none cursor-pointer h-full transition-colors font-medium hover:bg-surface-container-highest">
-        <option>{defaultValue}</option>
-        <option>Option 1</option>
-        <option>Option 2</option>
-      </select>
-      <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">
-        {icon}
-      </div>
-      <ChevronDownIcon className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
-    </div>
-  );
-}
-
-function LogR({ time, event, actor, target, ip }: any) {
-  return (
-    <tr className="hover:bg-surface-container-low/30 transition-colors group cursor-default">
-      <td className="py-4 px-6 text-on-surface-variant">{time}</td>
-      <td className="py-4 px-6">
-        <div className="flex items-center">
-          <span className={`p-1.5 rounded-md mr-3 ${event.bg} ${event.color}`}>
-            {event.icon}
-          </span>
-          <div>
-            <div className="font-bold text-on-surface font-sans text-sm">
-              {event.title}
-            </div>
-            <div className="text-[11px] text-on-surface-variant mt-0.5 uppercase tracking-wider">
-              {event.type}
-            </div>
-          </div>
-        </div>
-      </td>
-      <td className="py-4 px-6">
-        <div className={`font-sans text-sm ${actor.highlight}`}>
-          {actor.name}
-        </div>
-        <div className="text-[11px] text-on-surface-variant mt-0.5">
-          {actor.type}
-        </div>
-      </td>
-      <td className="py-4 px-6">
-        <div
-          className="text-on-surface font-semibold max-w-[200px] truncate"
-          title={target.name}
-        >
-          {target.name}
-        </div>
-        <div className="text-[11px] text-on-surface-variant mt-0.5">
-          {target.desc}
-        </div>
-      </td>
-      <td className="py-4 px-6 text-on-surface-variant">{ip}</td>
-      <td className="py-4 px-6 text-right">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 text-xs font-sans text-on-surface font-semibold border-outline-variant bg-surface-container-lowest hover:bg-surface-container-low"
-        >
-          View JSON
-        </Button>
-      </td>
-    </tr>
   );
 }
