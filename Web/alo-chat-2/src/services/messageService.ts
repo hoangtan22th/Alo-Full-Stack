@@ -174,6 +174,68 @@ export const messageService = {
     }
   },
 
+  // Upload nhiều ảnh và tạo album
+  uploadImages: async (
+    conversationId: string,
+    files: File[],
+    widths: number[],
+    heights: number[],
+    replyTo?: any,
+    senderName?: string,
+    onProgress?: (percent: number) => void,
+  ): Promise<MessageDTO | null> => {
+    try {
+      const formData = new FormData();
+      formData.append("conversationId", conversationId);
+      files.forEach((file) => formData.append("files", file));
+      formData.append("widths", JSON.stringify(widths));
+      formData.append("heights", JSON.stringify(heights));
+      if (senderName) {
+        formData.append("senderName", senderName);
+      }
+      if (replyTo) {
+        formData.append("replyTo", JSON.stringify(replyTo));
+      }
+      const raw = await api.post<any, any>(`/messages/upload/images`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (progressEvent) => {
+          if (onProgress && progressEvent.total) {
+            const percent = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total,
+            );
+            onProgress(percent);
+          }
+        },
+      });
+      return extractSentMessage(raw);
+    } catch (error) {
+      console.error("Lỗi upload album ảnh:", error);
+      return null;
+    }
+  },
+
+  // Thu hồi 1 ảnh trong album
+  revokeImageInGroup: async (messageId: string, index: number): Promise<boolean> => {
+    try {
+      await api.patch<any, any>(`/messages/${messageId}/images/${index}/revoke`);
+      return true;
+    } catch (error) {
+      console.error("Lỗi thu hồi ảnh trong album:", error);
+      return false;
+    }
+  },
+
+  // Xóa 1 ảnh trong album chỉ ở phía tôi
+  deleteImageInGroupForMe: async (messageId: string, index: number): Promise<boolean> => {
+    try {
+      await api.delete<any, any>(`/messages/${messageId}/images/${index}/me`);
+      return true;
+    } catch (error) {
+      console.error("Lỗi xóa ảnh trong album phía tôi:", error);
+      return false;
+    }
+  },
+
   // Thu hồi tin nhắn (cho tất cả mọi người)
   revokeMessage: async (messageId: string): Promise<boolean> => {
     try {
