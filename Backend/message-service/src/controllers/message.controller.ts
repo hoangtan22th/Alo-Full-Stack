@@ -685,3 +685,201 @@ export async function clearReactions(
     next(error);
   }
 }
+
+/**
+ * Upload multiple images and create an album message
+ */
+export async function uploadImages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId, replyTo, senderName, widths, heights } = req.body;
+    const userId = getUserIdFromHeader(req);
+    const files = req.files as Express.Multer.File[];
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized - no user id" });
+      return;
+    }
+
+    if (!conversationId || !files || !Array.isArray(files) || files.length === 0) {
+      res.status(400).json({ error: "Missing conversationId or images" });
+      return;
+    }
+
+    const parsedWidths = typeof widths === "string" ? JSON.parse(widths) : widths;
+    const parsedHeights =
+      typeof heights === "string" ? JSON.parse(heights) : heights;
+
+    // 1. Upload all to S3 concurrently
+    const uploadPromises = files.map(async (file, index) => {
+      const originalName = Buffer.from(file.originalname, "latin1").toString(
+        "utf8",
+      );
+      const url = await uploadFileToS3(file.buffer, file.mimetype, originalName);
+      return {
+        url,
+        width: parsedWidths ? parsedWidths[index] : 0,
+        height: parsedHeights ? parsedHeights[index] : 0,
+        fileName: originalName,
+        fileSize: file.size,
+        fileType: file.mimetype,
+        isRevoked: false,
+        deletedByUsers: [],
+      };
+    });
+
+    const imageGroup = await Promise.all(uploadPromises);
+
+    // 2. Save Message with imageGroup metadata
+    const messageDoc = await messageDataService.createMessage({
+      conversationId,
+      senderId: userId,
+      senderName: senderName,
+      type: "image",
+      content: "[Album Ảnh]",
+      metadata: {
+        imageGroup: imageGroup,
+      },
+      replyTo: replyTo ? JSON.parse(replyTo) : undefined,
+    });
+
+    // 3. Prepare event for RabbitMQ
+    const messageEvent: MessageEvent = {
+      _id: messageDoc._id.toString(),
+      conversationId: String(conversationId),
+      senderId: userId,
+      senderName: messageDoc.senderName || "",
+      type: messageDoc.type,
+      content: messageDoc.content,
+      isRead: false,
+      createdAt: messageDoc.createdAt,
+      ...(messageDoc.metadata && { metadata: messageDoc.metadata }),
+      ...(messageDoc.replyTo && { replyTo: messageDoc.replyTo as any }),
+    };
+
+    // 4. Publish to RabbitMQ
+    await rabbitMQProducer.publishMessageEvent(messageEvent);
+
+    res.status(201).json({
+      status: "success",
+      data: messageEvent,
+    });
+  } catch (error) {
+    console.error("[MessageController] POST uploadImages error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Thu hồi 1 ảnh trong album
+ */
+export async function revokeImageInGroup(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageId, index } = req.params;
+    const userId = getUserIdFromHeader(req);
+
+    if (!messageId || index === undefined) {
+      res.status(400).json({ error: "Missing messageId or index" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const message = await messageDataService.getMessageById(messageId as string);
+    if (!message) {
+      res.status(404).json({ error: "Message not found" });
+      return;
+    }
+
+    if (String(message.senderId) !== userId) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const updated = await messageDataService.revokeImageInGroup(
+      messageId as string,
+      parseInt(index as string),
+    );
+
+    if (updated) {
+      await rabbitMQProducer.publishMessageUpdateEvent({
+        _id: updated._id.toString(),
+        conversationId: updated.conversationId.toString(),
+        senderId: updated.senderId,
+        senderName: updated.senderName || "",
+        type: updated.type,
+        content: updated.content,
+        isRead: updated.isRead,
+        createdAt: updated.createdAt,
+        ...(updated.metadata && { metadata: updated.metadata }),
+      });
+    }
+
+    res.json({ status: "success", data: updated });
+  } catch (error) {
+    console.error("[MessageController] PATCH revokeImageInGroup error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Xóa 1 ảnh trong album chỉ ở phía tôi
+ */
+export async function deleteImageInGroupForMe(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageId, index } = req.params;
+    const userId = getUserIdFromHeader(req);
+
+    if (!messageId || index === undefined) {
+      res.status(400).json({ error: "Missing messageId or index" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const updated = await messageDataService.deleteImageInGroupForMe(
+      messageId as string,
+      parseInt(index as string),
+      userId,
+    );
+
+    if (updated) {
+      await rabbitMQProducer.publishMessageUpdateEvent({
+        _id: updated._id.toString(),
+        conversationId: updated.conversationId.toString(),
+        senderId: updated.senderId,
+        senderName: updated.senderName || "",
+        type: updated.type,
+        content: updated.content,
+        isRead: updated.isRead,
+        createdAt: updated.createdAt,
+        ...(updated.metadata && { metadata: updated.metadata }),
+      });
+    }
+
+    res.json({ status: "success", data: updated });
+  } catch (error) {
+    console.error(
+      "[MessageController] DELETE deleteImageInGroupForMe error:",
+      error,
+    );
+    next(error);
+  }
+}

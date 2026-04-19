@@ -110,6 +110,11 @@ class SocketService {
     this.addListener("message-received", callback);
   }
 
+  // Lắng nghe cập nhật tin nhắn
+  onMessageUpdated(callback: (message: any) => void) {
+    this.addListener("message-updated", callback);
+  }
+
   // Gửi sự kiện đang gõ
   emitTyping(target: string, isGroup: boolean = true) {
     this.socket?.emit("TYPING", { target, isGroup });
