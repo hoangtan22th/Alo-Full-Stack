@@ -1,6 +1,5 @@
 package edu.iuh.fit.auth_service.service;
 
-
 import edu.iuh.fit.auth_service.entity.Account;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -20,6 +19,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class TokenService {
+
     @Value("${jwt.secret}")
     private String secret;
 
@@ -27,12 +27,13 @@ public class TokenService {
 
     public String generateAccessToken(Account user, String sessionId) {
         List<String> roles = user.getRoles().stream()
-                .map(role -> role.getName()) 
+                .map(role -> role.getName())
                 .collect(Collectors.toList());
 
         return Jwts.builder()
                 .setSubject(user.getId())
                 .claim("email", user.getEmail())
+                .claim("fullName", user.getFullName())
                 .claim("sessionId", sessionId)
                 .claim("roles", roles)
                 .setIssuedAt(new Date())
@@ -63,6 +64,7 @@ public class TokenService {
                 .getBody()
                 .getId(); // Trả về giá trị JTI (tokenId)
     }
+
     public String getUserIdFromToken(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret)))

@@ -22,54 +22,93 @@ export const useAdmins = () => {
     }
   }, []);
 
-  const createAdmin = useCallback(async (
-    adminData: Omit<AdminUser, "id" | "createdAt" | "role"> & { role: string; password: string; },
-    onSuccess?: () => void
-  ) => {
-    setLoading(true);
-    setError(null);
-    try {
-      await adminService.createAdmin(adminData);
-      toast.success("Admin created successfully!");
-      await fetchAdmins();
-      if (onSuccess) onSuccess();
-    } catch (err: any) {
-      console.error(err);
-      let errMsg = err.message || "Failed to create admin";
+  const createAdmin = useCallback(
+    async (
+      adminData: Omit<AdminUser, "id" | "createdAt" | "role"> & {
+        role: string;
+        password: string;
+      },
+      onSuccess?: () => void,
+    ) => {
+      setLoading(true);
+      setError(null);
       try {
-         // handle spring boot specific error format if json wrapped
-         const parsed = JSON.parse(errMsg);
-         if (parsed.message) errMsg = parsed.message;
-      } catch (e) {}
-      setError(errMsg);
-      toast.error(errMsg);
-      throw new Error(errMsg);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchAdmins]);
+        await adminService.createAdmin(adminData);
+        toast.success("Admin created successfully!");
+        await fetchAdmins();
+        if (onSuccess) onSuccess();
+      } catch (err: any) {
+        console.error(err);
+        let errMsg = err.message || "Failed to create admin";
+        try {
+          // handle spring boot specific error format if json wrapped
+          const parsed = JSON.parse(errMsg);
+          if (parsed.message) errMsg = parsed.message;
+        } catch (e) {}
+        setError(errMsg);
+        toast.error(errMsg);
+        throw new Error(errMsg);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchAdmins],
+  );
 
-  const deleteAdmin = useCallback(async (id: string, onSuccess?: () => void) => {
-    setLoading(true);
-    setError(null);
-    try {
-      await adminService.deleteAdmin(id);
-      toast.success("Admin deleted successfully!");
-      await fetchAdmins();
-      if (onSuccess) onSuccess();
-    } catch (err: any) {
-      console.error(err);
-      let errMsg = err.message || "Failed to delete admin";
+  const deleteAdmin = useCallback(
+    async (id: string, onSuccess?: () => void) => {
+      setLoading(true);
+      setError(null);
       try {
-         const parsed = JSON.parse(errMsg);
-         if (parsed.message) errMsg = parsed.message;
-      } catch (e) {}
-      setError(errMsg);
-      toast.error(errMsg);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchAdmins]);
+        await adminService.deleteAdmin(id);
+        toast.success("Admin deleted successfully!");
+        await fetchAdmins();
+        if (onSuccess) onSuccess();
+      } catch (err: any) {
+        console.error(err);
+        let errMsg = err.message || "Failed to delete admin";
+        try {
+          const parsed = JSON.parse(errMsg);
+          if (parsed.message) errMsg = parsed.message;
+        } catch (e) {}
+        setError(errMsg);
+        toast.error(errMsg);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchAdmins],
+  );
+
+  const updateAdmin = useCallback(
+    async (
+      id: string,
+      updateData: { name: string; role: string; password?: string },
+      onSuccess?: () => void,
+    ) => {
+      setLoading(true);
+      setError(null);
+      try {
+        await adminService.updateAdmin(id, updateData);
+        toast.success("Admin updated successfully!");
+        await fetchAdmins();
+        if (onSuccess) onSuccess();
+      } catch (err: any) {
+        console.error(err);
+        let errMsg = err.message || "Failed to update admin";
+        try {
+          const parsed = JSON.parse(errMsg);
+          if (parsed.message) errMsg = parsed.message;
+        } catch (e) {}
+        setError(errMsg);
+        toast.error(errMsg);
+        throw new Error(errMsg);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchAdmins],
+  );
 
   return {
     admins,
@@ -77,6 +116,7 @@ export const useAdmins = () => {
     error,
     fetchAdmins,
     createAdmin,
+    updateAdmin,
     deleteAdmin,
   };
 };

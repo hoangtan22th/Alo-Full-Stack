@@ -16,7 +16,9 @@ export const adminService = {
       const response = await axiosClient.get(API_URL);
       return response.data?.data || [];
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || "Failed to fetch admins");
+      throw new Error(
+        error.response?.data?.message || "Failed to fetch admins",
+      );
     }
   },
 
@@ -30,7 +32,9 @@ export const adminService = {
       const response = await axiosClient.post(API_URL, adminData);
       return response.data?.data;
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || "Failed to create admin");
+      throw new Error(
+        error.response?.data?.message || "Failed to create admin",
+      );
     }
   },
 
@@ -38,7 +42,23 @@ export const adminService = {
     try {
       await axiosClient.delete(`${API_URL}/${id}`);
     } catch (error: any) {
-      throw new Error(error.response?.data?.message || "Failed to delete admin");
+      throw new Error(
+        error.response?.data?.message || "Failed to delete admin",
+      );
+    }
+  },
+
+  updateAdmin: async (
+    id: string,
+    updateData: { name: string; role: string; password?: string },
+  ): Promise<any> => {
+    try {
+      const response = await axiosClient.put(`${API_URL}/${id}`, updateData);
+      return response.data?.data;
+    } catch (error: any) {
+      throw new Error(
+        error.response?.data?.message || "Failed to update admin",
+      );
     }
   },
 };

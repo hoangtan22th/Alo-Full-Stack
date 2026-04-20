@@ -6,14 +6,25 @@ import { useAuthStore } from "@/store/useAuthStore";
 import {
   TrashIcon,
   PlusIcon,
+  PencilIcon,
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 
 export default function AdminManagementPage() {
-  const { admins, loading, error, fetchAdmins, createAdmin, deleteAdmin } = useAdmins();
+  const {
+    admins,
+    loading,
+    error,
+    fetchAdmins,
+    createAdmin,
+    updateAdmin,
+    deleteAdmin,
+  } = useAdmins();
   const { isSuperAdmin, checkAuth } = useAuthStore();
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editAdminId, setEditAdminId] = useState<string | null>(null);
 
   // New admin state
   const [name, setName] = useState("");
@@ -38,6 +49,39 @@ export default function AdminManagementPage() {
 
     await createAdmin({ name, email, password, role }, () => {
       setIsModalOpen(false);
+      setName("");
+      setEmail("");
+      setPassword("");
+      setRole("ROLE_ADMIN");
+    });
+  };
+
+  const openEditModal = (admin: any) => {
+    setEditAdminId(admin.id);
+    setName(admin.name || "");
+    setEmail(admin.email || "");
+    setPassword(""); // Leave empty unless modifying
+    setRole(
+      admin.role === "ROLE_SUPER_ADMIN" || admin.role === "SUPER_ADMIN"
+        ? "ROLE_SUPER_ADMIN"
+        : "ROLE_ADMIN",
+    );
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editAdminId || !role) return;
+
+    // Chỉ gửi password nếu người dùng có nhập
+    const updatePayload: any = { name, role };
+    if (password && password.trim() !== "") {
+      updatePayload.password = password;
+    }
+
+    await updateAdmin(editAdminId, updatePayload, () => {
+      setIsEditModalOpen(false);
+      setEditAdminId(null);
       setName("");
       setEmail("");
       setPassword("");
@@ -103,7 +147,9 @@ export default function AdminManagementPage() {
                 <th className="py-3 px-6 font-semibold">Name</th>
                 <th className="py-3 px-6 font-semibold">Email</th>
                 <th className="py-3 px-6 font-semibold">Role</th>
-                <th className="py-3 px-6 font-semibold border-l border-[#ebeef0]">Created At</th>
+                <th className="py-3 px-6 font-semibold border-l border-[#ebeef0]">
+                  Created At
+                </th>
                 <th className="py-3 px-6 font-semibold text-right">Actions</th>
               </tr>
             </thead>
@@ -149,13 +195,22 @@ export default function AdminManagementPage() {
                     </td>
                     <td className="py-3 px-6 text-right space-x-2">
                       {admin.email !== "admin@alochat.com" && (
-                        <button
-                          onClick={() => handleDelete(admin.id)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors invisible group-hover:visible"
-                          title="Delete Admin"
-                        >
-                          <TrashIcon className="w-5 h-5" />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => openEditModal(admin)}
+                            className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-md transition-colors invisible group-hover:visible inline-flex"
+                            title="Edit Admin"
+                          >
+                            <PencilIcon className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(admin.id)}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors invisible group-hover:visible inline-flex"
+                            title="Delete Admin"
+                          >
+                            <TrashIcon className="w-5 h-5" />
+                          </button>
+                        </>
                       )}
                     </td>
                   </tr>
@@ -239,6 +294,90 @@ export default function AdminManagementPage() {
                   className="px-4 py-2 bg-primary text-on-primary rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
                 >
                   {loading ? "Creating..." : "Create Admin"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Admin Modal */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-surface-container-lowest rounded-xl shadow-lg w-full max-w-md p-6 border border-[#ebeef0]">
+            <h2 className="text-xl font-bold mb-4">Edit Admin</h2>
+            <form onSubmit={handleUpdateAdmin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-on-surface mb-1">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-3 py-2 bg-surface-container-low border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  placeholder="Admin Name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-on-surface mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  disabled
+                  value={email}
+                  className="w-full px-3 py-2 bg-surface-container-highest cursor-not-allowed text-on-surface-variant border border-transparent rounded-lg focus:outline-none"
+                />
+                <p className="text-xs text-on-surface-variant mt-1">
+                  Email cannot be changed.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-on-surface mb-1">
+                  New Password (Optional)
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-3 py-2 bg-surface-container-low border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  placeholder="Leave blank to keep current"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-on-surface mb-1">
+                  Role
+                </label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full px-3 py-2 bg-surface-container-low border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                >
+                  <option value="ROLE_ADMIN">Admin</option>
+                  <option value="ROLE_SUPER_ADMIN">Super Admin</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditAdminId(null);
+                    setPassword("");
+                  }}
+                  className="px-4 py-2 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 bg-primary text-on-primary rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {loading ? "Updating..." : "Update Admin"}
                 </button>
               </div>
             </form>

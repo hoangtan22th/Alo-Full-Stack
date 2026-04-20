@@ -15,6 +15,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.jdbc.core.JdbcTemplate;
+import jakarta.annotation.PostConstruct;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -30,6 +33,17 @@ public class SuperAdminService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final RabbitMQPublisher rabbitMQPublisher;
+    private final JdbcTemplate jdbcTemplate;
+
+    @PostConstruct
+    public void init() {
+        try {
+            // Tự động thêm cột full_name nếu chưa có
+            jdbcTemplate.execute("ALTER TABLE accounts ADD COLUMN full_name VARCHAR(191);");
+        } catch (Exception e) {
+            // Cột đã tồn tại hoặc lỗi khác
+        }
+    }
 
     public List<AdminResponse> getAdmins() {
         return accountRepository.findByRolesNameIn(List.of("ROLE_ADMIN", "ROLE_SUPER_ADMIN")).stream()
@@ -40,7 +54,9 @@ public class SuperAdminService {
                     return new AdminResponse(
                             acc.getId(),
                             acc.getEmail(),
-                            acc.getEmail().split("@")[0], // Fallback name
+                            acc.getFullName() != null && !acc.getFullName().isEmpty()
+                            ? acc.getFullName()
+                            : acc.getEmail().split("@")[0], // Fallback name
                             role,
                             acc.getCreatedAt()
                     );
@@ -63,6 +79,7 @@ public class SuperAdminService {
 
         Account admin = Account.builder()
                 .id(UUID.randomUUID().toString())
+                .fullName(request.name())
                 .email(request.email())
                 .password(passwordEncoder.encode(request.password()))
                 .authProvider(Account.AuthProvider.LOCAL)
@@ -88,5 +105,31 @@ public class SuperAdminService {
         admin.setEmail(admin.getEmail() + "_deleted_" + System.currentTimeMillis());
         accountRepository.saveAndFlush(admin);
         accountRepository.delete(admin);
+    }
+
+    @Transactional
+    public void updateAdmin(String id, edu.iuh.fit.auth_service.dto.request.UpdateAdminRequest request) {
+        Account admin = accountRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
+
+        if (request.name() != null && !request.name().trim().isEmpty()) {
+            admin.setFullName(request.name());
+        }
+
+        if (request.password() != null && !request.password().trim().isEmpty()) {
+            admin.setPassword(passwordEncoder.encode(request.password()));
+        }
+
+        if (request.role() != null && !request.role().trim().isEmpty()) {
+            String roleName = request.role().equals("ROLE_SUPER_ADMIN") ? "ROLE_SUPER_ADMIN" : "ROLE_ADMIN";
+            Role adminRole = roleRepository.findByName(roleName)
+                    .orElseThrow(() -> new ResourceNotFoundException("Role không tồn tại"));
+
+            Set<Role> roles = new HashSet<>();
+            roles.add(adminRole);
+            admin.setRoles(roles);
+        }
+
+        accountRepository.save(admin);
     }
 }

@@ -21,8 +21,12 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 public class Account {
+
     @Id
-    private String id; 
+    private String id;
+
+    @Column(name = "full_name")
+    private String fullName;
 
     @Column(unique = true, nullable = false)
     private String email;

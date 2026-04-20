@@ -1,6 +1,7 @@
 package edu.iuh.fit.auth_service.controller;
 
 import edu.iuh.fit.auth_service.dto.request.CreateAdminRequest;
+import edu.iuh.fit.auth_service.dto.request.UpdateAdminRequest;
 import edu.iuh.fit.auth_service.dto.response.AdminResponse;
 import edu.iuh.fit.auth_service.service.SuperAdminService;
 import edu.iuh.fit.common_service.dto.response.ApiResponse;
@@ -35,5 +36,11 @@ public class SuperAdminController {
     public ResponseEntity<ApiResponse<String>> deleteAdmin(@PathVariable String id) {
         superAdminService.deleteAdmin(id);
         return ResponseEntity.ok(ApiResponse.success("Xóa Admin thành công"));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<String>> updateAdmin(@PathVariable String id, @Valid @RequestBody UpdateAdminRequest request) {
+        superAdminService.updateAdmin(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Cập nhật Admin thành công"));
     }
 }

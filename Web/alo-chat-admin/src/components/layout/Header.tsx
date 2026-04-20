@@ -1,21 +1,27 @@
 "use client";
 
-import { BellIcon, Bars3Icon } from "@heroicons/react/24/outline";
+import {
+  BellIcon,
+  Bars3Icon,
+  ArrowRightOnRectangleIcon,
+  UserIcon,
+} from "@heroicons/react/24/outline";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useEffect, useState } from "react";
 
 export function Header() {
-  const { adminEmail } = useAuthStore();
+  const { adminEmail, adminName, isSuperAdmin, logout } = useAuthStore();
   const [mounted, setMounted] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   // Lấy ký tự đầu làm Avatar
-  const initial = adminEmail ? adminEmail.charAt(0).toUpperCase() : "A";
-  const displayEmail = adminEmail ? adminEmail : "Loading...";
+  const displayName = adminName || adminEmail || "Loading...";
+  const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <header className="flex justify-between items-center w-full px-8 h-16 bg-surface-container-low top-0 sticky z-40">
@@ -39,15 +45,51 @@ export function Header() {
           </button>
 
           {/* User Info Container */}
-          <div className="flex items-center gap-3 bg-surface-container hover:bg-surface-container-highest transition-colors px-3 py-1.5 rounded-full cursor-pointer">
-            <span className="text-sm font-medium text-on-surface">
-              {mounted ? displayEmail : "..."}
-            </span>
-            <Avatar className="h-8 w-8 bg-primary border-none cursor-pointer">
-              <AvatarFallback className="bg-primary text-on-primary font-bold text-sm">
-                {mounted ? initial : "A"}
-              </AvatarFallback>
-            </Avatar>
+          <div className="relative">
+            <div
+              className="flex items-center gap-3 bg-surface-container hover:bg-surface-container-highest transition-colors px-3 py-1.5 rounded-full cursor-pointer"
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            >
+              <span className="text-sm font-medium text-on-surface">
+                {mounted ? displayName : "..."}
+              </span>
+              <Avatar className="h-8 w-8 bg-primary border-none cursor-pointer">
+                <AvatarFallback className="bg-primary text-on-primary font-bold text-sm">
+                  {mounted ? initial : "A"}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+
+            {/* Dropdown Profile Info */}
+            {isDropdownOpen && mounted && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-surface-container-lowest border border-[#ebeef0] rounded-xl shadow-lg overflow-hidden py-2 z-50">
+                <div className="px-4 py-3 border-b border-[#ebeef0]">
+                  <p className="text-sm font-bold text-on-surface truncate">
+                    {displayName}
+                  </p>
+                  <p className="text-xs text-on-surface-variant truncate mt-0.5">
+                    {adminEmail}
+                  </p>
+                  <div className="mt-2 inline-block px-2 py-0.5 bg-primary/10 text-primary text-xs font-semibold rounded-full">
+                    {isSuperAdmin ? "Super Admin" : "System Admin"}
+                  </div>
+                </div>
+
+                <div className="py-1">
+                  <button className="w-full text-left px-4 py-2 text-sm text-on-surface hover:bg-surface-container-low transition-colors flex items-center gap-2">
+                    <UserIcon className="w-4 h-4 text-on-surface-variant" />
+                    Account Settings
+                  </button>
+                  <button
+                    onClick={logout}
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2 mt-1 border-t border-[#ebeef0] pt-2"
+                  >
+                    <ArrowRightOnRectangleIcon className="w-4 h-4 text-red-500" />
+                    Log out
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
