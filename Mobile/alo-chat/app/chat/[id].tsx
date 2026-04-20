@@ -286,7 +286,7 @@ export default function GlobalChatScreen() {
       setSkip((prev) => (reset ? newMsgs.length : prev + newMsgs.length));
 
       if (reset) {
-        messageService.markAsRead(resolvedConversationId).catch(() => {});
+        messageService.markAsRead(resolvedConversationId).catch(() => { });
       }
     } catch (e) {
       console.error("Lỗi tải tin nhắn:", e);
@@ -342,7 +342,7 @@ export default function GlobalChatScreen() {
       if (newMsg.conversationId === resolvedConversationId) {
         setMessages((prev) => (prev.find((m: MessageDTO) => m._id === newMsg._id) ? prev : [...prev, newMsg]));
         if (currentUserId && String(newMsg.senderId) !== String(currentUserId)) {
-          messageService.markAsRead(resolvedConversationId).catch(() => {});
+          messageService.markAsRead(resolvedConversationId).catch(() => { });
           setHasNewUnseenMessages(true);
         } else {
           setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
@@ -392,12 +392,14 @@ export default function GlobalChatScreen() {
           data.reason === "delete"
             ? `Nhóm ${data.groupName} đã được giải tán`
             : `Bạn đã bị mời ra khỏi nhóm ${data.groupName}`,
-          [{ text: "OK", onPress: () => {
-            if (router.canDismiss()) {
-              router.dismissAll();
+          [{
+            text: "OK", onPress: () => {
+              if (router.canDismiss()) {
+                router.dismissAll();
+              }
+              router.replace("/(tabs)");
             }
-            router.replace("/(tabs)");
-          }}]
+          }]
         );
       }
     };
@@ -558,7 +560,7 @@ export default function GlobalChatScreen() {
           100,
         );
       }
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const handleSendFile = async () => {
@@ -677,7 +679,7 @@ export default function GlobalChatScreen() {
         setPinnedMessages((prev) => [...prev, selectedMsg].filter((msg: MessageDTO, idx: number, arr: MessageDTO[]) => arr.findIndex((m: MessageDTO) => m._id === msg._id) === idx));
         Alert.alert("Đã ghim tin nhắn");
       }
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const handleUnpinMessage = async () => {
@@ -901,6 +903,14 @@ export default function GlobalChatScreen() {
             onSendMessage={sendMessage}
             onSendImage={handleSendImage}
             onSendFile={handleSendFile}
+            onCreatePoll={() => {
+              if (resolvedConversationId) {
+                router.push({
+                  pathname: "/chat/create-poll",
+                  params: { conversationId: resolvedConversationId },
+                });
+              }
+            }}
             isKeyboardVisible={isKeyboardVisible}
             replyingTo={replyingTo}
             onCancelReply={() => setReplyingToWithRef(null)}

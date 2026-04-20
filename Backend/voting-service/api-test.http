@@ -1,0 +1,71 @@
+@baseUrl = http://localhost:8086/api/v1/polls
+@userId = user_123
+@conversationId = group_456
+
+### 1. Kiểm tra trạng thái của Service (Heatlh check)
+GET http://localhost:8086/health
+Content-Type: application/json
+
+### 2. Tạo một cuộc bình chọn (Poll) mới
+# @name createPoll
+POST {{baseUrl}}
+Content-Type: application/json
+
+{
+  "conversationId": "{{conversationId}}",
+  "creatorId": "{{userId}}",
+  "question": "Cuối tuần này nhóm mình đi ăn ở đâu?",
+  "options": [
+    "Lẩu",
+    "Nướng",
+    "Hải sản"
+  ],
+  "settings": {
+    "allowMultipleAnswers": true,
+    "allowAddOptions": true,
+    "hideResultsUntilVoted": false,
+    "hideVoters": false
+  },
+  "expiresAt": "2026-12-31T23:59:59.000Z"
+}
+
+### Lưu ID của Poll vừa tạo vào biến toàn cục của REST Client
+@pollId = {{createPoll.response.body._id}}
+
+### 3. Lấy Danh sách Poll theo Conversation
+GET {{baseUrl}}/conversation/{{conversationId}}
+
+### 4. Lấy Chi tiết một Poll cụ thể
+GET {{baseUrl}}/{{pollId}}
+
+### 5. Thêm một lựa chọn mới (Option) vào Poll
+POST {{baseUrl}}/{{pollId}}/options
+Content-Type: application/json
+
+{
+  "userId": "user_456",
+  "text": "Ăn chay"
+}
+
+### 6. Bỏ phiếu cho Poll
+# Mở Poll ra để COPY `_id` của Option bạn muốn vote vào mảng `optionIds` 
+POST {{baseUrl}}/{{pollId}}/vote
+Content-Type: application/json
+
+{
+  "userId": "{{userId}}",
+  "optionIds": [
+    "DÁN_ID_CỦA_OPTION_1_VÀO_ĐÂY"
+  ]
+}
+
+### 7. Xem Kết quả Bình chọn
+GET {{baseUrl}}/{{pollId}}/results?userId={{userId}}
+
+### 8. Đóng cuộc Bình chọn (Thủ công)
+PUT {{baseUrl}}/{{pollId}}/close
+Content-Type: application/json
+
+{
+  "userId": "{{userId}}"
+}

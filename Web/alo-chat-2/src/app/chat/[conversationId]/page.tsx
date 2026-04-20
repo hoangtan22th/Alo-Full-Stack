@@ -5,6 +5,7 @@ import axiosClient from "@/services/api";
 import { messageService, MessageDTO } from "@/services/messageService";
 import { groupService } from "@/services/groupService";
 import { socketService } from "@/services/socketService";
+import { toast } from "sonner";
 import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import JSZip from "jszip";
 import {
@@ -39,6 +40,7 @@ import {
 } from "@heroicons/react/24/outline";
 import BotChatArea from "@/components/ui/BotChatArea";
 import { useAuthStore } from "@/store/useAuthStore";
+import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -54,6 +56,21 @@ function formatListTime(iso: string) {
     minute: "2-digit",
   });
 }
+
+const getMediaUrl = (url: string | undefined): string => {
+  if (!url) return "";
+  if (
+    url.startsWith("http") ||
+    url.startsWith("blob:") ||
+    url.startsWith("data:")
+  ) {
+    return url;
+  }
+  const backendHost =
+    process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") ||
+    "http://localhost:8888";
+  return `${backendHost}${url.startsWith("/") ? "" : "/"}${url}`;
+};
 
 /* ─────────────────────────────────────────
    Page Component
@@ -121,9 +138,8 @@ export default function ChatPage() {
     if (msg?.senderName) return msg.senderName;
     if (!userId) return "Người dùng";
     const currentMyId = currentUser?.id || currentUser?._id || currentUser?.userId;
-
     if (String(userId) === String(currentMyId)) {
-      return currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi";
+      return currentUser?.fullName || "Tôi";
     }
 
     if (conversationInfo) {
@@ -187,13 +203,24 @@ export default function ChatPage() {
         return {
           ...prev,
           [myId]: {
-            name: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+            name: currentUser?.fullName || "Tôi",
             avatar: currentUser?.avatar || "",
           },
         };
       });
     }
   }, [currentUser]);
+
+  // Fetch thông tin cho tất cả thành viên trong nhóm
+  useEffect(() => {
+    if (conversationInfo?.isGroup && conversationInfo.members) {
+      conversationInfo.members.forEach((m: any) => {
+        if (m.userId && !userCache[m.userId]) {
+          fetchUserInfo(m.userId);
+        }
+      });
+    }
+  }, [conversationInfo, userCache]);
 
   const EMOJI_MAP: Record<string, string> = {
     like: "👍",
@@ -520,7 +547,7 @@ export default function ChatPage() {
   const handleDownloadAlbum = async (msg: MessageDTO) => {
     if (!msg.metadata?.imageGroup) return;
     const myId = currentUser?.id || currentUser?._id || currentUser?.userId || "me";
-    const availableImages = (msg.metadata.imageGroup as any[]).filter(
+    const availableImages = (msg.metadata!.imageGroup as any[]).filter(
       (img: any) => !img.isRevoked && !img.deletedByUsers?.includes(myId)
     );
     if (availableImages.length === 0) {
@@ -566,6 +593,91 @@ export default function ChatPage() {
     }
   };
 
+  /* ─── Clear History & Group Management ─── */
+  const handleClearHistory = async () => {
+    if (!confirm("Bạn có chắc chắn muốn xóa lịch sử trò chuyện này?")) return;
+    try {
+      await groupService.clearConversation(conversationId);
+      setMessages([]);
+      alert("Đã xóa lịch sử trò chuyện.");
+    } catch (err) {
+      console.error("Lỗi xóa lịch sử:", err);
+      alert("Không thể xóa lịch sử trò chuyện.");
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    if (!confirm("Bạn có chắc chắn muốn rời khỏi nhóm này?")) return;
+    try {
+      const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+      if (!myId) return;
+      await groupService.removeMember(conversationId, myId);
+      alert("Đã rời nhóm.");
+      router.push("/chat");
+    } catch (err) {
+      console.error("Lỗi rời nhóm:", err);
+      alert("Không thể rời nhóm.");
+    }
+  };
+
+  const handleDisbandGroup = async () => {
+    if (!confirm("CẢNH BÁO: Bạn có chắc chắn muốn giải tán nhóm này? Hành động này không thể hoàn tác.")) return;
+    try {
+      await groupService.deleteGroup(conversationId);
+      alert("Nhóm đã bị giải tán.");
+      router.push("/chat");
+    } catch (err) {
+      console.error("Lỗi giải tán nhóm:", err);
+      alert("Không thể giải tán nhóm.");
+    }
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!confirm("Xác nhận mời thành viên này ra khỏi nhóm?")) return;
+    try {
+      await groupService.removeMember(conversationId, userId);
+      toast.success("Đã mời thành viên ra khỏi nhóm");
+      handleRefreshData();
+    } catch (err) {
+      console.error("Lỗi xóa thành viên:", err);
+      toast.error("Không thể xóa thành viên.");
+    }
+  };
+
+  const handleUpdateRole = async (userId: string, newRole: string) => {
+    try {
+      await groupService.updateRole(conversationId, userId, newRole);
+      toast.success("Đã cập nhật vai trò thành công");
+      handleRefreshData();
+    } catch (err) {
+      console.error("Lỗi cập nhật vai trò:", err);
+      toast.error("Không thể cập nhật vai trò.");
+    }
+  };
+
+  const handleAssignLeader = async (userId: string) => {
+    if (!confirm("Bạn có chắc chắn muốn chuyển quyền Trưởng nhóm cho người này? Bạn sẽ trở thành thành viên thường.")) return;
+    try {
+      await groupService.assignLeader(conversationId, userId);
+      toast.success("Đã chuyển quyền trưởng nhóm thành công");
+      handleRefreshData();
+    } catch (err) {
+      console.error("Lỗi chuyển trưởng nhóm:", err);
+      toast.error("Không thể chuyển quyền trưởng nhóm.");
+    }
+  };
+
+  const handleRefreshData = async () => {
+    try {
+      // Reload conversation info
+      const res: any = await groupService.getGroupById(conversationId);
+      const raw = res?.data ? res.data : res;
+      setConversationInfo(raw);
+    } catch (err) {
+      console.error("Lỗi tải lại dữ liệu nhóm:", err);
+    }
+  };
+
   /* ─── Send message ─── */
   const handleSend = async () => {
     const text = messageText.trim();
@@ -585,7 +697,7 @@ export default function ChatPage() {
       _id: tempId,
       conversationId,
       senderId: myId,
-      senderName: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+      senderName: currentUser?.fullName || "Tôi",
       type: "text",
       content: text,
       isRead: false,
@@ -607,7 +719,7 @@ export default function ChatPage() {
         conversationId,
         content: text,
         type: "text",
-        senderName: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+        senderName: currentUser?.fullName || "Tôi",
         replyTo: currentReply
           ? {
             messageId: currentReply._id,
@@ -679,7 +791,7 @@ export default function ChatPage() {
           _id: tempId,
           conversationId,
           senderId: myId,
-          senderName: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+          senderName: currentUser?.fullName || "Tôi",
           type: "image",
           content: "[Album Ảnh]",
           isRead: false,
@@ -714,7 +826,7 @@ export default function ChatPage() {
             widths,
             heights,
             currentReply,
-            currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi"
+            currentUser?.fullName || "Tôi"
           );
         } catch (err) {
           console.error("Lỗi gửi album ảnh:", err);
@@ -733,7 +845,7 @@ export default function ChatPage() {
           _id: tempId,
           conversationId,
           senderId: myId,
-          senderName: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+          senderName: currentUser?.fullName || "Tôi",
           type: file.type.startsWith("image/") ? "image" : "file",
           content: "",
           isRead: false,
@@ -755,7 +867,7 @@ export default function ChatPage() {
         };
         setMessages((prev) => [...prev, tempMsg]);
         try {
-          await messageService.uploadFile(conversationId, file, currentReply, currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi");
+          await messageService.uploadFile(conversationId, file, currentReply, currentUser?.fullName || "Tôi");
         } catch (err) {
           console.error("Lỗi gửi file:", err);
           setMessages((prev) => prev.filter((m) => m._id !== tempId));
@@ -793,8 +905,12 @@ export default function ChatPage() {
         new Date(lastMsg.createdAt).getTime()
         : Infinity;
 
+      const isSystem = msg.type === "system";
+      const lastIsSystem = lastMsg?.type === "system";
+
       // Nhóm theo SENDER ID để tránh gộp nhiều người khác vào 1 khối trong group chat
-      if (last && last.senderId === msg.senderId && gap < FIVE_MIN) {
+      // Không gộp nếu là tin nhắn hệ thống hoặc tin nhắn trước đó là hệ thống
+      if (last && last.senderId === msg.senderId && gap < FIVE_MIN && !isSystem && !lastIsSystem) {
         last.messages.push(msg);
       } else {
         groups.push({ isMine, senderId: msg.senderId, messages: [msg] });
@@ -832,7 +948,7 @@ export default function ChatPage() {
                 <div className="relative shrink-0">
                   {conversationInfo?.displayAvatar ? (
                     <img
-                      src={conversationInfo.displayAvatar}
+                      src={getMediaUrl(conversationInfo.displayAvatar)}
                       alt={conversationInfo.displayName || ""}
                       className="w-10 h-10 rounded-full object-cover"
                     />
@@ -1034,6 +1150,23 @@ export default function ChatPage() {
 
                     // Tin cuối cùng của nhóm — để lấy senderName/avatar và timestamp + trạng thái
                     const lastMsg = gMsgs[gMsgs.length - 1];
+
+                    if (lastMsg.type === "system") {
+                      return (
+                        <div key={`group-${groupIdx}`} className="flex justify-center my-4 w-full px-10">
+                          <div className="flex flex-col items-center gap-1.5 max-w-full">
+                            {gMsgs.map((msg) => (
+                              <div key={msg._id} className="bg-gray-100 px-4 py-1.5 rounded-full shadow-sm border border-gray-200/50 max-w-full">
+                                <span className="text-[12px] text-gray-500 font-bold text-center block">
+                                  {msg.content}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
                     const senderName = getSenderDisplayName(senderId, lastMsg);
                     let senderAvatar = "";
 
@@ -1156,7 +1289,7 @@ export default function ChatPage() {
                                       {msg.metadata?.imageGroup ? (
                                         (() => {
                                           // 1. Lọc ra danh sách ảnh thực sự đang được hiển thị
-                                          const visibleImages = (msg.metadata.imageGroup || []).filter((img: any) =>
+                                          const visibleImages = (msg.metadata?.imageGroup || []).filter((img: any) =>
                                             !img.deletedByUsers?.includes(myId)
                                           );
 
@@ -1214,7 +1347,7 @@ export default function ChatPage() {
                                                 const shouldShowPlaceholder = msg.isRevoked || img.isRevoked;
 
                                                 // Tìm lại index nguyên thủy trong mảng gốc
-                                                const originalIdx = msg.metadata.imageGroup.findIndex((orig: any) => orig.url === img.url);
+                                                const originalIdx = msg.metadata?.imageGroup?.findIndex((orig: any) => orig.url === img.url);
 
                                                 // CHÌA KHÓA: Giữ đúng kích thước gốc bằng aspectRatio của từng tấm
                                                 const itemAspect = (img.width && img.height) ? `${img.width}/${img.height}` : aspectR;
@@ -1224,7 +1357,7 @@ export default function ChatPage() {
                                                     key={idx}
                                                     className="relative group/img rounded-lg overflow-hidden bg-gray-200 cursor-pointer flex items-center justify-center w-full"
                                                     style={{ aspectRatio: itemAspect }}
-                                                    onClick={() => !shouldShowPlaceholder && setActiveAlbumIndex({ messageId: msg._id, index: originalIdx })}
+                                                    onClick={() => !shouldShowPlaceholder && setActiveAlbumIndex({ messageId: msg._id, index: originalIdx ?? 0 })}
                                                   >
                                                     {shouldShowPlaceholder ? (
                                                       <div className="text-center text-gray-400">
@@ -1234,7 +1367,7 @@ export default function ChatPage() {
                                                     ) : (
                                                       <>
                                                         <img
-                                                          src={img.url}
+                                                          src={getMediaUrl(img.url)}
                                                           alt={`album-${idx}`}
                                                           className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                                                         />
@@ -1250,7 +1383,7 @@ export default function ChatPage() {
                                                                     ...m,
                                                                     metadata: {
                                                                       ...m.metadata,
-                                                                      imageGroup: m.metadata?.imageGroup.map((ig: any, i: number) => i === originalIdx ? {
+                                                                      imageGroup: m.metadata?.imageGroup?.map((ig: any, i: number) => i === originalIdx ? {
                                                                         ...ig,
                                                                         isRevoked: true,
                                                                         revokedAt: new Date().toISOString()
@@ -1258,7 +1391,7 @@ export default function ChatPage() {
                                                                     }
                                                                   } : m));
 
-                                                                  await messageService.revokeImageInGroup(msg._id, originalIdx);
+                                                                  await messageService.revokeImageInGroup(msg._id, originalIdx ?? 0);
                                                                 }
                                                               }}
                                                               className="p-1 bg-black/50 rounded text-white hover:bg-black/70"
@@ -1271,13 +1404,13 @@ export default function ChatPage() {
                                                             onClick={async (e) => {
                                                               e.stopPropagation();
                                                               if (confirm("Xóa ảnh này phía bạn?")) {
-                                                                await messageService.deleteImageInGroupForMe(msg._id, originalIdx);
+                                                                await messageService.deleteImageInGroupForMe(msg._id, originalIdx ?? 0);
                                                                 // Local update
                                                                 setMessages(prev => prev.map(m => m._id === msg._id ? {
                                                                   ...m,
                                                                   metadata: {
                                                                     ...m.metadata,
-                                                                    imageGroup: m.metadata?.imageGroup.map((ig: any, i: number) => i === originalIdx ? {
+                                                                    imageGroup: m.metadata?.imageGroup?.map((ig: any, i: number) => i === originalIdx ? {
                                                                       ...ig,
                                                                       deletedByUsers: [...(ig.deletedByUsers || []), myId]
                                                                     } : ig)
@@ -1326,7 +1459,7 @@ export default function ChatPage() {
                                           })()
                                         ) : (
                                           <img
-                                            src={msg.content}
+                                            src={getMediaUrl(msg.content)}
                                             alt="img"
                                             className="object-cover max-h-[420px] rounded-lg cursor-pointer"
                                             onClick={() => {
@@ -1351,7 +1484,7 @@ export default function ChatPage() {
                                       <div
                                         className="flex items-center gap-3 flex-1 min-w-0"
                                         onClick={() =>
-                                          window.open(msg.content, "_blank")
+                                          window.open(getMediaUrl(msg.content), "_blank")
                                         }
                                       >
                                         <div className="w-10 h-12 bg-blue-500 rounded-lg flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
@@ -1366,7 +1499,7 @@ export default function ChatPage() {
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleDownload(msg.content, msg.metadata?.fileName || "file");
+                                          handleDownload(getMediaUrl(msg.content), msg.metadata?.fileName || "file");
                                         }}
                                         className="w-8 h-8 bg-white border border-gray-100 rounded-md flex items-center justify-center text-gray-600 hover:bg-gray-50 transition"
                                       >
@@ -1546,7 +1679,7 @@ export default function ChatPage() {
                                     // Cả nhóm bị thu hồi → ẩn
                                     if (isRevoked) return false;
                                     // Tất cả ảnh lẻ đều bị thu hồi → ẩn
-                                    const allImgsRevoked = (msg.metadata.imageGroup as any[]).every((img: any) => img.isRevoked === true);
+                                    const allImgsRevoked = (msg.metadata!.imageGroup as any[]).every((img: any) => img.isRevoked === true);
                                     if (allImgsRevoked) return false;
                                     // Còn ít nhất 1 ảnh chưa thu hồi → hiện
                                     return true;
@@ -1963,109 +2096,24 @@ export default function ChatPage() {
           </div>
 
           {/* ═══ CỘT PHẢI: THÔNG TIN CHI TIẾT ═══ */}
-          <div
-            className={`hidden lg:flex flex-col shrink-0 bg-[#FAFAFA] h-full transition-all duration-300 ease-in-out overflow-hidden ${showInfoPanel
-              ? "w-[320px] xl:w-85 opacity-100 border-l border-gray-100"
-              : "w-0 opacity-0 border-l-0"
-              }`}
-          >
-            <div className="w-[320px] xl:w-85 h-full flex flex-col">
-              <div className="flex-1 overflow-y-auto scrollbar-hide">
-                {/* Profile Section */}
-                <div className="flex flex-col items-center pt-10 pb-8 border-b border-gray-100/60">
-                  <div className="relative mb-4">
-                    {conversationInfo?.displayAvatar ? (
-                      <img
-                        src={conversationInfo.displayAvatar}
-                        alt="Profile"
-                        className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
-                      />
-                    ) : (
-                      <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-3xl border-4 border-white shadow-lg">
-                        {(conversationInfo?.displayName || "?")
-                          .charAt(0)
-                          .toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                  <h2 className="text-[18px] font-black text-gray-900 tracking-tight">
-                    {conversationInfo?.displayName ||
-                      conversationInfo?.name ||
-                      "..."}
-                  </h2>
-                  <p className="text-[12px] font-bold text-gray-400 mt-1">
-                    {conversationInfo?.isGroup
-                      ? `${conversationInfo?.members?.length ?? 0} thành viên`
-                      : "Người dùng"}
-                  </p>
-
-                  <div className="flex items-center gap-3 mt-6">
-                    <button className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:bg-gray-50 transition shadow-sm">
-                      <UserIcon className="w-4 h-4" />
-                    </button>
-                    <button className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:bg-gray-50 transition shadow-sm">
-                      <BellIcon className="w-4 h-4" />
-                    </button>
-                    <button className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:bg-gray-50 transition shadow-sm">
-                      <EllipsisHorizontalIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Shared Files */}
-                <div className="p-6 border-b border-gray-100/60">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                      Shared Files
-                    </h3>
-                  </div>
-                  <div className="space-y-4">
-                    {messages
-                      .filter((m) => m.type === "file")
-                      .slice(-5)
-                      .map((m) => (
-                        <a
-                          key={m._id}
-                          href={m.content}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-4 cursor-pointer group"
-                        >
-                          <div className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-400 group-hover:bg-gray-50 transition">
-                            <FolderIcon className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-bold text-gray-900 truncate">
-                              {m.metadata?.fileName || "File"}
-                            </p>
-                            <p className="text-[11px] font-bold text-gray-400">
-                              {m.metadata?.fileType || ""}
-                            </p>
-                          </div>
-                        </a>
-                      ))}
-                    {messages.filter((m) => m.type === "file").length === 0 && (
-                      <p className="text-[12px] text-gray-400 font-medium">
-                        Chưa có file nào được chia sẻ
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Danger Actions */}
-                <div className="p-6 space-y-4 pb-10">
-                  <button className="w-full flex items-center justify-between text-[13px] font-bold text-red-500 hover:bg-red-50 p-2 -mx-2 rounded-lg transition">
-                    Block User
-                    <NoSymbolIcon className="w-4 h-4" />
-                  </button>
-                  <button className="w-full flex items-center justify-between text-[13px] font-bold text-gray-500 hover:bg-gray-100 p-2 -mx-2 rounded-lg transition">
-                    Report Conversation
-                    <ExclamationCircleIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <ChatInfoPanel
+            show={showInfoPanel}
+            conversationId={conversationId}
+            conversationInfo={conversationInfo}
+            messages={messages}
+            currentUser={currentUser}
+            onClose={() => setShowInfoPanel(false)}
+            onClearHistory={handleClearHistory}
+            onLeaveGroup={handleLeaveGroup}
+            onDisbandGroup={handleDisbandGroup}
+            onViewAllMedia={() => {/* Future: Open media gallery */}}
+            onViewAllFiles={() => {/* Future: Open file list */}}
+            onRemoveMember={handleRemoveMember}
+            onUpdateRole={handleUpdateRole}
+            onAssignLeader={handleAssignLeader}
+            onRefreshData={handleRefreshData}
+            userCache={userCache}
+          />
 
           {/* ALBUM PREVIEW MODAL */}
           {activeAlbumIndex && (
@@ -2122,7 +2170,7 @@ export default function ChatPage() {
                       ) : (
                         currentImg && (
                           <img
-                            src={currentImg.url}
+                            src={getMediaUrl(currentImg.url)}
                             className="max-w-full max-h-full object-contain shadow-2xl rounded-sm"
                             alt="preview"
                           />
@@ -2136,7 +2184,7 @@ export default function ChatPage() {
                           </p>
                           {!currentImg.isRevoked && (
                             <button
-                              onClick={() => handleDownload(currentImg.url, currentImg.fileName || "image.png")}
+                              onClick={() => handleDownload(getMediaUrl(currentImg.url), currentImg.fileName || "image.png")}
                               className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full text-sm font-bold transition"
                             >
                               <ArrowDownTrayIcon className="w-4 h-4" />
