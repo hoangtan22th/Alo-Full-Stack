@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { UserRow } from "@/components/users/UserRow";
 import { UserDetailModal } from "@/components/users/UserDetailModal";
+import { UserEditModal } from "@/components/users/UserEditModal";
 import { Pagination } from "@/components/ui/Pagination";
 import { toast } from "sonner";
 import { User } from "@/services/userService";
@@ -39,6 +40,7 @@ export default function UserManagementPage() {
 
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   // Handle Search Debounce
   useEffect(() => {
@@ -224,6 +226,10 @@ export default function UserManagementPage() {
                       setSelectedUser(user);
                       setIsDetailOpen(true);
                     }}
+                    onEdit={() => {
+                      setSelectedUser(user);
+                      setIsEditOpen(true);
+                    }}
                   />
                 ))
               )}
@@ -243,6 +249,13 @@ export default function UserManagementPage() {
         user={selectedUser}
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
+      />
+
+      <UserEditModal
+        user={selectedUser}
+        isOpen={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        onUpdateSuccess={loadData}
       />
     </>
   );

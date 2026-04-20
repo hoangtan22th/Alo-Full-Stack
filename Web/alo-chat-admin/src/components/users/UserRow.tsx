@@ -12,9 +12,10 @@ interface UserRowProps {
   user: User;
   onBan: () => void;
   onView?: () => void;
+  onEdit?: () => void;
 }
 
-export function UserRow({ user, onBan, onView }: UserRowProps) {
+export function UserRow({ user, onBan, onView, onEdit }: UserRowProps) {
   const isBanned = user.isBanned;
 
   const statusBadge = () => {
@@ -93,6 +94,7 @@ export function UserRow({ user, onBan, onView }: UserRowProps) {
         <Button
           variant="ghost"
           size="icon"
+          onClick={onEdit}
           className="h-8 w-8 text-on-surface-variant hover:text-on-surface mx-0.5"
           title="Edit Data"
         >
