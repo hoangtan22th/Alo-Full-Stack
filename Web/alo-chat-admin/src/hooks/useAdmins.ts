@@ -59,17 +59,23 @@ export const useAdmins = () => {
         toast.success("Admin created successfully!");
         await fetchAdmins();
         if (onSuccess) onSuccess();
+        return { success: true };
       } catch (err: any) {
-        console.error(err);
         let errMsg = err.message || "Failed to create admin";
-        try {
-          // handle spring boot specific error format if json wrapped
-          const parsed = JSON.parse(errMsg);
-          if (parsed.message) errMsg = parsed.message;
-        } catch (e) {}
+        if (
+          err.data &&
+          typeof err.data === "object" &&
+          Object.keys(err.data).length > 0
+        ) {
+          // Instead of throwing a generic string error, return the field errors
+          return { success: false, fieldErrors: err.data };
+        }
+        if (err.message && err.message.length > 0) {
+          return { success: false, fieldErrors: { generic: err.message } };
+        }
         setError(errMsg);
         toast.error(errMsg);
-        throw new Error(errMsg);
+        return { success: false, fieldErrors: { generic: errMsg } };
       } finally {
         setLoading(false);
       }
@@ -115,16 +121,22 @@ export const useAdmins = () => {
         toast.success("Admin updated successfully!");
         await fetchAdmins();
         if (onSuccess) onSuccess();
+        return { success: true };
       } catch (err: any) {
-        console.error(err);
         let errMsg = err.message || "Failed to update admin";
-        try {
-          const parsed = JSON.parse(errMsg);
-          if (parsed.message) errMsg = parsed.message;
-        } catch (e) {}
+        if (
+          err.data &&
+          typeof err.data === "object" &&
+          Object.keys(err.data).length > 0
+        ) {
+          return { success: false, fieldErrors: err.data };
+        }
+        if (err.message && err.message.length > 0) {
+          return { success: false, fieldErrors: { generic: err.message } };
+        }
         setError(errMsg);
         toast.error(errMsg);
-        throw new Error(errMsg);
+        return { success: false, fieldErrors: { generic: errMsg } };
       } finally {
         setLoading(false);
       }

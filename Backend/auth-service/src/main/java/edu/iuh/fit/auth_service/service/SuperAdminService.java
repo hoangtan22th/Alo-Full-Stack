@@ -1,4 +1,4 @@
-﻿package edu.iuh.fit.auth_service.service;
+package edu.iuh.fit.auth_service.service;
 
 import edu.iuh.fit.auth_service.dto.request.CreateAdminRequest;
 import edu.iuh.fit.auth_service.dto.response.AdminResponse;

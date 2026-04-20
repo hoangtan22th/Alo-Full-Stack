@@ -10,7 +10,11 @@ import {
   PencilIcon,
   ShieldCheckIcon,
   MagnifyingGlassIcon,
+  EyeIcon,
+  EyeSlashIcon,
 } from "@heroicons/react/24/outline";
+import { Pagination } from "@/components/ui/Pagination";
+import { AdminFormModal } from "@/components/admins/AdminFormModal";
 
 export default function AdminManagementPage() {
   const {
@@ -35,6 +39,10 @@ export default function AdminManagementPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("ROLE_ADMIN");
+
+  // UI states for form
+  const [showPassword, setShowPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Search and filter state
   const [searchTerm, setSearchTerm] = useState("");
@@ -75,18 +83,30 @@ export default function AdminManagementPage() {
 
   const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFieldErrors({});
     if (!name || !email || !password || !role) return;
 
-    await createAdmin({ name, email, password, role }, () => {
+    const res = await createAdmin({ name, email, password, role }, () => {
       setIsModalOpen(false);
       setName("");
       setEmail("");
       setPassword("");
       setRole("ROLE_ADMIN");
+      setFieldErrors({});
+      setShowPassword(false);
     });
+
+    if (res && !res.success && res.fieldErrors) {
+      setFieldErrors(res.fieldErrors);
+    }
   };
 
-  const openEditModal = (admin: any) => {
+  const openEditModal = (admin: {
+    id: string;
+    name?: string;
+    email?: string;
+    role?: string;
+  }) => {
     setEditAdminId(admin.id);
     setName(admin.name || "");
     setEmail(admin.email || "");
@@ -96,34 +116,16 @@ export default function AdminManagementPage() {
         ? "ROLE_SUPER_ADMIN"
         : "ROLE_ADMIN",
     );
+    setFieldErrors({});
+    setShowPassword(false);
     setIsEditModalOpen(true);
-  };
-
-  const handleUpdateAdmin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editAdminId || !role) return;
-
-    // Chỉ gửi password nếu người dùng có nhập
-    const updatePayload: any = { name, role };
-    if (password && password.trim() !== "") {
-      updatePayload.password = password;
-    }
-
-    await updateAdmin(editAdminId, updatePayload, () => {
-      setIsEditModalOpen(false);
-      setEditAdminId(null);
-      setName("");
-      setEmail("");
-      setPassword("");
-      setRole("ROLE_ADMIN");
-    });
   };
 
   const handleDelete = async (id: string, email: string) => {
     confirm({
       title: "Xóa Admin",
-      message: `Bạn có chắc chắn muốn xóa tài khoản admin "${email}" không? Hành động này không thể hoàn tác.`,
-      confirmText: "Xóa tài khoản",
+      message: `B?n có ch?c ch?n mu?n xóa tài kho?n admin "${email}" không? Hành d?ng này không th? hoàn tác.`,
+      confirmText: "Xóa tài kho?n",
       destructive: true,
       onConfirm: async () => {
         await deleteAdmin(id);
@@ -258,14 +260,14 @@ export default function AdminManagementPage() {
                         <>
                           <button
                             onClick={() => openEditModal(admin)}
-                            className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-md transition-colors invisible group-hover:visible inline-flex"
+                            className="h-8 w-8 items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low mx-0.5 rounded-md transition-colors inline-flex"
                             title="Edit Admin"
                           >
                             <PencilIcon className="w-5 h-5" />
                           </button>
                           <button
                             onClick={() => handleDelete(admin.id, admin.email)}
-                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors invisible group-hover:visible inline-flex"
+                            className="h-8 w-8 items-center justify-center text-on-surface-variant hover:text-red-500 hover:bg-red-50 mx-0.5 rounded-md transition-colors inline-flex"
                             title="Delete Admin"
                           >
                             <TrashIcon className="w-5 h-5" />
@@ -282,213 +284,95 @@ export default function AdminManagementPage() {
       </div>
 
       {/* Pagination Controls */}
-      {!loading && pagination.totalPages > 1 && (
-        <div className="flex justify-between flex-wrap gap-4 items-center mt-6 p-4 bg-surface-container-lowest rounded-xl border border-[#ebeef0]">
-          <span className="text-sm text-on-surface-variant font-medium">
-            Showing page {pagination.page + 1} of {pagination.totalPages} (
-            {pagination.totalElements} total admins)
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              disabled={pagination.page === 0}
-              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-              className="px-3 py-1.5 text-sm font-medium rounded-lg border border-[#ebeef0] text-on-surface hover:bg-surface-container-low disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Previous
-            </button>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: pagination.totalPages }).map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentPage(i)}
-                  className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
-                    pagination.page === i
-                      ? "bg-primary text-on-primary shadow-sm"
-                      : "text-on-surface-variant hover:bg-surface-container-low"
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-            <button
-              disabled={pagination.page >= pagination.totalPages - 1}
-              onClick={() =>
-                setCurrentPage((p) =>
-                  Math.min(pagination.totalPages - 1, p + 1),
-                )
-              }
-              className="px-3 py-1.5 text-sm font-medium rounded-lg border border-[#ebeef0] text-on-surface hover:bg-surface-container-low disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination
+        currentPage={pagination.page}
+        totalPages={pagination.totalPages}
+        totalElements={pagination.totalElements}
+        onPageChange={setCurrentPage}
+        loading={loading}
+      />
 
-      {/* Create Admin Modal */}
+      {/* Modals */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-surface-container-lowest rounded-xl shadow-lg w-full max-w-md p-6 border border-[#ebeef0]">
-            <h2 className="text-xl font-bold mb-4">Create New Admin</h2>
-            <form onSubmit={handleCreateAdmin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-on-surface mb-1">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 bg-surface-container-low border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                  placeholder="Admin Name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-on-surface mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 bg-surface-container-low border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                  placeholder="admin@example.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-on-surface mb-1">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 bg-surface-container-low border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                  placeholder="••••••••"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-on-surface mb-1">
-                  Role
-                </label>
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="w-full px-3 py-2 bg-surface-container-low border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                >
-                  <option value="ROLE_ADMIN">Admin</option>
-                  <option value="ROLE_SUPER_ADMIN">Super Admin</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-4 py-2 bg-primary text-on-primary rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                  {loading ? "Creating..." : "Create Admin"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <AdminFormModal
+          mode="create"
+          fieldErrors={fieldErrors}
+          loading={loading}
+          onSubmit={({ name, email, password, role }) => {
+            // we set states here so that handleCreateAdmin can use them, or we modify handleCreateAdmin to take params
+            // simpler to just call createAdmin here
+            setFieldErrors({});
+            createAdmin(
+              {
+                name,
+                email,
+                password,
+                role: role as "ROLE_ADMIN" | "ROLE_SUPER_ADMIN",
+              },
+              () => {
+                setIsModalOpen(false);
+                setFieldErrors({});
+              },
+            ).then(
+              (
+                res: {
+                  success: boolean;
+                  fieldErrors?: Record<string, string>;
+                } | void,
+              ) => {
+                if (res && !res.success && res.fieldErrors)
+                  setFieldErrors(res.fieldErrors);
+              },
+            );
+          }}
+          onCancel={() => {
+            setIsModalOpen(false);
+            setFieldErrors({});
+          }}
+        />
       )}
 
-      {/* Edit Admin Modal */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-surface-container-lowest rounded-xl shadow-lg w-full max-w-md p-6 border border-[#ebeef0]">
-            <h2 className="text-xl font-bold mb-4">Edit Admin</h2>
-            <form onSubmit={handleUpdateAdmin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-on-surface mb-1">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 bg-surface-container-low border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                  placeholder="Admin Name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-on-surface mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  disabled
-                  value={email}
-                  className="w-full px-3 py-2 bg-surface-container-highest cursor-not-allowed text-on-surface-variant border border-transparent rounded-lg focus:outline-none"
-                />
-                <p className="text-xs text-on-surface-variant mt-1">
-                  Email cannot be changed.
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-on-surface mb-1">
-                  New Password (Optional)
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 bg-surface-container-low border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                  placeholder="Leave blank to keep current"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-on-surface mb-1">
-                  Role
-                </label>
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="w-full px-3 py-2 bg-surface-container-low border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                >
-                  <option value="ROLE_ADMIN">Admin</option>
-                  <option value="ROLE_SUPER_ADMIN">Super Admin</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditModalOpen(false);
-                    setEditAdminId(null);
-                    setPassword("");
-                  }}
-                  className="px-4 py-2 text-on-surface-variant hover:bg-surface-container-low rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-4 py-2 bg-primary text-on-primary rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                  {loading ? "Updating..." : "Update Admin"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <AdminFormModal
+          mode="edit"
+          initialData={{ name, email, role }}
+          fieldErrors={fieldErrors}
+          loading={loading}
+          onSubmit={({ name, role, password }) => {
+            setFieldErrors({});
+            if (!editAdminId) return;
+            const updatePayload: {
+              name: string;
+              role: string;
+              password?: string;
+            } = { name, role };
+            if (password && password.trim() !== "")
+              updatePayload.password = password;
+            updateAdmin(editAdminId, updatePayload, () => {
+              setIsEditModalOpen(false);
+              setEditAdminId(null);
+              setFieldErrors({});
+            }).then(
+              (
+                res: {
+                  success: boolean;
+                  fieldErrors?: Record<string, string>;
+                } | void,
+              ) => {
+                if (res && !res.success && res.fieldErrors)
+                  setFieldErrors(res.fieldErrors);
+              },
+            );
+          }}
+          onCancel={() => {
+            setIsEditModalOpen(false);
+            setEditAdminId(null);
+            setFieldErrors({});
+          }}
+        />
       )}
     </div>
   );
 }
+
+

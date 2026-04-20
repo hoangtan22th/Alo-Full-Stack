@@ -51,9 +51,10 @@ export const adminService = {
       const response = await axiosClient.post(API_URL, adminData);
       return response.data?.data;
     } catch (error: any) {
-      throw new Error(
-        error.response?.data?.message || "Failed to create admin",
-      );
+      if (error.response?.data) {
+        throw error.response.data; // Throw the whole backend ApiResponse
+      }
+      throw new Error("Failed to create admin");
     }
   },
 
@@ -75,9 +76,10 @@ export const adminService = {
       const response = await axiosClient.put(`${API_URL}/${id}`, updateData);
       return response.data?.data;
     } catch (error: any) {
-      throw new Error(
-        error.response?.data?.message || "Failed to update admin",
-      );
+      if (error.response?.data) {
+        throw error.response.data; // Throw the whole backend ApiResponse
+      }
+      throw new Error("Failed to update admin");
     }
   },
 };
