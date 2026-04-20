@@ -41,12 +41,15 @@ export default function ZegoCallRoom({
     avatarMap,
   });
 
-  // Cập nhật ref để không bị stale closure
+  // Đếm số người trong phòng (kể cả bản thân)
+  const participantCountRef = useRef(1); // bắt đầu với 1 (bản thân mình)
+
+  // Cập nhật ref để tránh lỗi stale closure trong các callback của Zego
   useEffect(() => {
     callbacksRef.current = { onLeaveRoom, onUserJoin, onUserLeave, avatarMap };
   }, [onLeaveRoom, onUserJoin, onUserLeave, avatarMap]);
 
-  // Chặn thông báo lỗi "createSpan" vô hại của Zego làm rác console
+  // Chặn các lỗi vặt về DOM mà Zego đôi khi quăng ra console
   useEffect(() => {
     const handler = (e: ErrorEvent) => {
       if (e.message?.includes("createSpan")) {
@@ -58,8 +61,6 @@ export default function ZegoCallRoom({
     return () => window.removeEventListener("error", handler);
   }, []);
 
-  const participantsCount = useRef(1);
-
   useEffect(() => {
     let isMounted = true;
     let zp: any = null;
@@ -67,6 +68,7 @@ export default function ZegoCallRoom({
     const timer = setTimeout(() => {
       if (!isMounted || !containerRef.current) return;
 
+      // Lấy AppID và Secret từ biến môi trường
       const appID = Number(
         process.env.NEXT_PUBLIC_ZEGO_APP_ID || import.meta.env.VITE_ZEGO_APP_ID,
       );
@@ -75,13 +77,11 @@ export default function ZegoCallRoom({
         import.meta.env.VITE_ZEGO_SERVER_SECRET;
 
       if (!appID || !serverSecret) {
-        console.error(
-          "Lỗi: Thiếu ZEGO_APP_ID hoặc ZEGO_SERVER_SECRET trong file .env",
-        );
+        console.error("Lỗi: Thiếu cấu hình ZegoCloud trong file .env");
         return;
       }
 
-      // Xử lý ID an toàn cho Zego (chỉ nhận chữ và số)
+      // Format ID chỉ chứa chữ và số để Zego không bị lỗi kết nối
       const safeUserId = userId.replace(/[^a-zA-Z0-9_]/g, "") || "user_id";
       const safeRoomId = roomId.replace(/[^a-zA-Z0-9_]/g, "") || "room_id";
 
@@ -99,27 +99,28 @@ export default function ZegoCallRoom({
         container: containerRef.current,
         maxUsers: isGroup ? 50 : 2,
         scenario: {
+          // Tự động chọn kịch bản 1-1 hoặc Nhóm dựa trên prop isGroup
           mode: isGroup
             ? ZegoUIKitPrebuilt.GroupCall
             : ZegoUIKitPrebuilt.OneONoneCall,
         },
         layout: "Auto",
 
-        // Cấu hình giao diện chuẩn
-        showPreJoinView: false,
-        showLeaveRoomConfirmDialog: false, // Tắt popup hỏi "Bạn có chắc muốn rời khỏi?"
+        // ═══ SỬ DỤNG GIAO DIỆN MẶC ĐỊNH ═══
+        showPreJoinView: false, // Vào thẳng phòng không cần chờ
+        showLeaveRoomConfirmDialog: false, // Bấm cúp máy là thoát luôn, không hỏi lại
 
-        // Điều khiển luồng Media
+        // Hiện đầy đủ các nút điều khiển mặc định của Zego
         turnOnMicrophoneWhenJoining: true,
         turnOnCameraWhenJoining: isVideoCall,
-        showMyCameraToggleButton: isVideoCall,
+        showMyCameraToggleButton: true,
         showMyMicrophoneToggleButton: true,
         showAudioVideoSettingsButton: true,
-        showScreenSharingButton: isVideoCall,
-        showTextChat: false,
+        showScreenSharingButton: true,
+        showTextChat: false, // Tắt chat của Zego vì đã có Alo Chat
         showUserList: isGroup,
 
-        // Giữ lại Avatar Builder để khi tắt cam nhìn vẫn xịn
+        // Hiển thị Avatar khi tắt cam
         showAvatarInAudioMode: true,
         showNonVideoUser: true,
         avatarBuilder: (userInfo: any) => {
@@ -147,21 +148,24 @@ export default function ZegoCallRoom({
           return div;
         },
 
-        // Bắt sự kiện người dùng
         onLeaveRoom: () => callbacksRef.current.onLeaveRoom(),
         onUserJoin: (users: any[]) => {
-          participantsCount.current += users.length;
+          participantCountRef.current += users.length;
           callbacksRef.current.onUserJoin?.(users);
         },
         onUserLeave: (users: any[]) => {
-          participantsCount.current -= users.length;
-          if (!isGroup || participantsCount.current <= 1) {
-            callbacksRef.current.onLeaveRoom(); // End call nếu còn 1 mình
+          participantCountRef.current -= users.length;
+          if (!isGroup) {
+            // 1-1: người kia out => mình cũng out
+            callbacksRef.current.onLeaveRoom();
+          } else if (participantCountRef.current <= 1) {
+            // Group: còn lại 1 mình => tự động thoát
+            callbacksRef.current.onLeaveRoom();
           }
           callbacksRef.current.onUserLeave?.(users);
         },
       });
-    }, 300); // Delay nhẹ 300ms để DOM kịp render
+    }, 300);
 
     return () => {
       isMounted = false;
@@ -178,16 +182,15 @@ export default function ZegoCallRoom({
 
   return (
     <div className="fixed inset-0 z-[9999] bg-[#1C1F2E] flex flex-col animate-in fade-in duration-300">
-      {/* Nút thoát khẩn cấp an toàn góc trái trên cùng */}
+      {/* Nút X thoát khẩn cấp phòng hờ lỗi treo trình duyệt */}
       <button
         onClick={() => callbacksRef.current.onLeaveRoom()}
         className="absolute top-6 left-6 z-[10000] p-3 bg-red-500/80 hover:bg-red-600 text-white rounded-full transition-all shadow-lg active:scale-95"
-        title="Đóng phòng gọi"
       >
         <XMarkIcon className="w-6 h-6" />
       </button>
 
-      {/* Box chứa Zego - Full màn hình */}
+      {/* Container chuẩn của Zego */}
       <div ref={containerRef} className="w-full h-full" />
     </div>
   );

@@ -93,15 +93,15 @@ class SocketService {
   // Tham gia vào phòng chat của cuộc hội thoại
   joinRoom(conversationId: string) {
     if (this.socket?.connected) {
-      this.socket.emit("join-room", { conversationId });
-      console.log(`📡 [Socket] Joining room: ${conversationId}`);
+      this.socket.emit("joinRoom", conversationId);
+      console.log(`📡 [Socket] Joining room: room_${conversationId}`);
     }
   }
 
   // Rời phòng chat
   leaveRoom(conversationId: string) {
     if (this.socket?.connected) {
-      this.socket.emit("leave-room", { conversationId });
+      this.socket.emit("leaveRoom", conversationId);
     }
   }
 
