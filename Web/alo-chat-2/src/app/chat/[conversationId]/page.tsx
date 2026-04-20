@@ -239,7 +239,7 @@ export default function ChatPage() {
         setUserCache((prev) => ({
           ...prev,
           [userId]: {
-            name: u.fullName || u.username || u.name || "Người dùng",
+            name: u.fullName || (u as any).username || (u as any).name || "Người dùng",
             avatar: u.avatar || "",
           },
         }));
@@ -346,7 +346,7 @@ export default function ChatPage() {
             const res: any = await axiosClient.get(`/users/${other.userId}`);
             const u = res?.data?.data || res?.data || res;
             if (u) {
-              displayName = u.fullName || u.username || u.name || "Người dùng";
+              displayName = u.fullName || (u as any).username || (u as any).name || "Người dùng";
               displayAvatar = u.avatar || displayAvatar;
             }
           } catch { }
@@ -476,6 +476,15 @@ export default function ChatPage() {
       }
     });
 
+    // Lắng nghe cập nhật nhóm (thành viên, quyền, v.v.)
+    socketService.off("GROUP_UPDATED");
+    socketService.onGroupUpdated((data: any) => {
+      if (String(data._id) === String(conversationIdRef.current)) {
+        console.log("Group updated received, refreshing data...");
+        handleRefreshData();
+      }
+    });
+
     return () => {
       socketService.off("message-received");
       socketService.off("messages-read");
@@ -485,6 +494,7 @@ export default function ChatPage() {
       socketService.off("message-updated");
       socketService.off("INCOMING_CALL");
       socketService.off("CALL_CANCELED");
+      socketService.off("GROUP_UPDATED");
     };
   }, [conversationId, currentUser]);
 
@@ -532,9 +542,9 @@ export default function ChatPage() {
     socketService.initiateCall({
       targetRoom: conversationId,
       caller: {
-        id: myId,
-        name: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
-        avatar: currentUser?.avatar
+        id: myId || "",
+        name: currentUser?.fullName || (currentUser as any)?.name || (currentUser as any)?.username || "Tôi",
+        avatar: currentUser?.avatar || ""
       },
       isVideo
     });
@@ -781,16 +791,9 @@ export default function ChatPage() {
     }
   };
 
-  const handleRefreshData = async () => {
-    try {
-      // Reload conversation info
-      const res: any = await groupService.getGroupById(conversationId);
-      const raw = res?.data ? res.data : res;
-      setConversationInfo(raw);
-    } catch (err) {
-      console.error("Lỗi tải lại dữ liệu nhóm:", err);
-    }
-  };
+  const handleRefreshData = useCallback(async () => {
+    await fetchConversationInfo();
+  }, [fetchConversationInfo]);
 
   /* ─── Send message ─── */
   const handleSend = async () => {
@@ -1019,8 +1022,8 @@ export default function ChatPage() {
         new Date(lastMsg.createdAt).getTime()
         : Infinity;
 
-      const isSystem = msg.type === "system";
-      const lastIsSystem = lastMsg?.type === "system";
+      const isSystem = (msg.type as any) === "system";
+      const lastIsSystem = (lastMsg?.type as any) === "system";
 
       // Nhóm theo SENDER ID để tránh gộp nhiều người khác vào 1 khối trong group chat
       // Không gộp nếu là tin nhắn hệ thống hoặc tin nhắn trước đó là hệ thống
@@ -1059,16 +1062,14 @@ export default function ChatPage() {
       {callState.active && conversationId !== BOT_ID && (
         <ZegoCallRoom
           roomId={callState.roomId || conversationId}
-          userId={myId}
-          userName={currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi"}
+          userId={myId || ""}
+          userName={currentUser?.fullName || (currentUser as any)?.name || (currentUser as any)?.username || "Tôi"}
           isGroup={conversationInfo?.isGroup || false}
           isVideoCall={callState.isVideo}
           avatarMap={avatarMap}
-          myAvatar={currentUser?.avatar}
-          targetAvatar={conversationInfo?.isGroup ? undefined : conversationInfo?.displayAvatar}
-          targetName={conversationInfo?.isGroup ? undefined : conversationInfo?.displayName}
-          hasSomeoneJoined={callState.hasSomeoneJoined}
-          isCaller={callState.isCaller}
+          myAvatar={currentUser?.avatar || ""}
+          targetAvatar={conversationInfo?.isGroup ? "" : conversationInfo?.displayAvatar || ""}
+          targetName={conversationInfo?.isGroup ? "" : conversationInfo?.displayName || ""}
           onUserJoin={() => {
             // Khi có người vào phòng, tắt tiếng chuông và đánh dấu đã có người nghe
             stopRingtone();
@@ -1408,7 +1409,7 @@ export default function ChatPage() {
                 <div className="pointer-events-auto">
                   <ChatSummaryButton 
                     conversationId={conversationId} 
-                    userId={myId} 
+                    userId={myId || ""} 
                     messages={messages} 
                   />
                 </div>
@@ -1529,7 +1530,7 @@ export default function ChatPage() {
                                 className={`relative max-w-[75%] flex flex-col ${isMine ? "items-end" : "items-start"}`}
                               >
                                 {/* System messages (General & Call) */}
-                                {msg.type === "system" ? (
+                                {(msg.type as any) === "system" ? (
                                   msg.metadata?.callType ? (
                                     <CallSystemMessage
                                       isMine={isMine}
@@ -1778,7 +1779,7 @@ export default function ChatPage() {
                                         Tin nhắn đã được thu hồi
                                       </span>
                                     </div>
-                                  ) : msg.type === "system" && msg.metadata?.callType ? (
+                                  ) : (msg.type as any) === "system" && msg.metadata?.callType ? (
                                     null /* Rendered outside bubble wrapper above */
 
                                   ) : msg.type === "file" ? (
