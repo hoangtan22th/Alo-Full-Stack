@@ -102,6 +102,7 @@ export default function ChatPage() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [mediaMessages, setMediaMessages] = useState<MessageDTO[]>([]);
   const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
@@ -391,6 +392,24 @@ export default function ChatPage() {
     messages.length,
   ]);
 
+  const fetchMediaHistory = useCallback(async () => {
+    if (!conversationId || conversationId === "alo-bot") return;
+    try {
+      // Tải 200 tin nhắn gần nhất để trích xuất media cho InfoPanel
+      const msgs = await messageService.getMessageHistory(
+        conversationId,
+        200,
+        0,
+      );
+      const filtered = msgs.filter(
+        (m) => m.type === "image" || m.type === "file",
+      );
+      setMediaMessages(filtered);
+    } catch (err) {
+      console.error("Lỗi lấy lịch sử media cho InfoPanel:", err);
+    }
+  }, [conversationId]);
+
   /* ─── Fetch conversation info ─── */
   const fetchConversationInfo = useCallback(async () => {
     if (!conversationId) return;
@@ -423,10 +442,12 @@ export default function ChatPage() {
       }
 
       setConversationInfo({ ...g, displayName, displayAvatar });
+      // Fetch media history specifically for InfoPanel
+      fetchMediaHistory();
     } catch (err) {
       console.error("Lỗi lấy thông tin cuộc hội thoại:", err);
     }
-  }, [conversationId, currentUser]);
+  }, [conversationId, currentUser, fetchMediaHistory]);
 
   /* ─── Socket: connect once on mount, cleanup on unmount ─── */
   // socketService.connect() is now handled globally in AuthProvider
@@ -459,6 +480,14 @@ export default function ChatPage() {
           if (prev.some((m) => m._id === newMsg._id)) return prev;
           return [...prev, newMsg];
         });
+
+        // Cập nhật media/files cho InfoPanel
+        if (newMsg.type === "image" || newMsg.type === "file") {
+          setMediaMessages((prev) => {
+            if (prev.some((m) => m._id === newMsg._id)) return prev;
+            return [newMsg, ...prev];
+          });
+        }
 
         // Nếu tin từ người khác → đánh dấu đã đọc
         const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
@@ -2740,7 +2769,7 @@ export default function ChatPage() {
             show={showInfoPanel}
             conversationId={conversationId}
             conversationInfo={conversationInfo}
-            messages={messages}
+            messages={mediaMessages}
             currentUser={currentUser}
             onClose={() => setShowInfoPanel(false)}
             onClearHistory={handleClearHistory}
