@@ -1,4 +1,5 @@
 import amqp, { Connection, Channel } from 'amqplib';
+import { startPollWorker } from '../workers/pollWorker';
 
 // fix vội
 // let connection: Connection | null = null;
@@ -15,6 +16,7 @@ export const EXCHANGES = {
 
 export const QUEUES = {
   MESSAGE: 'message_queue',
+  POLL: 'message_poll_queue',
 };
 
 export const ROUTING_KEYS = {
@@ -51,8 +53,16 @@ export async function connectRabbitMQ(): Promise<Channel> {
     
     // Bind sự kiện hội thoại
     await channel.bindQueue(QUEUES.MESSAGE, EXCHANGES.CHAT, 'chat.conversation.*');
+
+    // Bind sự kiện poll (Bình chọn) vào queue riêng để tránh conflicts với group-service
+    await channel.assertQueue(QUEUES.POLL, { durable: true });
+    await channel.bindQueue(QUEUES.POLL, EXCHANGES.CHAT, 'poll.*');
     
     console.log(`[RabbitMQ] Queue '${QUEUES.MESSAGE}' ready for Message events`);
+    console.log(`[RabbitMQ] Queue '${QUEUES.POLL}' ready for Poll events`);
+
+    // Khởi động các worker tiêu thụ (consumers)
+    startPollWorker(channel);
 
     connection?.on('error', (err: any) => {
       console.error('[RabbitMQ] Connection error:', err);

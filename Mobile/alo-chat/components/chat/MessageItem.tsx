@@ -12,6 +12,7 @@ import { MessageDTO } from "../../services/messageService";
 import { EMOJI_MAP } from "../../constants/Chat";
 import { openRemoteFile } from "../../utils/fileUtils";
 import { WebView } from "react-native-webview";
+import { PollMessagePreview } from "./PollMessagePreview";
 // import Pdf from "react-native-pdf";
 
 interface MessageItemProps {
@@ -50,7 +51,14 @@ export const MessageItem = ({
 
   return (
     <View
-      className={`${isLastInBlock ? "" : "mb-1"} w-full ${isSender ? "items-end" : "items-start"}`}
+      className={`${isLastInBlock ? "" : "mb-1"}`}
+      style={{
+        width: "100%",
+        alignItems: msg.type === "poll" ? "center" : (isSender ? "flex-end" : "flex-start"), 
+        justifyContent: "center",
+        marginVertical: msg.type === "poll" ? 12 : 0,
+        paddingHorizontal: 10
+      }}
     >
       {isHighlighted && (
         <View
@@ -76,13 +84,14 @@ export const MessageItem = ({
       >
         <View
           className={`shadow-sm ${
-            (msg.type === "image" || msg.type === "file") && !msg.isRevoked
+            (((msg.type === "image" || msg.type === "file") && !msg.isRevoked) || (msg.type === "poll"))
               ? "p-0 bg-transparent"
               : "px-5 py-3 " +
                 (isSender
                   ? "bg-black rounded-3xl rounded-br-lg"
                   : "bg-white rounded-3xl rounded-bl-lg")
           }`}
+          style={msg.type === "poll" ? { width: "100%", alignItems: "center" } : {}}
         >
           {msg.replyTo && msg.replyTo.messageId && (
             <TouchableOpacity
@@ -241,6 +250,8 @@ export const MessageItem = ({
             >
               {msg.content}
             </Text>
+          ) : msg.type === "poll" ? (
+            <PollMessagePreview pollId={msg.metadata?.pollId || ""} isSender={isSender} />
           ) : null}
         </View>
       </TouchableOpacity>
