@@ -58,7 +58,7 @@ api.interceptors.response.use(
     if (response.data && response.data.data !== undefined) {
       return response.data.data;
     }
-    return response;
+    return response.data || response;
   },
   async (error) => {
     const originalRequest = error.config as CustomAxiosRequestConfig;

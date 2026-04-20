@@ -24,9 +24,17 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   PhotoIcon,
+  ChartBarIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
 import { MessageDTO } from '@/services/messageService';
 import AddMemberModal from '../ui/group/AddMemberModal';
+import PollModal from '../ui/group/PollModal';
+import NoteModal from '../ui/group/NoteModal';
+import ReminderModal from '../ui/group/ReminderModal';
+import JoinLinkModal from '../ui/group/JoinLinkModal';
+import { groupService } from '@/services/groupService';
+import { toast } from 'sonner';
 
 const getMediaUrl = (url: string | undefined): string => {
   if (!url) return "";
@@ -82,7 +90,17 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 }) => {
   const [showMembers, setShowMembers] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [showPollModal, setShowPollModal] = useState(false);
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [showJoinLinkModal, setShowJoinLinkModal] = useState(false);
   const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
+
+  // Group Info Editing State
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState("");
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const isGroup = conversationInfo?.isGroup;
   
@@ -93,6 +111,50 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   }, [isGroup, conversationInfo, myId]);
 
   const isAdmin = currentUserRole === 'leader';
+  const isDeputy = currentUserRole === 'deputy';
+  const isManager = isAdmin || isDeputy;
+
+  // Quyền hạn giống mobile
+  const permissions = conversationInfo?.permissions;
+  const canEdit = isGroup && (isManager || permissions?.editGroupInfo === "EVERYONE");
+  const canCreatePoll = isGroup && (isManager || permissions?.createPolls === "EVERYONE");
+  const canCreateNote = isGroup && (isManager || permissions?.createNotes === "EVERYONE");
+  const canCreateReminder = isGroup && (isManager || permissions?.createReminders === "EVERYONE");
+
+  const handleUpdateName = async () => {
+    if (!tempName.trim() || tempName === conversationInfo?.displayName) {
+      setIsEditingName(false);
+      return;
+    }
+    try {
+      await groupService.updateGroup(conversationId, tempName.trim());
+      toast.success("Đã cập nhật tên nhóm");
+      setIsEditingName(false);
+      if (onRefreshData) onRefreshData();
+    } catch (err) {
+      toast.error("Không thể cập nhật tên nhóm");
+    }
+  };
+
+  const handleAvatarClick = () => {
+    if (isGroup && canEdit) {
+      fileInputRef.current?.click();
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      await groupService.updateGroup(conversationId, undefined, file);
+      toast.success("Đã cập nhật ảnh đại diện nhóm");
+      if (onRefreshData) onRefreshData();
+    } catch (err) {
+      console.error(err);
+      toast.error("Không thể cập nhật ảnh đại diện");
+    }
+  };
 
   // Lọc media (ảnh/video)
   const mediaList = useMemo(() => {
@@ -100,13 +162,14 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
     messages.forEach(m => {
       if (m.type === 'image') {
         if (m.metadata?.imageGroup) {
-          list.push(...m.metadata.imageGroup.filter((img: any) => !img.isRevoked));
+          list.push(...m.metadata.imageGroup.filter((img: any) => !img.isRevoked).map((img: any) => ({ ...img, createdAt: m.createdAt })));
         } else {
-          list.push({ url: m.content, fileName: m.metadata?.fileName });
+          list.push({ url: m.content, fileName: m.metadata?.fileName, createdAt: m.createdAt });
         }
       }
     });
-    return list.slice(0, 6); // Lấy 6 cái mới nhất
+    // Sắp xếp mới nhất lên đầu và lấy 5 cái
+    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
   }, [messages]);
 
   // Lọc file
@@ -141,29 +204,66 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           {/* Profile Section */}
           <div className="flex flex-col items-center pt-8 pb-6 border-b border-gray-50">
             <div className="relative mb-4 group">
-              {conversationInfo?.displayAvatar ? (
-                <img
-                  src={getMediaUrl(conversationInfo.displayAvatar)}
-                  alt="Profile"
-                  className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-xl ring-1 ring-gray-100"
-                />
-              ) : (
-                <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-3xl border-4 border-white shadow-xl">
-                  {(conversationInfo?.displayName || "?").charAt(0).toUpperCase()}
-                </div>
-              )}
-              {isGroup && (
-                <button className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-gray-100 text-gray-500 hover:text-blue-600 transition scale-0 group-hover:scale-100 duration-200">
-                  <CameraIcon className="w-4 h-4" />
-                </button>
-              )}
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleFileChange}
+              />
+              <div 
+                onClick={handleAvatarClick}
+                className={`relative cursor-pointer transition-transform duration-300 ${isGroup && canEdit ? 'hover:scale-105 active:scale-95' : ''}`}
+              >
+                {conversationInfo?.displayAvatar ? (
+                  <img
+                    src={getMediaUrl(conversationInfo.displayAvatar)}
+                    alt="Profile"
+                    className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-xl ring-1 ring-gray-100"
+                  />
+                ) : (
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-3xl border-4 border-white shadow-xl">
+                    {(conversationInfo?.displayName || "?").charAt(0).toUpperCase()}
+                  </div>
+                )}
+                {isGroup && canEdit && (
+                  <button className="absolute bottom-0 right-0 p-2 bg-white rounded-full shadow-lg border border-gray-100 text-gray-500 hover:text-blue-600 transition">
+                    <CameraIcon className="w-4 h-4" />
+                  </button>
+                )}
+                {!isGroup && (
+                  <div className="absolute bottom-1 right-2 w-4 h-4 bg-green-500 border-2 border-white rounded-full" />
+                )}
+              </div>
             </div>
             
-            <div className="flex items-center gap-2 group cursor-pointer">
-              <h2 className="text-[18px] font-black text-gray-900 tracking-tight">
-                {conversationInfo?.displayName || "..."}
-              </h2>
-              {isGroup && <PencilIcon className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-500 transition" />}
+            <div className="flex flex-col items-center gap-1 group px-6 text-center">
+              {isEditingName ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={tempName}
+                    onChange={(e) => setTempName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleUpdateName()}
+                    onBlur={handleUpdateName}
+                    className="w-full bg-gray-50 border-none rounded-lg px-3 py-1 text-[18px] font-black text-gray-900 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 max-w-full">
+                  <h2 className="text-[18px] font-black text-gray-900 tracking-tight truncate">
+                    {conversationInfo?.displayName || "..."}
+                  </h2>
+                  {isGroup && canEdit && (
+                    <button 
+                      onClick={() => { setTempName(conversationInfo?.displayName || ""); setIsEditingName(true); }}
+                      className="p-1 hover:bg-gray-100 rounded-full transition text-gray-300 hover:text-blue-500 flex-shrink-0"
+                    >
+                      <PencilIcon className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             
             <p className="text-[12px] font-bold text-gray-400 mt-1 uppercase tracking-wider">
@@ -177,11 +277,16 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
               <ActionButton icon={<BellSlashIcon />} label="Tắt báo" />
               <ActionButton icon={<MapPinIcon />} label="Ghim" />
               <ActionButton icon={<MagnifyingGlassIcon />} label="Tìm kiếm" />
-              {isGroup && (
+              {isGroup ? (
                 <ActionButton 
                   icon={<UserGroupIcon />} 
                   label="Thêm" 
                   onClick={() => setShowAddMemberModal(true)}
+                />
+              ) : (
+                <ActionButton 
+                  icon={<UserGroupIcon />} 
+                  label="Nhóm chung" 
                 />
               )}
             </div>
@@ -306,19 +411,36 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
             
             <div className="grid grid-cols-3 gap-2">
               {mediaList.length > 0 ? (
-                mediaList.map((img, idx) => (
-                  <div key={idx} className="aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-50 group cursor-pointer">
-                    <img 
-                      src={getMediaUrl(img.url)} 
-                      className="w-full h-full object-cover group-hover:scale-110 transition duration-300"
-                      alt="Media"
-                    />
-                  </div>
-                ))
+                <>
+                  {mediaList.slice(0, 5).map((img, idx) => (
+                    <div key={idx} className="aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-50 group cursor-pointer shadow-sm">
+                      <img 
+                        src={getMediaUrl(img.url)} 
+                        className="w-full h-full object-cover group-hover:scale-110 transition duration-300"
+                        alt="Media"
+                      />
+                    </div>
+                  ))}
+                  {mediaList.length > 5 && (
+                    <div 
+                      onClick={onViewAllMedia}
+                      className="aspect-square rounded-xl overflow-hidden bg-gray-200 border border-gray-50 group cursor-pointer relative shadow-sm"
+                    >
+                      <img 
+                        src={getMediaUrl(mediaList[5].url)} 
+                        className="w-full h-full object-cover blur-[2px] opacity-50"
+                        alt="More Media"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center text-gray-800 font-black text-[16px]">
+                        +{mediaList.length - 5}
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
-                <div className="col-span-3 py-4 text-center">
-                  <PhotoIcon className="w-8 h-8 text-gray-100 mx-auto mb-1" />
-                  <p className="text-[12px] text-gray-300 font-medium italic">Trống</p>
+                <div className="col-span-3 py-10 text-center bg-gray-50 rounded-2xl border-2 border-dashed border-gray-100">
+                  <PhotoIcon className="w-8 h-8 text-gray-200 mx-auto mb-2" />
+                  <p className="text-[12px] text-gray-400 font-bold italic">Chưa có ảnh/video</p>
                 </div>
               )}
             </div>
@@ -332,35 +454,81 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
             </div>
             <div className="space-y-3">
               {fileList.length > 0 ? (
-                fileList.map((m) => (
+                fileList.slice(0, 3).map((m) => (
                   <a
                     key={m._id}
                     href={getMediaUrl(m.content)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-3 p-2 -mx-2 rounded-xl hover:bg-gray-50 transition group"
+                    className="flex items-center gap-3 p-3 rounded-2xl bg-gray-50 border border-gray-100 hover:border-blue-200 hover:bg-white transition group shadow-sm active:scale-[0.98]"
                   >
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 group-hover:bg-blue-100 transition">
+                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-blue-500 group-hover:text-white group-hover:bg-blue-600 transition shadow-sm">
                       {m.metadata?.fileType?.includes('pdf') ? <DocumentTextIcon className="w-5 h-5" /> : <TableCellsIcon className="w-5 h-5" />}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-bold text-gray-900 truncate group-hover:text-blue-600 transition">
+                      <p className="text-[13px] font-black text-gray-900 truncate tracking-tight">
                         {m.metadata?.fileName || "File"}
                       </p>
-                      <p className="text-[11px] font-medium text-gray-400">
-                        {m.metadata?.fileSize ? (m.metadata.fileSize / 1024).toFixed(1) + ' KB' : '0 KB'} • {new Date(m.createdAt || "").toLocaleDateString('vi-VN')}
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
+                        {m.metadata?.fileSize ? (m.metadata.fileSize / (1024 * 1024)).toFixed(1) + ' MB' : '0 MB'} • {new Date(m.createdAt || "").toLocaleDateString('vi-VN')}
                       </p>
                     </div>
                   </a>
                 ))
               ) : (
-                <p className="text-[12px] text-gray-300 font-medium italic py-2">Chưa có file nào</p>
+                <div className="py-6 text-center bg-gray-50 rounded-2xl border-2 border-dashed border-gray-100">
+                  <p className="text-[12px] text-gray-400 font-bold italic">Chưa có file nào</p>
+                </div>
               )}
             </div>
           </div>
 
+          {/* SECTION: TIỆN ÍCH NHÓM */}
+          {isGroup && (
+            <div className="p-6 border-b border-gray-50">
+              <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4">Tiện ích nhóm</h3>
+              <div className="space-y-1">
+                <SettingItem 
+                  icon={<ChartBarIcon />} 
+                  label="Bình chọn" 
+                  onClick={() => setShowPollModal(true)}
+                />
+                <SettingItem 
+                  icon={<DocumentTextIcon />} 
+                  label="Ghi chú" 
+                  onClick={() => setShowNoteModal(true)}
+                />
+                <SettingItem 
+                  icon={<ClockIcon />} 
+                  label="Nhắc hẹn" 
+                  onClick={() => setShowReminderModal(true)}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* SECTION: THÔNG TIN KHÁC */}
+          {isGroup && (
+            <div className="p-6 border-b border-gray-50">
+              <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4">Thông tin khác</h3>
+              <div className="space-y-1">
+                {isManager && (
+                   <SettingItem 
+                    icon={<Cog6ToothIcon />} 
+                    label="Cài đặt nhóm" 
+                  />
+                )}
+                <SettingItem 
+                  icon={<LinkIcon />} 
+                  label="Link tham gia nhóm" 
+                  onClick={() => setShowJoinLinkModal(true)}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Settings & Danger Zone */}
-          <div className="p-6 space-y-1">
+          <div className="p-6 pb-12 space-y-1">
              <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4">Cài đặt & Bảo mật</h3>
              
              <SettingItem 
@@ -374,7 +542,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
              />
              <div className="pt-4 mt-4 border-t border-gray-50 space-y-1">
                <SettingItem 
-                icon={<TrashIcon className="text-red-500" />} 
+                icon={<TrashIcon />} 
                 label="Xóa lịch sử trò chuyện" 
                 isDanger 
                 onClick={onClearHistory}
@@ -382,14 +550,14 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                {isGroup && (
                  <>
                    <SettingItem 
-                    icon={<ArrowRightOnRectangleIcon className="text-red-500" />} 
+                    icon={<ArrowRightOnRectangleIcon />} 
                     label="Rời khỏi nhóm" 
                     isDanger 
                     onClick={onLeaveGroup}
                    />
                    {isAdmin && (
                      <SettingItem 
-                      icon={<XMarkIcon className="text-red-600" />} 
+                      icon={<XMarkIcon />} 
                       label="Giải tán nhóm" 
                       isDanger 
                       onClick={onDisbandGroup}
@@ -413,6 +581,36 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           }}
         />
       )}
+
+      {showPollModal && (
+        <PollModal 
+          conversationId={conversationId}
+          onClose={() => setShowPollModal(false)}
+        />
+      )}
+
+      {showNoteModal && (
+        <NoteModal 
+          conversationId={conversationId}
+          onClose={() => setShowNoteModal(false)}
+        />
+      )}
+
+      {showReminderModal && (
+        <ReminderModal 
+          conversationId={conversationId}
+          onClose={() => setShowReminderModal(false)}
+        />
+      )}
+
+      {showJoinLinkModal && (
+        <JoinLinkModal 
+          groupId={conversationId}
+          groupName={conversationInfo?.displayName || "Nhóm"}
+          isManager={isManager}
+          onClose={() => setShowJoinLinkModal(false)}
+        />
+      )}
     </div>
   );
 };
@@ -431,17 +629,17 @@ const ActionButton: React.FC<{ icon: React.ReactNode; label: string; onClick?: (
 const SettingItem: React.FC<{ icon: React.ReactNode; label: string; value?: string; isDanger?: boolean; onClick?: () => void }> = ({ icon, label, value, isDanger, onClick }) => (
   <button 
     onClick={onClick}
-    className="w-full flex items-center justify-between p-3 -mx-3 rounded-xl hover:bg-gray-50 transition group"
+    className="w-full flex items-center justify-between p-3 -mx-3 rounded-2xl hover:bg-gray-50 transition group active:scale-[0.98]"
   >
     <div className="flex items-center gap-3">
-      <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition ${isDanger ? 'bg-red-50 text-red-500 group-hover:bg-red-100' : 'bg-gray-50 text-gray-500 group-hover:bg-white group-hover:shadow-sm group-hover:ring-1 group-hover:ring-gray-100'}`}>
-        {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { className: "w-4 h-4" }) : icon}
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition shadow-sm ${isDanger ? 'bg-red-50 text-red-500 group-hover:bg-red-600 group-hover:text-white' : 'bg-white text-gray-500 group-hover:bg-blue-600 group-hover:text-white border border-gray-100'}`}>
+        {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { className: "w-5 h-5" }) : icon}
       </div>
-      <span className={`text-[13px] font-bold ${isDanger ? 'text-red-500' : 'text-gray-700'}`}>{label}</span>
+      <span className={`text-[13px] font-black tracking-tight ${isDanger ? 'text-red-500 group-hover:text-red-600' : 'text-gray-700 group-hover:text-blue-600'}`}>{label}</span>
     </div>
     <div className="flex items-center gap-2">
       {value && <span className="text-[12px] font-bold text-gray-400">{value}</span>}
-      <ChevronRightIcon className={`w-3.5 h-3.5 ${isDanger ? 'text-red-300' : 'text-gray-300'}`} />
+      <ChevronRightIcon className={`w-4 h-4 ${isDanger ? 'text-red-300' : 'text-gray-300 group-hover:text-blue-300'}`} />
     </div>
   </button>
 );

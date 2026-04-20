@@ -1,21 +1,14 @@
 import api from "./api";
 
 export const groupService = {
-  updateGroup: async (groupId: string, name?: string, imageUri?: string) => {
+  updateGroup: async (groupId: string, name?: string, avatarFile?: File) => {
     try {
       const formData = new FormData();
       if (name) {
         formData.append("name", name);
       }
-      if (imageUri) {
-        const filename = imageUri.split("/").pop() || "avatar.jpg";
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : `image/jpeg`;
-        formData.append("avatarFile", {
-          uri: imageUri,
-          name: filename,
-          type,
-        } as any);
+      if (avatarFile) {
+        formData.append("avatarFile", avatarFile);
       }
       return await api.put<any, any>(`/groups/${groupId}`, formData, {
         headers: {

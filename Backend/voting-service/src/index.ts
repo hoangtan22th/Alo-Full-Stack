@@ -23,7 +23,8 @@ eurekaClient.start((error: any) => {
 });
 
 const app = express();
-app.use(cors());
+// Tắt CORS ở đây vì API Gateway đã đảm nhận. Nếu mở cả 2 sẽ sinh ra lỗi 'Multiple Access-Control-Allow-Origin'
+// app.use(cors());
 app.use(express.json());
 
 // Debug logging for incoming requests
