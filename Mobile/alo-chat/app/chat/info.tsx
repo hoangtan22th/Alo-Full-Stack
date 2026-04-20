@@ -35,6 +35,7 @@ import {
   PencilIcon,
   CameraIcon,
   LinkIcon,
+  Cog6ToothIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -424,9 +425,18 @@ export default function ChatInfoScreen() {
           <ArrowLeftIcon size={24} color="#000" />
         </TouchableOpacity>
         <Text className="text-lg font-bold text-gray-900">Thông tin</Text>
-        <TouchableOpacity className="p-2 -mr-2">
-          <EllipsisVerticalIcon size={24} color="#000" />
-        </TouchableOpacity>
+        {isGroup && isManager ? (
+          <TouchableOpacity
+            onPress={() => router.push(`/chat/settings?id=${id}`)}
+            className="p-2 -mr-2"
+          >
+            <Cog6ToothIcon size={24} color="#000" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity className="p-2 -mr-2">
+            <EllipsisVerticalIcon size={24} color="#000" />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
@@ -656,6 +666,16 @@ export default function ChatInfoScreen() {
             </Text>
 
             <View className="bg-[#f5f6f8] rounded-[24px]">
+              {isManager && (
+                <>
+                  <SettingItem
+                    icon={<Cog6ToothIcon size={24} color="#4b5563" />}
+                    title="Cài đặt nhóm"
+                    onPress={() => router.push(`/chat/settings?id=${id}`)}
+                  />
+                  <View className="h-[1px] bg-white w-[90%] self-end" />
+                </>
+              )}
               <SettingItem
                 icon={<LinkIcon size={24} color="#4b5563" />}
                 title="Link tham gia nhóm"

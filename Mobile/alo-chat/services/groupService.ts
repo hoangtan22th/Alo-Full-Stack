@@ -335,4 +335,29 @@ export const groupService = {
       throw error;
     }
   },
+
+  updateGroupSettings: async (
+    groupId: string,
+    settings: {
+      isHighlightEnabled?: boolean;
+      permissions?: {
+        editGroupInfo?: "EVERYONE" | "ADMIN";
+        createNotes?: "EVERYONE" | "ADMIN";
+        createPolls?: "EVERYONE" | "ADMIN";
+        pinMessages?: "EVERYONE" | "ADMIN";
+        sendMessage?: "EVERYONE" | "ADMIN";
+      };
+    },
+  ) => {
+    try {
+      const data = await api.put<any, any>(
+        `/groups/${groupId}/settings`,
+        settings,
+      );
+      return data;
+    } catch (error) {
+      console.error("Lỗi cập nhật cấu hình nhóm:", error);
+      throw error;
+    }
+  },
 };

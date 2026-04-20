@@ -28,6 +28,7 @@ interface MessageItemProps {
   setExpandedTimeMsgId: React.Dispatch<React.SetStateAction<string | null>>;
   onReplyClick?: (messageId: string) => void;
   isHighlighted?: boolean;
+  isAdminHighlighted?: boolean;
 }
 
 export const MessageItem = ({
@@ -43,6 +44,7 @@ export const MessageItem = ({
   setExpandedTimeMsgId,
   onReplyClick,
   isHighlighted,
+  isAdminHighlighted,
 }: MessageItemProps) => {
   const timeString = new Date(msg.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
@@ -54,10 +56,11 @@ export const MessageItem = ({
       className={`${isLastInBlock ? "" : "mb-1"}`}
       style={{
         width: "100%",
-        alignItems: msg.type === "poll" ? "center" : (isSender ? "flex-end" : "flex-start"), 
+        alignItems:
+          msg.type === "poll" ? "center" : isSender ? "flex-end" : "flex-start",
         justifyContent: "center",
         marginVertical: msg.type === "poll" ? 12 : 0,
-        paddingHorizontal: 10
+        paddingHorizontal: 10,
       }}
     >
       {isHighlighted && (
@@ -83,15 +86,18 @@ export const MessageItem = ({
         className="relative"
       >
         <View
-          className={`shadow-sm ${
-            (((msg.type === "image" || msg.type === "file") && !msg.isRevoked) || (msg.type === "poll"))
-              ? "p-0 bg-transparent"
+          className={`shadow-sm border-[2px] ${
+            ((msg.type === "image" || msg.type === "file") && !msg.isRevoked) ||
+            msg.type === "poll"
+              ? `p-0 bg-transparent ${msg.type === "image" ? "rounded-[22px]" : "rounded-3xl"}`
               : "px-5 py-3 " +
                 (isSender
                   ? "bg-black rounded-3xl rounded-br-lg"
                   : "bg-white rounded-3xl rounded-bl-lg")
-          }`}
-          style={msg.type === "poll" ? { width: "100%", alignItems: "center" } : {}}
+          } ${isAdminHighlighted ? "border-amber-200" : "border-transparent"}`}
+          style={
+            msg.type === "poll" ? { width: "100%", alignItems: "center" } : {}
+          }
         >
           {msg.replyTo && msg.replyTo.messageId && (
             <TouchableOpacity
@@ -117,7 +123,9 @@ export const MessageItem = ({
                 {msg.replyTo.type === "text"
                   ? msg.replyTo.content
                   : msg.replyTo.type === "image"
-                    ? (msg.replyTo.content === "[Album Ảnh]" ? "[Album Ảnh]" : "[Hình ảnh]")
+                    ? msg.replyTo.content === "[Album Ảnh]"
+                      ? "[Album Ảnh]"
+                      : "[Hình ảnh]"
                     : "[Tệp tin]"}
               </Text>
             </TouchableOpacity>
@@ -251,7 +259,10 @@ export const MessageItem = ({
               {msg.content}
             </Text>
           ) : msg.type === "poll" ? (
-            <PollMessagePreview pollId={msg.metadata?.pollId || ""} isSender={isSender} />
+            <PollMessagePreview
+              pollId={msg.metadata?.pollId || ""}
+              isSender={isSender}
+            />
           ) : null}
         </View>
       </TouchableOpacity>

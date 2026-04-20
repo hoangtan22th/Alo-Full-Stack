@@ -88,10 +88,10 @@ router.put(
   groupController.updateLinkSetting,
 );
 
-// Cài đặt xem lịch sử tin nhắn
+// Cài đặt nâng cao của nhóm
 router.put(
-  "/api/v1/groups/:groupId/history-setting",
-  groupController.updateHistorySetting,
+  "/api/v1/groups/:groupId/settings",
+  groupController.updateSettings,
 );
 
 export default router;

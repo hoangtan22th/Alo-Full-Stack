@@ -27,6 +27,14 @@ export interface IConversation extends Document {
   isHistoryVisible: boolean; // Add isHistoryVisible field
   clearedAt: Map<string, Date>; // userId -> timestamp
   unreadCount: Map<string, number>; // userId -> count
+  isHighlightEnabled: boolean;
+  permissions: {
+    editGroupInfo: "EVERYONE" | "ADMIN";
+    createNotes: "EVERYONE" | "ADMIN";
+    createPolls: "EVERYONE" | "ADMIN";
+    pinMessages: "EVERYONE" | "ADMIN";
+    sendMessage: "EVERYONE" | "ADMIN";
+  };
   // Các trường do timestamps tự sinh ra:
   createdAt: Date;
   updatedAt: Date;
@@ -76,6 +84,14 @@ const conversationSchema = new Schema<IConversation>(
       type: Map,
       of: Date,
       default: {},
+    },
+    isHighlightEnabled: { type: Boolean, default: false },
+    permissions: {
+      editGroupInfo: { type: String, enum: ["EVERYONE", "ADMIN"], default: "ADMIN" },
+      createNotes: { type: String, enum: ["EVERYONE", "ADMIN"], default: "EVERYONE" },
+      createPolls: { type: String, enum: ["EVERYONE", "ADMIN"], default: "EVERYONE" },
+      pinMessages: { type: String, enum: ["EVERYONE", "ADMIN"], default: "ADMIN" },
+      sendMessage: { type: String, enum: ["EVERYONE", "ADMIN"], default: "EVERYONE" },
     },
   },
   {

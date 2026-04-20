@@ -102,6 +102,8 @@ export default function GlobalChatScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<MessageDTO[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [groupDetails, setGroupDetails] = useState<any>(null);
+  const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
 
 
   const chatInputRef = useRef<any>(null);
@@ -305,12 +307,36 @@ export default function GlobalChatScreen() {
     }
   };
 
+  const fetchGroupDetails = async () => {
+    if (!resolvedConversationId || !isGroupChat) return;
+    try {
+      const res = await groupService.getGroupById(resolvedConversationId);
+      const data = res?.data?.data || res?.data || res;
+      if (data) {
+        setGroupDetails(data);
+        const admins = new Set<string>(
+          (data.members || [])
+            .filter((m: any) => m.role === "LEADER" || m.role === "DEPUTY")
+            .map((m: any) => String(m.userId)),
+        );
+        setAdminIds(admins);
+        if (data.name) setRealtimeGroupName(data.name);
+        if (data.groupAvatar) setRealtimeAvatar(data.groupAvatar);
+      }
+    } catch (e) {
+      console.error("Lỗi fetch group details:", e);
+    }
+  };
+
   useEffect(() => {
     if (resolvedConversationId) {
       fetchMsgs(true);
       fetchPinnedMessages();
+      if (isGroupChat) {
+        fetchGroupDetails();
+      }
     }
-  }, [resolvedConversationId]);
+  }, [resolvedConversationId, isGroupChat]);
 
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {
@@ -404,6 +430,23 @@ export default function GlobalChatScreen() {
       }
     };
 
+    const handleGroupUpdated = (data: any) => {
+      const updatedGroup = data.group ? data.group : data;
+      if (updatedGroup._id === resolvedConversationId) {
+        setGroupDetails(updatedGroup);
+        if (updatedGroup.members) {
+          const admins = new Set<string>(
+            (updatedGroup.members || [])
+              .filter((m: any) => m.role === "LEADER" || m.role === "DEPUTY")
+              .map((m: any) => String(m.userId)),
+          );
+          setAdminIds(admins);
+        }
+        if (updatedGroup.name) setRealtimeGroupName(updatedGroup.name);
+        if (updatedGroup.groupAvatar) setRealtimeAvatar(updatedGroup.groupAvatar);
+      }
+    };
+
     socket.on("message-received", handleMessageReceived);
     socket.on("message-reaction-updated", handleReactionUpdated);
     socket.on("messages-read", handleMessagesRead);
@@ -412,6 +455,7 @@ export default function GlobalChatScreen() {
     socket.on("message-pinned", handleMessagePinned);
     socket.on("message-revoked", handleMessageRevoked);
     socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
+    socket.on("GROUP_UPDATED", handleGroupUpdated);
 
     return () => {
       socket.off("message-received", handleMessageReceived);
@@ -422,6 +466,7 @@ export default function GlobalChatScreen() {
       socket.off("message-pinned", handleMessagePinned);
       socket.off("message-revoked", handleMessageRevoked);
       socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
+      socket.off("GROUP_UPDATED", handleGroupUpdated);
     };
   }, [socket, resolvedConversationId, isGroupChat, targetUserId]);
 
@@ -813,6 +858,10 @@ export default function GlobalChatScreen() {
                         setExpandedTimeMsgId={setExpandedTimeMsgId}
                         onReplyClick={scrollToMessage}
                         isHighlighted={msg._id === highlightedMsgId}
+                        isAdminHighlighted={
+                          groupDetails?.isHighlightEnabled &&
+                          adminIds.has(String(msg.senderId))
+                        }
                       />
                     ))}
                   </View>

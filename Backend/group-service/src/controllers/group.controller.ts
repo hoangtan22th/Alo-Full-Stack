@@ -1177,3 +1177,53 @@ export const updateHistorySetting = async (
     res.status(500).json({ error: error.message });
   }
 };
+
+export const updateSettings = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const groupId = String(req.params.groupId || "");
+    const { isHighlightEnabled, permissions } = req.body;
+    const requesterId = (req.headers["x-user-id"] || "").toString();
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    // Check permissions (Only Leader/Deputy can update these settings)
+    const member = group.members.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (!member || (member.role !== "LEADER" && member.role !== "DEPUTY")) {
+      res.status(403).json({ error: "Bạn không có quyền thay đổi thiết lập này" });
+      return;
+    }
+
+    if (typeof isHighlightEnabled === "boolean") {
+      group.isHighlightEnabled = isHighlightEnabled;
+    }
+
+    if (permissions && typeof permissions === "object") {
+      // Deep merge or specific assign
+      if (permissions.editGroupInfo) group.permissions.editGroupInfo = permissions.editGroupInfo;
+      if (permissions.createNotes) group.permissions.createNotes = permissions.createNotes;
+      if (permissions.createPolls) group.permissions.createPolls = permissions.createPolls;
+      if (permissions.pinMessages) group.permissions.pinMessages = permissions.pinMessages;
+      if (permissions.sendMessage) group.permissions.sendMessage = permissions.sendMessage;
+    }
+
+    await group.save();
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
+
+    res.status(200).json({
+      message: "Cập nhật thiết lập thành công",
+      data: group,
+    });
+  } catch (error: any) {
+    console.error("[updateSettings] Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
