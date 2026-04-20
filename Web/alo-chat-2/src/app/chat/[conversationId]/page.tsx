@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import axiosClient from "@/services/api";
 import { messageService, MessageDTO } from "@/services/messageService";
 import { groupService } from "@/services/groupService";
@@ -82,6 +82,7 @@ const getMediaUrl = (url: string | undefined): string => {
 export default function ChatPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const conversationId = params?.conversationId as string;
 
   // File upload state
@@ -524,6 +525,34 @@ export default function ChatPage() {
       fetchConversationInfo();
     }
   }, [conversationId, currentUser, fetchConversationInfo]);
+
+  const handleStartCall = useCallback((isVideo: boolean) => {
+    setCallState({ active: true, isVideo, roomId: conversationId, isCaller: true, hasSomeoneJoined: false });
+    playRingtone(); // Nghe tiếng chuông chờ
+    socketService.initiateCall({
+      targetRoom: conversationId,
+      caller: {
+        id: myId,
+        name: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+        avatar: currentUser?.avatar
+      },
+      isVideo
+    });
+  }, [conversationId, myId, currentUser]);
+
+  // Handle call query param
+  useEffect(() => {
+    const callParam = searchParams.get("call");
+    if (!callParam || callState.active || !conversationId || !currentUser || !myId) return;
+
+    if (callParam === "video") {
+      handleStartCall(true);
+      router.replace(`/chat/${conversationId}`);
+    } else if (callParam === "audio") {
+      handleStartCall(false);
+      router.replace(`/chat/${conversationId}`);
+    }
+  }, [searchParams, callState.active, conversationId, currentUser, myId, handleStartCall, router]);
 
   /* ─── Fetch user info for group members who sent messages ─── */
   useEffect(() => {
@@ -1018,19 +1047,6 @@ export default function ChatPage() {
   /* ─────────────────────────────────────────
      RENDER
   ───────────────────────────────────────── */
-  const handleStartCall = (isVideo: boolean) => {
-    setCallState({ active: true, isVideo, roomId: conversationId, isCaller: true, hasSomeoneJoined: false });
-    playRingtone(); // Nghe tiếng chuông chờ
-    socketService.initiateCall({
-      targetRoom: conversationId,
-      caller: {
-        id: myId,
-        name: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
-        avatar: currentUser?.avatar
-      },
-      isVideo
-    });
-  };
 
   const avatarMap = useMemo(() => 
     Object.fromEntries(Object.entries(userCache).map(([k, v]) => [k, v.avatar])),

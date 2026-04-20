@@ -215,7 +215,9 @@ class SocketService {
     }
   }
 
-  onIncomingCall(callback: (data: { roomId: string; caller: any; isVideo: boolean }) => void) {
+  onIncomingCall(
+    callback: (data: { roomId: string; caller: any; isVideo: boolean }) => void,
+  ) {
     this.addListener("INCOMING_CALL", callback);
   }
 

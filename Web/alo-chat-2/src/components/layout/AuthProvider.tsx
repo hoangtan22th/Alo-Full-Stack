@@ -25,18 +25,18 @@ export default function AuthProvider({
     const handleForceLogout = () => {
       // Ngăn chặn hiển thị đè đúp Swal nếu đã có một cái đang mở
       if (document.body.classList.contains("swal2-shown")) {
-         return;
+        return;
       }
 
       // 1. Chỉ ngắt kết nối socket để ko gửi/nhận thêm tin nhắn (treo UI lại)
       socketService.disconnect();
-      
+
       // 2. Hiển thị Swal bằng static import và đợi user xác nhận
       Swal.fire({
-        icon: 'warning',
-        title: 'Đã ngắt kết nối',
-        text: 'Tài khoản của bạn đã bị đăng nhập ở một thiết bị khác. Vui lòng đăng nhập lại.',
-        confirmButtonColor: '#000',
+        icon: "warning",
+        title: "Đã ngắt kết nối",
+        text: "Tài khoản của bạn đã bị đăng nhập ở một thiết bị khác. Vui lòng đăng nhập lại.",
+        confirmButtonColor: "#000",
         allowOutsideClick: false, // Bắt buộc user phải bấm OK
         allowEscapeKey: false,
       }).then((result) => {

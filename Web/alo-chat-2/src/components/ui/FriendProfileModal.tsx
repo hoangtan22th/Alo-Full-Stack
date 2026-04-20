@@ -14,6 +14,8 @@ import {
 import { useState, useEffect } from "react";
 import axiosClient from "@/services/api";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { groupService } from "@/services/groupService";
 
 export default function FriendProfileModal({
   isOpen,
@@ -25,6 +27,7 @@ export default function FriendProfileModal({
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     if (isOpen && userId) {
@@ -86,6 +89,66 @@ export default function FriendProfileModal({
       onClose();
     } catch (err) {
       toast.error("Lỗi khi chấp nhận");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRemoveFriend = async () => {
+    setActionLoading(true);
+    try {
+      await axiosClient.delete(`/contacts/friend/${userId}`);
+      toast.success("Đã xoá khỏi danh sách bạn bè!");
+      onActionSuccess?.();
+      onClose();
+    } catch (err) {
+      toast.error("Lỗi khi xoá bạn");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleMessage = async () => {
+    setActionLoading(true);
+    try {
+      const conversation = await groupService.createDirectConversation(userId);
+      const convoId =
+        conversation?._id ||
+        conversation?.id ||
+        conversation?.data?._id ||
+        conversation?.data?.id;
+
+      if (!convoId) {
+        toast.error("Không tạo được cuộc hội thoại");
+        return;
+      }
+      onClose();
+      router.push(`/chat/${convoId}`);
+    } catch (error) {
+      toast.error("Lỗi khi tạo cuộc hội thoại");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCall = async (isVideo: boolean) => {
+    setActionLoading(true);
+    try {
+      const conversation = await groupService.createDirectConversation(userId);
+      const convoId =
+        conversation?._id ||
+        conversation?.id ||
+        conversation?.data?._id ||
+        conversation?.data?.id;
+
+      if (!convoId) {
+        toast.error("Không tạo được cuộc hội thoại");
+        return;
+      }
+      onClose();
+      router.push(`/chat/${convoId}?call=${isVideo ? "video" : "audio"}`);
+    } catch (error) {
+      toast.error("Lỗi khi tạo cuộc gọi");
     } finally {
       setActionLoading(false);
     }
@@ -171,10 +234,18 @@ export default function FriendProfileModal({
             <div className="mt-4 space-y-2">
               {relationStatus === "ACCEPTED" ? (
                 <div className="flex gap-2">
-                  <button className="flex-1 bg-gray-100 text-gray-900 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-200 transition">
+                  <button 
+                    onClick={() => handleCall(false)}
+                    disabled={actionLoading}
+                    className="flex-1 bg-gray-100 text-gray-900 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-200 transition"
+                  >
                     Gọi điện
                   </button>
-                  <button className="flex-1 bg-black text-white py-2.5 rounded-xl font-bold text-xs hover:bg-neutral-800 transition">
+                  <button 
+                    onClick={handleMessage}
+                    disabled={actionLoading}
+                    className="flex-1 bg-black text-white py-2.5 rounded-xl font-bold text-xs hover:bg-neutral-800 transition"
+                  >
                     Nhắn tin
                   </button>
                 </div>
@@ -255,6 +326,8 @@ export default function FriendProfileModal({
                   icon={TrashIcon}
                   label="Xóa khỏi danh sách bạn bè"
                   color="text-red-500"
+                  onClick={handleRemoveFriend}
+                  disabled={actionLoading}
                 />
               )}
             </div>
