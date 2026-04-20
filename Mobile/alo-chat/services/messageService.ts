@@ -5,12 +5,21 @@ export interface SendFileMessagePayload {
   conversationId: string;
   file: any; // DocumentPicker hoặc ImagePicker asset
   isImage?: boolean;
+  senderName?: string;
+  replyTo?: {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    type: string;
+  };
 }
 
 export interface MessageDTO {
   _id: string;
   conversationId: string;
   senderId: string;
+  senderName?: string;
   type: "text" | "image" | "file" | "system";
   content: string;
   metadata?: {
@@ -24,13 +33,28 @@ export interface MessageDTO {
   reactions?: any[];
   createdAt: string;
   updatedAt?: string;
+  replyTo?: {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    type: string;
+  };
 }
 
 export interface SendMessagePayload {
   conversationId: string;
   type?: "text" | "image" | "file";
   content: string;
+  senderName?: string;
   metadata?: Record<string, any>;
+  replyTo?: {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    type: string;
+  };
 }
 
 export interface MessageHistoryResponse {
@@ -154,11 +178,15 @@ export const messageService = {
     conversationId,
     file,
     isImage,
+    senderName,
+    replyTo,
   }: SendFileMessagePayload): Promise<MessageDTO | null> {
     try {
       // Chuẩn hóa file cho FormData
       const formData = new FormData();
       formData.append("conversationId", conversationId);
+      if (senderName) formData.append("senderName", senderName);
+      if (replyTo) formData.append("replyTo", JSON.stringify(replyTo));
       // Xử lý file từ DocumentPicker hoặc ImagePicker
       if (file) {
         // Expo DocumentPicker: { uri, name, mimeType }
@@ -193,7 +221,9 @@ export const messageService = {
         conversationId: payload.conversationId,
         type: payload.type || "text",
         content: payload.content,
+        senderName: payload.senderName,
         metadata: payload.metadata || {},
+        replyTo: payload.replyTo,
       });
       return extractSentMessage(raw);
     } catch (error) {

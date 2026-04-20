@@ -64,6 +64,7 @@ export default function GlobalChatScreen() {
   const { socket, onlineUsers } = useSocket();
   const { user } = useAuth();
   const currentUserId = user?.id || user?._id || user?.userId;
+
   const messageRefs = useRef<Record<string, View>>({});
   const flatListRef = useRef<FlatList>(null);
 
@@ -92,6 +93,24 @@ export default function GlobalChatScreen() {
   const [userCache, setUserCache] = useState<Record<string, UserProfileDTO>>({});
   const [resolvedConversationId, setResolvedConversationId] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [replyingTo, setReplyingTo] = useState<MessageDTO | null>(null);
+  const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+  const chatInputRef = useRef<any>(null);
+  const replyingToRef = useRef<MessageDTO | null>(null);
+
+  const setReplyingToWithRef = (msg: MessageDTO | null) => {
+    setReplyingTo(msg);
+    replyingToRef.current = msg;
+  };
+
+  useEffect(() => {
+    if (highlightedMsgId) {
+      const timer = setTimeout(() => {
+        setHighlightedMsgId(null);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightedMsgId]);
 
   // Real-time Group Info
   const [realtimeGroupName, setRealtimeGroupName] = useState<string>((name as string) || "");
@@ -414,17 +433,92 @@ export default function GlobalChatScreen() {
     }, 2000);
   };
 
+  const handleReply = (msg: MessageDTO) => {
+    setReplyingToWithRef(msg);
+    closeModal();
+    setTimeout(() => chatInputRef.current?.focus(), 100);
+  };
+
+  const scrollToMessage = (msgId: string) => {
+    const group = messageGroups.find((g) =>
+      g.messages.some((m) => m._id === msgId),
+    );
+    if (group) {
+      const reversedGroups = [...messageGroups].reverse();
+      const index = reversedGroups.findIndex((g) => g === group);
+      if (index !== -1) {
+        flatListRef.current?.scrollToIndex({
+          index,
+          animated: true,
+          viewPosition: 0.5,
+        });
+        // Highlight tin nhắn
+        setHighlightedMsgId(msgId);
+        // Highlight tin nhắn bằng cách mở rộng hiển thị thời gian
+        setExpandedTimeMsgId(msgId);
+      }
+    } else {
+      Alert.alert(
+        "Thông báo",
+        "Tin nhắn gốc không còn trong lịch sử tải xuống",
+      );
+    }
+  };
+
+  const currentUserName = user?.fullName || user?.displayName || "Người dùng";
+
+  const getReplyData = (msg: MessageDTO | null) => {
+    if (!msg || !msg._id) return undefined;
+    let content = msg.content;
+    if (msg.type === "image") content = "[Hình ảnh]";
+    else if (msg.type === "file")
+      content = msg.metadata?.fileName || "[Tệp tin]";
+
+    return {
+      messageId: msg._id,
+      senderId: msg.senderId,
+      senderName:
+        msg.senderId === currentUserId
+          ? "Bạn"
+          : msg.senderName ||
+            userCache[msg.senderId]?.fullName ||
+            "Người dùng",
+      content: content,
+      type: msg.type,
+    };
+  };
+
   const sendMessage = async () => {
     if (!inputText.trim() || !resolvedConversationId) return;
     const textToSend = inputText.trim();
     setInputText("");
+    const replyData = getReplyData(replyingToRef.current);
+    setReplyingToWithRef(null);
     Keyboard.dismiss();
-    if (socket) socket.emit("STOP_TYPING", { roomId: resolvedConversationId, actorId: currentUserId });
+    if (socket)
+      socket.emit("STOP_TYPING", {
+        roomId: resolvedConversationId,
+        actorId: currentUserId,
+      });
     try {
-      const sentMessage = await messageService.sendMessage({ conversationId: resolvedConversationId, type: "text", content: textToSend });
+      const sentMessage = await messageService.sendMessage({
+        conversationId: resolvedConversationId,
+        type: "text",
+        content: textToSend,
+        senderName: currentUserName,
+        replyTo: replyData,
+      });
       if (sentMessage) {
-        setMessages((prev: MessageDTO[]) => (prev.find((m: MessageDTO) => m._id === sentMessage._id) ? prev : [...prev, sentMessage]));
-        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
+        setMessages((prev: MessageDTO[]) =>
+          prev.find((m: MessageDTO) => m._id === sentMessage._id)
+            ? prev
+            : [...prev, sentMessage],
+        );
+        setTimeout(
+          () =>
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
+          100,
+        );
       }
     } catch (e) {}
   };
@@ -440,11 +534,15 @@ export default function GlobalChatScreen() {
 
       if (fileRes.canceled || !fileRes.assets?.length) return;
 
+      const replyData = getReplyData(replyingToRef.current);
+      setReplyingTo(null);
       const sentMessages: MessageDTO[] = [];
       for (const asset of fileRes.assets) {
         const sentMessage = await messageService.sendFileMessage({
           conversationId: resolvedConversationId,
           file: asset,
+          senderName: currentUserName,
+          replyTo: replyData,
         });
         if (sentMessage) {
           sentMessages.push(sentMessage);
@@ -475,12 +573,16 @@ export default function GlobalChatScreen() {
 
       if (imgRes.canceled || !imgRes.assets?.length) return;
 
+      const replyData = getReplyData(replyingToRef.current);
+      setReplyingTo(null);
       const sentMessages: MessageDTO[] = [];
       for (const asset of imgRes.assets) {
         const sentMessage = await messageService.sendFileMessage({
           conversationId: resolvedConversationId,
           file: asset,
           isImage: true,
+          senderName: currentUserName,
+          replyTo: replyData,
         });
         if (sentMessage) {
           sentMessages.push(sentMessage);
@@ -649,6 +751,8 @@ export default function GlobalChatScreen() {
                         messageRefs={messageRefs}
                         expandedTimeMsgId={expandedTimeMsgId}
                         setExpandedTimeMsgId={setExpandedTimeMsgId}
+                        onReplyClick={scrollToMessage}
+                        isHighlighted={msg._id === highlightedMsgId}
                       />
                     ))}
                   </View>
@@ -685,12 +789,15 @@ export default function GlobalChatScreen() {
 
         <View className="flex-1 justify-end" pointerEvents="box-none">
           <ChatInput
+            ref={chatInputRef}
             inputText={inputText}
             onInputChange={handleInputChange}
             onSendMessage={sendMessage}
             onSendImage={handleSendImage}
             onSendFile={handleSendFile}
             isKeyboardVisible={isKeyboardVisible}
+            replyingTo={replyingTo}
+            onCancelReply={() => setReplyingToWithRef(null)}
           />
         </View>
       </View>
@@ -709,6 +816,7 @@ export default function GlobalChatScreen() {
         onDeleteLocal={handleDeleteLocal}
         onPin={handlePinMessage}
         onUnpin={handleUnpinMessage}
+        onReply={handleReply}
         isPinned={!!selectedMessageId && pinnedMessages.some((m: MessageDTO) => m._id === selectedMessageId)}
         currentUserId={currentUserId as string}
       />
