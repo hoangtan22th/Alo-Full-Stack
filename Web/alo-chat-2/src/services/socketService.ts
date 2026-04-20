@@ -249,6 +249,26 @@ class SocketService {
   onCallCanceled(callback: (data: any) => void) {
     this.addListener("CALL_CANCELED", callback);
   }
+
+  declinedCall(data: { targetRoom: string }) {
+    if (this.socket?.connected) {
+      this.socket.emit("CALL_DECLINED", data);
+    }
+  }
+
+  onCallDeclined(callback: (data: any) => void) {
+    this.addListener("CALL_DECLINED", callback);
+  }
+
+  emitCallBusy(data: { targetRoom: string }) {
+    if (this.socket?.connected) {
+      this.socket.emit("CALL_BUSY", data);
+    }
+  }
+
+  onCallBusy(callback: (data: any) => void) {
+    this.addListener("CALL_BUSY", callback);
+  }
 }
 
 export const socketService = new SocketService();
