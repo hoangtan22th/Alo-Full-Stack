@@ -108,6 +108,7 @@ export default function GlobalChatScreen() {
 
   const chatInputRef = useRef<any>(null);
   const replyingToRef = useRef<MessageDTO | null>(null);
+  const fetchingRef = useRef(false); // V3: Strict protection against concurrent fetches
 
   const setReplyingToWithRef = (msg: MessageDTO | null) => {
     setReplyingTo(msg);
@@ -260,24 +261,27 @@ export default function GlobalChatScreen() {
   }, [id, isGroup, paramsTargetUserId]);
 
   const fetchMsgs = async (reset = false) => {
-    if (!resolvedConversationId) return;
+    if (!resolvedConversationId || fetchingRef.current) return;
+    fetchingRef.current = true; // Block further calls immediately
+
     if (reset) {
       setSkip(0);
+      setLoadingMore(true);
     } else {
       setLoadingMore(true);
     }
 
     try {
       const currentSkip = reset ? 0 : skip;
+      console.log(`[Chat] Fetching messages. skip=${currentSkip}, reset=${reset}`);
       const response = await messageService.getMessageHistory(resolvedConversationId, 50, currentSkip);
       const newMsgs = response.messages || [];
-      const hasMoreData = response.hasMore ?? newMsgs.length === 50;
+      const hasMoreData = response.hasMore ?? newMsgs.length >= 50;
 
       if (reset) {
         setMessages(newMsgs);
       } else {
         setMessages((prev) => {
-          // Lọc bỏ tin nhắn đã tồn tại để tránh lỗi key FlatList
           const existingIds = new Set(prev.map((m: MessageDTO) => m._id));
           const filteredNew = newMsgs.filter((m: MessageDTO) => !existingIds.has(m._id));
           return [...filteredNew, ...prev];
@@ -286,6 +290,7 @@ export default function GlobalChatScreen() {
 
       setHasMore(hasMoreData);
       setSkip((prev) => (reset ? newMsgs.length : prev + newMsgs.length));
+      console.log(`[Chat] Fetched ${newMsgs.length} messages. skip=${skip}, hasMore=${hasMoreData}`);
 
       if (reset) {
         messageService.markAsRead(resolvedConversationId).catch(() => { });
@@ -294,6 +299,7 @@ export default function GlobalChatScreen() {
       console.error("Lỗi tải tin nhắn:", e);
     } finally {
       setLoadingMore(false);
+      fetchingRef.current = false; // Release block
     }
   };
 
@@ -837,7 +843,7 @@ export default function GlobalChatScreen() {
             onEndReachedThreshold={0.5}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             className="flex-1 px-4"
-            contentContainerStyle={{ paddingTop: 80, paddingBottom: 0 }}
+            contentContainerStyle={{ flexGrow: 1, paddingTop: 80, paddingBottom: 0 }}
             ListHeaderComponent={typingUsers.length > 0 ? (
               <View className="mb-6 self-start flex-row items-center px-5 py-3 shadow-sm bg-white rounded-3xl rounded-bl-lg">
                 <Text className="text-gray-500 italic text-sm">{typingUsers.length === 1 ? "Có người đang nhắn tin..." : "Nhiều người đang nhắn tin..."}</Text>

@@ -71,26 +71,58 @@ export interface MessageHistoryResponse {
  * Chuẩn hóa response từ getMessageHistory.
  */
 function extractHistory(raw: any): MessageHistoryResponse {
-  // Case 1: interceptor đã unwrap và trả về object chứa messages
-  if (raw && Array.isArray(raw.messages)) return raw;
+  console.log("[MessageService] Extracting history from:", JSON.stringify(raw).substring(0, 200));
 
-  // Case 2: interceptor KHÔNG unwrap (Axios response)
-  if (raw?.data && Array.isArray(raw.data.messages)) return raw.data;
+  let target = raw;
 
-  // Case 3: gateway wrapper { status, data: { messages, ... } }
-  // api.ts unwrap trả về response.data.data
-  if (raw && Array.isArray(raw.messages)) return raw; // Same as Case 1 logically
+  // 1. Nếu raw là Axios Response (có .data)
+  if (target?.data && !Array.isArray(target.data)) {
+    // Nếu trong data lại có .data (Gateway wrapping { status, data: { ... } })
+    if (target.data.data && !Array.isArray(target.data.data)) {
+      target = target.data.data;
+    } else {
+      target = target.data;
+    }
+  }
 
-  // Case fallback: Nếu raw là data.data từ interceptor (nhưng có thể data.data.data...)
-  if (raw?.data && Array.isArray(raw.data.messages)) return raw.data;
+  // 2. Nếu target vẫn có .data (Double wrapping)
+  if (target?.data && !Array.isArray(target.data) && target.data.messages) {
+    target = target.data;
+  }
 
+  // 3. Kiểm tra xem target có phải là object chứa messages không
+  if (target && Array.isArray(target.messages)) {
+    return {
+      conversationId: target.conversationId || "",
+      messages: target.messages,
+      count: target.count || target.messages.length,
+      limit: target.limit || 50,
+      skip: target.skip || 0,
+      hasMore: target.hasMore ?? target.messages.length >= 50,
+    };
+  }
+
+  // 4. Fallback: Nếu target là một mảng trực tiếp
+  const messagesArray = Array.isArray(target) ? target : Array.isArray(raw) ? raw : [];
+  if (messagesArray.length > 0 || Array.isArray(target)) {
+    return {
+      conversationId: "",
+      messages: messagesArray,
+      count: messagesArray.length,
+      limit: 50,
+      skip: 0,
+      hasMore: messagesArray.length >= 50,
+    };
+  }
+
+  // 5. Fallback cuối cùng: rỗng
   return {
-    conversationId: raw?.conversationId || "",
-    messages: raw?.messages || (Array.isArray(raw) ? raw : []),
-    count: raw?.count || 0,
-    limit: raw?.limit || 50,
-    skip: raw?.skip || 0,
-    hasMore: raw?.hasMore ?? (Array.isArray(raw) ? raw.length === 50 : false),
+    conversationId: "",
+    messages: [],
+    count: 0,
+    limit: 50,
+    skip: 0,
+    hasMore: false,
   };
 }
 
