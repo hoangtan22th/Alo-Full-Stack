@@ -340,6 +340,7 @@ export default function GlobalChatScreen() {
 
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {
+      console.log(`[Chat] Loading more messages... skip=${skip}`);
       fetchMsgs(false);
     }
   };
@@ -355,16 +356,6 @@ export default function GlobalChatScreen() {
     return adminIds.has(String(currentUserId));
   }, [isGroupChat, groupDetails, adminIds, currentUserId]);
 
-  const canSendMessage = useMemo(() => {
-    if (!isGroupChat) return true;
-    if (!groupDetails) return true; // Default to true if not loaded
-
-    const sendPermission = groupDetails.permissions?.sendMessage || "EVERYONE";
-    if (sendPermission === "EVERYONE") return true;
-
-    // Admin-only: Check if current user is LEADER or DEPUTY
-    return adminIds.has(String(currentUserId));
-  }, [isGroupChat, groupDetails, adminIds, currentUserId]);
 
   useEffect(() => {
     if (!socket || !resolvedConversationId) return;
@@ -728,13 +719,30 @@ export default function GlobalChatScreen() {
     return groups;
   }, [messages, currentUserId]);
 
+  const invertedMessages = useMemo(() => {
+    return [...messageGroups].reverse();
+  }, [messageGroups]);
+
+  const canSendMessage = useMemo(() => {
+    if (!isGroupChat) return true;
+    if (!groupDetails) return true;
+
+    const sendPermission = groupDetails.permissions?.sendMessage || "EVERYONE";
+    if (sendPermission === "EVERYONE") return true;
+
+    return adminIds.has(String(currentUserId));
+  }, [isGroupChat, groupDetails, adminIds, currentUserId]);
+
   useEffect(() => {
     const showSub = Keyboard.addListener("keyboardDidShow", () => {
       setKeyboardVisible(true);
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     });
     const hideSub = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
-    return () => { showSub.remove(); hideSub.remove(); };
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
   }, []);
 
   const handlePinMessage = async () => {
@@ -822,7 +830,7 @@ export default function GlobalChatScreen() {
         <View className="absolute top-0 left-0 right-0 bottom-0" style={{ paddingTop: pinnedMessages.length > 0 ? 64 : 0 }}>
           <FlatList
             ref={flatListRef}
-            data={[...messageGroups].reverse()}
+            data={invertedMessages}
             keyExtractor={(item) => item.messages[0]?._id + "_group"}
             inverted
             onEndReached={handleLoadMore}

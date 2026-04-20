@@ -71,21 +71,26 @@ export interface MessageHistoryResponse {
  * Chuẩn hóa response từ getMessageHistory.
  */
 function extractHistory(raw: any): MessageHistoryResponse {
-  // Case 1: interceptor đã unwrap
+  // Case 1: interceptor đã unwrap và trả về object chứa messages
   if (raw && Array.isArray(raw.messages)) return raw;
-  // Case 2: interceptor KHÔNG unwrap
+
+  // Case 2: interceptor KHÔNG unwrap (Axios response)
   if (raw?.data && Array.isArray(raw.data.messages)) return raw.data;
-  // Case 3: gateway wrapper
-  if (raw?.data?.data && Array.isArray(raw.data.data.messages))
-    return raw.data.data.messages;
+
+  // Case 3: gateway wrapper { status, data: { messages, ... } }
+  // api.ts unwrap trả về response.data.data
+  if (raw && Array.isArray(raw.messages)) return raw; // Same as Case 1 logically
+
+  // Case fallback: Nếu raw là data.data từ interceptor (nhưng có thể data.data.data...)
+  if (raw?.data && Array.isArray(raw.data.messages)) return raw.data;
 
   return {
-    conversationId: "",
-    messages: [],
-    count: 0,
-    limit: 0,
-    skip: 0,
-    hasMore: false,
+    conversationId: raw?.conversationId || "",
+    messages: raw?.messages || (Array.isArray(raw) ? raw : []),
+    count: raw?.count || 0,
+    limit: raw?.limit || 50,
+    skip: raw?.skip || 0,
+    hasMore: raw?.hasMore ?? (Array.isArray(raw) ? raw.length === 50 : false),
   };
 }
 
