@@ -46,6 +46,7 @@ function calculateNextOccurrence(reminder: IReminder): Date | null {
   // If the reminder is in the past, we start calculating from 'now' or 'baseDate'
   // But typically a reminder just fired, so we move forward from the current designated time.
   let nextDate = new Date(baseDate);
+  nextDate.setSeconds(0, 0); // Luôn đưa về đầu phút
 
   switch (reminder.repeat) {
     case "DAILY":

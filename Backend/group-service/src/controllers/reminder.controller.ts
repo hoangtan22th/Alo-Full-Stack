@@ -74,11 +74,14 @@ export const createReminder = async (
       return;
     }
 
+    const reminderTime = new Date(time);
+    reminderTime.setSeconds(0, 0); // Đưa về đúng 0 giây
+
     const newReminder = new Reminder({
       conversationId: groupId,
       creatorId,
       title,
-      time: new Date(time),
+      time: reminderTime,
       repeat: repeat || "NONE",
       repeatDays: Array.isArray(repeatDays) ? repeatDays : [],
       remindFor: remindFor || "GROUP",
@@ -178,9 +181,17 @@ export const updateReminder = async (
       return;
     }
 
-    // Update fields
+    // Update fields and reactivate if necessary
+    if (title || time || repeat || repeatDays !== undefined) {
+      reminder.status = "ACTIVE";
+    }
+
     if (title) reminder.title = title;
-    if (time) reminder.time = new Date(time);
+    if (time) {
+      const updatedTime = new Date(time);
+      updatedTime.setSeconds(0, 0);
+      reminder.time = updatedTime;
+    }
     if (repeat) reminder.repeat = repeat;
     if (repeatDays !== undefined) reminder.repeatDays = repeatDays;
     if (remindFor) reminder.remindFor = remindFor;
