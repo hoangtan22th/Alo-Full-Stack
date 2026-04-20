@@ -117,6 +117,14 @@ export class RabbitMQProducerService {
       };
 
       await publishToQueue(ROUTING_KEYS.MESSAGE_UPDATED, payload);
+
+      // Đồng bộ sang Realtime Service (cho Socket.io broadcast)
+      // Sử dụng event 'message-updated' để Frontend phân biệt với tin nhắn mới
+      await this.publishToRealtimeService("message-updated", {
+        room: messageData.conversationId,
+        data: messageData,
+      });
+
       console.log(
         `[RabbitMQProducer] Message update event published: ${messageData._id}`,
       );

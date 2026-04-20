@@ -5,18 +5,28 @@ export interface SendFileMessagePayload {
   conversationId: string;
   file: any; // DocumentPicker hoặc ImagePicker asset
   isImage?: boolean;
+  senderName?: string;
+  replyTo?: {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    type: string;
+  };
 }
 
 export interface MessageDTO {
   _id: string;
   conversationId: string;
   senderId: string;
-  type: "text" | "image" | "file" | "system";
+  senderName?: string;
+  type: "text" | "image" | "file" | "system" | "poll";
   content: string;
   metadata?: {
     fileName?: string;
     fileSize?: number;
     fileType?: string;
+    pollId?: string;
   };
   isRead: boolean;
   isRevoked?: boolean;
@@ -24,36 +34,96 @@ export interface MessageDTO {
   reactions?: any[];
   createdAt: string;
   updatedAt?: string;
+  replyTo?: {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    type: string;
+  };
 }
 
 export interface SendMessagePayload {
   conversationId: string;
-  type?: "text" | "image" | "file";
+  type?: "text" | "image" | "file" | "poll";
   content: string;
+  senderName?: string;
   metadata?: Record<string, any>;
+  replyTo?: {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    type: string;
+  };
+}
+
+export interface MessageHistoryResponse {
+  conversationId: string;
+  messages: MessageDTO[];
+  count: number;
+  limit: number;
+  skip: number;
+  hasMore?: boolean;
 }
 
 /**
  * Chuẩn hóa response từ getMessageHistory.
- *
- * Backend message-service trả về:
- *   { conversationId, messages: [...], count, limit, skip }
- *
- * API interceptor (api.ts) unwrap nếu response.data.data tồn tại:
- *   - nếu KHÔNG có ".data" → interceptor trả về nguyên Axios Response object
- *   - nếu CÓ ".data" → interceptor trả về response.data.data
- *
- * Đây là helper để lấy đúng mảng messages bất kể format.
  */
-function extractMessages(raw: any): MessageDTO[] {
-  // Case 1: interceptor đã unwrap → raw = { conversationId, messages, count }
-  if (raw && Array.isArray(raw.messages)) return raw.messages;
-  // Case 2: interceptor KHÔNG unwrap → raw = Axios Response, raw.data = { conversationId, messages, count }
-  if (raw?.data && Array.isArray(raw.data.messages)) return raw.data.messages;
-  // Case 3: gateway thêm thêm wrapper
-  if (raw?.data?.data && Array.isArray(raw.data.data.messages))
-    return raw.data.data.messages;
-  return [];
+function extractHistory(raw: any): MessageHistoryResponse {
+  console.log("[MessageService] Extracting history from:", JSON.stringify(raw).substring(0, 200));
+
+  let target = raw;
+
+  // 1. Nếu raw là Axios Response (có .data)
+  if (target?.data && !Array.isArray(target.data)) {
+    // Nếu trong data lại có .data (Gateway wrapping { status, data: { ... } })
+    if (target.data.data && !Array.isArray(target.data.data)) {
+      target = target.data.data;
+    } else {
+      target = target.data;
+    }
+  }
+
+  // 2. Nếu target vẫn có .data (Double wrapping)
+  if (target?.data && !Array.isArray(target.data) && target.data.messages) {
+    target = target.data;
+  }
+
+  // 3. Kiểm tra xem target có phải là object chứa messages không
+  if (target && Array.isArray(target.messages)) {
+    return {
+      conversationId: target.conversationId || "",
+      messages: target.messages,
+      count: target.count || target.messages.length,
+      limit: target.limit || 50,
+      skip: target.skip || 0,
+      hasMore: target.hasMore ?? target.messages.length >= 50,
+    };
+  }
+
+  // 4. Fallback: Nếu target là một mảng trực tiếp
+  const messagesArray = Array.isArray(target) ? target : Array.isArray(raw) ? raw : [];
+  if (messagesArray.length > 0 || Array.isArray(target)) {
+    return {
+      conversationId: "",
+      messages: messagesArray,
+      count: messagesArray.length,
+      limit: 50,
+      skip: 0,
+      hasMore: messagesArray.length >= 50,
+    };
+  }
+
+  // 5. Fallback cuối cùng: rỗng
+  return {
+    conversationId: "",
+    messages: [],
+    count: 0,
+    limit: 50,
+    skip: 0,
+    hasMore: false,
+  };
 }
 
 /**
@@ -72,21 +142,27 @@ function extractSentMessage(raw: any): MessageDTO | null {
 }
 
 export const messageService = {
-  // Lấy lịch sử tin nhắn của một cuộc hội thoại
   getMessageHistory: async (
     conversationId: string,
     limit = 50,
     skip = 0,
     type?: string,
-  ): Promise<MessageDTO[]> => {
+  ): Promise<MessageHistoryResponse> => {
     try {
       const raw = await api.get<any, any>(`/messages/${conversationId}`, {
         params: { limit, skip, type },
       });
-      return extractMessages(raw);
+      return extractHistory(raw);
     } catch (error) {
       console.error("Lỗi lấy lịch sử tin nhắn:", error);
-      return [];
+      return {
+        conversationId,
+        messages: [],
+        count: 0,
+        limit,
+        skip,
+        hasMore: false,
+      };
     }
   },
 
@@ -116,15 +192,43 @@ export const messageService = {
     }
   },
   /**
-   * Lấy tin nhắn đã ghim của hội thoại
+   * Lấy tất cả tin nhắn đã ghim của hội thoại
    */
-  async getPinnedMessage(conversationId: string): Promise<MessageDTO | null> {
+  async getPinnedMessages(conversationId: string): Promise<MessageDTO[]> {
     try {
-      const raw = await api.get(`/conversations/${conversationId}/pinned`);
-      // Có thể cần điều chỉnh extractSentMessage hoặc parse lại nếu backend trả về khác
-      return extractSentMessage(raw);
+      const raw = await api.get<any, any>(`/messages/${conversationId}/pinned`);
+      // Backend trả về { status: 'success', data: IMessage[] }
+      if (Array.isArray(raw?.data)) return raw.data;
+      if (Array.isArray(raw)) return raw;
+      return [];
     } catch (error) {
-      return null;
+      console.error("Lỗi lấy danh sách tin nhắn ghim:", error);
+      return [];
+    }
+  },
+
+  /**
+   * Tìm kiếm tin nhắn (GET /messages/:conversationId/search)
+   */
+  async searchMessages(
+    conversationId: string,
+    query: string,
+    limit: number = 50,
+  ): Promise<MessageDTO[]> {
+    try {
+      const raw = await api.get<any, any>(
+        `/messages/${conversationId}/search`,
+        {
+          params: { query, limit },
+        },
+      );
+      // Backend trả về { status: 'success', data: IMessage[] }
+      if (Array.isArray(raw?.data)) return raw.data;
+      if (Array.isArray(raw)) return raw;
+      return [];
+    } catch (error) {
+      console.error("Lỗi tìm kiếm tin nhắn:", error);
+      return [];
     }
   },
 
@@ -137,11 +241,15 @@ export const messageService = {
     conversationId,
     file,
     isImage,
+    senderName,
+    replyTo,
   }: SendFileMessagePayload): Promise<MessageDTO | null> {
     try {
       // Chuẩn hóa file cho FormData
       const formData = new FormData();
       formData.append("conversationId", conversationId);
+      if (senderName) formData.append("senderName", senderName);
+      if (replyTo) formData.append("replyTo", JSON.stringify(replyTo));
       // Xử lý file từ DocumentPicker hoặc ImagePicker
       if (file) {
         // Expo DocumentPicker: { uri, name, mimeType }
@@ -176,7 +284,9 @@ export const messageService = {
         conversationId: payload.conversationId,
         type: payload.type || "text",
         content: payload.content,
+        senderName: payload.senderName,
         metadata: payload.metadata || {},
+        replyTo: payload.replyTo,
       });
       return extractSentMessage(raw);
     } catch (error) {

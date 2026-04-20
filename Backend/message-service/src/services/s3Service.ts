@@ -1,6 +1,6 @@
 import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { v4 as uuidv4 } from "uuid";
-import s3Client from "../config/aws.ts";
+import s3Client from "../config/aws";
 
 export const BUCKET_NAME = process.env.AWS_BUCKET_NAME || "btl-alo-chat";
 

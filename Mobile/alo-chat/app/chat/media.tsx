@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState, useEffect, useCallback } from "react";
 import { useSocket } from "../../contexts/SocketContext";
+import { GalleryViewerModal } from "../../components/chat/GalleryViewer";
 import {
   View,
   Text,
@@ -18,6 +19,7 @@ import {
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { messageService, MessageDTO } from "../../services/messageService";
+import { openRemoteFile } from "../../utils/fileUtils";
 
 const { width } = Dimensions.get("window");
 const COLUMN_WIDTH = width / 3;
@@ -49,13 +51,13 @@ export default function MediaScreen() {
   const fetchMedia = async () => {
     try {
       setLoading(true);
-      const res = await messageService.getMessageHistory(
+      const { messages } = await messageService.getMessageHistory(
         id as string,
         200,
         0,
         "image",
       );
-      const sortedRes = [...res].sort((a, b) =>
+      const sortedRes = [...messages].sort((a, b) =>
         (b.createdAt || "").localeCompare(a.createdAt || ""),
       );
       setMediaList(sortedRes);
@@ -68,13 +70,13 @@ export default function MediaScreen() {
 
   const fetchFiles = async () => {
     try {
-      const res = await messageService.getMessageHistory(
+      const { messages } = await messageService.getMessageHistory(
         id as string,
         100,
         0,
         "file",
       );
-      const sortedRes = [...res].sort((a, b) =>
+      const sortedRes = [...messages].sort((a, b) =>
         (b.createdAt || "").localeCompare(a.createdAt || ""),
       );
       setFileList(sortedRes);
@@ -227,7 +229,10 @@ export default function MediaScreen() {
             const createdDate = formatDate(item.createdAt);
 
             return (
-              <View className="flex-row items-center px-5 py-4 border-b border-gray-50">
+              <TouchableOpacity
+                onPress={() => openRemoteFile(item.content, fileName)}
+                className="flex-row items-center px-5 py-4 border-b border-gray-50 active:bg-gray-50"
+              >
                 <View className="w-12 h-12 bg-gray-100 rounded-xl items-center justify-center mr-4">
                   <Text className="text-[10px] font-bold text-gray-500 uppercase">
                     {fileType}
@@ -244,7 +249,7 @@ export default function MediaScreen() {
                     {fileSize} • {createdDate}
                   </Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           }}
           showsVerticalScrollIndicator={false}
@@ -256,28 +261,13 @@ export default function MediaScreen() {
         />
       )}
 
-      {/* Basic Image Viewer Modal */}
-      <Modal
+      <GalleryViewerModal
+        images={mediaList}
+        initialIndex={viewerIndex ?? 0}
         visible={viewerIndex !== null}
-        transparent={true}
-        animationType="fade"
-      >
-        <View className="flex-1 bg-black justify-center items-center">
-          <TouchableOpacity
-            className="absolute top-10 right-5 z-50 p-3"
-            onPress={() => setViewerIndex(null)}
-          >
-            <XMarkIcon size={30} color="white" />
-          </TouchableOpacity>
-          {viewerIndex !== null && (
-            <Image
-              source={{ uri: mediaList[viewerIndex].content }}
-              className="w-full h-full"
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      </Modal>
+        onClose={() => setViewerIndex(null)}
+        onIndexChange={(idx) => setViewerIndex(idx)}
+      />
     </View>
   );
 }

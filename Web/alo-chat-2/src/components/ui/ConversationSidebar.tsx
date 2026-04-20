@@ -197,18 +197,7 @@ export default function ConversationSidebar() {
     conversationIdRef.current = conversationId;
   }, [conversationId]);
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      await Promise.all([fetchGroups(), fetchLabelsInfo(), fetchPinnedInfo()]);
-    } catch (error) {
-      console.error("Lỗi tải dữ liệu:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const fetchPinnedInfo = async () => {
+  const fetchPinnedInfo = useCallback(async () => {
     try {
       const res = await groupService.getPinnedConversations();
       const ids = res?.data || res || [];
@@ -216,9 +205,9 @@ export default function ConversationSidebar() {
     } catch (err) {
       console.error("Lỗi tải danh sách ghim:", err);
     }
-  };
+  }, []);
 
-  const fetchLabelsInfo = async () => {
+  const fetchLabelsInfo = useCallback(async () => {
     try {
       const [labelsRes, assignmentsRes]: any = await Promise.all([
         groupService.getLabels(),
@@ -239,9 +228,9 @@ export default function ConversationSidebar() {
     } catch (err) {
       console.error("Lỗi tải thông tin nhãn:", err);
     }
-  };
+  }, []);
 
-  const fetchGroups = async () => {
+  const fetchGroups = useCallback(async () => {
     try {
       const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
 
@@ -306,7 +295,18 @@ export default function ConversationSidebar() {
     } catch (error) {
       console.error("Lỗi lấy danh sách nhóm:", error);
     }
-  };
+  }, [currentUser]);
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      await Promise.all([fetchGroups(), fetchLabelsInfo(), fetchPinnedInfo()]);
+    } catch (error) {
+      console.error("Lỗi tải dữ liệu:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchGroups, fetchLabelsInfo, fetchPinnedInfo]);
 
   useEffect(() => {
     fetchData();
@@ -357,7 +357,7 @@ export default function ConversationSidebar() {
       socketService.off("CONVERSATION_REMOVED");
       socketService.off("CONVERSATION_UPDATED");
     };
-  }, [fetchData, router]);
+  }, [fetchData, router, currentUser]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

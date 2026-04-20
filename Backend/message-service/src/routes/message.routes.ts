@@ -14,6 +14,8 @@ const upload = multer({
 });
 
 router.get("/:conversationId", messageController.getMessageHistory);
+router.get("/:conversationId/search", messageController.searchMessages);
+router.get("/:conversationId/pinned", messageController.getPinnedMessages);
 router.patch("/:messageId/pin", messageController.pinMessage);
 router.patch("/:messageId/unpin", messageController.unpinMessage);
 router.post("/", messageController.sendMessage);
@@ -23,6 +25,11 @@ router.patch("/:messageId", messageController.editMessage);
 
 // Route upload file lên S3
 router.post("/upload", upload.single("file"), messageController.uploadFile);
+router.post("/upload/images", upload.array("files", 20), messageController.uploadImages);
+
+// Hành động trên từng ảnh trong album
+router.patch("/:messageId/images/:index/revoke", messageController.revokeImageInGroup);
+router.delete("/:messageId/images/:index/me", messageController.deleteImageInGroupForMe);
 
 // Route đánh dấu đã đọc tin nhắn
 router.patch("/:conversationId/read", messageController.markMessagesAsRead);

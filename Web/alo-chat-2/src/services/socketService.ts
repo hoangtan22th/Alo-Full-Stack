@@ -1,4 +1,3 @@
-// ...existing code...
 import { io, Socket } from "socket.io-client";
 
 const SOCKET_URL =
@@ -7,70 +6,82 @@ const SOCKET_URL =
   "http://localhost:8888";
 
 class SocketService {
-  // Lắng nghe ghim/bỏ ghim tin nhắn real-time
-  onMessagePinned(
-    callback: (data: {
-      messageId: string;
-      isPinned: boolean;
-      conversationId: string;
-    }) => void,
-  ) {
-    this.addListener("message-pinned", callback);
-  }
   private socket: Socket | null = null;
-  private listeners: Map<string, Array<(data: any) => void>> = new Map();
+  private listeners: Map<string, Set<(data: any) => void>> = new Map();
+  private attachedEvents: Set<string> = new Set();
 
   connect() {
-    if (this.socket?.connected) return;
+    if (this.socket) return;
 
     const token =
       typeof window !== "undefined"
         ? localStorage.getItem("accessToken")
         : null;
 
-    console.log(
-      "🔌 [Socket] Attempting to connect with token:",
-      token ? `${token.substring(0, 10)}...` : "NONE",
-    );
+    console.log("🔌 [Socket] Connecting...");
 
     this.socket = io(SOCKET_URL, {
       auth: { token },
       transports: ["websocket"],
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
     });
 
     this.socket.on("connect", () => {
-      console.log("🚀 [Socket] Connected to Gateway");
-      // Re-attach all buffered listeners upon reconnection
-      this.listeners.forEach((callbacks, event) => {
-        callbacks.forEach((cb) => {
-          this.socket?.on(event, cb);
-        });
+      console.log("🚀 [Socket] Connected ID:", this.socket?.id);
+      // Khi reconnect, socket.io tự động giữ lại các listener đã gán bằng .on()
+      // Nhưng vì chúng ta dùng wrapper, chúng ta cần đảm bảo wrapper đã được gán
+      this.listeners.forEach((_, event) => {
+        this.attachSocketWrapper(event);
       });
     });
 
     this.socket.on("disconnect", (reason) => {
       console.log("❌ [Socket] Disconnected:", reason);
+      if (reason === "io server disconnect") {
+        // the disconnection was initiated by the server, you need to reconnect manually
+        this.socket?.connect();
+      }
     });
 
     this.socket.on("connect_error", (error) => {
-      console.error("⚠️ [Socket] Connection Error:", error.message);
+      console.error("⚠️ [Socket] Error:", error.message);
     });
 
-    // Lắng nghe lệnh đá thiết bị từ hệ thống phòng khi dùng nhiều máy
-    this.socket.on("FORCE_LOGOUT", (data) => {
-      console.warn("⚠️ Received FORCE_LOGOUT from server:", data);
+    this.socket.on("FORCE_LOGOUT", () => {
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("force_logout"));
       }
     });
   }
 
+  private attachSocketWrapper(event: string) {
+    if (!this.socket) return;
+
+    // Chỉ gán wrapper duy nhất một lần cho mỗi event trên instance socket này
+    if (this.attachedEvents.has(event)) return;
+
+    this.socket.on(event, (data: any) => {
+      const callbacks = this.listeners.get(event);
+      if (callbacks) {
+        callbacks.forEach((cb) => {
+          try {
+            cb(data);
+          } catch (err) {
+            console.error(`Error in socket callback [${event}]:`, err);
+          }
+        });
+      }
+    });
+    this.attachedEvents.add(event);
+  }
+
   disconnect() {
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
+      this.attachedEvents.clear();
     }
   }
 
@@ -80,109 +91,85 @@ class SocketService {
 
   private addListener(event: string, callback: (data: any) => void) {
     if (!this.listeners.has(event)) {
-      this.listeners.set(event, []);
+      this.listeners.set(event, new Set());
     }
-    this.listeners.get(event)?.push(callback);
+    this.listeners.get(event)?.add(callback);
 
-    // If already connected, attach immediately
+    if (this.socket) {
+      this.attachSocketWrapper(event);
+    }
+  }
+
+  private removeListener(event: string, callback: (data: any) => void) {
+    const callbacks = this.listeners.get(event);
+    if (callbacks) {
+      callbacks.delete(callback);
+      if (callbacks.size === 0) {
+        this.listeners.delete(event);
+        if (this.socket) {
+          this.socket.off(event);
+          this.attachedEvents.delete(event);
+        }
+      }
+    }
+  }
+
+  // Phương thức tương thích ngược với code cũ sử dụng .off(event)
+  // Lưu ý: .off() truyền thống của socket.io sẽ gỡ sạch mọi callback của event đó
+  off(event: string) {
+    this.listeners.delete(event);
+    if (this.socket) {
+      this.socket.off(event);
+      this.attachedEvents.delete(event);
+    }
+  }
+
+  // --- Social Events ---
+  onFriendRequestReceived(callback: (data: any) => void) {
+    this.addListener("NEW_FRIEND_REQUEST", callback);
+  }
+
+  onFriendRequestAccepted(callback: (data: any) => void) {
+    this.addListener("FRIEND_REQUEST_ACCEPTED", callback);
+  }
+
+  onFriendListUpdated(callback: (data: any) => void) {
+    this.addListener("FRIEND_LIST_UPDATED", callback);
+  }
+
+  emitFriendRequestSent(data: {
+    recipientId: string;
+    requesterName: string;
+    requesterAvatar?: string;
+  }) {
     if (this.socket?.connected) {
-      this.socket.on(event, callback);
+      this.socket.emit("EMIT_FRIEND_REQUEST_SENT", data);
     }
   }
 
-  // Tham gia vào phòng chat của cuộc hội thoại
-  joinRoom(conversationId: string) {
+  emitFriendRequestAccepted(data: {
+    recipientId: string;
+    accepterName: string;
+  }) {
     if (this.socket?.connected) {
-      this.socket.emit("join-room", { conversationId });
-      console.log(`📡 [Socket] Joining room: ${conversationId}`);
+      this.socket.emit("EMIT_FRIEND_REQUEST_ACCEPTED", data);
     }
   }
 
-  // Rời phòng chat
-  leaveRoom(conversationId: string) {
-    if (this.socket?.connected) {
-      this.socket.emit("leave-room", { conversationId });
-    }
-  }
-
-  // Lắng nghe tin nhắn mới
-  onMessageReceived(callback: (message: any) => void) {
-    this.addListener("message-received", callback);
-  }
-
-  // Gửi sự kiện đang gõ
-  emitTyping(target: string, isGroup: boolean = true) {
-    this.socket?.emit("TYPING", { target, isGroup });
-  }
-
-  // Gửi sự kiện dừng gõ
-  emitStopTyping(target: string, isGroup: boolean = true) {
-    this.socket?.emit("STOP_TYPING", { target, isGroup });
-  }
-
-  // Lắng nghe sự kiện đang gõ từ người khác
-  onTyping(callback: (data: { actorId: string; roomId: string }) => void) {
-    this.addListener("TYPING", callback);
-  }
-
-  // Lắng nghe sự kiện dừng gõ từ người khác
-  onStopTyping(callback: (data: { actorId: string; roomId: string }) => void) {
-    this.addListener("STOP_TYPING", callback);
-  }
-
-  // Lắng nghe trạng thái Online
-  onUserOnline(callback: (data: { userId: string; status: string }) => void) {
-    this.addListener("USER_ONLINE", callback);
-  }
-
-  // Lắng nghe trạng thái Offline
-  onUserOffline(
-    callback: (data: {
-      userId: string;
-      status: string;
-      last_active: number;
-    }) => void,
-  ) {
-    this.addListener("USER_OFFLINE", callback);
-  }
-
-  // Lắng nghe sự kiện đối phương đã đọc tin nhắn
-  onMessagesRead(
-    callback: (data: {
-      conversationId: string;
-      userId: string;
-      readAt: string;
-    }) => void,
-  ) {
-    this.addListener("messages-read", callback);
-  }
-
-  // Lắng nghe sự kiện cập nhật cảm xúc
-  onMessageReactionUpdated(
-    callback: (data: { messageId: string; reactions: any[] }) => void,
-  ) {
-    this.addListener("message-reaction-updated", callback);
-  }
-
-  // Realtime Sync cho Ghim và Phân loại
-  onPinUpdated(
-    callback: (data: { conversationId: string; isPinned: boolean }) => void,
-  ) {
+  // --- Conversation Management ---
+  onPinUpdated(callback: (data: any) => void) {
     this.addListener("CONVERSATION_PIN_UPDATED", callback);
   }
 
-  onLabelUpdated(
-    callback: (data: { conversationId: string; label: any }) => void,
-  ) {
+  onLabelUpdated(callback: (data: any) => void) {
     this.addListener("CONVERSATION_LABEL_UPDATED", callback);
   }
 
-  // Lắng nghe sự kiện hội thoại mới được tạo
-  onConversationCreated(callback: (newConvo: any) => void) {
+  onConversationCreated(callback: (data: any) => void) {
     this.addListener("CONVERSATION_CREATED", callback);
   }
 
-  onConversationRemoved(callback: (data: { conversationId: string }) => void) {
+  onConversationRemoved(callback: (data: any) => void) {
     this.addListener("CONVERSATION_REMOVED", callback);
   }
 
@@ -190,19 +177,98 @@ class SocketService {
     this.addListener("CONVERSATION_UPDATED", callback);
   }
 
-  // Lắng nghe sự kiện thu hồi tin nhắn
-  onMessageRevoked(
-    callback: (data: { messageId: string; revokedAt?: string }) => void,
-  ) {
+  // --- Messaging ---
+  joinRoom(conversationId: string) {
+    if (this.socket?.connected) {
+      this.socket.emit("joinRoom", conversationId);
+    }
+  }
+
+  onMessageReceived(callback: (message: any) => void) {
+    this.addListener("message-received", callback);
+  }
+
+  onMessagesRead(callback: (data: any) => void) {
+    this.addListener("messages-read", callback);
+  }
+
+  onMessageReactionUpdated(callback: (data: any) => void) {
+    this.addListener("message-reaction-updated", callback);
+  }
+
+  onMessageRevoked(callback: (data: any) => void) {
     this.addListener("message-revoked", callback);
   }
 
-  // Hủy lắng nghe một sự kiện
-  off(event: string) {
-    this.listeners.delete(event);
-    this.socket?.off(event);
+  onMessagePinned(callback: (data: any) => void) {
+    this.addListener("message-pinned", callback);
+  }
+
+  onMessageUpdated(callback: (data: any) => void) {
+    this.addListener("message-updated", callback);
+  }
+
+  // --- Typing ---
+  onTyping(callback: (data: any) => void) {
+    this.addListener("TYPING", callback);
+  }
+
+  onStopTyping(callback: (data: any) => void) {
+    this.addListener("STOP_TYPING", callback);
+  }
+
+  emitTyping(data: { target: string; isGroup: boolean }) {
+    if (this.socket?.connected) {
+      this.socket.emit("TYPING", data);
+    }
+  }
+
+  emitStopTyping(data: { target: string; isGroup: boolean }) {
+    if (this.socket?.connected) {
+      this.socket.emit("STOP_TYPING", data);
+    }
+  }
+
+  // --- Call Signaling ---
+  initiateCall(data: { targetRoom: string; caller: any; isVideo: boolean }) {
+    if (this.socket?.connected) {
+      this.socket.emit("CALL_INITIATED", data);
+    }
+  }
+
+  onIncomingCall(callback: (data: any) => void) {
+    this.addListener("INCOMING_CALL", callback);
+  }
+
+  cancelCall(data: { targetRoom: string }) {
+    if (this.socket?.connected) {
+      this.socket.emit("CANCEL_CALL", data);
+    }
+  }
+
+  onCallCanceled(callback: (data: any) => void) {
+    this.addListener("CALL_CANCELED", callback);
+  }
+
+  declinedCall(data: { targetRoom: string }) {
+    if (this.socket?.connected) {
+      this.socket.emit("CALL_DECLINED", data);
+    }
+  }
+
+  onCallDeclined(callback: (data: any) => void) {
+    this.addListener("CALL_DECLINED", callback);
+  }
+
+  emitCallBusy(data: { targetRoom: string }) {
+    if (this.socket?.connected) {
+      this.socket.emit("CALL_BUSY", data);
+    }
+  }
+
+  onCallBusy(callback: (data: any) => void) {
+    this.addListener("CALL_BUSY", callback);
   }
 }
 
-// Singleton — dùng chung toàn app
 export const socketService = new SocketService();

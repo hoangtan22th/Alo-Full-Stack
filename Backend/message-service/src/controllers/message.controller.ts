@@ -14,6 +14,51 @@ function getUserIdFromHeader(req: Request): string | null {
 }
 
 /**
+ * Helper to check if a user has permission to perform an action in a conversation
+ */
+async function hasGroupPermission(
+  req: Request,
+  conversationId: string,
+  userId: string,
+  action: "pinMessages" | "sendMessage" | "createPolls" | "createNotes" | "createReminders" | "editGroupInfo",
+): Promise<boolean> {
+  try {
+    const gatewayUrl = process.env.GATEWAY_URL || "http://127.0.0.1:8888";
+    const response = await fetch(
+      `${gatewayUrl}/api/v1/groups/${conversationId}`,
+      {
+        headers: {
+          "X-User-Id": userId,
+          Authorization: req.headers.authorization || "",
+        },
+      },
+    );
+
+    if (!response.ok) return false;
+    const result = await response.json();
+    const conversation = result.data;
+
+    if (!conversation) return false;
+    // Direct matches (1-1) always allow all actions
+    if (!conversation.isGroup) return true;
+
+    // Permissions check
+    const permission = conversation.permissions?.[action] || "EVERYONE";
+    if (permission === "EVERYONE") return true;
+
+    // For ADMIN only, check if the user is LEADER or DEPUTY
+    const member = conversation.members?.find(
+      (m: any) => String(m.userId) === userId,
+    );
+    const role = member?.role?.toUpperCase();
+    return role === "LEADER" || role === "DEPUTY";
+  } catch (error) {
+    console.error(`[hasGroupPermission] Error checking ${action}:`, error);
+    return false;
+  }
+}
+
+/**
  * Ghim tin nhắn
  */
 export async function pinMessage(
@@ -23,15 +68,43 @@ export async function pinMessage(
 ): Promise<void> {
   try {
     const { messageId } = req.params;
+    const userId = getUserIdFromHeader(req);
+
     if (!messageId || typeof messageId !== "string") {
       res.status(400).json({ error: "Missing or invalid messageId" });
       return;
     }
-    const updated = await messageDataService.pinMessage(messageId);
-    if (!updated) {
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    // 1. Lấy thông tin tin nhắn để biết conversationId
+    const message = await messageDataService.getMessageById(messageId);
+    if (!message) {
       res.status(404).json({ error: "Message not found" });
       return;
     }
+
+    // 2. Kiểm tra quyền ghim
+    const allowed = await hasGroupPermission(
+      req,
+      message.conversationId.toString(),
+      userId,
+      "pinMessages",
+    );
+    if (!allowed) {
+      res.status(403).json({ error: "Bạn không có quyền ghim tin nhắn" });
+      return;
+    }
+
+    const updated = await messageDataService.pinMessage(messageId);
+    if (!updated) {
+      res.status(404).json({ error: "Failed to update pin status" });
+      return;
+    }
+
     // Phát sự kiện realtime
     await rabbitMQProducer.publishMessagePinEvent({
       messageId: updated._id.toString(),
@@ -56,15 +129,43 @@ export async function unpinMessage(
 ): Promise<void> {
   try {
     const { messageId } = req.params;
+    const userId = getUserIdFromHeader(req);
+
     if (!messageId || typeof messageId !== "string") {
       res.status(400).json({ error: "Missing or invalid messageId" });
       return;
     }
-    const updated = await messageDataService.unpinMessage(messageId);
-    if (!updated) {
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    // 1. Lấy thông tin tin nhắn để biết conversationId
+    const message = await messageDataService.getMessageById(messageId);
+    if (!message) {
       res.status(404).json({ error: "Message not found" });
       return;
     }
+
+    // 2. Kiểm tra quyền bỏ ghim
+    const allowed = await hasGroupPermission(
+      req,
+      message.conversationId.toString(),
+      userId,
+      "pinMessages",
+    );
+    if (!allowed) {
+      res.status(403).json({ error: "Bạn không có quyền bỏ ghim tin nhắn" });
+      return;
+    }
+
+    const updated = await messageDataService.unpinMessage(messageId);
+    if (!updated) {
+      res.status(404).json({ error: "Failed to update pin status" });
+      return;
+    }
+
     // Phát sự kiện realtime
     await rabbitMQProducer.publishMessagePinEvent({
       messageId: updated._id.toString(),
@@ -165,6 +266,7 @@ export async function getMessageHistory(
       count: messages.length,
       limit,
       skip,
+      hasMore: messages.length === limit,
     });
   } catch (error) {
     console.error("[MessageController] GET history error:", error);
@@ -400,7 +502,8 @@ export async function sendMessage(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const { conversationId, type, content, metadata, replyTo, senderName } = req.body;
+    const { conversationId, type, content, metadata, replyTo, senderName } =
+      req.body;
     const userId = getUserIdFromHeader(req);
 
     if (!userId) {
@@ -410,6 +513,20 @@ export async function sendMessage(
 
     if (!conversationId || (!content && type !== "image" && type !== "file")) {
       res.status(400).json({ error: "Missing conversationId or content" });
+      return;
+    }
+
+    // 0. Kiểm tra quyền nhắn tin
+    const allowed = await hasGroupPermission(
+      req,
+      String(conversationId),
+      userId,
+      "sendMessage",
+    );
+    if (!allowed) {
+      res.status(403).json({
+        error: "Chỉ trưởng/phó nhóm mới có thể gửi tin nhắn trong nhóm này",
+      });
       return;
     }
 
@@ -472,6 +589,20 @@ export async function uploadFile(
 
     if (!conversationId || !file) {
       res.status(400).json({ error: "Missing conversationId or file" });
+      return;
+    }
+
+    // 0. Kiểm tra quyền nhắn tin
+    const allowed = await hasGroupPermission(
+      req,
+      String(conversationId),
+      userId,
+      "sendMessage",
+    );
+    if (!allowed) {
+      res.status(403).json({
+        error: "Chỉ trưởng/phó nhóm mới có thể gửi tin nhắn trong nhóm này",
+      });
       return;
     }
 
@@ -682,6 +813,303 @@ export async function clearReactions(
     });
   } catch (error) {
     console.error("[MessageController] DELETE clearReactions error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Upload multiple images and create an album message
+ */
+export async function uploadImages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId, replyTo, senderName, widths, heights } = req.body;
+    const userId = getUserIdFromHeader(req);
+    const files = req.files as Express.Multer.File[];
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized - no user id" });
+      return;
+    }
+
+    if (
+      !conversationId ||
+      !files ||
+      !Array.isArray(files) ||
+      files.length === 0
+    ) {
+      res.status(400).json({ error: "Missing conversationId or images" });
+      return;
+    }
+
+    // 0. Kiểm tra quyền nhắn tin
+    const allowed = await hasGroupPermission(
+      req,
+      String(conversationId),
+      userId,
+      "sendMessage",
+    );
+    if (!allowed) {
+      res.status(403).json({
+        error: "Chỉ trưởng/phó nhóm mới có thể gửi tin nhắn trong nhóm này",
+      });
+      return;
+    }
+
+    const parsedWidths =
+      typeof widths === "string" ? JSON.parse(widths) : widths;
+    const parsedHeights =
+      typeof heights === "string" ? JSON.parse(heights) : heights;
+
+    // 1. Upload all to S3 concurrently
+    const uploadPromises = files.map(async (file, index) => {
+      const originalName = Buffer.from(file.originalname, "latin1").toString(
+        "utf8",
+      );
+      const url = await uploadFileToS3(
+        file.buffer,
+        file.mimetype,
+        originalName,
+      );
+      return {
+        url,
+        width: parsedWidths ? parsedWidths[index] : 0,
+        height: parsedHeights ? parsedHeights[index] : 0,
+        fileName: originalName,
+        fileSize: file.size,
+        fileType: file.mimetype,
+        isRevoked: false,
+        deletedByUsers: [],
+      };
+    });
+
+    const imageGroup = await Promise.all(uploadPromises);
+
+    // 2. Save Message with imageGroup metadata
+    const messageDoc = await messageDataService.createMessage({
+      conversationId,
+      senderId: userId,
+      senderName: senderName,
+      type: "image",
+      content: "[Album Ảnh]",
+      metadata: {
+        imageGroup: imageGroup,
+      },
+      replyTo: replyTo ? JSON.parse(replyTo) : undefined,
+    });
+
+    // 3. Prepare event for RabbitMQ
+    const messageEvent: MessageEvent = {
+      _id: messageDoc._id.toString(),
+      conversationId: String(conversationId),
+      senderId: userId,
+      senderName: messageDoc.senderName || "",
+      type: messageDoc.type,
+      content: messageDoc.content,
+      isRead: false,
+      createdAt: messageDoc.createdAt,
+      ...(messageDoc.metadata && { metadata: messageDoc.metadata }),
+      ...(messageDoc.replyTo && { replyTo: messageDoc.replyTo as any }),
+    };
+
+    // 4. Publish to RabbitMQ
+    await rabbitMQProducer.publishMessageEvent(messageEvent);
+
+    res.status(201).json({
+      status: "success",
+      data: messageEvent,
+    });
+  } catch (error) {
+    console.error("[MessageController] POST uploadImages error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Thu hồi 1 ảnh trong album
+ */
+export async function revokeImageInGroup(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageId, index } = req.params;
+    const userId = getUserIdFromHeader(req);
+
+    if (!messageId || index === undefined) {
+      res.status(400).json({ error: "Missing messageId or index" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const message = await messageDataService.getMessageById(
+      messageId as string,
+    );
+    if (!message) {
+      res.status(404).json({ error: "Message not found" });
+      return;
+    }
+
+    if (String(message.senderId) !== userId) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const updated = await messageDataService.revokeImageInGroup(
+      messageId as string,
+      parseInt(index as string),
+    );
+
+    if (updated) {
+      await rabbitMQProducer.publishMessageUpdateEvent({
+        _id: updated._id.toString(),
+        conversationId: updated.conversationId.toString(),
+        senderId: updated.senderId,
+        senderName: updated.senderName || "",
+        type: updated.type,
+        content: updated.content,
+        isRead: updated.isRead,
+        createdAt: updated.createdAt,
+        ...(updated.metadata && { metadata: updated.metadata }),
+      });
+    }
+
+    res.json({ status: "success", data: updated });
+  } catch (error) {
+    console.error("[MessageController] PATCH revokeImageInGroup error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Xóa 1 ảnh trong album chỉ ở phía tôi
+ */
+export async function deleteImageInGroupForMe(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageId, index } = req.params;
+    const userId = getUserIdFromHeader(req);
+
+    if (!messageId || index === undefined) {
+      res.status(400).json({ error: "Missing messageId or index" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const updated = await messageDataService.deleteImageInGroupForMe(
+      messageId as string,
+      parseInt(index as string),
+      userId,
+    );
+
+    if (updated) {
+      await rabbitMQProducer.publishMessageUpdateEvent({
+        _id: updated._id.toString(),
+        conversationId: updated.conversationId.toString(),
+        senderId: updated.senderId,
+        senderName: updated.senderName || "",
+        type: updated.type,
+        content: updated.content,
+        isRead: updated.isRead,
+        createdAt: updated.createdAt,
+        ...(updated.metadata && { metadata: updated.metadata }),
+      });
+    }
+
+    res.json({ status: "success", data: updated });
+  } catch (error) {
+    console.error(
+      "[MessageController] DELETE deleteImageInGroupForMe error:",
+      error,
+    );
+    next(error);
+  }
+}
+
+/**
+ * Lấy tất cả tin nhắn đã ghim trong hội thoại
+ */
+export async function getPinnedMessages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId } = req.params;
+
+    if (typeof conversationId !== "string") {
+      res.status(400).json({ error: "Invalid or missing conversationId" });
+      return;
+    }
+
+    const pinnedMessages =
+      await messageDataService.getPinnedMessages(conversationId);
+
+    res.json({
+      status: "success",
+      data: pinnedMessages,
+    });
+  } catch (error) {
+    console.error("[MessageController] GET pinned messages error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Tìm kiếm tin nhắn trong cuộc hội thoại
+ */
+export async function searchMessages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId } = req.params;
+    const { query } = req.query;
+    const userId = getUserIdFromHeader(req);
+
+    if (!conversationId || typeof conversationId !== "string") {
+      res.status(400).json({ error: "Missing or invalid conversationId" });
+      return;
+    }
+
+    if (!query || typeof query !== "string") {
+      res.status(400).json({ error: "Missing or invalid search query" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const messages = await messageDataService.searchMessages(
+      conversationId,
+      query,
+      userId,
+    );
+
+    res.json({
+      status: "success",
+      data: messages,
+    });
+  } catch (error) {
+    console.error("[MessageController] searchMessages error:", error);
     next(error);
   }
 }

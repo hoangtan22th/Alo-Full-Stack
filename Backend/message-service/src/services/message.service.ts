@@ -119,6 +119,60 @@ export class MessageDataService {
   }
 
   /**
+   * Thu hồi một ảnh trong album
+   */
+  async revokeImageInGroup(
+    messageId: string,
+    index: number,
+  ): Promise<IMessage | null> {
+    try {
+      const updateKey = `metadata.imageGroup.${index}.isRevoked`;
+      const timeKey = `metadata.imageGroup.${index}.revokedAt`;
+      const updated = await Message.findByIdAndUpdate(
+        messageId,
+        {
+          $set: {
+            [updateKey]: true,
+            [timeKey]: new Date(),
+          },
+        },
+        { new: true },
+      );
+      return updated;
+    } catch (error) {
+      console.error("[MessageDataService] Failed to revoke image in group:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Xóa một ảnh trong album chỉ ở phía tôi
+   */
+  async deleteImageInGroupForMe(
+    messageId: string,
+    index: number,
+    userId: string,
+  ): Promise<IMessage | null> {
+    try {
+      const updateKey = `metadata.imageGroup.${index}.deletedByUsers`;
+      const updated = await Message.findByIdAndUpdate(
+        messageId,
+        {
+          $addToSet: { [updateKey]: userId },
+        },
+        { new: true },
+      );
+      return updated;
+    } catch (error) {
+      console.error(
+        "[MessageDataService] Failed to delete image in group for me:",
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Lấy lịch sử tin nhắn (Có lọc những tin đã xóa 1 phía và xử lý thu hồi)
    */
   async getMessageHistory(
@@ -308,6 +362,48 @@ export class MessageDataService {
       );
     } catch (error) {
       console.error("[MessageDataService] Failed to clear reactions:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Lấy tất cả tin nhắn đã ghim trong một cuộc hội thoại
+   */
+  async getPinnedMessages(conversationId: string): Promise<IMessage[]> {
+    try {
+      return await Message.find({
+        conversationId: new Types.ObjectId(conversationId),
+        isPinned: true,
+      }).sort({ createdAt: -1 });
+    } catch (error) {
+      console.error("[MessageDataService] Failed to get pinned messages:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Tìm kiếm tin nhắn trong cuộc hội thoại
+   */
+  async searchMessages(
+    conversationId: string,
+    query: string,
+    userId: string,
+    limit: number = 50,
+  ): Promise<IMessage[]> {
+    try {
+      const dbQuery: any = {
+        conversationId: new Types.ObjectId(conversationId),
+        content: { $regex: query, $options: "i" },
+        isRevoked: false,
+        deletedByUsers: { $ne: userId },
+      };
+
+      return await Message.find(dbQuery)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
+    } catch (error) {
+      console.error("[MessageDataService] Failed to search messages:", error);
       throw error;
     }
   }

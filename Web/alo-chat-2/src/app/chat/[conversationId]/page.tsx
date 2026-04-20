@@ -1,11 +1,17 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import axiosClient from "@/services/api";
 import { messageService, MessageDTO } from "@/services/messageService";
 import { groupService } from "@/services/groupService";
 import { socketService } from "@/services/socketService";
+import { toast } from "sonner";
 import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
+import ChatSummaryButton from "@/components/ui/chatbot/ChatSummaryButton";
+import { CallSystemMessage } from "@/components/ui/call/CallSystemMessage";
+import { useCall } from "@/components/layout/CallProvider";
+
+import JSZip from "jszip";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -32,9 +38,13 @@ import {
   XMarkIcon,
   CheckCircleIcon,
   PencilIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  PhotoIcon,
 } from "@heroicons/react/24/outline";
 import BotChatArea from "@/components/ui/BotChatArea";
 import { useAuthStore } from "@/store/useAuthStore";
+import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -51,17 +61,36 @@ function formatListTime(iso: string) {
   });
 }
 
+const getMediaUrl = (url: string | undefined): string => {
+  if (!url) return "";
+  if (
+    url.startsWith("http") ||
+    url.startsWith("blob:") ||
+    url.startsWith("data:")
+  ) {
+    return url;
+  }
+  const backendHost =
+    process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") ||
+    "http://localhost:8888";
+  return `${backendHost}${url.startsWith("/") ? "" : "/"}${url}`;
+};
+
 /* ─────────────────────────────────────────
    Page Component
 ───────────────────────────────────────── */
 export default function ChatPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const conversationId = params?.conversationId as string;
 
   // File upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
+
+  // Audio state for ringtone
+  const ringtoneRef = useRef<HTMLAudioElement>(null);
 
   /* ---------- chat area state ---------- */
   const { user: currentUser } = useAuthStore();
@@ -98,15 +127,56 @@ export default function ChatPage() {
   const fetchingUsersRef = useRef<Set<string>>(new Set());
 
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+  const [activeAlbumIndex, setActiveAlbumIndex] = useState<{ messageId: string, index: number } | null>(null);
+
+  // Use global call state
+  const { callState, incomingCall, startCall, acceptCall, declineCall, endCall } = useCall();
+
+
+
+  // Chặn triệt để lỗi "createSpan" của Zego SDK — handler sống ở page level
+  // để vẫn hoạt động sau khi ZegoCallRoom unmount
+  useEffect(() => {
+    const zegoErrorHandler = (e: any) => {
+      const msg = e.message || e.reason?.message || "";
+      if (msg.includes("createSpan") || msg.includes("Cannot read properties of null")) {
+        if (e.preventDefault) e.preventDefault();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        return true;
+      }
+    };
+    window.addEventListener("error", zegoErrorHandler, true);
+    window.addEventListener("unhandledrejection", zegoErrorHandler, true);
+    return () => {
+      // Delay removal để bắt hết lỗi Zego post-destroy
+      setTimeout(() => {
+        window.removeEventListener("error", zegoErrorHandler, true);
+        window.removeEventListener("unhandledrejection", zegoErrorHandler, true);
+      }, 5000);
+    };
+  }, []);
+
+  // Ringtone is now handled by CallProvider
+
+  // Helper lấy kích thước ảnh tự nhiên trước khi upload
+  const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.onerror = () => resolve({ width: 0, height: 0 });
+      img.src = URL.createObjectURL(file);
+    });
+  };
 
   // Helper lấy tên người dùng ưu tiên dữ liệu "trực tiếp" (senderName trong msg, currentUser, conversationInfo) trước khi dùng cache
   const getSenderDisplayName = (userId: string, msg?: MessageDTO) => {
     if (msg?.senderName) return msg.senderName;
     if (!userId) return "Người dùng";
     const currentMyId = currentUser?.id || currentUser?._id || currentUser?.userId;
-
     if (String(userId) === String(currentMyId)) {
-      return currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi";
+      return currentUser?.fullName || "Tôi";
     }
 
     if (conversationInfo) {
@@ -170,13 +240,24 @@ export default function ChatPage() {
         return {
           ...prev,
           [myId]: {
-            name: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+            name: currentUser?.fullName || "Tôi",
             avatar: currentUser?.avatar || "",
           },
         };
       });
     }
   }, [currentUser]);
+
+  // Fetch thông tin cho tất cả thành viên trong nhóm
+  useEffect(() => {
+    if (conversationInfo?.isGroup && conversationInfo.members) {
+      conversationInfo.members.forEach((m: any) => {
+        if (m.userId && !userCache[m.userId]) {
+          fetchUserInfo(m.userId);
+        }
+      });
+    }
+  }, [conversationInfo, userCache]);
 
   const EMOJI_MAP: Record<string, string> = {
     like: "👍",
@@ -338,12 +419,23 @@ export default function ChatPage() {
       }
     });
 
+    // Lắng nghe cập nhật tin nhắn (VD: thu hồi 1 ảnh trong album)
+    socketService.off("message-updated");
+    socketService.onMessageUpdated((newMsg: any) => {
+      if (String(newMsg.conversationId) === String(conversationIdRef.current)) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === newMsg._id ? newMsg : m))
+        );
+      }
+    });
+
     return () => {
       socketService.off("message-received");
       socketService.off("messages-read");
       socketService.off("message-reaction-updated");
       socketService.off("message-revoked");
       socketService.off("message-pinned");
+      socketService.off("message-updated");
     };
   }, [conversationId, currentUser]);
 
@@ -384,6 +476,24 @@ export default function ChatPage() {
       fetchConversationInfo();
     }
   }, [conversationId, currentUser, fetchConversationInfo]);
+
+  const handleStartCall = useCallback((isVideo: boolean) => {
+    startCall(conversationId, isVideo, !!conversationInfo?.isGroup);
+  }, [conversationId, conversationInfo, startCall]);
+
+  // Handle call query param
+  useEffect(() => {
+    const callParam = searchParams.get("call");
+    if (!callParam || callState.active || !conversationId || !currentUser || !myId) return;
+
+    if (callParam === "video") {
+      handleStartCall(true);
+      router.replace(`/chat/${conversationId}`);
+    } else if (callParam === "audio") {
+      handleStartCall(false);
+      router.replace(`/chat/${conversationId}`);
+    }
+  }, [searchParams, callState.active, conversationId, currentUser, myId, handleStartCall, router]);
 
   /* ─── Fetch user info for group members who sent messages ─── */
   useEffect(() => {
@@ -488,6 +598,141 @@ export default function ChatPage() {
     }
   };
 
+  /* ─── Download Album as ZIP ─── */
+  const handleDownloadAlbum = async (msg: MessageDTO) => {
+    if (!msg.metadata?.imageGroup) return;
+    const myId = currentUser?.id || currentUser?._id || currentUser?.userId || "me";
+    const availableImages = (msg.metadata!.imageGroup as any[]).filter(
+      (img: any) => !img.isRevoked && !img.deletedByUsers?.includes(myId)
+    );
+    if (availableImages.length === 0) {
+      alert("Không có ảnh nào khả dụng để tải!");
+      return;
+    }
+
+    try {
+      const zip = new JSZip();
+
+      // Fetch tất cả ảnh song song
+      const results = await Promise.all(
+        availableImages.map(async (img: any, i: number) => {
+          const fileName = img.fileName || `image_${i + 1}.png`;
+          const response = await fetch(`${img.url}?t=${Date.now()}`, {
+            method: "GET",
+            cache: "no-cache",
+          });
+          if (!response.ok) return null;
+          const blob = await response.blob();
+          return { fileName, blob };
+        })
+      );
+
+      // Thêm vào ZIP
+      results.forEach((r) => {
+        if (r) zip.file(r.fileName, r.blob);
+      });
+
+      // Tạo và tải file ZIP
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const blobUrl = URL.createObjectURL(zipBlob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = `album_${new Date().getTime()}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("Lỗi tải album:", err);
+      alert("Không thể tải album. Vui lòng thử lại.");
+    }
+  };
+
+  /* ─── Clear History & Group Management ─── */
+  const handleClearHistory = async () => {
+    if (!confirm("Bạn có chắc chắn muốn xóa lịch sử trò chuyện này?")) return;
+    try {
+      await groupService.clearConversation(conversationId);
+      setMessages([]);
+      alert("Đã xóa lịch sử trò chuyện.");
+    } catch (err) {
+      console.error("Lỗi xóa lịch sử:", err);
+      alert("Không thể xóa lịch sử trò chuyện.");
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    if (!confirm("Bạn có chắc chắn muốn rời khỏi nhóm này?")) return;
+    try {
+      const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+      if (!myId) return;
+      await groupService.removeMember(conversationId, myId);
+      alert("Đã rời nhóm.");
+      router.push("/chat");
+    } catch (err) {
+      console.error("Lỗi rời nhóm:", err);
+      alert("Không thể rời nhóm.");
+    }
+  };
+
+  const handleDisbandGroup = async () => {
+    if (!confirm("CẢNH BÁO: Bạn có chắc chắn muốn giải tán nhóm này? Hành động này không thể hoàn tác.")) return;
+    try {
+      await groupService.deleteGroup(conversationId);
+      alert("Nhóm đã bị giải tán.");
+      router.push("/chat");
+    } catch (err) {
+      console.error("Lỗi giải tán nhóm:", err);
+      alert("Không thể giải tán nhóm.");
+    }
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!confirm("Xác nhận mời thành viên này ra khỏi nhóm?")) return;
+    try {
+      await groupService.removeMember(conversationId, userId);
+      toast.success("Đã mời thành viên ra khỏi nhóm");
+      handleRefreshData();
+    } catch (err) {
+      console.error("Lỗi xóa thành viên:", err);
+      toast.error("Không thể xóa thành viên.");
+    }
+  };
+
+  const handleUpdateRole = async (userId: string, newRole: string) => {
+    try {
+      await groupService.updateRole(conversationId, userId, newRole);
+      toast.success("Đã cập nhật vai trò thành công");
+      handleRefreshData();
+    } catch (err) {
+      console.error("Lỗi cập nhật vai trò:", err);
+      toast.error("Không thể cập nhật vai trò.");
+    }
+  };
+
+  const handleAssignLeader = async (userId: string) => {
+    if (!confirm("Bạn có chắc chắn muốn chuyển quyền Trưởng nhóm cho người này? Bạn sẽ trở thành thành viên thường.")) return;
+    try {
+      await groupService.assignLeader(conversationId, userId);
+      toast.success("Đã chuyển quyền trưởng nhóm thành công");
+      handleRefreshData();
+    } catch (err) {
+      console.error("Lỗi chuyển trưởng nhóm:", err);
+      toast.error("Không thể chuyển quyền trưởng nhóm.");
+    }
+  };
+
+  const handleRefreshData = async () => {
+    try {
+      // Reload conversation info
+      const res: any = await groupService.getGroupById(conversationId);
+      const raw = res?.data ? res.data : res;
+      setConversationInfo(raw);
+    } catch (err) {
+      console.error("Lỗi tải lại dữ liệu nhóm:", err);
+    }
+  };
+
   /* ─── Send message ─── */
   const handleSend = async () => {
     const text = messageText.trim();
@@ -507,7 +752,7 @@ export default function ChatPage() {
       _id: tempId,
       conversationId,
       senderId: myId,
-      senderName: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+      senderName: currentUser?.fullName || "Tôi",
       type: "text",
       content: text,
       isRead: false,
@@ -529,7 +774,7 @@ export default function ChatPage() {
         conversationId,
         content: text,
         type: "text",
-        senderName: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+        senderName: currentUser?.fullName || "Tôi",
         replyTo: currentReply
           ? {
             messageId: currentReply._id,
@@ -560,16 +805,17 @@ export default function ChatPage() {
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0 || !conversationId || uploadingFile)
+    const filesList = e.target.files;
+    if (!filesList || filesList.length === 0 || !conversationId || uploadingFile)
       return;
-    if (files.length > 5) {
-      alert("Chỉ được gửi tối đa 5 file mỗi lần!");
+    if (filesList.length > 20) {
+      alert("Chỉ được gửi tối đa 20 file mỗi lần!");
       return;
     }
+
+    const files = Array.from(filesList);
     // Kiểm tra từng file dưới 100MB
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    for (const file of files) {
       if (file.size > 100 * 1024 * 1024) {
         alert(
           `File "${file.name}" vượt quá 100MB, vui lòng chọn file nhỏ hơn.`,
@@ -577,24 +823,85 @@ export default function ChatPage() {
         return;
       }
     }
+
     setUploadingFile(true);
     const myId =
       currentUser?.id || currentUser?._id || currentUser?.userId || "me";
-    const tempIds: string[] = [];
     const currentReply = replyingTo;
     setReplyingTo(null);
 
+    // Tách ảnh và file
+    const imageFiles = files.filter(f => f.type.startsWith("image/"));
+    const otherFiles = files.filter(f => !f.type.startsWith("image/"));
+
     try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const tempId = `temp_file_${Date.now()}_${i}`;
-        tempIds.push(tempId);
+      // 1. Xử lý gửi ALBUM ảnh (nếu có nhiều hơn 1 ảnh)
+      if (imageFiles.length > 1) {
+        const tempId = `temp_album_${Date.now()}`;
+        const dimensions = await Promise.all(imageFiles.map(f => getImageDimensions(f)));
+        const widths = dimensions.map(d => d.width);
+        const heights = dimensions.map(d => d.height);
+
         const tempMsg: MessageDTO = {
           _id: tempId,
           conversationId,
           senderId: myId,
-          senderName: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
-          type: "file",
+          senderName: currentUser?.fullName || "Tôi",
+          type: "image",
+          content: "[Album Ảnh]",
+          isRead: false,
+          metadata: {
+            imageGroup: imageFiles.map((f, i) => ({
+              url: URL.createObjectURL(f), // preview local
+              width: widths[i],
+              height: heights[i],
+              fileName: f.name,
+              isRevoked: false,
+              deletedByUsers: []
+            }))
+          },
+          replyTo: currentReply
+            ? {
+              messageId: currentReply._id,
+              senderId: currentReply.senderId,
+              senderName: getSenderDisplayName(currentReply.senderId, currentReply),
+              content: currentReply.type === 'file' ? (currentReply.metadata?.fileName || currentReply.content) : currentReply.content,
+              type: currentReply.type,
+            }
+            : undefined,
+          createdAt: new Date().toISOString(),
+        };
+
+        setMessages((prev) => [...prev, tempMsg]);
+
+        try {
+          await messageService.uploadImages(
+            conversationId,
+            imageFiles,
+            widths,
+            heights,
+            currentReply,
+            currentUser?.fullName || "Tôi"
+          );
+        } catch (err) {
+          console.error("Lỗi gửi album ảnh:", err);
+          setMessages((prev) => prev.filter((m) => m._id !== tempId));
+        }
+      } else if (imageFiles.length === 1) {
+        // Gửi 1 ảnh lẻ như cũ hoặc dùng album 1 ảnh
+        otherFiles.unshift(imageFiles[0]);
+      }
+
+      // 2. Xử lý các file còn lại (gửi lẻ từng tin như cũ)
+      for (let i = 0; i < otherFiles.length; i++) {
+        const file = otherFiles[i];
+        const tempId = `temp_file_${Date.now()}_${i}`;
+        const tempMsg: MessageDTO = {
+          _id: tempId,
+          conversationId,
+          senderId: myId,
+          senderName: currentUser?.fullName || "Tôi",
+          type: file.type.startsWith("image/") ? "image" : "file",
           content: "",
           isRead: false,
           replyTo: currentReply
@@ -615,13 +922,7 @@ export default function ChatPage() {
         };
         setMessages((prev) => [...prev, tempMsg]);
         try {
-          await messageService.uploadFile(conversationId, file, currentReply ? {
-            messageId: currentReply._id,
-            senderId: currentReply.senderId,
-            senderName: getSenderDisplayName(currentReply.senderId, currentReply),
-            content: currentReply.type === 'file' ? (currentReply.metadata?.fileName || currentReply.content) : currentReply.content,
-            type: currentReply.type,
-          } : undefined, currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi");
+          await messageService.uploadFile(conversationId, file, currentReply, currentUser?.fullName || "Tôi");
         } catch (err) {
           console.error("Lỗi gửi file:", err);
           setMessages((prev) => prev.filter((m) => m._id !== tempId));
@@ -659,8 +960,12 @@ export default function ChatPage() {
         new Date(lastMsg.createdAt).getTime()
         : Infinity;
 
+      const isSystem = msg.type === "system";
+      const lastIsSystem = lastMsg?.type === "system";
+
       // Nhóm theo SENDER ID để tránh gộp nhiều người khác vào 1 khối trong group chat
-      if (last && last.senderId === msg.senderId && gap < FIVE_MIN) {
+      // Không gộp nếu là tin nhắn hệ thống hoặc tin nhắn trước đó là hệ thống
+      if (last && last.senderId === msg.senderId && gap < FIVE_MIN && !isSystem && !lastIsSystem) {
         last.messages.push(msg);
       } else {
         groups.push({ isMine, senderId: msg.senderId, messages: [msg] });
@@ -683,6 +988,11 @@ export default function ChatPage() {
   /* ─────────────────────────────────────────
      RENDER
   ───────────────────────────────────────── */
+
+  const avatarMap = useMemo(() => 
+    Object.fromEntries(Object.entries(userCache).map(([k, v]) => [k, v.avatar])),
+  [userCache]);
+
   return (
     <>
       {conversationId === BOT_ID ? (
@@ -698,7 +1008,7 @@ export default function ChatPage() {
                 <div className="relative shrink-0">
                   {conversationInfo?.displayAvatar ? (
                     <img
-                      src={conversationInfo.displayAvatar}
+                      src={getMediaUrl(conversationInfo.displayAvatar)}
                       alt={conversationInfo.displayName || ""}
                       className="w-10 h-10 rounded-full object-cover"
                     />
@@ -744,13 +1054,21 @@ export default function ChatPage() {
                 </div>
               </div>
 
+
               <div className="flex items-center gap-4 text-gray-400">
-                <button className="hover:text-black transition">
+                <button 
+                  onClick={() => handleStartCall(false)}
+                  className="hover:text-black transition"
+                >
                   <PhoneIcon className="w-5 h-5" />
                 </button>
-                <button className="hover:text-black transition">
+                <button 
+                  onClick={() => handleStartCall(true)}
+                  className="hover:text-black transition"
+                >
                   <VideoCameraIcon className="w-5 h-5" />
                 </button>
+
                 <button className="hover:text-black transition">
                   <MagnifyingGlassIcon className="w-5 h-5" />
                 </button>
@@ -880,6 +1198,19 @@ export default function ChatPage() {
               </div>
             )}
 
+            {/* Floating Chat Summary Button */}
+            {conversationId !== "alo-bot" && (
+              <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex justify-center w-full">
+                <div className="pointer-events-auto">
+                  <ChatSummaryButton 
+                    conversationId={conversationId} 
+                    userId={myId} 
+                    messages={messages} 
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto px-5 py-4 scrollbar-hide">
               {loadingMessages ? (
@@ -900,6 +1231,23 @@ export default function ChatPage() {
 
                     // Tin cuối cùng của nhóm — để lấy senderName/avatar và timestamp + trạng thái
                     const lastMsg = gMsgs[gMsgs.length - 1];
+
+                    if (lastMsg.type === "system" && !lastMsg.metadata?.callType) {
+                      return (
+                        <div key={`group-${groupIdx}`} className="flex justify-center my-4 w-full px-10">
+                          <div className="flex flex-col items-center gap-1.5 max-w-full">
+                            {gMsgs.map((msg) => (
+                              <div key={msg._id} className="bg-gray-100 px-4 py-1.5 rounded-full shadow-sm border border-gray-200/50 max-w-full">
+                                <span className="text-[12px] text-gray-500 font-bold text-center block">
+                                  {msg.content}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
                     const senderName = getSenderDisplayName(senderId, lastMsg);
                     let senderAvatar = "";
 
@@ -976,13 +1324,29 @@ export default function ChatPage() {
                               <div
                                 className={`relative max-w-[75%] flex flex-col ${isMine ? "items-end" : "items-start"}`}
                               >
-                                {/* Wrapper cho Bubble content và Hover controls để nó luôn căn giữa text */}
-                                <div
-                                  className={`relative max-w-full overflow-hidden flex flex-col p-1.5 px-2 border shadow-sm ${isMine
-                                    ? "bg-blue-50/80 border-blue-100 shadow-blue-900/5 items-end"
-                                    : "bg-white border-gray-100 shadow-gray-900/5 items-start"
-                                    } ${bubbleRadius}`}
-                                >
+                                {/* System messages (General & Call) */}
+                                {msg.type === "system" ? (
+                                  msg.metadata?.callType ? (
+                                    <CallSystemMessage
+                                      isMine={isMine}
+                                      metadata={msg.metadata as any}
+                                      createdAt={msg.createdAt}
+                                      onCallAgain={(isVideo) => handleStartCall(isVideo)}
+                                    />
+                                  ) : (
+                                    <div className="flex justify-center w-full my-4 px-10">
+                                      <div className="bg-gray-100/50 backdrop-blur-sm text-gray-500 text-[11px] font-bold py-1.5 px-4 rounded-full border border-gray-200/50 shadow-sm text-center uppercase tracking-tight">
+                                        {msg.content}
+                                      </div>
+                                    </div>
+                                  )
+                                ) : (
+                                  <div
+                                    className={`relative max-w-full overflow-hidden flex flex-col p-1.5 px-2 border shadow-sm ${isMine
+                                      ? "bg-blue-50/80 border-blue-100 shadow-blue-900/5 items-end"
+                                      : "bg-white border-gray-100 shadow-gray-900/5 items-start"
+                                      } ${bubbleRadius}`}
+                                  >
                                   {/* Reply Quote Box */}
                                   {msg.replyTo && msg.replyTo.messageId && !isRevoked && (
                                     <div
@@ -1017,18 +1381,202 @@ export default function ChatPage() {
                                     </div>
                                   )}
 
-                                  {isRevoked ? (
+                                  {msg.type === "image" ? (
+                                    <div className="w-full">
+                                      {msg.metadata?.imageGroup ? (
+                                        (() => {
+                                          // 1. Lọc ra danh sách ảnh thực sự đang được hiển thị
+                                          const visibleImages = (msg.metadata?.imageGroup || []).filter((img: any) =>
+                                            !img.deletedByUsers?.includes(myId)
+                                          );
+
+                                          if (visibleImages.length === 0) return null;
+
+                                          const firstImg = visibleImages[0];
+                                          const count = visibleImages.length;
+                                          const isPortrait = firstImg ? (firstImg.height > firstImg.width) : false;
+
+                                          // 2. Logic số cột linh hoạt dựa trên số ảnh THỰC TẾ đang có
+                                          let numCols = 2;
+                                          let gridCols = "grid-cols-2";
+                                          if (count === 1) { gridCols = "grid-cols-1"; numCols = 1; }
+                                          else if (count === 3) { gridCols = "grid-cols-3"; numCols = 3; }
+                                          else if (count >= 4 && isPortrait) { gridCols = "grid-cols-4"; numCols = 4; }
+                                          else if (count >= 4 && !isPortrait) { gridCols = "grid-cols-2"; numCols = 2; }
+
+                                          // Tỷ lệ khung hình: giới hạn để không quá dài/dẹp
+                                          let aspectR = 1;
+                                          if (firstImg && firstImg.width && firstImg.height) {
+                                            aspectR = firstImg.width / firstImg.height;
+                                            if (count > 1) {
+                                              aspectR = Math.max(0.7, Math.min(aspectR, 1.5));
+                                            }
+                                          }
+
+                                          // Tính width cố định cho grid dựa trên kích thước ảnh gốc
+                                          // Chỉ dùng khi TẤT CẢ ảnh đều bị thu hồi (placeholder)
+                                          const allRevoked = msg.isRevoked || visibleImages.every((img: any) => img.isRevoked);
+                                          const baseImgW = firstImg?.width || 200;
+                                          const baseImgH = firstImg?.height || 200;
+                                          const cellHeight = Math.min(200, baseImgH);
+                                          const cellWidth = cellHeight * (baseImgW / baseImgH);
+                                          const gap = 4;
+                                          let computedGridWidth = cellWidth * numCols + gap * (numCols - 1);
+                                          if (count === 1 && isPortrait) computedGridWidth = Math.min(computedGridWidth, 280);
+                                          computedGridWidth = Math.min(computedGridWidth, 420);
+
+                                          return (
+                                            <div
+                                              className={`grid gap-1 ${allRevoked ? '' : 'w-full'} ${gridCols}`}
+                                              style={{
+                                                ...(allRevoked
+                                                  ? { width: `${computedGridWidth}px`, maxWidth: '100%' }
+                                                  : { maxWidth: (count === 1 && isPortrait) ? '280px' : '100%' }
+                                                ),
+                                                maxHeight: '420px',
+                                                overflow: 'hidden'
+                                              }}
+                                            >
+                                              {visibleImages.map((img: any, idx: number) => {
+                                                // Rock-solid: Một tấm ảnh bị coi là thu hồi nếu:
+                                                // 1. Cả tin nhắn bị thu hồi (msg.isRevoked = true)
+                                                // 2. HOẶC chính nó bị thu hồi lẻ (img.isRevoked = true)
+                                                const shouldShowPlaceholder = msg.isRevoked || img.isRevoked;
+
+                                                // Tìm lại index nguyên thủy trong mảng gốc
+                                                const originalIdx = msg.metadata?.imageGroup?.findIndex((orig: any) => orig.url === img.url);
+
+                                                // CHÌA KHÓA: Giữ đúng kích thước gốc bằng aspectRatio của từng tấm
+                                                const itemAspect = (img.width && img.height) ? `${img.width}/${img.height}` : aspectR;
+
+                                                return (
+                                                  <div
+                                                    key={idx}
+                                                    className="relative group/img rounded-lg overflow-hidden bg-gray-200 cursor-pointer flex items-center justify-center w-full"
+                                                    style={{ aspectRatio: itemAspect }}
+                                                    onClick={() => !shouldShowPlaceholder && setActiveAlbumIndex({ messageId: msg._id, index: originalIdx ?? 0 })}
+                                                  >
+                                                    {shouldShowPlaceholder ? (
+                                                      <div className="text-center text-gray-400">
+                                                        <PhotoIcon className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                                                        <span className="text-xs font-medium">Đã thu hồi</span>
+                                                      </div>
+                                                    ) : (
+                                                      <>
+                                                        <img
+                                                          src={getMediaUrl(img.url)}
+                                                          alt={`album-${idx}`}
+                                                          className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                                                        />
+                                                        {/* Individual actions overlay */}
+                                                        <div className="absolute top-1 right-1 opacity-0 group-hover/img:opacity-100 transition-opacity flex flex-col gap-1">
+                                                          {isMine && !img.isRevoked && (
+                                                            <button
+                                                              onClick={async (e) => {
+                                                                e.stopPropagation();
+                                                                if (confirm("Thu hồi ảnh này?")) {
+                                                                  // Optimistic Update
+                                                                  setMessages(prev => prev.map(m => m._id === msg._id ? {
+                                                                    ...m,
+                                                                    metadata: {
+                                                                      ...m.metadata,
+                                                                      imageGroup: m.metadata?.imageGroup?.map((ig: any, i: number) => i === originalIdx ? {
+                                                                        ...ig,
+                                                                        isRevoked: true,
+                                                                        revokedAt: new Date().toISOString()
+                                                                      } : ig)
+                                                                    }
+                                                                  } : m));
+
+                                                                  await messageService.revokeImageInGroup(msg._id, originalIdx ?? 0);
+                                                                }
+                                                              }}
+                                                              className="p-1 bg-black/50 rounded text-white hover:bg-black/70"
+                                                              title="Thu hồi"
+                                                            >
+                                                              <ArrowUturnLeftIcon className="w-3 h-3" />
+                                                            </button>
+                                                          )}
+                                                          <button
+                                                            onClick={async (e) => {
+                                                              e.stopPropagation();
+                                                              if (confirm("Xóa ảnh này phía bạn?")) {
+                                                                await messageService.deleteImageInGroupForMe(msg._id, originalIdx ?? 0);
+                                                                // Local update
+                                                                setMessages(prev => prev.map(m => m._id === msg._id ? {
+                                                                  ...m,
+                                                                  metadata: {
+                                                                    ...m.metadata,
+                                                                    imageGroup: m.metadata?.imageGroup?.map((ig: any, i: number) => i === originalIdx ? {
+                                                                      ...ig,
+                                                                      deletedByUsers: [...(ig.deletedByUsers || []), myId]
+                                                                    } : ig)
+                                                                  }
+                                                                } : m));
+                                                              }
+                                                            }}
+                                                            className="p-1 bg-black/50 rounded text-white hover:bg-black/70"
+                                                            title="Xóa phía tôi"
+                                                          >
+                                                            <TrashIcon className="w-3 h-3" />
+                                                          </button>
+                                                        </div>
+                                                      </>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          );
+                                        })()
+                                      ) : (
+                                        /* RENDER SINGLE IMAGE */
+                                        isRevoked ? (
+                                          (() => {
+                                            const imgW = msg.metadata?.width || 300;
+                                            const imgH = msg.metadata?.height || 200;
+                                            const displayH = Math.min(420, imgH);
+                                            const displayW = displayH * (imgW / imgH);
+                                            const isPortraitSingle = imgH > imgW;
+                                            return (
+                                              <div
+                                                className="bg-gray-200 rounded-lg flex items-center justify-center"
+                                                style={{
+                                                  width: `${Math.min(displayW, isPortraitSingle ? 280 : 420)}px`,
+                                                  maxWidth: '100%',
+                                                  aspectRatio: `${imgW}/${imgH}`
+                                                }}
+                                              >
+                                                <div className="text-center text-gray-400">
+                                                  <PhotoIcon className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                                                  <span className="text-xs font-medium">Đã thu hồi</span>
+                                                </div>
+                                              </div>
+                                            );
+                                          })()
+                                        ) : (
+                                          <img
+                                            src={getMediaUrl(msg.content)}
+                                            alt="img"
+                                            className="object-cover max-h-[420px] rounded-lg cursor-pointer"
+                                            onClick={() => {
+                                              // For legacy single images, we can also use the album preview logic if we want
+                                              // but let's keep it simple for now or set a dummy album
+                                              setActiveAlbumIndex({ messageId: msg._id, index: 0 });
+                                            }}
+                                          />
+                                        )
+                                      )}
+                                    </div>
+                                  ) : isRevoked ? (
                                     <div className="flex items-center gap-2 group/revoked px-2 py-1">
                                       <span className="italic text-[12px] text-gray-400 block w-fit">
                                         Tin nhắn đã được thu hồi
                                       </span>
                                     </div>
-                                  ) : msg.type === "image" ? (
-                                    <img
-                                      src={msg.content}
-                                      alt="img"
-                                      className="object-cover max-h-64 rounded-lg"
-                                    />
+                                  ) : msg.type === "system" && msg.metadata?.callType ? (
+                                    null /* Rendered outside bubble wrapper above */
+
                                   ) : msg.type === "file" ? (
                                     <div
                                       className={`flex items-center justify-between gap-4 px-2 py-1 transition w-80 max-w-full group`}
@@ -1036,7 +1584,7 @@ export default function ChatPage() {
                                       <div
                                         className="flex items-center gap-3 flex-1 min-w-0"
                                         onClick={() =>
-                                          window.open(msg.content, "_blank")
+                                          window.open(getMediaUrl(msg.content), "_blank")
                                         }
                                       >
                                         <div className="w-10 h-12 bg-blue-500 rounded-lg flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
@@ -1051,7 +1599,7 @@ export default function ChatPage() {
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleDownload(msg.content, msg.metadata?.fileName || "file");
+                                          handleDownload(getMediaUrl(msg.content), msg.metadata?.fileName || "file");
                                         }}
                                         className="w-8 h-8 bg-white border border-gray-100 rounded-md flex items-center justify-center text-gray-600 hover:bg-gray-50 transition"
                                       >
@@ -1063,7 +1611,8 @@ export default function ChatPage() {
                                       {msg.content}
                                     </div>
                                   )}
-                                </div>
+                                  </div>
+                                )} {/* end: system call bypasses bubble wrapper */}
 
                                 {/* Hover Controls (Reaction & Menu & Redo) */}
                                 <div
@@ -1178,12 +1727,17 @@ export default function ChatPage() {
                                           <button
                                             onClick={() => {
                                               setActiveMenu(null);
-                                              handleDownload(msg.content, msg.metadata?.fileName || (msg.type === "image" ? "image.png" : "file"));
+                                              if (msg.metadata?.imageGroup) {
+                                                // Tải toàn bộ album ảnh (chỉ ảnh chưa bị thu hồi/xóa)
+                                                handleDownloadAlbum(msg);
+                                              } else {
+                                                handleDownload(msg.content, msg.metadata?.fileName || (msg.type === "image" ? "image.png" : "file"));
+                                              }
                                             }}
                                             className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-blue-600 hover:bg-blue-50 transition text-left"
                                           >
                                             <ArrowDownTrayIcon className="w-4 h-4 shrink-0" />
-                                            Lưu về máy
+                                            {msg.metadata?.imageGroup ? `Lưu tất cả ảnh` : "Lưu về máy"}
                                           </button>
                                         )}
                                         {isMine && !msg.isRevoked && new Date().getTime() - new Date(msg.createdAt).getTime() < 86400000 && (
@@ -1219,9 +1773,20 @@ export default function ChatPage() {
                                       <PencilIcon className="w-4 h-4" />
                                     </button>
                                   )}
-                                </div>
+                                  </div>
                                 {/* Hiển thị các cảm xúc đã thả */}
-                                {msg.reactions && msg.reactions.length > 0 && (
+                                {(() => {
+                                  if (msg.type === "image" && msg.metadata?.imageGroup) {
+                                    // Cả nhóm bị thu hồi → ẩn
+                                    if (isRevoked) return false;
+                                    // Tất cả ảnh lẻ đều bị thu hồi → ẩn
+                                    const allImgsRevoked = (msg.metadata!.imageGroup as any[]).every((img: any) => img.isRevoked === true);
+                                    if (allImgsRevoked) return false;
+                                    // Còn ít nhất 1 ảnh chưa thu hồi → hiện
+                                    return true;
+                                  }
+                                  return !isRevoked;
+                                })() && msg.reactions && msg.reactions.length > 0 && (
                                   <div
                                     className={`flex flex-wrap gap-1 mt-1 ${isMine ? "justify-end" : "justify-start"}`}
                                   >
@@ -1632,109 +2197,109 @@ export default function ChatPage() {
           </div>
 
           {/* ═══ CỘT PHẢI: THÔNG TIN CHI TIẾT ═══ */}
-          <div
-            className={`hidden lg:flex flex-col shrink-0 bg-[#FAFAFA] h-full transition-all duration-300 ease-in-out overflow-hidden ${showInfoPanel
-              ? "w-[320px] xl:w-85 opacity-100 border-l border-gray-100"
-              : "w-0 opacity-0 border-l-0"
-              }`}
-          >
-            <div className="w-[320px] xl:w-85 h-full flex flex-col">
-              <div className="flex-1 overflow-y-auto scrollbar-hide">
-                {/* Profile Section */}
-                <div className="flex flex-col items-center pt-10 pb-8 border-b border-gray-100/60">
-                  <div className="relative mb-4">
-                    {conversationInfo?.displayAvatar ? (
-                      <img
-                        src={conversationInfo.displayAvatar}
-                        alt="Profile"
-                        className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
-                      />
-                    ) : (
-                      <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-3xl border-4 border-white shadow-lg">
-                        {(conversationInfo?.displayName || "?")
-                          .charAt(0)
-                          .toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                  <h2 className="text-[18px] font-black text-gray-900 tracking-tight">
-                    {conversationInfo?.displayName ||
-                      conversationInfo?.name ||
-                      "..."}
-                  </h2>
-                  <p className="text-[12px] font-bold text-gray-400 mt-1">
-                    {conversationInfo?.isGroup
-                      ? `${conversationInfo?.members?.length ?? 0} thành viên`
-                      : "Người dùng"}
-                  </p>
+          <ChatInfoPanel
+            show={showInfoPanel}
+            conversationId={conversationId}
+            conversationInfo={conversationInfo}
+            messages={messages}
+            currentUser={currentUser}
+            onClose={() => setShowInfoPanel(false)}
+            onClearHistory={handleClearHistory}
+            onLeaveGroup={handleLeaveGroup}
+            onDisbandGroup={handleDisbandGroup}
+            onViewAllMedia={() => {/* Future: Open media gallery */}}
+            onViewAllFiles={() => {/* Future: Open file list */}}
+            onRemoveMember={handleRemoveMember}
+            onUpdateRole={handleUpdateRole}
+            onAssignLeader={handleAssignLeader}
+            onRefreshData={handleRefreshData}
+            userCache={userCache}
+          />
 
-                  <div className="flex items-center gap-3 mt-6">
-                    <button className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:bg-gray-50 transition shadow-sm">
-                      <UserIcon className="w-4 h-4" />
-                    </button>
-                    <button className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:bg-gray-50 transition shadow-sm">
-                      <BellIcon className="w-4 h-4" />
-                    </button>
-                    <button className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:bg-gray-50 transition shadow-sm">
-                      <EllipsisHorizontalIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+          {/* ALBUM PREVIEW MODAL */}
+          {activeAlbumIndex && (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 animate-in fade-in duration-200">
+              <button
+                className="absolute top-6 right-6 p-3 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition z-10"
+                onClick={() => setActiveAlbumIndex(null)}
+              >
+                <XMarkIcon className="w-8 h-8" />
+              </button>
 
-                {/* Shared Files */}
-                <div className="p-6 border-b border-gray-100/60">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                      Shared Files
-                    </h3>
-                  </div>
-                  <div className="space-y-4">
-                    {messages
-                      .filter((m) => m.type === "file")
-                      .slice(-5)
-                      .map((m) => (
-                        <a
-                          key={m._id}
-                          href={m.content}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-4 cursor-pointer group"
+              {(() => {
+                const msg = messages.find(m => m._id === activeAlbumIndex.messageId);
+                if (!msg) return null;
+
+                const images = msg.metadata?.imageGroup || [{ url: msg.content, isRevoked: msg.isRevoked }];
+                const currentImg = images[activeAlbumIndex.index];
+
+                const next = () => {
+                  const nextIdx = (activeAlbumIndex.index + 1) % images.length;
+                  setActiveAlbumIndex({ ...activeAlbumIndex, index: nextIdx });
+                };
+                const prev = () => {
+                  const prevIdx = (activeAlbumIndex.index - 1 + images.length) % images.length;
+                  setActiveAlbumIndex({ ...activeAlbumIndex, index: prevIdx });
+                };
+
+                return (
+                  <div className="relative w-full h-full flex items-center justify-center p-4">
+                    {/* Navigation Buttons */}
+                    {images.length > 1 && (
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); prev(); }}
+                          className="absolute left-4 top-1/2 -translate-y-1/2 p-4 text-white/50 hover:text-white transition"
                         >
-                          <div className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-400 group-hover:bg-gray-50 transition">
-                            <FolderIcon className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-bold text-gray-900 truncate">
-                              {m.metadata?.fileName || "File"}
-                            </p>
-                            <p className="text-[11px] font-bold text-gray-400">
-                              {m.metadata?.fileType || ""}
-                            </p>
-                          </div>
-                        </a>
-                      ))}
-                    {messages.filter((m) => m.type === "file").length === 0 && (
-                      <p className="text-[12px] text-gray-400 font-medium">
-                        Chưa có file nào được chia sẻ
-                      </p>
+                          <ChevronLeftIcon className="w-12 h-12" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); next(); }}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 p-4 text-white/50 hover:text-white transition"
+                        >
+                          <ChevronRightIcon className="w-12 h-12" />
+                        </button>
+                      </>
                     )}
-                  </div>
-                </div>
 
-                {/* Danger Actions */}
-                <div className="p-6 space-y-4 pb-10">
-                  <button className="w-full flex items-center justify-between text-[13px] font-bold text-red-500 hover:bg-red-50 p-2 -mx-2 rounded-lg transition">
-                    Block User
-                    <NoSymbolIcon className="w-4 h-4" />
-                  </button>
-                  <button className="w-full flex items-center justify-between text-[13px] font-bold text-gray-500 hover:bg-gray-100 p-2 -mx-2 rounded-lg transition">
-                    Report Conversation
-                    <ExclamationCircleIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+                    <div className="max-w-4xl max-h-[85vh] flex flex-col items-center">
+                      {currentImg?.isRevoked ? (
+                        <div className="flex flex-col items-center justify-center text-gray-500">
+                          <ArrowUturnLeftIcon className="w-20 h-20 mb-4 opacity-20" />
+                          <p className="text-xl font-bold">Hình ảnh này đã được thu hồi</p>
+                        </div>
+                      ) : (
+                        currentImg && (
+                          <img
+                            src={getMediaUrl(currentImg.url)}
+                            className="max-w-full max-h-full object-contain shadow-2xl rounded-sm"
+                            alt="preview"
+                          />
+                        )
+                      )}
+
+                      {currentImg && (
+                        <div className="mt-6 flex flex-col items-center gap-2">
+                          <p className="text-white/60 text-sm font-medium">
+                            {activeAlbumIndex.index + 1} / {images.length}
+                          </p>
+                          {!currentImg.isRevoked && (
+                            <button
+                              onClick={() => handleDownload(getMediaUrl(currentImg.url), currentImg.fileName || "image.png")}
+                              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full text-sm font-bold transition"
+                            >
+                              <ArrowDownTrayIcon className="w-4 h-4" />
+                              Lưu về máy
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
-          </div>
+          )}
         </>
       )}
     </>

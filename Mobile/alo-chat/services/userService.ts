@@ -16,12 +16,13 @@ export interface UserProfileDTO {
 export const userService = {
   getUserById: async (id: string): Promise<UserProfileDTO | null> => {
     try {
-      let data = await api.get<any, any>(`/users/${id}`);
-      // Nếu API không bọc trong ApiResponse mà trả thẳng object (UserDto), interceptor sẽ trả về toàn bộ Axios Response.
-      if (data && data.data) {
-        data = data.data;
+      const response = await api.get<any, any>(`/users/${id}`);
+      // Interceptor should have already returned response.data.data
+      // But if it didn't for some reason, we handle it
+      if (response && response.status === 200 && response.data) {
+        return response.data as UserProfileDTO;
       }
-      return data;
+      return response as UserProfileDTO;
     } catch (error) {
       console.error("Lỗi khi tải thông tin user:", error);
       return null;

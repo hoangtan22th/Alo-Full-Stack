@@ -1,6 +1,5 @@
 "use client";
-// src/pages/contacts/FriendListPage.tsx
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import axiosClient from "@/services/api";
 import AddFriendModal from "@/components/ui/AddFriendModal";
 import {
@@ -19,26 +18,28 @@ export default function FriendListPage() {
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
+  const lastFetchTime = useRef(0);
+  const isFetching = useRef(false);
+
   const fetchFriends = async () => {
+    // Chống loop: Không fetch quá 1 lần mỗi 2 giây
+    const now = Date.now();
+    if (isFetching.current || now - lastFetchTime.current < 2000) return;
+    
+    isFetching.current = true;
+    lastFetchTime.current = now;
+
     try {
       setLoading(true);
-
-      // 1. Lấy thông tin cá nhân của Tấn để xác định ID làm mốc so sánh
       const meRes: any = await axiosClient.get("/auth/me");
       const userData = meRes?.data || meRes;
       const myId = userData?.id || userData?._id;
 
-      // 2. Lấy danh sách bạn bè thô từ API
       const res: any = await axiosClient.get("/contacts/friends");
       const rawData = Array.isArray(res) ? res : res?.data || [];
 
-      // 3. Chuẩn hóa dữ liệu hiển thị:
-      // Luôn trích xuất thông tin của "đối phương" (người bạn) thay vì lấy mặc định requester
       const formattedFriends = rawData.map((f: any) => {
-        // Nếu Tấn là người gửi (requesterId trùng với myId) thì thông tin bạn bè nằm ở recipient
-        // Nếu Tấn là người nhận thì thông tin bạn bè nằm ở requester
         const isMeRequester = f.requesterId === myId;
-
         return {
           ...f,
           displayId: isMeRequester ? f.recipientId : f.requesterId,
@@ -52,21 +53,23 @@ export default function FriendListPage() {
       console.error("Lỗi lấy danh sách bạn bè:", err);
     } finally {
       setLoading(false);
+      isFetching.current = false;
     }
   };
 
   useEffect(() => {
     fetchFriends();
+    const handleUpdate = () => fetchFriends();
+    window.addEventListener("friend_list_updated", handleUpdate);
+    return () => window.removeEventListener("friend_list_updated", handleUpdate);
   }, []);
 
   const handleOpenProfile = (friend: any) => {
-    // Luôn sử dụng displayId đã chuẩn hóa để mở đúng profile bạn bè
     setSelectedUserId(friend.displayId);
     setProfileModalOpen(true);
   };
 
   const groupedFriends = useMemo(() => {
-    // Thực hiện lọc và sắp xếp dựa trên tên đã chuẩn hóa (displayName)
     const filtered = friends.filter((f) =>
       (f.displayName || "").toLowerCase().includes(searchQuery.toLowerCase()),
     );
@@ -92,12 +95,7 @@ export default function FriendListPage() {
     sortOrder === "asc" ? a.localeCompare(b) : b.localeCompare(a),
   );
 
-  if (loading)
-    return (
-      <div className="p-6 text-center text-sm font-bold">
-        Đang tải dữ liệu...
-      </div>
-    );
+  if (loading) return <div className="p-6 text-center text-xs font-bold">Đang tải...</div>;
 
   return (
     <div className="flex-1 h-screen p-5 lg:p-6 overflow-y-auto bg-[#fafafa] scrollbar-hide">
@@ -107,80 +105,37 @@ export default function FriendListPage() {
             <div className="p-2 bg-black rounded-xl text-white shadow-lg">
               <UserPlusIcon className="w-5 h-5" />
             </div>
-            <h1 className="text-xl font-black tracking-tight">
-              Danh sách bạn bè
-            </h1>
+            <h1 className="text-xl font-black tracking-tight">Danh sách bạn bè</h1>
           </div>
-          <button
-            onClick={() => setShowAddFriend(true)}
-            className="bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-neutral-800 transition shadow-md"
-          >
-            + Thêm bạn mới
-          </button>
+          <button onClick={() => setShowAddFriend(true)} className="bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-neutral-800 transition shadow-md">+ Thêm bạn mới</button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-8">
-          <div className="md:col-span-3 flex items-center gap-3 bg-white border border-gray-100 px-4 py-2.5 rounded-xl shadow-sm focus-within:ring-1 focus-within:ring-black">
+          <div className="md:col-span-3 flex items-center gap-3 bg-white border border-gray-100 px-4 py-2.5 rounded-xl shadow-sm">
             <MagnifyingGlassIcon className="w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Tìm kiếm tên..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-transparent w-full outline-none text-[14px] font-medium"
-            />
+            <input type="text" placeholder="Tìm kiếm tên..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="bg-transparent w-full outline-none text-[14px] font-medium" />
           </div>
-          <button
-            onClick={() =>
-              setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
-            }
-            className="bg-white border border-gray-100 px-4 py-2.5 rounded-xl text-sm font-bold flex justify-between items-center shadow-sm"
-          >
-            {sortOrder.toUpperCase()}{" "}
-            <ArrowsUpDownIcon className="w-3 h-3 text-gray-400" />
+          <button onClick={() => setSortOrder(prev => prev === "asc" ? "desc" : "asc")} className="bg-white border border-gray-100 px-4 py-2.5 rounded-xl text-sm font-bold flex justify-between items-center shadow-sm">
+            {sortOrder.toUpperCase()} <ArrowsUpDownIcon className="w-3 h-3 text-gray-400" />
           </button>
         </div>
 
         <div className="space-y-10">
           {groupKeys.length === 0 ? (
-            <div className="text-center py-16 bg-white rounded-[24px] border-2 border-dashed border-gray-100">
-              <p className="text-gray-400 text-sm font-medium italic">
-                Danh sách bạn bè hiện tại trống.
-              </p>
-            </div>
+            <div className="text-center py-16 bg-white rounded-[24px] border-2 border-dashed border-gray-100 italic text-gray-400 text-xs">Trống</div>
           ) : (
             groupKeys.map((letter) => (
               <div key={letter}>
-                <h2 className="text-[11px] font-black text-gray-300 mb-4 px-1 tracking-widest uppercase">
-                  {letter} ————————
-                </h2>
+                <h2 className="text-[11px] font-black text-gray-300 mb-4 px-1 tracking-widest uppercase">{letter} ————————</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {groupedFriends[letter].map((friend: any) => (
-                    <div
-                      key={friend.id}
-                      onClick={() => handleOpenProfile(friend)}
-                      className="flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-transparent hover:border-black hover:shadow-lg transition-all cursor-pointer group"
-                    >
+                    <div key={friend.id} onClick={() => handleOpenProfile(friend)} className="flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-transparent hover:border-black hover:shadow-lg transition-all cursor-pointer">
                       <div className="w-12 h-12 rounded-full overflow-hidden border border-gray-100 bg-black shrink-0">
-                        <img
-                          src={friend.displayAvatar || "/avt-mac-dinh.jpg"}
-                          onError={(e) =>
-                            (e.currentTarget.src = "/avt-mac-dinh.jpg")
-                          }
-                          className="w-full h-full object-cover"
-                          alt=""
-                        />
+                        <img src={friend.displayAvatar || "/avt-mac-dinh.jpg"} className="w-full h-full object-cover" alt="" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-[14px] text-gray-900 truncate">
-                          {friend.displayName}
-                        </h3>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                          <p className="text-[10px] text-gray-400 font-bold uppercase">
-                            Trực tuyến
-                          </p>
-                        </div>
+                        <h3 className="font-bold text-[14px] text-gray-900 truncate">{friend.displayName}</h3>
+                        <div className="flex items-center gap-1 mt-0.5"><div className="w-1.5 h-1.5 bg-green-500 rounded-full" /><p className="text-[10px] text-gray-400 font-bold uppercase">Online</p></div>
                       </div>
                     </div>
                   ))}
@@ -190,16 +145,8 @@ export default function FriendListPage() {
           )}
         </div>
       </div>
-      {showAddFriend && (
-        <AddFriendModal onClose={() => setShowAddFriend(false)} />
-      )}
-      <FriendProfileModal
-        isOpen={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
-        userId={selectedUserId}
-        relationStatus="ACCEPTED"
-        onActionSuccess={fetchFriends}
-      />
+      {showAddFriend && <AddFriendModal onClose={() => setShowAddFriend(false)} />}
+      <FriendProfileModal isOpen={profileModalOpen} onClose={() => setProfileModalOpen(false)} userId={selectedUserId} relationStatus="ACCEPTED" onActionSuccess={fetchFriends} />
     </div>
   );
 }

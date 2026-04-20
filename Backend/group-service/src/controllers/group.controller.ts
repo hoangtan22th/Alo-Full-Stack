@@ -726,7 +726,13 @@ export const requestJoinGroup = async (
       group.joinRequests = [];
     }
 
-    group.joinRequests.push({ userId: requesterId, requestedAt: new Date() });
+    const { answer } = req.body;
+
+    group.joinRequests.push({
+      userId: requesterId,
+      requestedAt: new Date(),
+      answer: answer || "",
+    });
     await group.save();
 
     // Bắn tin cho admin
@@ -742,6 +748,8 @@ export const requestJoinGroup = async (
       rabbitMQProducer
         .publishNewJoinRequest(groupId, requesterName, admins, group.name)
         .catch(console.error);
+
+      rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
     } catch (notifErr) {
       console.error("[RequestJoinGroup] Notification Error:", notifErr);
     }
@@ -912,6 +920,8 @@ export const rejectJoinRequest = async (
       .publishJoinRequestRejected(userId, group.name || "Nhóm")
       .catch(console.error);
 
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
+
     res.status(200).json({ message: "Đã từ chối yêu cầu", data: group });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1025,12 +1035,18 @@ export const updateGroup = async (
       (m: any) => m.userId.toString() === currentUserId,
     );
 
-    if (
-      !currentMember ||
-      (currentMember.role !== "LEADER" && currentMember.role !== "DEPUTY")
-    ) {
+    if (!currentMember) {
+      res.status(403).json({ error: "Bạn không phải thành viên của nhóm này" });
+      return;
+    }
+
+    const editPermission = group.permissions?.editGroupInfo || "ADMIN";
+    const isAdmin =
+      currentMember.role === "LEADER" || currentMember.role === "DEPUTY";
+
+    if (editPermission === "ADMIN" && !isAdmin) {
       res.status(403).json({
-        error: "Bạn không có quyền cập nhật thông tin nhóm này",
+        error: "Chỉ Trưởng nhóm và Phó nhóm mới có quyền cập nhật thông tin",
       });
       return;
     }
@@ -1283,5 +1299,76 @@ export const toggleBanGroupAdmin = async (
       .json({ message: "Cập nhật trạng thái cấm thành công", data: group });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+};
+// 21. Update settings
+export const updateSettings = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const groupId = String(req.params.groupId || "");
+    const {
+      isHighlightEnabled,
+      permissions,
+      membershipQuestion,
+      isQuestionEnabled,
+    } = req.body;
+    const requesterId = (req.headers["x-user-id"] || "").toString();
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    // Check permissions (Only Leader/Deputy can update these settings)
+    const member = group.members.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (!member || (member.role !== "LEADER" && member.role !== "DEPUTY")) {
+      res
+        .status(403)
+        .json({ error: "Bạn không có quyền thay đổi thiết lập này" });
+      return;
+    }
+
+    if (typeof isHighlightEnabled === "boolean") {
+      group.isHighlightEnabled = isHighlightEnabled;
+    }
+
+    if (permissions && typeof permissions === "object") {
+      // Deep merge or specific assign
+      if (permissions.editGroupInfo)
+        group.permissions.editGroupInfo = permissions.editGroupInfo;
+      if (permissions.createNotes)
+        group.permissions.createNotes = permissions.createNotes;
+      if (permissions.createPolls)
+        group.permissions.createPolls = permissions.createPolls;
+      if (permissions.pinMessages)
+        group.permissions.pinMessages = permissions.pinMessages;
+      if (permissions.sendMessage)
+        group.permissions.sendMessage = permissions.sendMessage;
+      if (permissions.createReminders)
+        group.permissions.createReminders = permissions.createReminders;
+    }
+
+    if (typeof membershipQuestion === "string") {
+      group.membershipQuestion = membershipQuestion;
+    }
+
+    if (typeof isQuestionEnabled === "boolean") {
+      group.isQuestionEnabled = isQuestionEnabled;
+    }
+
+    await group.save();
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
+
+    res.status(200).json({
+      message: "Cập nhật thiết lập thành công",
+      data: group,
+    });
+  } catch (error: any) {
+    console.error("[updateSettings] Error:", error);
   }
 };
