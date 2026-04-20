@@ -170,6 +170,31 @@ export const messageService = {
   },
 
   /**
+   * Tìm kiếm tin nhắn (GET /messages/:conversationId/search)
+   */
+  async searchMessages(
+    conversationId: string,
+    query: string,
+    limit: number = 50,
+  ): Promise<MessageDTO[]> {
+    try {
+      const raw = await api.get<any, any>(
+        `/messages/${conversationId}/search`,
+        {
+          params: { query, limit },
+        },
+      );
+      // Backend trả về { status: 'success', data: IMessage[] }
+      if (Array.isArray(raw?.data)) return raw.data;
+      if (Array.isArray(raw)) return raw;
+      return [];
+    } catch (error) {
+      console.error("Lỗi tìm kiếm tin nhắn:", error);
+      return [];
+    }
+  },
+
+  /**
    * Gửi file hoặc ảnh từ React Native (DocumentPicker/ImagePicker)
    * file: asset từ DocumentPicker hoặc ImagePicker
    * isImage: true nếu là ảnh

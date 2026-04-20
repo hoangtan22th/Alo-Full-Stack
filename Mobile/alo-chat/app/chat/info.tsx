@@ -507,6 +507,10 @@ export default function ChatInfoScreen() {
               />
             }
             label="Tìm kiếm"
+            onPress={() => {
+              // Just go back to chat screen
+              router.back();
+            }}
           />
           {isGroup ? (
             <ActionButton

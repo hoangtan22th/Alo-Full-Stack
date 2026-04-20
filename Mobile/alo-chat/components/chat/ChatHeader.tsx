@@ -5,6 +5,7 @@ import {
   InformationCircleIcon,
   PhoneIcon,
   VideoCameraIcon,
+  MagnifyingGlassIcon,
 } from "react-native-heroicons/outline";
 
 interface ChatHeaderProps {
@@ -17,6 +18,7 @@ interface ChatHeaderProps {
   userStatus: any;
   onBack: () => void;
   onInfo: () => void;
+  onSearchToggle?: () => void;
 }
 
 export const ChatHeader = ({
@@ -29,6 +31,7 @@ export const ChatHeader = ({
   userStatus,
   onBack,
   onInfo,
+  onSearchToggle,
 }: ChatHeaderProps) => {
   const getOfflineText = (lastActive?: number) => {
     if (!lastActive) return "Chưa truy cập";
@@ -88,15 +91,18 @@ export const ChatHeader = ({
         </TouchableOpacity>
       </View>
 
-      <View className="flex-row items-center gap-5">
+      <View className="flex-row items-center gap-4">
         <TouchableOpacity>
-          <PhoneIcon size={24} color="#374151" />
+          <PhoneIcon size={22} color="#374151" />
         </TouchableOpacity>
         <TouchableOpacity>
-          <VideoCameraIcon size={24} color="#374151" />
+          <VideoCameraIcon size={22} color="#374151" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onSearchToggle}>
+          <MagnifyingGlassIcon size={22} color="#374151" />
         </TouchableOpacity>
         <TouchableOpacity onPress={onInfo}>
-          <InformationCircleIcon size={24} color="#374151" />
+          <InformationCircleIcon size={22} color="#374151" />
         </TouchableOpacity>
       </View>
     </View>
