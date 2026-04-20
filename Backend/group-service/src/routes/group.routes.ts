@@ -88,6 +88,12 @@ router.put(
   groupController.updateLinkSetting,
 );
 
+// Cài đặt xem lịch sử tin nhắn
+router.put(
+  "/api/v1/groups/:groupId/history-setting",
+  groupController.updateHistorySetting,
+);
+
 // Cài đặt nâng cao của nhóm
 router.put(
   "/api/v1/groups/:groupId/settings",
