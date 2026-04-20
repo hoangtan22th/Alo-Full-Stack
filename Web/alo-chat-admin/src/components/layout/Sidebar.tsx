@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { authService } from "@/services/authService";
 import {
   Squares2X2Icon,
@@ -15,38 +14,13 @@ import {
   QuestionMarkCircleIcon,
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
+import { useAuthStore } from "@/store/useAuthStore";
+import { useConfirmStore } from "@/store/useConfirmStore";
 
 export function Sidebar() {
+  const { isSuperAdmin, logout } = useAuthStore();
+  const { confirm } = useConfirmStore();
   const pathname = usePathname();
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-
-  useEffect(() => {
-    // Check if user is SUPER_ADMIN
-    const getCookie = (name: string) => {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop()?.split(";").shift();
-      return null;
-    };
-
-    const token = getCookie("admin_token");
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split(".")[1]));
-        // Often roles are stored in the "roles" array or "role" string in JWT payload
-        // Let's assume authorities or roles claim is an array
-        const roles = payload.roles || payload.authorities || [];
-        if (
-          roles.includes("ROLE_SUPER_ADMIN") ||
-          roles === "ROLE_SUPER_ADMIN"
-        ) {
-          setIsSuperAdmin(true);
-        }
-      } catch (e) {
-        console.error("Failed to decode token", e);
-      }
-    }
-  }, []);
 
   const getLinkClass = (path: string) => {
     const isActive = pathname === path;
@@ -113,7 +87,18 @@ export function Sidebar() {
           </Link>
 
           <button
-            onClick={() => authService.logout()}
+            // onClick={() => authService.logout()}
+            onClick={() => {
+              confirm({
+                title: "Đăng xuất",
+                message: "Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?",
+                confirmText: "Đăng xuất",
+                destructive: true,
+                onConfirm: () => {
+                  logout();
+                },
+              });
+            }}
             className="w-full mt-4 flex items-center gap-3 py-2 px-4 rounded-lg transition-all duration-200 text-red-500 font-semibold hover:bg-red-50"
           >
             <svg

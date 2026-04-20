@@ -3,6 +3,7 @@ import { Manrope, Geist } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -27,6 +28,7 @@ export default function RootLayout({
     <html lang="en" className={cn("font-sans", geist.variable)}>
       <body className="bg-surface text-on-surface antialiased min-h-screen flex flex-col font-sans">
         {children}
+        <ConfirmModal />
         <Toaster />
       </body>
     </html>

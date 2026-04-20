@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAdmins } from "@/hooks/useAdmins";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useConfirmStore } from "@/store/useConfirmStore";
 import {
   TrashIcon,
   PlusIcon,
@@ -21,6 +22,7 @@ export default function AdminManagementPage() {
     deleteAdmin,
   } = useAdmins();
   const { isSuperAdmin, checkAuth } = useAuthStore();
+  const { confirm } = useConfirmStore();
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -89,9 +91,16 @@ export default function AdminManagementPage() {
     });
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this admin?")) return;
-    await deleteAdmin(id);
+  const handleDelete = async (id: string, email: string) => {
+    confirm({
+      title: "Xóa Admin",
+      message: `Bạn có chắc chắn muốn xóa tài khoản admin "${email}" không? Hành động này không thể hoàn tác.`,
+      confirmText: "Xóa tài khoản",
+      destructive: true,
+      onConfirm: async () => {
+        await deleteAdmin(id);
+      },
+    });
   };
 
   if (!isAuthChecked) return null; // loading state
@@ -204,7 +213,7 @@ export default function AdminManagementPage() {
                             <PencilIcon className="w-5 h-5" />
                           </button>
                           <button
-                            onClick={() => handleDelete(admin.id)}
+                            onClick={() => handleDelete(admin.id, admin.email)}
                             className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors invisible group-hover:visible inline-flex"
                             title="Delete Admin"
                           >

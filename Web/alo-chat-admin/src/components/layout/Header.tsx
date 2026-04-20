@@ -8,16 +8,20 @@ import {
 } from "@heroicons/react/24/outline";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useConfirmStore } from "@/store/useConfirmStore";
 import { useEffect, useState } from "react";
 
 export function Header() {
-  const { adminEmail, adminName, isSuperAdmin, logout } = useAuthStore();
+  const { adminEmail, adminName, isSuperAdmin, logout, checkAuth } =
+    useAuthStore();
+  const { confirm } = useConfirmStore();
   const [mounted, setMounted] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
+    checkAuth();
     setMounted(true);
-  }, []);
+  }, [checkAuth]);
 
   // Lấy ký tự đầu làm Avatar
   const displayName = adminName || adminEmail || "Loading...";
@@ -81,7 +85,19 @@ export function Header() {
                     Account Settings
                   </button>
                   <button
-                    onClick={logout}
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      confirm({
+                        title: "Đăng xuất",
+                        message:
+                          "Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?",
+                        confirmText: "Đăng xuất",
+                        destructive: true,
+                        onConfirm: () => {
+                          logout();
+                        },
+                      });
+                    }}
                     className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2 mt-1 border-t border-[#ebeef0] pt-2"
                   >
                     <ArrowRightOnRectangleIcon className="w-4 h-4 text-red-500" />
