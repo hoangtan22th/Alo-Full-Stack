@@ -100,9 +100,7 @@ export default function ZegoCallRoom({
         maxUsers: isGroup ? 50 : 2,
         scenario: {
           // Tự động chọn kịch bản 1-1 hoặc Nhóm dựa trên prop isGroup
-          mode: isGroup
-            ? ZegoUIKitPrebuilt.GroupCall
-            : ZegoUIKitPrebuilt.OneONoneCall,
+          mode: ZegoUIKitPrebuilt.GroupCall,
         },
         layout: "Auto",
 
@@ -150,6 +148,7 @@ export default function ZegoCallRoom({
 
         onLeaveRoom: () => callbacksRef.current.onLeaveRoom(),
         onUserJoin: (users: any[]) => {
+          console.log("📍 [Zego] onUserJoin triggered:", users);
           participantCountRef.current += users.length;
           callbacksRef.current.onUserJoin?.(users);
         },

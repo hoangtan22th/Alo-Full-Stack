@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import AuthProvider from "../components/layout/AuthProvider";
+import CallProvider from "../components/layout/CallProvider";
 import { Toaster } from "sonner";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 
@@ -29,8 +30,10 @@ export default function RootLayout({
           }
         >
           <AuthProvider>
-            <Toaster position="top-right" />
-            {children}
+            <CallProvider>
+              <Toaster position="top-right" />
+              {children}
+            </CallProvider>
           </AuthProvider>
         </GoogleOAuthProvider>
       </body>
