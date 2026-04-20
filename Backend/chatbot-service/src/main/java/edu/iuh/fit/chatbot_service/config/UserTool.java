@@ -34,4 +34,20 @@ public class UserTool {
             return "Lỗi khi tìm kiếm người dùng: " + e.getMessage();
         }
     }
+    @Tool(description = "Lấy tên đầy đủ của người dùng hiện tại.")
+    public String getUserInfo(@ToolParam(description = "Mã ID người dùng", required = true) String userId) {
+        try {
+            // Theo cú pháp hàm searchUsers ở trên, response trả về thẳng UserDto
+            UserDto user = userClient.getUserById(userId);
+
+            if (user != null) {
+                return (user.getFullName() != null && !user.getFullName().isBlank())
+                        ? user.getFullName() : "Người dùng";
+            }
+            return "Người dùng";
+        } catch (Exception e) {
+            System.err.println(">>> [LỖI USER TOOL]: " + e.getMessage());
+            return "Người dùng";
+        }
+    }
 }

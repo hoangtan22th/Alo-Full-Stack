@@ -93,15 +93,15 @@ class SocketService {
   // Tham gia vào phòng chat của cuộc hội thoại
   joinRoom(conversationId: string) {
     if (this.socket?.connected) {
-      this.socket.emit("join-room", { conversationId });
-      console.log(`📡 [Socket] Joining room: ${conversationId}`);
+      this.socket.emit("joinRoom", conversationId);
+      console.log(`📡 [Socket] Joining room: room_${conversationId}`);
     }
   }
 
   // Rời phòng chat
   leaveRoom(conversationId: string) {
     if (this.socket?.connected) {
-      this.socket.emit("leave-room", { conversationId });
+      this.socket.emit("leaveRoom", conversationId);
     }
   }
 
@@ -206,6 +206,27 @@ class SocketService {
   off(event: string) {
     this.listeners.delete(event);
     this.socket?.off(event);
+  }
+
+  // --- Call Signaling ---
+  initiateCall(data: { targetRoom: string; caller: any; isVideo: boolean }) {
+    if (this.socket?.connected) {
+      this.socket.emit("CALL_INITIATED", data);
+    }
+  }
+
+  onIncomingCall(callback: (data: { roomId: string; caller: any; isVideo: boolean }) => void) {
+    this.addListener("INCOMING_CALL", callback);
+  }
+
+  cancelCall(data: { targetRoom: string }) {
+    if (this.socket?.connected) {
+      this.socket.emit("CANCEL_CALL", data);
+    }
+  }
+
+  onCallCanceled(callback: (data: { roomId: string }) => void) {
+    this.addListener("CALL_CANCELED", callback);
   }
 }
 

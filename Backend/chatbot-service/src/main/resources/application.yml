@@ -31,29 +31,41 @@ spring:
 #          max-tokens: 1000
 #          top-p: 0.9
 #          stop: ["\n\n"]
-  ai:
-    openai:
-      api-key: ${GEMINI_API_KEY}
-      chat:
-        base-url: https://generativelanguage.googleapis.com/v1beta/openai/
-        options:
-          model: gemini-2.5-flash
-          temperature: 0.2
-          max-tokens: 1000
-          top-p: 0.9
-          stop: ["\n\n"]
 #  ai:
 #    openai:
-#      api-key: ${DEEPSEEK}
+#      api-key: ${GEMINI_API_KEY}
 #      chat:
-#        base-url: https://api.deepseek.com
+#        base-url: https://generativelanguage.googleapis.com/v1beta/openai/
 #        options:
-#          model: deepseek-chat
+#          model: gemini-2.5-flash
 #          temperature: 0.2
 #          max-tokens: 1000
 #          top-p: 0.9
-#          stop: [ "\n\n" ]
+#          stop: ["\n\n"]
+  ai:
+    openai:
+      api-key: dummy
+      base-url: http://localhost:11434
+      chat:
+        options:
+          model: qwen2.5:7b
+          temperature: 0.2
+          max-tokens: 2000
 
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        enabled: false
+      embedding:
+        enabled: true
+        options:
+          model: nomic-embed-text
+
+    vectorstore:
+      qdrant:
+        host: localhost
+        port: 6334
+        initialize-schema: true
 eureka:
   client:
     service-url:

@@ -23,13 +23,27 @@ public class ChatController {
 
         String finalUserId = (request.userId() != null && !request.userId().isBlank())
                 ? request.userId() : headerUserId;
+
         if (finalUserId == null || finalUserId.isBlank()) {
-            return ResponseEntity.status(401).body(ApiResponse.error(401, "Không xác định được người dùng"));
+            return ResponseEntity.status(401)
+                    .body(ApiResponse.error(401, "Không xác định được ID người dùng. Vui lòng đăng nhập lại."));
         }
 
-        var fullRequest = new ChatRequest(request.message(), finalUserId);
+        ChatRequest fullRequest = new ChatRequest(
+                request.message(),
+                finalUserId,
+                request.roomId()
+        );
+
         String result = chatService.chat(fullRequest);
-        result = result.replaceAll("^\"|\"$", "").replace("\\\"", "\"");
+
+        // 4. Xử lý hậu kỳ cho chuỗi kết quả
+        if (result == null || result.isBlank()) {
+            result = "AI hiện tại không thể phản hồi câu hỏi này. thử lại câu khác xem sao?";
+        } else {
+            result = result.strip();
+        }
+
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 }

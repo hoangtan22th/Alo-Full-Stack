@@ -108,6 +108,23 @@ export function initSocketConnection(io: Server) {
       socket.join(`room_${roomId}`);
     });
 
+    // 5.2 Handle Call Signaling
+    socket.on("CALL_INITIATED", (data: { targetRoom: string; caller: any; isVideo: boolean }) => {
+      console.log(`[Socket.IO] Call initiated by ${userId} to room_${data.targetRoom}`);
+      socket.to(`room_${data.targetRoom}`).emit("INCOMING_CALL", {
+        roomId: data.targetRoom,
+        caller: data.caller,
+        isVideo: data.isVideo,
+      });
+    });
+
+    socket.on("CANCEL_CALL", (data: { targetRoom: string }) => {
+      console.log(`[Socket.IO] Call canceled by ${userId} for room_${data.targetRoom}`);
+      socket.to(`room_${data.targetRoom}`).emit("CALL_CANCELED", {
+        roomId: data.targetRoom,
+      });
+    });
+
     // 6. Check User Status
     socket.on("CHECK_USER_STATUS", async (targetUserId: string) => {
       try {
