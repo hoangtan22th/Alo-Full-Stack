@@ -96,8 +96,26 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public void unbanUser(String id) {
+        UserProfile user = userProfileRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("UserProfile not found with id: " + id));
+
+        user.setStatus(UserProfile.UserStatus.ACTIVE);
+        userProfileRepository.save(user);
+
+        // Phát sự kiện sang auth-service để activate account lại
+        rabbitMQPublisher.publishUserUnbannedEvent(id);
+    }
+
+    @Override
     public Page<UserDto> searchUsersDynamic(String fullName, String email, String phoneNumber, Pageable pageable) {
         return userProfileRepository.searchUsersDynamic(fullName, email, phoneNumber, pageable)
+                .map(UserDto::fromEntity);
+    }
+
+    @Override
+    public Page<UserDto> searchAdminUsers(String keyword, Pageable pageable) {
+        return userProfileRepository.searchAdminUsers(keyword, pageable)
                 .map(UserDto::fromEntity);
     }
 

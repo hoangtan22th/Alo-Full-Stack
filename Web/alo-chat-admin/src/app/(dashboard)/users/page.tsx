@@ -1,18 +1,87 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useUsers } from "@/hooks/useUsers";
+import { useConfirmStore } from "@/store/useConfirmStore";
 import {
   MagnifyingGlassIcon,
   ArrowDownTrayIcon,
   UserPlusIcon,
   ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
+  NoSymbolIcon,
+  ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { UserRow } from "@/components/users/UserRow";
+import { Pagination } from "@/components/ui/Pagination";
+import { toast } from "sonner";
 
 export default function UserManagementPage() {
+  const {
+    users,
+    pagination,
+    loading,
+    error,
+    fetchUsers,
+    banUser,
+    unbanUser,
+    updateUser,
+  } = useUsers();
+  const { confirm } = useConfirmStore();
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(0);
+  const pageSize = 10;
+
+  // Handle Search Debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(0); // Reset page on new search
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const loadData = () => {
+    fetchUsers({
+      page: currentPage,
+      size: pageSize,
+      search: debouncedSearch || undefined,
+    });
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [currentPage, debouncedSearch, fetchUsers]);
+
+  const handleBanToggle = (id: string, currentStatus: boolean) => {
+    if (currentStatus) {
+      confirm({
+        title: "Unban User",
+        description:
+          "Are you sure you want to unban this user? They will be able to log in again.",
+        confirmText: "Unban User",
+        cancelText: "Cancel",
+        type: "info",
+        onConfirm: () => unbanUser(id),
+      });
+      return;
+    }
+    confirm({
+      title: "Ban User",
+      description:
+        "Are you sure you want to ban this user? They will not be able to log in anymore.",
+      confirmText: "Ban User",
+      cancelText: "Cancel",
+      type: "danger",
+      onConfirm: () => banUser(id),
+    });
+  };
+
   return (
     <>
-      {/* Page Header & Actions */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h2 className="text-3xl font-bold text-on-surface tracking-tight font-headline">
@@ -37,49 +106,54 @@ export default function UserManagementPage() {
         </div>
       </div>
 
-      {/* Filters Overlay */}
       <div className="bg-surface-container-low rounded-xl p-4 mb-6 flex flex-wrap gap-4 items-center border border-outline-variant/15">
         <div className="text-xs font-bold text-on-surface mr-2 tracking-wide uppercase">
           Filters
         </div>
 
-        <div className="relative">
-          <select className="appearance-none bg-surface-container-lowest border border-outline-variant/15 text-on-surface text-sm rounded-lg py-2 pl-4 pr-10 focus:ring-1 focus:ring-primary focus:border-primary focus:outline-none cursor-pointer h-9">
-            <option value="">All Roles</option>
-            <option value="admin">Administrator</option>
-            <option value="moderator">Moderator</option>
-            <option value="user">Standard User</option>
-          </select>
-          <ChevronDownIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
-        </div>
-
-        <div className="relative">
-          <select className="appearance-none bg-surface-container-lowest border border-outline-variant/15 text-on-surface text-sm rounded-lg py-2 pl-4 pr-10 focus:ring-1 focus:ring-primary focus:border-primary focus:outline-none cursor-pointer h-9">
-            <option value="">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="banned">Banned</option>
-          </select>
-          <ChevronDownIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
+        <div className="relative flex-1 min-w-[200px] max-w-[300px]">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <MagnifyingGlassIcon className="h-5 w-5 text-on-surface-variant" />
+          </div>
+          <input
+            type="text"
+            placeholder="Search by name, email or phone..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 text-sm bg-surface-container-lowest border border-outline-variant/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+          />
         </div>
 
         <div className="ml-auto text-sm text-on-surface-variant font-medium">
-          Showing <span className="text-on-surface font-bold">1-10</span> of{" "}
-          <span className="text-on-surface font-bold">2,451</span> users
+          Showing{" "}
+          <span className="text-on-surface font-bold">
+            {pagination.totalElements === 0
+              ? 0
+              : pagination.page * pageSize + 1}
+            -
+            {Math.min(
+              (pagination.page + 1) * pageSize,
+              pagination.totalElements,
+            )}
+          </span>{" "}
+          of{" "}
+          <span className="text-on-surface font-bold">
+            {pagination.totalElements}
+          </span>{" "}
+          users
         </div>
       </div>
 
-      {/* Data Table Card */}
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/15 overflow-hidden shadow-minimal">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-surface-container-low/50">
                 <th className="py-4 px-6 text-xs font-bold text-on-surface-variant uppercase tracking-wider">
                   User
                 </th>
                 <th className="py-4 px-6 text-xs font-bold text-on-surface-variant uppercase tracking-wider">
-                  Role
+                  Phone
                 </th>
                 <th className="py-4 px-6 text-xs font-bold text-on-surface-variant uppercase tracking-wider">
                   Registration
@@ -96,97 +170,43 @@ export default function UserManagementPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/10">
-              <UserRow
-                name="Sarah Jenkins"
-                email="sarah.j@example.com"
-                avatarUrl="https://lh3.googleusercontent.com/aida-public/AB6AXuCdXM2WN5vVVcirSgHhJD2-WNq2_jPMo5GkQtZSXQbjUYsDSn0gcyYI6oYS_dQ7O99SzdRG1RmGxmwH_dn9X3YyUzwF86M_eb3_FThw3yVf0FYpWVAox1-d6yEovPe6MdM73bXGTAhzfuqSAkaDFtbmQHnLGJJPhT9w2KFGRL4trfVrqLkXhZ8XHcHqTft_5GpaVuCpDZpng2fKLuwUFeokhboNjKQz7LA7YqiCVQDljPmNe74RmCRowa1B6INTM8PhWWM6PCszM8zS"
-                initials="SJ"
-                role="Administrator"
-                registration="Oct 24, 2023"
-                lastActive="2 hours ago"
-                status="Active"
-              />
-              <UserRow
-                name="Marcus Webb"
-                email="m.webb@example.com"
-                initials="MW"
-                role="Moderator"
-                registration="Nov 12, 2023"
-                lastActive="5 mins ago"
-                status="Active"
-              />
-              <UserRow
-                name="David Chen"
-                email="david.c@example.com"
-                avatarUrl="https://lh3.googleusercontent.com/aida-public/AB6AXuBT0aSy9Po_1WlUnYuSeZDfafMZO-m550OAx9-E_gox-ieGxA-SQ503v5sucAzYV6kPJ8jjSYf1m-qWrMreeOcsFLA3dHCiLwuNvjmPhN04fekg-Lfk3ctQj0vwmZxsPbKgIv_zlj-VxA23afmE8PyWyB8oAj-VYV-wX0K8dQ4j1fc-PdH7Boe5elyl7AB9R4XhGB7Q0OglWhvRZimesji9R71NO51M6bgZonm-woIhOdxXNZR-MFed4bko4GCpQXH1wiNsDDUegUln"
-                initials="DC"
-                role="Standard User"
-                registration="Jan 05, 2024"
-                lastActive="3 days ago"
-                status="Inactive"
-              />
-              <UserRow
-                name="Elena Lopez"
-                email="e.lopez@example.com"
-                initials="EL"
-                role="Standard User"
-                registration="Feb 18, 2024"
-                lastActive="1 week ago"
-                status="Banned"
-              />
+              {loading ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="py-8 text-center text-on-surface-variant"
+                  >
+                    <div className="animate-pulse">Loading users...</div>
+                  </td>
+                </tr>
+              ) : users.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="py-8 text-center text-on-surface-variant"
+                  >
+                    No users found matching your criteria.
+                  </td>
+                </tr>
+              ) : (
+                users.map((user) => (
+                  <UserRow
+                    key={user.id}
+                    user={user}
+                    onBan={() => handleBanToggle(user.id, user.isBanned)}
+                  />
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination Wrapper */}
-        <div className="bg-surface-container-low/50 border-t border-outline-variant/10 px-6 py-4 flex items-center justify-between">
-          <Button
-            variant="ghost"
-            disabled
-            className="text-sm font-medium text-on-surface-variant hover:text-on-surface"
-          >
-            <ChevronLeftIcon className="w-5 h-5 mr-1" />
-            Previous
-          </Button>
-
-          <div className="flex space-x-1">
-            <Button
-              variant="outline"
-              className="h-8 w-8 p-0 bg-surface-container-lowest border-outline-variant/20 text-on-surface font-bold"
-            >
-              1
-            </Button>
-            <Button
-              variant="ghost"
-              className="h-8 w-8 p-0 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-medium"
-            >
-              2
-            </Button>
-            <Button
-              variant="ghost"
-              className="h-8 w-8 p-0 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-medium"
-            >
-              3
-            </Button>
-            <span className="h-8 w-8 flex items-center justify-center text-on-surface-variant">
-              ...
-            </span>
-            <Button
-              variant="ghost"
-              className="h-8 w-8 p-0 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-medium"
-            >
-              24
-            </Button>
-          </div>
-
-          <Button
-            variant="ghost"
-            className="text-sm font-medium text-on-surface-variant hover:text-on-surface"
-          >
-            Next
-            <ChevronRightIcon className="w-5 h-5 ml-1" />
-          </Button>
-        </div>
+        <Pagination
+          currentPage={pagination.page}
+          totalPages={pagination.totalPages}
+          totalElements={pagination.totalElements}
+          onPageChange={setCurrentPage}
+        />
       </div>
     </>
   );

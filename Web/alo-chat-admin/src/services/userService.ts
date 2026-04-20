@@ -1,6 +1,8 @@
 import { axiosClient } from "@/lib/axiosClient";
 
-const API_URL = "/users"; // Map qua gateway route của user-service: /api/v1/admin/management/users
+const GATEWAY_URL =
+  process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8888";
+const API_URL = `${GATEWAY_URL}/api/v1/admin/users`; // Map qua gateway route của user-service
 
 export interface User {
   id: string;
@@ -21,7 +23,8 @@ export interface PaginatedUsers {
   content: User[];
   totalPages: number;
   totalElements: number;
-  number: number;
+  page?: number; // backend uses this, replacing 'number'
+  number?: number; // fallback
 }
 
 export const userService = {
@@ -37,6 +40,7 @@ export const userService = {
           content: [],
           totalPages: 0,
           totalElements: 0,
+          page: 0,
           number: 0,
         }
       );
@@ -51,6 +55,15 @@ export const userService = {
       await axiosClient.delete(`${API_URL}/${id}`);
     } catch (error) {
       console.error("Error banning user:", error);
+      throw error;
+    }
+  },
+
+  unbanUser: async (id: string): Promise<void> => {
+    try {
+      await axiosClient.put(`${API_URL}/${id}/unban`);
+    } catch (error) {
+      console.error("Error unbanning user:", error);
       throw error;
     }
   },

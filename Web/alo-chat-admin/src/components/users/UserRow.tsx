@@ -3,29 +3,43 @@ import { Button } from "@/components/ui/button";
 import {
   EyeIcon,
   PencilIcon,
-  EllipsisVerticalIcon,
+  NoSymbolIcon,
+  ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
+import { User } from "@/services/userService";
 
-export function UserRow({
-  name,
-  email,
-  avatarUrl,
-  initials,
-  role,
-  registration,
-  lastActive,
-  status,
-}: any) {
-  const isBanned = status === "Banned";
-  const isInactive = status === "Inactive";
+interface UserRowProps {
+  user: User;
+  onBan: () => void;
+}
 
-  // Badges status mapping perfectly mimicking the bespoke design requirement
+export function UserRow({ user, onBan }: UserRowProps) {
+  const isBanned = user.isBanned;
+
   const statusBadge = () => {
     if (isBanned) return "bg-error-container/30 text-error";
-    if (isInactive)
-      return "bg-surface-container-highest text-on-surface-variant";
-    return "bg-tertiary-container text-on-tertiary-container";
+    if (user.isOnline)
+      return "bg-tertiary-container text-on-tertiary-container";
+    return "bg-surface-container-highest text-on-surface-variant";
   };
+
+  const getStatusText = () => {
+    if (isBanned) return "Banned";
+    if (user.isOnline) return "Online";
+    return "Offline";
+  };
+
+  const formattedDate = user.createdAt
+    ? new Date(user.createdAt).toLocaleDateString()
+    : "N/A";
+
+  const lastActiveDate = user.lastActive
+    ? new Date(user.lastActive).toLocaleString()
+    : "N/A";
+
+  const initials = user.fullName
+    ? user.fullName.substring(0, 2).toUpperCase()
+    : "U";
 
   return (
     <tr
@@ -34,29 +48,35 @@ export function UserRow({
       <td className="py-4 px-6">
         <div className="flex items-center">
           <Avatar className="h-10 w-10 bg-surface-container-highest font-bold text-sm text-on-surface-variant border-none">
-            {avatarUrl && <AvatarImage src={avatarUrl} alt={name} />}
+            {user.avatar && (
+              <AvatarImage src={user.avatar} alt={user.fullName} />
+            )}
             <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
           <div className="ml-4">
-            <div className="text-sm font-bold text-on-surface">{name}</div>
-            <div className="text-xs text-on-surface-variant">{email}</div>
+            <div className="text-sm font-bold text-on-surface">
+              {user.fullName || "No Name"}
+            </div>
+            <div className="text-xs text-on-surface-variant">{user.email}</div>
           </div>
         </div>
       </td>
       <td className="py-4 px-6">
-        <span className="text-sm text-on-surface font-medium">{role}</span>
+        <span className="text-sm text-on-surface-variant">
+          {user.phoneNumber || "N/A"}
+        </span>
       </td>
       <td className="py-4 px-6 text-sm text-on-surface-variant">
-        {registration}
+        {formattedDate}
       </td>
       <td className="py-4 px-6 text-sm text-on-surface-variant">
-        {lastActive}
+        {lastActiveDate}
       </td>
       <td className="py-4 px-6">
         <span
           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${statusBadge()}`}
         >
-          {status}
+          {getStatusText()}
         </span>
       </td>
       <td className="py-4 px-6 text-right whitespace-nowrap">
@@ -64,6 +84,7 @@ export function UserRow({
           variant="ghost"
           size="icon"
           className="h-8 w-8 text-on-surface-variant hover:text-on-surface mx-0.5"
+          title="View Details"
         >
           <EyeIcon className="w-5 h-5" />
         </Button>
@@ -71,15 +92,22 @@ export function UserRow({
           variant="ghost"
           size="icon"
           className="h-8 w-8 text-on-surface-variant hover:text-on-surface mx-0.5"
+          title="Edit Data"
         >
           <PencilIcon className="w-5 h-5" />
         </Button>
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-on-surface-variant hover:text-error mx-0.5"
+          onClick={onBan}
+          className={`h-8 w-8 mx-0.5 ${isBanned ? "text-error hover:text-error/80" : "text-on-surface-variant hover:text-error"}`}
+          title={isBanned ? "Unban User" : "Ban User"}
         >
-          <EllipsisVerticalIcon className="w-5 h-5" />
+          {isBanned ? (
+            <ShieldCheckIcon className="w-5 h-5" />
+          ) : (
+            <NoSymbolIcon className="w-5 h-5" />
+          )}
         </Button>
       </td>
     </tr>

@@ -26,20 +26,20 @@ public class AdminUserController {
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-            
+
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         // Map chung từ khoá search vào tất cả các trường: Tên, Email, Số điện thoại
-        Page<UserDto> users = userService.searchUsersDynamic(search, search, search, pageable);
-        
+        Page<UserDto> users = userService.searchAdminUsers(search, pageable);
+
         PageResponse<UserDto> pageResponse = PageResponse.<UserDto>builder()
-            .content(users.getContent())
-            .page(users.getNumber())
-            .size(users.getSize())
-            .totalElements(users.getTotalElements())
-            .totalPages(users.getTotalPages())
-            .last(users.isLast())
-            .build();
-            
+                .content(users.getContent())
+                .page(users.getNumber())
+                .size(users.getSize())
+                .totalElements(users.getTotalElements())
+                .totalPages(users.getTotalPages())
+                .last(users.isLast())
+                .build();
+
         return ResponseEntity.ok(ApiResponse.success(pageResponse));
     }
 
@@ -59,6 +59,13 @@ public class AdminUserController {
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable String id) {
         userService.deleteUser(id);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    // Mở khóa (Unban) user
+    @PutMapping("/{id}/unban")
+    public ResponseEntity<ApiResponse<Void>> unbanUser(@PathVariable String id) {
+        userService.unbanUser(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 }
