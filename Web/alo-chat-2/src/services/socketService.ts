@@ -177,6 +177,10 @@ class SocketService {
     this.addListener("CONVERSATION_UPDATED", callback);
   }
 
+  onGroupUpdated(callback: (data: any) => void) {
+    this.addListener("GROUP_UPDATED", callback);
+  }
+
   // --- Messaging ---
   joinRoom(conversationId: string) {
     if (this.socket?.connected) {

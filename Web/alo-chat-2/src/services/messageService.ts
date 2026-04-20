@@ -32,7 +32,7 @@ export interface MessageDTO {
 
 export interface SendMessagePayload {
   conversationId: string;
-  type?: "text" | "image" | "file";
+  type?: "text" | "image" | "file" | "system";
   content: string;
   senderName?: string;
   metadata?: Record<string, any>;
