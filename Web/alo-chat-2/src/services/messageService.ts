@@ -11,6 +11,8 @@ export interface MessageDTO {
     fileName?: string;
     fileSize?: number;
     fileType?: string;
+    imageGroup?: any[];
+    [key: string]: any;
   };
   isRead: boolean;
   isRevoked?: boolean;
