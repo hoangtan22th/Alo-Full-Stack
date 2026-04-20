@@ -124,6 +124,20 @@ export function initSocketConnection(io: Server) {
         roomId: data.targetRoom,
       });
     });
+    
+    socket.on("CALL_DECLINED", (data: { targetRoom: string }) => {
+      console.log(`[Socket.IO] Call declined by ${userId} for room_${data.targetRoom}`);
+      socket.to(`room_${data.targetRoom}`).emit("CALL_DECLINED", {
+        roomId: data.targetRoom,
+      });
+    });
+
+    socket.on("CALL_BUSY", (data: { targetRoom: string }) => {
+      console.log(`[Socket.IO] Call busy from ${userId} for room_${data.targetRoom}`);
+      socket.to(`room_${data.targetRoom}`).emit("CALL_BUSY", {
+        roomId: data.targetRoom,
+      });
+    });
 
     // 6. Check User Status
     socket.on("CHECK_USER_STATUS", async (targetUserId: string) => {

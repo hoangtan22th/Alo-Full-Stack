@@ -9,16 +9,21 @@ import { toast } from "sonner";
 const publicRoutes = ["/login", "/register"];
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, logout } = useAuthStore();
+  const { isAuthenticated, user, logout, fetchProfile } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const listenersAttached = useRef(false);
 
-  // 1. Chỉ đánh dấu mounted một lần duy nhất
+  // 1. Chỉ đánh dấu mounted một lần duy nhất + Fetch Profile nếu thiếu
   useEffect(() => {
     setMounted(true);
-  }, []);
+    const token = localStorage.getItem("accessToken");
+    if (token && !user) {
+      console.log("🔄 [Auth] Profile missing on reload, fetching...");
+      fetchProfile();
+    }
+  }, [user, fetchProfile]);
 
   // 2. Logic Socket - Tách biệt hoàn toàn
   useEffect(() => {
@@ -78,8 +83,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     listenersAttached.current = true;
   }, [mounted, isAuthenticated, handleFriendRequestReceived, handleFriendRequestAccepted, handleFriendListUpdated]);
 
-  // Nếu chưa mounted (SSR), không render gì để tránh lệch Hydration
-  if (!mounted) return null;
-
+  // Luôn render children để tránh lệch Hydration giữa Server và Client
   return <>{children}</>;
 }
