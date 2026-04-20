@@ -8,24 +8,10 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+  codec:
+    max-in-memory-size: 105MB
   cloud:
     gateway:
-      # --- BẮT ĐẦU PHẦN BỔ SUNG CORS ---
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOrigins:
-              - "https://against-behavioral-engage-modems.trycloudflare.com" # Link FE Cloudflare
-              - "http://localhost:5173" # Để test ở local vẫn chạy được
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - OPTIONS
-            allowedHeaders: "*"
-            allowCredentials: true
-      # --- KẾT THÚC PHẦN BỔ SUNG ---
       server:
         webflux:
           routes:
@@ -64,8 +50,13 @@ spring:
               predicates:
                 - Path=/api/v1/chatbot/**
 
+            - id: voting-service
+              uri: lb://VOTING-SERVICE
+              predicates:
+                - Path=/api/v1/polls/**, /api/v1/polls
+                
             - id: realtime-service
-              uri: lb:ws://REALTIME-SERVICE
+              uri: lb://REALTIME-SERVICE
               predicates:
                 - Path=/socket.io/**
 

@@ -1,19 +1,21 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState, useEffect } from "react";
+// Cần đảm bảo các thư viện như "expo-router", "react-native" đã được cấu hình trong môi trường thật của dự án.
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import React, { useState, useCallback, useEffect } from "react";
+import { useSocket } from "../../contexts/SocketContext";
+import { GalleryViewerModal } from "../../components/chat/GalleryViewer";
 import { groupService } from "../../services/groupService";
 import { userService } from "../../services/userService";
-import { contactService } from "../../services/contactService";
 import { useAuth } from "../../contexts/AuthContext";
+import { messageService, MessageDTO } from "../../services/messageService";
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
   Image,
-  Platform,
   Alert,
   Modal,
-  TextInput,
+  Switch,
 } from "react-native";
 import {
   ArrowLeftIcon,
@@ -28,7 +30,6 @@ import {
   EyeSlashIcon,
   TrashIcon,
   ChevronRightIcon,
-  UserPlusIcon,
   ArrowRightOnRectangleIcon,
   XMarkIcon,
   PencilIcon,
@@ -41,11 +42,17 @@ import * as ImagePicker from "expo-image-picker";
 export default function ChatInfoScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id, name, avatar, membersCount } = useLocalSearchParams();
+  const {
+    id,
+    name,
+    avatar,
+    membersCount,
+    isGroup: paramsIsGroup,
+  } = useLocalSearchParams();
   const { user } = useAuth();
   const currentUserId = user?.id || user?._id || user?.userId || null;
 
-  const isGroup = !!membersCount;
+  const isGroup = paramsIsGroup === "true";
 
   const [members, setMembers] = useState<any[]>([]);
   const [groupName, setGroupName] = useState<string>(name as string);
@@ -56,13 +63,21 @@ export default function ChatInfoScreen() {
     null,
   );
   const [isLinkEnabled, setIsLinkEnabled] = useState(false);
+  const [isHistoryVisible, setIsHistoryVisible] = useState(true);
+  const [mediaList, setMediaList] = useState<MessageDTO[]>([]);
+  const [fileList, setFileList] = useState<MessageDTO[]>([]);
+  const [mediaCount, setMediaCount] = useState(0);
+  const [fileCount, setFileCount] = useState(0);
+  const [realtimeMembersCount, setRealtimeMembersCount] = useState<string>(
+    (membersCount as string) || "0",
+  );
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const fetchGroupDetails = async () => {
     try {
       if (!isGroup || !id) return;
       const res = await groupService.getGroupById(id as string);
 
-      // Xử lý dữ liệu trả về từ API (Axios response)
       let groupData = res;
       if (res?.data?.data) {
         groupData = res.data.data;
@@ -79,6 +94,9 @@ export default function ChatInfoScreen() {
       if (typeof groupData?.isLinkEnabled === "boolean") {
         setIsLinkEnabled(groupData.isLinkEnabled);
       }
+      if (typeof groupData?.isHistoryVisible === "boolean") {
+        setIsHistoryVisible(groupData.isHistoryVisible);
+      }
 
       if (groupData && groupData.members) {
         const memberPromises = groupData.members.map(async (m: any) => {
@@ -88,25 +106,152 @@ export default function ChatInfoScreen() {
           return {
             id: m.userId,
             name: userData?.fullName || "Người dùng",
-            role: m.role.toLowerCase(), // "leader", "deputy", "member"
+            role: m.role.toLowerCase(),
             avatar: userData?.avatar || "",
           };
         });
         const membersList = await Promise.all(memberPromises);
         setMembers(membersList);
+        setRealtimeMembersCount(membersList.length.toString());
       }
     } catch (error) {
       console.error("Lỗi lấy chi tiết nhóm:", error);
     }
   };
 
+  const fetchMediaAndFiles = async () => {
+    try {
+      if (!id) return;
+
+      const { messages: media } = await messageService.getMessageHistory(
+        id as string,
+        100,
+        0,
+        "image",
+      );
+
+      const getSafeTime = (item: any) => {
+        const dateValue = item.createdAt || item.timestamp || item.updatedAt;
+        if (!dateValue) return Date.now() + 9999999;
+
+        const time = new Date(dateValue).getTime();
+        return isNaN(time) ? Date.now() + 9999999 : time;
+      };
+
+      const sortedMedia = [...media].sort((a, b) => {
+        const timeA = getSafeTime(a);
+        const timeB = getSafeTime(b);
+        return timeB - timeA;
+      });
+
+      setMediaList(sortedMedia);
+      setMediaCount(media.length);
+
+      const { messages: files } = await messageService.getMessageHistory(
+        id as string,
+        100,
+        0,
+        "file",
+      );
+
+      const sortedFiles = [...files].sort((a, b) => {
+        const timeA = getSafeTime(a);
+        const timeB = getSafeTime(b);
+        return timeB - timeA;
+      });
+
+      setFileList(sortedFiles);
+      setFileCount(files.length);
+    } catch (error) {
+      console.error("Lỗi lấy media/files:", error);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (id) {
+        fetchGroupDetails();
+        fetchMediaAndFiles();
+      }
+    }, [id]),
+  );
+
+  const { socket } = useSocket();
+
   useEffect(() => {
-    fetchGroupDetails();
-  }, [id]);
+    if (!socket || !id) return;
+
+    const handleMessageReceived = (data: any) => {
+      const newMsg = data.message ? data.message : data;
+      // Socket trả về cho toàn bộ cuộc trò chuyện mà user tham gia,
+      // nên cần lọc đúng conversationId đang xem
+      if (newMsg.conversationId === id && !newMsg.isRevoked) {
+        if (newMsg.type === "image") {
+          setMediaList((prev) => {
+            if (prev.find((m) => m._id === newMsg._id)) return prev;
+            const updated = [newMsg, ...prev];
+            // Sắp xếp lại để mục mới nhất ở đầu
+            return updated
+              .sort((a, b) =>
+                (b.createdAt || "").localeCompare(a.createdAt || ""),
+              )
+              .slice(0, 100);
+          });
+          setMediaCount((prev) => prev + 1);
+        } else if (newMsg.type === "file") {
+          setFileList((prev) => {
+            if (prev.find((f) => f._id === newMsg._id)) return prev;
+            const updated = [newMsg, ...prev];
+            return updated
+              .sort((a, b) =>
+                (b.createdAt || "").localeCompare(a.createdAt || ""),
+              )
+              .slice(0, 100);
+          });
+          setFileCount((prev) => prev + 1);
+        }
+      }
+    };
+
+    socket.on("message-received", handleMessageReceived);
+
+    const handleGroupUpdated = (updatedGroup: any) => {
+      if (updatedGroup._id === id) {
+        console.log("Group updated, fetching new details...");
+        fetchGroupDetails();
+      }
+    };
+
+    const handleConversationRemoved = (data: {
+      conversationId: string;
+      groupName: string;
+      reason: string;
+    }) => {
+      if (data.conversationId === id && data.reason !== "leave") {
+        Alert.alert(
+          "Thông báo",
+          data.reason === "delete"
+            ? `Nhóm ${data.groupName} đã được giải tán`
+            : `Bạn đã bị mời ra khỏi nhóm ${data.groupName}`,
+          [{ text: "OK", onPress: () => router.replace("/(tabs)") }]
+        );
+      }
+    };
+
+    socket.on("GROUP_UPDATED", handleGroupUpdated);
+    socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
+
+    return () => {
+      socket.off("message-received", handleMessageReceived);
+      socket.off("GROUP_UPDATED", handleGroupUpdated);
+      socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
+    };
+  }, [socket, id]);
 
   const currentUserRole = members.find((m) => m.id === currentUserId)?.role;
   const isAdmin = currentUserRole === "leader";
   const isDeputy = currentUserRole === "deputy";
+  const isManager = isAdmin || isDeputy;
 
   const handleLeaveGroup = () => {
     if (isAdmin) {
@@ -142,6 +287,41 @@ export default function ChatInfoScreen() {
         },
       },
     ]);
+  };
+
+  const handleClearHistory = () => {
+    Alert.alert(
+      "Xoá lịch sử trò chuyện",
+      "Bạn có chắc chắn muốn xoá lịch sử trò chuyện này? Các tin nhắn cũ sẽ biến mất đối với bạn.",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xoá",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await groupService.clearConversation(id as string);
+              Alert.alert("Thông báo", "Đã xoá lịch sử trò chuyện.", [
+                {
+                  text: "OK",
+                  onPress: () => {
+                    if (router.canDismiss()) {
+                      router.dismissAll();
+                    }
+                    router.replace("/(tabs)");
+                  },
+                },
+              ]);
+              setMediaList([]);
+              setFileList([]);
+            } catch (err) {
+              console.error("Lỗi xoá lịch sử:", err);
+              Alert.alert("Lỗi", "Không thể xoá lịch sử trò chuyện.");
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleTransferAndLeave = async () => {
@@ -236,16 +416,6 @@ export default function ChatInfoScreen() {
     );
   };
 
-  // Dummy images... (Keep the rest of the file)
-  const images = [
-    "https://images.unsplash.com/photo-1541698444083-023c97d3f4b6?q=80&w=400",
-    "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=400",
-    "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=400",
-    "https://images.unsplash.com/photo-1498050108023-c5249f4df085?q=80&w=400",
-    "https://images.unsplash.com/photo-1552664730-d307ca884978?q=80&w=400",
-    "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?q=80&w=400",
-  ];
-
   return (
     <View className="flex-1 bg-[#fcfcfc]" style={{ paddingTop: insets.top }}>
       {/* Header */}
@@ -290,7 +460,7 @@ export default function ChatInfoScreen() {
                 <CameraIcon size={16} color="#4b5563" />
               </TouchableOpacity>
             ) : (
-              !membersCount && (
+              !isGroup && (
                 <View className="absolute bottom-1 right-2 w-[18px] h-[18px] bg-green-500 border-[3px] border-white rounded-full" />
               )
             )}
@@ -299,7 +469,7 @@ export default function ChatInfoScreen() {
           <View className="flex-row items-center justify-center mt-4 mb-1">
             {isGroup && <View className="w-8" />}
             <Text className="text-[22px] font-extrabold text-gray-900 text-center">
-              {groupName || `Nhóm ${id}`}
+              {groupName || (isGroup ? `Nhóm ${id}` : "Nhắn tin")}
             </Text>
             {isGroup && (
               <TouchableOpacity
@@ -312,7 +482,9 @@ export default function ChatInfoScreen() {
           </View>
 
           <Text className="text-[13px] text-gray-500 font-medium">
-            {membersCount ? `${membersCount} thành viên` : "Đang hoạt động"}
+            {isGroup
+              ? `${realtimeMembersCount || ""} thành viên`
+              : "Đang hoạt động"}
           </Text>
         </View>
 
@@ -335,8 +507,12 @@ export default function ChatInfoScreen() {
               />
             }
             label="Tìm kiếm"
+            onPress={() => {
+              // Just go back to chat screen
+              router.back();
+            }}
           />
-          {membersCount ? (
+          {isGroup ? (
             <ActionButton
               icon={
                 <UserGroupIcon size={24} color="#374151" strokeWidth={1.5} />
@@ -360,34 +536,58 @@ export default function ChatInfoScreen() {
             <Text className="text-[11px] font-bold text-gray-500 uppercase tracking-[1px]">
               Ảnh / Video
             </Text>
-            <TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push(`/chat/media?id=${id}`)}
+            >
               <Text className="text-[12px] font-bold text-gray-900">
                 Xem tất cả
               </Text>
             </TouchableOpacity>
           </View>
 
-          <View className="flex-row flex-wrap justify-between">
-            {images.slice(0, 5).map((img, idx) => (
-              <Image
-                key={idx}
-                source={{ uri: img }}
-                className="w-[31.5%] aspect-square rounded-2xl mb-3 bg-gray-200"
-              />
-            ))}
-            {/* The "+12" overlay for the last image */}
-            <TouchableOpacity
-              className="w-[31.5%] aspect-square rounded-2xl mb-3 bg-gray-300 items-center justify-center overflow-hidden"
-              activeOpacity={0.8}
-            >
-              <Image
-                source={{ uri: images[5] }}
-                className="w-full h-full absolute opacity-40"
-              />
-              <Text className="text-white font-bold text-[22px] z-10 shadow-sm">
-                +12
-              </Text>
-            </TouchableOpacity>
+          <View className="flex-row flex-wrap -mx-[6px]">
+            {mediaList.slice(0, 5).map((msg, idx) => {
+              const uniqueKey = msg._id
+                ? `${msg._id}-${idx}`
+                : `media-fallback-${idx}-${Math.random().toString(36).substring(2)}`;
+              return (
+                <TouchableOpacity
+                  key={uniqueKey}
+                  className="w-1/3 px-[6px] mb-3"
+                  activeOpacity={0.8}
+                  onPress={() => setViewerIndex(idx)}
+                >
+                  <Image
+                    source={{ uri: msg.content }}
+                    className="w-full aspect-square rounded-2xl bg-gray-200"
+                  />
+                </TouchableOpacity>
+              );
+            })}
+
+            {mediaList.length > 5 ? (
+              <View className="w-1/3 px-[6px] mb-3">
+                <TouchableOpacity
+                  className="w-full aspect-square rounded-2xl bg-gray-300 items-center justify-center overflow-hidden"
+                  activeOpacity={0.8}
+                  onPress={() => router.push(`/chat/media?id=${id}`)}
+                >
+                  <Image
+                    source={{ uri: mediaList[5].content }}
+                    className="w-full h-full absolute opacity-40"
+                  />
+                  <Text className="text-white font-bold text-[22px] z-10 shadow-sm">
+                    +{mediaList.length - 5}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : mediaList.length === 0 ? (
+              <View className="w-full px-[6px]">
+                <Text className="text-gray-400 text-[13px] italic py-2">
+                  Chưa có ảnh hoặc video
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -397,7 +597,9 @@ export default function ChatInfoScreen() {
             <Text className="text-[11px] font-bold text-gray-500 uppercase tracking-[1px]">
               File
             </Text>
-            <TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push(`/chat/media?id=${id}&tab=file`)}
+            >
               <Text className="text-[12px] font-bold text-gray-900">
                 Xem tất cả
               </Text>
@@ -406,18 +608,43 @@ export default function ChatInfoScreen() {
 
           {/* Wrapper for cards */}
           <View className="bg-[#f5f6f8] rounded-[24px]">
-            <FileItem
-              icon={<DocumentTextIcon size={24} color="#10b981" />}
-              title="Bao_cao_du_an_Q4.pdf"
-              info="12.5 MB • 22/10/2023"
-            />
-            {/* Divider */}
-            <View className="h-[1px] bg-white w-[90%] self-end" />
-            <FileItem
-              icon={<TableCellsIcon size={24} color="#3b82f6" />}
-              title="Danh_sach_nhan_su.xlsx"
-              info="2.1 MB • 15/10/2023"
-            />
+            {fileList.length > 0 ? (
+              fileList.slice(0, 3).map((file, index) => {
+                const uniqueKey = file._id
+                  ? `${file._id}-${index}`
+                  : `file-fallback-${index}-${Math.random().toString(36).substring(2)}`;
+                return (
+                  <View key={uniqueKey}>
+                    <FileItem
+                      icon={
+                        file.metadata?.fileType?.includes("pdf") ? (
+                          <DocumentTextIcon size={24} color="#10b981" />
+                        ) : (
+                          <TableCellsIcon size={24} color="#3b82f6" />
+                        )
+                      }
+                      title={file.metadata?.fileName || "Không tên"}
+                      info={`${
+                        file.metadata?.fileSize
+                          ? (file.metadata.fileSize / (1024 * 1024)).toFixed(
+                              1,
+                            ) + " MB"
+                          : "0 MB"
+                      } • ${file.createdAt ? new Date(file.createdAt).toLocaleDateString("vi-VN") : "Vừa xong"}`}
+                    />
+                    {index < Math.min(fileList.length, 3) - 1 && (
+                      <View className="h-[1px] bg-white w-[90%] self-end" />
+                    )}
+                  </View>
+                );
+              })
+            ) : (
+              <View className="p-5 items-center">
+                <Text className="text-gray-400 text-[13px] italic">
+                  Chưa có file nào
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -438,7 +665,7 @@ export default function ChatInfoScreen() {
                       (groupName as string) || "",
                     )}&avatar=${encodeURIComponent(
                       (groupAvatar as string) || "",
-                    )}&isLinkEnabled=${isLinkEnabled}`,
+                    )}&isLinkEnabled=${isLinkEnabled}&isHistoryVisible=${isHistoryVisible}&isAdmin=${isAdmin || isDeputy}`,
                   )
                 }
               />
@@ -468,6 +695,7 @@ export default function ChatInfoScreen() {
               icon={<TrashIcon size={24} color="#ef4444" />}
               title="Xóa lịch sử trò chuyện"
               isDestructive
+              onPress={handleClearHistory}
             />
           </View>
         </View>
@@ -562,6 +790,14 @@ export default function ChatInfoScreen() {
           </View>
         </View>
       </Modal>
+
+      <GalleryViewerModal
+        images={mediaList}
+        initialIndex={viewerIndex ?? 0}
+        visible={viewerIndex !== null}
+        onClose={() => setViewerIndex(null)}
+        onIndexChange={(idx) => setViewerIndex(idx)}
+      />
     </View>
   );
 }

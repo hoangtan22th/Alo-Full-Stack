@@ -25,10 +25,33 @@ export async function initRabbitMQ(io: Server) {
 
         // Map RabbitMQ target to Socket.IO room/user
         if (payload.target) {
-          io.to(`user_${payload.target}`).emit(payload.event, payload.data);
+          if (payload.event === "FORCE_LOGOUT" && payload.data?.killedSessionIds) {
+            io.in(`user_${payload.target}`).fetchSockets().then((sockets) => {
+              sockets.forEach((s) => {
+                const killedIds: string[] = payload.data.killedSessionIds;
+                if (killedIds.includes(s.data.sessionId)) {
+                  s.emit(payload.event, payload.data);
+                  s.disconnect(); // Đóng socket luôn cho chắc chắn
+                }
+              });
+            });
+          } else {
+            const userRoom = `user_${payload.target}`;
+            // Kiểm tra xem có ai trong phòng này không
+            io.in(userRoom).fetchSockets().then(sockets => {
+              console.log(`[Socket.IO] Target Room: ${userRoom} | Connected Sockets: ${sockets.length} | Event: ${payload.event}`);
+              if (sockets.length > 0) {
+                io.to(userRoom).emit(payload.event, payload.data);
+              } else {
+                console.warn(`[Socket.IO] No active sockets found for room ${userRoom}. Message not delivered via Socket.`);
+              }
+            });
+          }
         } else if (payload.room) {
+          console.log(`[Socket.IO] Emitting event '${payload.event}' to room: room_${payload.room}`);
           io.to(`room_${payload.room}`).emit(payload.event, payload.data);
         } else {
+          console.log(`[Socket.IO] Emitting global event: '${payload.event}'`);
           io.emit(payload.event, payload.data);
         }
       } catch (error) {

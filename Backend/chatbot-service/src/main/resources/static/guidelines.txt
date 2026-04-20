@@ -1,0 +1,47 @@
+🛠️ PHẦN 1: HƯỚNG DẪN THAO TÁC HỆ THỐNG (MANUAL)
+1. Quản lý Bạn bè & Liên hệ
+
+Kết bạn mới: * Cách 1: Tại màn hình danh sách chat, nhấn biểu tượng (+) ở góc trên bên phải.
+
+Cách 2: Vào tab Danh bạ ➔ Chọn Tìm bạn ➔ Nhập số điện thoại ➔ Nhấn Thêm bạn.
+
+Xóa bạn bè: Vào trang Hồ sơ cá nhân của người đó ➔ Chọn Xóa bạn ➔ Xác nhận.
+
+Chặn người dùng: Vào trang Hồ sơ cá nhân của người đó ➔ Nhấn biểu tượng ba chấm (⋯) góc trên ➔ Chọn Chặn.
+
+2. Trò chuyện & Nhóm
+
+Tạo nhóm chat: Nhấn biểu tượng (+) ➔ Chọn Tạo nhóm ➔ Đánh dấu chọn các thành viên muốn thêm ➔ Đặt tên nhóm và bắt đầu trò chuyện.
+
+Tìm kiếm tin nhắn: Mở khung chat bất kỳ ➔ Nhấn biểu tượng Kính lúp (🔍) ở góc trên bên phải ➔ Nhập từ khóa cần tìm.
+
+Thu hồi tin nhắn: Nhấn giữ vào tin nhắn bạn vừa gửi ➔ Chọn Thu hồi (tin nhắn sẽ biến mất ở cả hai phía).
+
+🤖 PHẦN 2: HƯỚNG DẪN SỬ DỤNG TRỢ LÝ AI (TOOLS)
+Alo Chat được tích hợp Trợ lý AI thông minh giúp bạn thực hiện các thao tác nhanh chóng chỉ bằng cách ra lệnh bằng văn bản. Không cần bấm nhiều nút, chỉ cần chat với AI!
+
+Bạn có thể yêu cầu AI thực hiện các lệnh sau:
+
+🔍 Tra cứu thông tin cá nhân:
+
+"Xem danh sách bạn bè của tôi."
+
+"Có ai gửi lời mời kết bạn cho tôi không?" (Xem lời mời đang chờ).
+
+"Tôi đã gửi lời mời kết bạn cho những ai?"
+
+🤝 Thao tác Kết bạn/Xóa bạn tự động: (Bắt buộc kèm theo số điện thoại)
+
+"Kết bạn với số 0987654321." (AI sẽ tự động dò tìm và gửi lời mời).
+
+"Chấp nhận lời mời kết bạn của số 0987654321."
+
+"Xóa bạn bè với số 0987654321." (AI sẽ tự động hủy kết bạn).
+
+"Thu hồi lời mời đã gửi cho số 0987654321."
+
+🌤️ Tiện ích hàng ngày:
+
+"Thời tiết hôm nay thế nào?" hoặc "Thời tiết tại Đà Nẵng hôm nay ra sao?"
+
+💡 Mẹo nhỏ: Trợ lý AI hiểu được ngôn ngữ tự nhiên. Bạn cứ trò chuyện thoải mái như với một người bạn, AI sẽ tự động kích hoạt công cụ (Tool) phù hợp để hỗ trợ bạn nhanh nhất!

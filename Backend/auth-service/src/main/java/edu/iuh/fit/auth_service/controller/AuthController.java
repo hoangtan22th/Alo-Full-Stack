@@ -6,6 +6,7 @@ import edu.iuh.fit.auth_service.dto.request.RegistrationOtpRequest;
 import edu.iuh.fit.auth_service.dto.response.UserResponse;
 import edu.iuh.fit.auth_service.dto.response.UserSessionResponse;
 import edu.iuh.fit.auth_service.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -39,15 +40,15 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<Map<String, String>>> login(@RequestBody LoginRequest request,
-            HttpServletResponse response) {
-        Map<String, String> tokens = authService.login(request, response);
+            HttpServletRequest httpRequest, HttpServletResponse response) {
+        Map<String, String> tokens = authService.login(request, httpRequest, response);
         return ResponseEntity.ok(ApiResponse.success(tokens));
     }
 
     @PostMapping("/google")
     public ResponseEntity<ApiResponse<Map<String, String>>> loginWithGoogle(@RequestBody GoogleLoginRequest request,
-            HttpServletResponse response) {
-        Map<String, String> tokens = authService.loginWithGoogle(request, response);
+            HttpServletRequest httpRequest, HttpServletResponse response) {
+        Map<String, String> tokens = authService.loginWithGoogle(request, httpRequest, response);
         return ResponseEntity.ok(ApiResponse.success(tokens));
     }
 
@@ -85,10 +86,9 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Đổi mật khẩu thành công"));
     }
 
-    // Lấy thông tin cá nhân (Yêu cầu Authorize JWT)
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getMyProfile(@RequestHeader("X-User-Id") String userId) {
-        return ResponseEntity.ok(ApiResponse.success(UserResponse.fromEntity(authService.getProfile(userId))));
+        return ResponseEntity.ok(ApiResponse.success(authService.getProfile(userId)));
     }
 
     // Lấy danh sách thiết bị đăng nhập
@@ -119,8 +119,14 @@ public class AuthController {
     // Đăng xuất hiện tại
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<String>> logout(
-            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            @CookieValue(name = "refreshToken", required = false) String cookieRefreshToken,
+            @RequestBody(required = false) Map<String, String> body,
             jakarta.servlet.http.HttpServletResponse response) {
+
+        String refreshToken = cookieRefreshToken;
+        if (refreshToken == null && body != null) {
+            refreshToken = body.get("refreshToken");
+        }
 
         if (refreshToken != null && !refreshToken.isBlank()) {
             try {
@@ -133,32 +139,10 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Đăng xuất thành công"));
     }
 
-    // Cập nhật thông tin cá nhân
-    @PutMapping("/me")
-    public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
-            @RequestHeader("X-User-Id") String userId,
-            @Valid @RequestBody UpdateProfileRequest request) {
-        return ResponseEntity
-                .ok(ApiResponse.success(UserResponse.fromEntity(authService.updateProfile(userId, request))));
-    }
-
-    // Cập nhật Avatar ảnh đại diện
-    @PostMapping(value = "/me/avatar", consumes = "multipart/form-data")
-    public ResponseEntity<ApiResponse<UserResponse>> updateAvatar(
-            @RequestHeader("X-User-Id") String userId,
-            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) throws java.io.IOException {
-        return ResponseEntity
-                .ok(ApiResponse.success(UserResponse.fromEntity(authService.updateAvatarOrCover(userId, file, true))));
-    }
-
-    // Cập nhật ảnh bìa
-    @PostMapping(value = "/me/cover", consumes = "multipart/form-data")
-    public ResponseEntity<ApiResponse<UserResponse>> updateCover(
-            @RequestHeader("X-User-Id") String userId,
-            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) throws java.io.IOException {
-        return ResponseEntity
-                .ok(ApiResponse.success(UserResponse.fromEntity(authService.updateAvatarOrCover(userId, file, false))));
-    }
+    /* 
+    // Các endpoint updateProfile, updateAvatar, updateCover được dời sang user-service 
+    // (Vì auth-service không còn quản lý UserProfile DB nữa)
+    */
 
     // API: Tìm kiếm người dùng theo số điện thoại (Dùng cho Modal Thêm Bạn)
     @GetMapping("/search")

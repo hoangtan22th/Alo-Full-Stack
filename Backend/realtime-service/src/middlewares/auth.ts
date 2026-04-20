@@ -14,13 +14,15 @@ export const socketAuthMiddleware = (
   if (!token) return next(new Error("Authentication error: No token provided"));
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "secret") as {
+    const secret = Buffer.from(process.env.JWT_SECRET || "secret", "base64");
+    const decoded = jwt.verify(token, secret) as {
       sub?: string;
       userId?: string;
     };
 
     // Spring Boot Jwts thường đẩy UserId vào Subject (sub) thay vì userId.
     const userId = decoded.sub || decoded.userId;
+    const sessionId = (decoded as any).sessionId;
 
     if (!userId) {
       return next(
@@ -31,6 +33,9 @@ export const socketAuthMiddleware = (
     }
 
     socket.data.userId = String(userId);
+    if (sessionId) {
+      socket.data.sessionId = String(sessionId);
+    }
     next();
   } catch (err) {
     next(new Error("Authentication error: Invalid token"));

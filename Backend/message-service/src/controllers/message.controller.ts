@@ -1,0 +1,972 @@
+import { Request, Response, NextFunction } from "express";
+import { Types } from "mongoose";
+import messageDataService from "../services/message.service.js";
+import { uploadFileToS3 } from "../services/s3Service.js";
+import rabbitMQProducer from "../services/RabbitMQProducerService.js";
+import { MessageEvent } from "../types/events.js";
+
+/**
+ * Extract userId from x-user-id header (set by Gateway)
+ */
+function getUserIdFromHeader(req: Request): string | null {
+  const userId = req.headers["x-user-id"];
+  return typeof userId === "string" ? userId : null;
+}
+
+/**
+ * Ghim tin nhắn
+ */
+export async function pinMessage(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageId } = req.params;
+    if (!messageId || typeof messageId !== "string") {
+      res.status(400).json({ error: "Missing or invalid messageId" });
+      return;
+    }
+    const updated = await messageDataService.pinMessage(messageId);
+    if (!updated) {
+      res.status(404).json({ error: "Message not found" });
+      return;
+    }
+    // Phát sự kiện realtime
+    await rabbitMQProducer.publishMessagePinEvent({
+      messageId: updated._id.toString(),
+      conversationId: updated.conversationId.toString(),
+      isPinned: true,
+      pinnedAt: new Date().toISOString(),
+      message: updated,
+    });
+    res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Bỏ ghim tin nhắn
+ */
+export async function unpinMessage(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageId } = req.params;
+    if (!messageId || typeof messageId !== "string") {
+      res.status(400).json({ error: "Missing or invalid messageId" });
+      return;
+    }
+    const updated = await messageDataService.unpinMessage(messageId);
+    if (!updated) {
+      res.status(404).json({ error: "Message not found" });
+      return;
+    }
+    // Phát sự kiện realtime
+    await rabbitMQProducer.publishMessagePinEvent({
+      messageId: updated._id.toString(),
+      conversationId: updated.conversationId.toString(),
+      isPinned: false,
+      pinnedAt: new Date().toISOString(),
+      message: updated,
+    });
+    res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Get message history for a conversation
+ */
+export async function getMessageHistory(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId } = req.params;
+
+    // Typeof Check: Đảm bảo conversationId là string
+    if (typeof conversationId !== "string") {
+      res.status(400).json({ error: "Invalid or missing conversationId" });
+      return;
+    }
+
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit as string) || 50, 1),
+      100,
+    );
+    const skip = Math.max(parseInt(req.query.skip as string) || 0, 0);
+    const type = req.query.type as string | undefined;
+    const userId = getUserIdFromHeader(req);
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized - no user id" });
+      return;
+    }
+
+    // 0. Gọi sang group-service để lấy thông tin clearedAt và joinedAt
+    let clearedAt: Date | undefined = undefined;
+    let joinedAt: Date | undefined = undefined;
+    try {
+      const gatewayUrl = process.env.GATEWAY_URL || "http://127.0.0.1:8888";
+      const response = await fetch(
+        `${gatewayUrl}/api/v1/groups/${conversationId}`,
+        {
+          headers: {
+            "X-User-Id": userId,
+            Authorization: req.headers.authorization || "",
+          },
+        },
+      );
+      if (response.ok) {
+        const result = await response.json();
+        const conversation = result.data;
+        if (conversation) {
+          // Lấy clearedAt
+          if (conversation.clearedAt && conversation.clearedAt[userId]) {
+            clearedAt = new Date(conversation.clearedAt[userId]);
+          }
+          // Lấy joinedAt
+          if (Array.isArray(conversation.members)) {
+            const member = conversation.members.find(
+              (m: any) => String(m.userId) === userId,
+            );
+            if (member && member.joinedAt) {
+              joinedAt = new Date(member.joinedAt);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(
+        "[MessageController] Failed to fetch conversation info from group-service:",
+        err,
+      );
+    }
+
+    const messages = await messageDataService.getMessageHistory(
+      conversationId,
+      userId,
+      limit,
+      skip,
+      clearedAt,
+      type,
+      joinedAt,
+    );
+
+    res.json({
+      conversationId,
+      messages,
+      count: messages.length,
+      limit,
+      skip,
+      hasMore: messages.length === limit,
+    });
+  } catch (error) {
+    console.error("[MessageController] GET history error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Get unread message count
+ */
+export async function getUnreadCount(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId } = req.params;
+    const userId = getUserIdFromHeader(req);
+
+    // Typeof Check cho params
+    if (typeof conversationId !== "string") {
+      res.status(400).json({ error: "Invalid or missing conversationId" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized - no user id" });
+      return;
+    }
+
+    const count = await messageDataService.getUnreadCount(
+      conversationId,
+      userId,
+    );
+
+    res.json({
+      conversationId,
+      unreadCount: count,
+    });
+  } catch (error) {
+    console.error("[MessageController] GET unread-count error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Mark message as read
+ */
+export async function markAsRead(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageId } = req.params;
+    const userId = getUserIdFromHeader(req);
+
+    // Typeof Check cho params
+    if (typeof messageId !== "string") {
+      res.status(400).json({ error: "Invalid or missing messageId" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized - no user id" });
+      return;
+    }
+
+    await messageDataService.markAsRead([messageId], userId);
+
+    res.json({
+      status: "success",
+      messageId,
+    });
+  } catch (error) {
+    console.error("[MessageController] PUT read error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Edit message
+ */
+export async function editMessage(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageId } = req.params;
+    const { content } = req.body;
+    const userId = getUserIdFromHeader(req);
+
+    // Typeof Check cho params
+    if (typeof messageId !== "string") {
+      res.status(400).json({ error: "Invalid or missing messageId" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized - no user id" });
+      return;
+    }
+
+    if (typeof content !== "string" || content.trim() === "") {
+      res.status(400).json({ error: "Content must be a non-empty string" });
+      return;
+    }
+
+    const isOwner = await messageDataService.isMessageOwner(messageId, userId);
+    if (!isOwner) {
+      res
+        .status(403)
+        .json({ error: "Forbidden - you are not the message owner" });
+      return;
+    }
+
+    const updated = await messageDataService.editMessage(messageId, content);
+
+    res.json({
+      status: "success",
+      message: updated,
+    });
+  } catch (error) {
+    console.error("[MessageController] PUT edit error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Revoke message (soft delete for everyone)
+ */
+export async function revokeMessage(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageId } = req.params;
+    const userId = getUserIdFromHeader(req);
+
+    // Typeof Check cho params
+    if (typeof messageId !== "string") {
+      res.status(400).json({ error: "Invalid or missing messageId" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized - no user id" });
+      return;
+    }
+    const message = await messageDataService.getMessageById(messageId);
+    if (!message) {
+      res.status(404).json({ error: "Message not found" });
+      return;
+    }
+
+    if (String(message.senderId) !== userId) {
+      res
+        .status(403)
+        .json({ error: "Forbidden - you are not the message owner" });
+      return;
+    }
+
+    // Check 24h limit (86400000 ms)
+    const timeDiff = Date.now() - new Date(message.createdAt).getTime();
+    if (timeDiff > 86400000) {
+      res.status(400).json({
+        error: "Chỉ có thể thu hồi tin nhắn trong vòng 24 giờ kể từ khi gửi",
+      });
+      return;
+    }
+
+    const updatedMessage = await messageDataService.revokeMessage(messageId);
+
+    if (updatedMessage) {
+      await rabbitMQProducer.publishMessageRevokedEvent({
+        messageId,
+        conversationId: updatedMessage.conversationId.toString(),
+      });
+    }
+
+    res.json({
+      status: "success",
+      messageId,
+    });
+  } catch (error) {
+    console.error("[MessageController] REVOKE error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Delete message for me only
+ */
+export async function deleteMessageForMe(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageId } = req.params;
+    const userId = getUserIdFromHeader(req);
+
+    if (typeof messageId !== "string") {
+      res.status(400).json({ error: "Invalid or missing messageId" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    await messageDataService.deleteMessageForMe(messageId, userId);
+
+    res.json({
+      status: "success",
+      messageId,
+    });
+  } catch (error) {
+    console.error("[MessageController] DELETE for me error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Send a new message
+ */
+export async function sendMessage(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId, type, content, metadata, replyTo, senderName } =
+      req.body;
+    const userId = getUserIdFromHeader(req);
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized - no user id" });
+      return;
+    }
+
+    if (!conversationId || (!content && type !== "image" && type !== "file")) {
+      res.status(400).json({ error: "Missing conversationId or content" });
+      return;
+    }
+
+    // 1. Lưu vào Database
+    const messageDoc = await messageDataService.createMessage({
+      conversationId,
+      senderId: userId,
+      senderName: senderName,
+      type: type || "text",
+      content: content || "",
+      metadata: metadata || {},
+      replyTo: replyTo,
+    });
+
+    // 2. Chuẩn bị event để bắn sang RabbitMQ
+    const messageEvent: MessageEvent = {
+      _id: messageDoc._id.toString(),
+      conversationId: String(conversationId),
+      senderId: userId,
+      type: messageDoc.type,
+      content: messageDoc.content,
+      isRead: false,
+      createdAt: messageDoc.createdAt,
+      ...(messageDoc.senderName && { senderName: messageDoc.senderName }),
+      ...(messageDoc.metadata && { metadata: messageDoc.metadata }),
+      ...(messageDoc.replyTo && { replyTo: messageDoc.replyTo as any }),
+    };
+
+    // 3. Đẩy sang RabbitMQ cho Realtime Service tiêu thụ
+    await rabbitMQProducer.publishMessageEvent(messageEvent);
+
+    // 4. Trả về kết quả cho Client
+    res.status(201).json({
+      status: "success",
+      data: messageEvent,
+    });
+  } catch (error) {
+    console.error("[MessageController] POST sendMessage error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Upload a file and create a message
+ */
+export async function uploadFile(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId, replyTo, senderName } = req.body;
+    const userId = getUserIdFromHeader(req);
+    const file = req.file;
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized - no user id" });
+      return;
+    }
+
+    if (!conversationId || !file) {
+      res.status(400).json({ error: "Missing conversationId or file" });
+      return;
+    }
+
+    // Fix Vietnamese encoding for originalname (multer sometimes misinterprets UTF-8 as Latin-1)
+    const originalName = Buffer.from(file.originalname, "latin1").toString(
+      "utf8",
+    );
+
+    // 1. Upload to S3
+    const fileUrl = await uploadFileToS3(
+      file.buffer,
+      file.mimetype,
+      originalName,
+    );
+
+    // 2. Determine message type
+    const isImage = file.mimetype.startsWith("image/");
+    const type = isImage ? "image" : "file";
+
+    // 3. Save to Database
+    const messageDoc = await messageDataService.createMessage({
+      conversationId,
+      senderId: userId,
+      senderName: senderName,
+      type,
+      content: fileUrl, // For files, content is the URL
+      metadata: {
+        fileName: originalName,
+        fileSize: file.size,
+        fileType: file.mimetype,
+      },
+      replyTo: replyTo ? JSON.parse(replyTo) : undefined,
+    });
+
+    // 4. Prepare event for RabbitMQ
+    const messageEvent: MessageEvent = {
+      _id: messageDoc._id.toString(),
+      conversationId: String(conversationId),
+      senderId: userId,
+      type: messageDoc.type,
+      content: messageDoc.content,
+      isRead: false,
+      createdAt: messageDoc.createdAt,
+      ...(messageDoc.senderName && { senderName: messageDoc.senderName }),
+      ...(messageDoc.metadata && { metadata: messageDoc.metadata }),
+      ...(messageDoc.replyTo && { replyTo: messageDoc.replyTo as any }),
+    };
+
+    // 5. Publish to RabbitMQ
+    await rabbitMQProducer.publishMessageEvent(messageEvent);
+
+    // 4. Trả về kết quả cho Client
+    res.status(201).json({
+      status: "success",
+      data: messageEvent,
+    });
+  } catch (error) {
+    console.error("[MessageController] POST uploadFile error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Đánh dấu đã xem tất cả tin nhắn trong một cuộc hội thoại
+ */
+export async function markMessagesAsRead(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId } = req.params;
+    const userId = getUserIdFromHeader(req);
+
+    if (typeof conversationId !== "string") {
+      res.status(400).json({ error: "Invalid or missing conversationId" });
+      return;
+    }
+
+    if (!conversationId) {
+      res
+        .status(400)
+        .json({ status: "error", message: "Thiếu conversationId" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ status: "error", message: "Unauthorized" });
+      return;
+    }
+
+    const modifiedCount = await messageDataService.markConversationAsRead(
+      conversationId,
+      userId,
+    );
+
+    // Gửi sự kiện qua RabbitMQ để realtime-service báo cho đối phương (người gửi)
+    if (modifiedCount > 0) {
+      await rabbitMQProducer.publishMessageReadEvent({
+        conversationId,
+        userId,
+        timestamp: new Date(),
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      data: { modifiedCount },
+    });
+  } catch (error) {
+    console.error("[MessageController] PATCH markMessagesAsRead error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Thả cảm xúc hoặc tăng số lượng (Spam)
+ */
+export async function reactToMessage(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = getUserIdFromHeader(req);
+
+    if (typeof messageId !== "string") {
+      res.status(400).json({ error: "Invalid or missing messageId" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    if (!messageId || !emoji) {
+      res.status(400).json({ error: "Missing messageId or emoji" });
+      return;
+    }
+
+    const updatedMessage = await messageDataService.addReaction(
+      messageId,
+      userId,
+      emoji,
+    );
+
+    if (updatedMessage) {
+      // Bắn sự kiện realtime
+      await rabbitMQProducer.publishReactionUpdateEvent({
+        messageId: messageId as string,
+        conversationId: updatedMessage.conversationId.toString(),
+        reactions: updatedMessage.reactions,
+      });
+    }
+
+    res.json({
+      status: "success",
+      data: updatedMessage?.reactions || [],
+    });
+  } catch (error) {
+    console.error("[MessageController] POST reactToMessage error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Xóa toàn bộ cảm xúc của user trên tin nhắn
+ */
+export async function clearReactions(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageId } = req.params;
+    const userId = getUserIdFromHeader(req);
+
+    if (typeof messageId !== "string") {
+      res.status(400).json({ error: "Invalid or missing messageId" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const updatedMessage = await messageDataService.clearReactions(
+      messageId,
+      userId,
+    );
+
+    if (updatedMessage) {
+      // Bắn sự kiện realtime
+      await rabbitMQProducer.publishReactionUpdateEvent({
+        messageId: messageId,
+        conversationId: updatedMessage.conversationId.toString(),
+        reactions: updatedMessage.reactions,
+      });
+    }
+
+    res.json({
+      status: "success",
+      data: updatedMessage?.reactions || [],
+    });
+  } catch (error) {
+    console.error("[MessageController] DELETE clearReactions error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Upload multiple images and create an album message
+ */
+export async function uploadImages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId, replyTo, senderName, widths, heights } = req.body;
+    const userId = getUserIdFromHeader(req);
+    const files = req.files as Express.Multer.File[];
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized - no user id" });
+      return;
+    }
+
+    if (
+      !conversationId ||
+      !files ||
+      !Array.isArray(files) ||
+      files.length === 0
+    ) {
+      res.status(400).json({ error: "Missing conversationId or images" });
+      return;
+    }
+
+    const parsedWidths =
+      typeof widths === "string" ? JSON.parse(widths) : widths;
+    const parsedHeights =
+      typeof heights === "string" ? JSON.parse(heights) : heights;
+
+    // 1. Upload all to S3 concurrently
+    const uploadPromises = files.map(async (file, index) => {
+      const originalName = Buffer.from(file.originalname, "latin1").toString(
+        "utf8",
+      );
+      const url = await uploadFileToS3(
+        file.buffer,
+        file.mimetype,
+        originalName,
+      );
+      return {
+        url,
+        width: parsedWidths ? parsedWidths[index] : 0,
+        height: parsedHeights ? parsedHeights[index] : 0,
+        fileName: originalName,
+        fileSize: file.size,
+        fileType: file.mimetype,
+        isRevoked: false,
+        deletedByUsers: [],
+      };
+    });
+
+    const imageGroup = await Promise.all(uploadPromises);
+
+    // 2. Save Message with imageGroup metadata
+    const messageDoc = await messageDataService.createMessage({
+      conversationId,
+      senderId: userId,
+      senderName: senderName,
+      type: "image",
+      content: "[Album Ảnh]",
+      metadata: {
+        imageGroup: imageGroup,
+      },
+      replyTo: replyTo ? JSON.parse(replyTo) : undefined,
+    });
+
+    // 3. Prepare event for RabbitMQ
+    const messageEvent: MessageEvent = {
+      _id: messageDoc._id.toString(),
+      conversationId: String(conversationId),
+      senderId: userId,
+      senderName: messageDoc.senderName || "",
+      type: messageDoc.type,
+      content: messageDoc.content,
+      isRead: false,
+      createdAt: messageDoc.createdAt,
+      ...(messageDoc.metadata && { metadata: messageDoc.metadata }),
+      ...(messageDoc.replyTo && { replyTo: messageDoc.replyTo as any }),
+    };
+
+    // 4. Publish to RabbitMQ
+    await rabbitMQProducer.publishMessageEvent(messageEvent);
+
+    res.status(201).json({
+      status: "success",
+      data: messageEvent,
+    });
+  } catch (error) {
+    console.error("[MessageController] POST uploadImages error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Thu hồi 1 ảnh trong album
+ */
+export async function revokeImageInGroup(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageId, index } = req.params;
+    const userId = getUserIdFromHeader(req);
+
+    if (!messageId || index === undefined) {
+      res.status(400).json({ error: "Missing messageId or index" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const message = await messageDataService.getMessageById(
+      messageId as string,
+    );
+    if (!message) {
+      res.status(404).json({ error: "Message not found" });
+      return;
+    }
+
+    if (String(message.senderId) !== userId) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    const updated = await messageDataService.revokeImageInGroup(
+      messageId as string,
+      parseInt(index as string),
+    );
+
+    if (updated) {
+      await rabbitMQProducer.publishMessageUpdateEvent({
+        _id: updated._id.toString(),
+        conversationId: updated.conversationId.toString(),
+        senderId: updated.senderId,
+        senderName: updated.senderName || "",
+        type: updated.type,
+        content: updated.content,
+        isRead: updated.isRead,
+        createdAt: updated.createdAt,
+        ...(updated.metadata && { metadata: updated.metadata }),
+      });
+    }
+
+    res.json({ status: "success", data: updated });
+  } catch (error) {
+    console.error("[MessageController] PATCH revokeImageInGroup error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Xóa 1 ảnh trong album chỉ ở phía tôi
+ */
+export async function deleteImageInGroupForMe(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageId, index } = req.params;
+    const userId = getUserIdFromHeader(req);
+
+    if (!messageId || index === undefined) {
+      res.status(400).json({ error: "Missing messageId or index" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const updated = await messageDataService.deleteImageInGroupForMe(
+      messageId as string,
+      parseInt(index as string),
+      userId,
+    );
+
+    if (updated) {
+      await rabbitMQProducer.publishMessageUpdateEvent({
+        _id: updated._id.toString(),
+        conversationId: updated.conversationId.toString(),
+        senderId: updated.senderId,
+        senderName: updated.senderName || "",
+        type: updated.type,
+        content: updated.content,
+        isRead: updated.isRead,
+        createdAt: updated.createdAt,
+        ...(updated.metadata && { metadata: updated.metadata }),
+      });
+    }
+
+    res.json({ status: "success", data: updated });
+  } catch (error) {
+    console.error(
+      "[MessageController] DELETE deleteImageInGroupForMe error:",
+      error,
+    );
+    next(error);
+  }
+}
+
+/**
+ * Lấy tất cả tin nhắn đã ghim trong hội thoại
+ */
+export async function getPinnedMessages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId } = req.params;
+
+    if (typeof conversationId !== "string") {
+      res.status(400).json({ error: "Invalid or missing conversationId" });
+      return;
+    }
+
+    const pinnedMessages =
+      await messageDataService.getPinnedMessages(conversationId);
+
+    res.json({
+      status: "success",
+      data: pinnedMessages,
+    });
+  } catch (error) {
+    console.error("[MessageController] GET pinned messages error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Tìm kiếm tin nhắn trong cuộc hội thoại
+ */
+export async function searchMessages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId } = req.params;
+    const { query } = req.query;
+    const userId = getUserIdFromHeader(req);
+
+    if (!conversationId || typeof conversationId !== "string") {
+      res.status(400).json({ error: "Missing or invalid conversationId" });
+      return;
+    }
+
+    if (!query || typeof query !== "string") {
+      res.status(400).json({ error: "Missing or invalid search query" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const messages = await messageDataService.searchMessages(
+      conversationId,
+      query,
+      userId,
+    );
+
+    res.json({
+      status: "success",
+      data: messages,
+    });
+  } catch (error) {
+    console.error("[MessageController] searchMessages error:", error);
+    next(error);
+  }
+}

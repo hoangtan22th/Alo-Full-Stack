@@ -1,5 +1,7 @@
+import React, { useState, useEffect } from "react";
 import { Tabs } from "expo-router";
-import { Platform } from "react-native";
+import { Platform, DeviceEventEmitter } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ChatBubbleLeftEllipsisIcon as ChatOutlineIcon,
   Cog6ToothIcon as Cog6OutlineIcon,
@@ -14,6 +16,23 @@ import {
 } from "react-native-heroicons/solid";
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = insets.bottom > 0 ? insets.bottom : 10;
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener(
+      "update_unread_count",
+      (count) => {
+        setUnreadCount(count);
+      },
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   return (
     <Tabs
       screenOptions={{
@@ -27,8 +46,8 @@ export default function TabLayout() {
           borderTopLeftRadius: 35,
           borderTopRightRadius: 35,
           borderTopWidth: 0,
-          height: Platform.OS === "ios" ? 90 : 70,
-          paddingBottom: Platform.OS === "ios" ? 30 : 10,
+          height: 60 + bottomPadding,
+          paddingBottom: bottomPadding,
           paddingTop: 10,
           elevation: 10, // Shadow Android
           shadowColor: "#000",
@@ -42,6 +61,12 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Tin nhắn",
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: "#EF4444",
+            color: "white",
+            fontSize: 10,
+          },
           tabBarIcon: ({ color, focused }) =>
             focused ? (
               <ChatSolidIcon size={24} color={color} />

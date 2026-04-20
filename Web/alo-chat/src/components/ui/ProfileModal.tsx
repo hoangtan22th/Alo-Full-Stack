@@ -90,7 +90,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const fetchUserData = async () => {
     try {
       setLoading(true);
-      const res: any = await axiosClient.get("/auth/me");
+      const res: any = await axiosClient.get("/users/me");
       const userData = res?.data || res;
 
       if (userData) {
@@ -100,12 +100,15 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         setAvatarUrl(userData.avatar || "/avt-mac-dinh.jpg");
         setCoverImageUrl(userData.coverImage || "/black.jpg");
 
-        const genderMap: Record<number, Gender> = {
-          1: "Nam",
-          0: "Nữ",
-          2: "Khác",
+        const genderMap: Record<string, Gender> = {
+          "0": "Nam",
+          "1": "Nữ",
+          "2": "Khác",
+          MALE: "Nam",
+          FEMALE: "Nữ",
+          OTHER: "Khác",
         };
-        setGender(genderMap[userData.gender] || "Nam");
+        setGender(genderMap[String(userData.gender)] || "Nam");
       }
     } catch (error) {
       console.error("Fetch profile error:", error);
@@ -141,7 +144,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     try {
       const genderRevMap = { Nam: 0, Nữ: 1, Khác: 2 };
 
-      await axiosClient.put("/auth/me", {
+      await axiosClient.put("/users/me", {
         fullName,
         gender: genderRevMap[gender],
         phoneNumber: phone,
@@ -151,7 +154,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       if (avatarFile) {
         const formData = new FormData();
         formData.append("file", avatarFile);
-        await axiosClient.post("/auth/me/avatar", formData, {
+        await axiosClient.post("/users/me/avatar", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
       }
@@ -159,7 +162,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       if (coverFile) {
         const formData = new FormData();
         formData.append("file", coverFile);
-        await axiosClient.post("/auth/me/cover", formData, {
+        await axiosClient.post("/users/me/cover", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
       }

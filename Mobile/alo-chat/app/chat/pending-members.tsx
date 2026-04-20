@@ -14,6 +14,7 @@ import { ArrowLeftIcon } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { groupService } from "../../services/groupService";
 import { userService } from "../../services/userService";
+import { useSocket } from "../../contexts/SocketContext";
 
 export default function PendingMembersScreen() {
   const router = useRouter();
@@ -73,9 +74,39 @@ export default function PendingMembersScreen() {
     }
   };
 
+  const { socket } = useSocket();
+
   useEffect(() => {
     fetchData();
   }, [id]);
+
+  useEffect(() => {
+    if (!socket || !id) return;
+
+    // Lắng nghe yêu cầu tham gia mới
+    const handleNewJoinRequest = (data: { groupId: string }) => {
+      console.log("📥 [Pending] Received NEW_JOIN_REQUEST:", data.groupId);
+      if (data.groupId === id) {
+        fetchData();
+      }
+    };
+
+    // Lắng nghe thay đổi thông tin nhóm (khi một request được duyệt/từ chối bởi admin khác)
+    const handleGroupUpdated = (data: any) => {
+      console.log("🔄 [Pending] Received GROUP_UPDATED:", data._id);
+      if (data._id === id) {
+        fetchData();
+      }
+    };
+
+    socket.on("NEW_JOIN_REQUEST", handleNewJoinRequest);
+    socket.on("GROUP_UPDATED", handleGroupUpdated);
+
+    return () => {
+      socket.off("NEW_JOIN_REQUEST", handleNewJoinRequest);
+      socket.off("GROUP_UPDATED", handleGroupUpdated);
+    };
+  }, [socket, id]);
 
   const toggleApproval = async (newValue: boolean) => {
     if (!id) return;

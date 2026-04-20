@@ -1,20 +1,73 @@
 server:
   port: 8085
 
-
 spring:
+  application:
+    name: chatbot-service
+  datasource:
+    url: jdbc:mariadb://localhost:3306/chatbot_memory?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh
+    username: root
+    password: root
+    driver-class-name: org.mariadb.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MariaDBDialect
+        format_sql: true
+
+#  ai:
+#    openai:
+#      api-key: ${GROQ}
+#      chat:
+#        base-url: https://api.groq.com/openai
+#        options:
+##          model: llama-3.3-70b-versatile
+#          model: llama-3.1-8b-instant
+#          temperature: 0.2
+#          max-tokens: 1000
+#          top-p: 0.9
+#          stop: ["\n\n"]
+#  ai:
+#    openai:
+#      api-key: ${GEMINI_API_KEY}
+#      chat:
+#        base-url: https://generativelanguage.googleapis.com/v1beta/openai/
+#        options:
+#          model: gemini-2.5-flash
+#          temperature: 0.2
+#          max-tokens: 1000
+#          top-p: 0.9
+#          stop: ["\n\n"]
   ai:
     openai:
-      api-key: ${GROQ_API_KEY}
+      api-key: dummy
+      base-url: http://localhost:11434
       chat:
-        base-url: https://api.groq.com/openai
         options:
-          model: llama-3.3-70b-versatile   # ✅ Đổi sang model này
-          temperature: 0.2                  # ✅ Giảm temperature, AI bớt sáng tạo linh tinh
+          model: qwen2.5:7b
+          temperature: 0.2
+          max-tokens: 2000
 
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        enabled: false
+      embedding:
+        enabled: true
+        options:
+          model: nomic-embed-text
+
+    vectorstore:
+      qdrant:
+        host: localhost
+        port: 6334
+        initialize-schema: true
 eureka:
   client:
-#    enabled: false
     service-url:
       defaultZone: ${EUREKA_DEFAULT_ZONE:http://localhost:8761/eureka/}
   instance:
