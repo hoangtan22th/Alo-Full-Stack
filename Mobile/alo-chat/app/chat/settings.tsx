@@ -37,6 +37,7 @@ import {
   PaperAirplaneIcon,
   ChevronRightIcon,
   CheckIcon,
+  CalendarDaysIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -47,6 +48,7 @@ interface GroupPermissions {
   createPolls: "EVERYONE" | "ADMIN";
   pinMessages: "EVERYONE" | "ADMIN";
   sendMessage: "EVERYONE" | "ADMIN";
+  createReminders: "EVERYONE" | "ADMIN";
 }
 
 export default function GroupSettingsScreen() {
@@ -76,6 +78,7 @@ export default function GroupSettingsScreen() {
     createPolls: "EVERYONE",
     pinMessages: "ADMIN",
     sendMessage: "EVERYONE",
+    createReminders: "ADMIN",
   });
 
   const [isTransferLeaderModalVisible, setIsTransferLeaderModalVisible] =
@@ -114,6 +117,7 @@ export default function GroupSettingsScreen() {
           createPolls: data.permissions.createPolls || "EVERYONE",
           pinMessages: data.permissions.pinMessages || "ADMIN",
           sendMessage: data.permissions.sendMessage || "EVERYONE",
+          createReminders: data.permissions.createReminders || "ADMIN",
         });
       }
 
@@ -423,9 +427,16 @@ export default function GroupSettingsScreen() {
             <View className="h-[1px] bg-gray-50 w-[90%] self-center" />
             <PermissionItem
               icon={<DocumentTextIcon size={22} color="#4b5563" />}
-              title="Tạo ghi chú, nhắc hẹn"
+              title="Tạo ghi chú"
               value={getPermissionLabel("createNotes")}
               onPress={() => openPermissionModal("createNotes")}
+            />
+            <View className="h-[1px] bg-gray-50 w-[90%] self-center" />
+            <PermissionItem
+              icon={<CalendarDaysIcon size={22} color="#4b5563" />}
+              title="Tạo nhắc hẹn"
+              value={getPermissionLabel("createReminders")}
+              onPress={() => openPermissionModal("createReminders")}
             />
             <View className="h-[1px] bg-gray-50 w-[90%] self-center" />
             <PermissionItem

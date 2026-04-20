@@ -74,7 +74,9 @@ async function postSystemMessage(
       "Content-Type": "application/json",
     };
     if (authHeader) {
-      headers["Authorization"] = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+      headers["Authorization"] = Array.isArray(authHeader)
+        ? authHeader[0]
+        : authHeader;
     }
 
     await fetch(`${gatewayUrl}/api/v1/messages`, {
@@ -305,7 +307,9 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
     // Real-time Sync: Thông báo cho thành viên mới về nhóm này
     rabbitMQProducer.publishConversationCreated(group).catch(console.error);
     // Thông báo đẩy (In-app) cho thành viên mới
-    rabbitMQProducer.publishAddedToGroup(String(newUserId), group).catch(console.error);
+    rabbitMQProducer
+      .publishAddedToGroup(String(newUserId), group)
+      .catch(console.error);
 
     // Bắn tin nhắn hệ thống
     const newUserName = await getUserFullName(String(newUserId), authHeader);
@@ -327,7 +331,7 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
 export const removeMember = async (
   req: Request,
   res: Response,
-  ): Promise<void> => {
+): Promise<void> => {
   try {
     const groupId = String(req.params.groupId || "");
     const userId = String(req.params.userId || "");
@@ -558,7 +562,12 @@ export const deleteGroup = async (
       for (const member of group.members) {
         if (member.userId) {
           rabbitMQProducer
-            .publishConversationRemoved(groupId, String(member.userId), group.name || "Nhóm", "delete")
+            .publishConversationRemoved(
+              groupId,
+              String(member.userId),
+              group.name || "Nhóm",
+              "delete",
+            )
             .catch(console.error);
         }
       }
@@ -678,7 +687,9 @@ export const requestJoinGroup = async (
       group.members.push({
         userId: requesterId,
         role: "MEMBER",
-        joinedAt: group.isHistoryVisible ? group.createdAt || new Date() : new Date(),
+        joinedAt: group.isHistoryVisible
+          ? group.createdAt || new Date()
+          : new Date(),
       });
 
       // Xoá join requests nếu lỡ có trễ (ví dụ họ đã từng gửi trước khi nhóm tắt phê duyệt)
@@ -737,7 +748,7 @@ export const requestJoinGroup = async (
       rabbitMQProducer
         .publishNewJoinRequest(groupId, requesterName, admins, group.name)
         .catch(console.error);
-      
+
       rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
     } catch (notifErr) {
       console.error("[RequestJoinGroup] Notification Error:", notifErr);
@@ -832,7 +843,9 @@ export const approveJoinRequest = async (
       group.members.push({
         userId: String(userId),
         role: "MEMBER",
-        joinedAt: group.isHistoryVisible ? group.createdAt || new Date() : new Date(),
+        joinedAt: group.isHistoryVisible
+          ? group.createdAt || new Date()
+          : new Date(),
       });
     }
 
@@ -841,7 +854,9 @@ export const approveJoinRequest = async (
     // Real-time Sync: Thông báo cho người vừa được duyệt về hội thoại mới hiển thị
     rabbitMQProducer.publishConversationCreated(group).catch(console.error);
     // Thông báo đẩy (In-app) cho người dùng được duyệt
-    rabbitMQProducer.publishJoinRequestApproved(userId, group).catch(console.error);
+    rabbitMQProducer
+      .publishJoinRequestApproved(userId, group)
+      .catch(console.error);
 
     // Bắn tin nhắn hệ thống
     const targetName = await getUserFullName(userId, req.headers.authorization);
@@ -1171,7 +1186,9 @@ export const updateHistorySetting = async (
       (m) => m.userId.toString() === requesterId,
     );
     if (!member || (member.role !== "LEADER" && member.role !== "DEPUTY")) {
-      res.status(403).json({ error: "Bạn không có quyền thay đổi thiết lập này" });
+      res
+        .status(403)
+        .json({ error: "Bạn không có quyền thay đổi thiết lập này" });
       return;
     }
 
@@ -1200,7 +1217,12 @@ export const updateSettings = async (
 ): Promise<void> => {
   try {
     const groupId = String(req.params.groupId || "");
-    const { isHighlightEnabled, permissions, membershipQuestion, isQuestionEnabled } = req.body;
+    const {
+      isHighlightEnabled,
+      permissions,
+      membershipQuestion,
+      isQuestionEnabled,
+    } = req.body;
     const requesterId = (req.headers["x-user-id"] || "").toString();
 
     const group = await Conversation.findById(groupId);
@@ -1214,7 +1236,9 @@ export const updateSettings = async (
       (m) => m.userId.toString() === requesterId,
     );
     if (!member || (member.role !== "LEADER" && member.role !== "DEPUTY")) {
-      res.status(403).json({ error: "Bạn không có quyền thay đổi thiết lập này" });
+      res
+        .status(403)
+        .json({ error: "Bạn không có quyền thay đổi thiết lập này" });
       return;
     }
 
@@ -1224,11 +1248,18 @@ export const updateSettings = async (
 
     if (permissions && typeof permissions === "object") {
       // Deep merge or specific assign
-      if (permissions.editGroupInfo) group.permissions.editGroupInfo = permissions.editGroupInfo;
-      if (permissions.createNotes) group.permissions.createNotes = permissions.createNotes;
-      if (permissions.createPolls) group.permissions.createPolls = permissions.createPolls;
-      if (permissions.pinMessages) group.permissions.pinMessages = permissions.pinMessages;
-      if (permissions.sendMessage) group.permissions.sendMessage = permissions.sendMessage;
+      if (permissions.editGroupInfo)
+        group.permissions.editGroupInfo = permissions.editGroupInfo;
+      if (permissions.createNotes)
+        group.permissions.createNotes = permissions.createNotes;
+      if (permissions.createPolls)
+        group.permissions.createPolls = permissions.createPolls;
+      if (permissions.pinMessages)
+        group.permissions.pinMessages = permissions.pinMessages;
+      if (permissions.sendMessage)
+        group.permissions.sendMessage = permissions.sendMessage;
+      if (permissions.createReminders)
+        group.permissions.createReminders = permissions.createReminders;
     }
 
     if (typeof membershipQuestion === "string") {

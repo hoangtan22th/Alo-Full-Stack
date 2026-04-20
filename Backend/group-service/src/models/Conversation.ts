@@ -36,6 +36,7 @@ export interface IConversation extends Document {
     createPolls: "EVERYONE" | "ADMIN";
     pinMessages: "EVERYONE" | "ADMIN";
     sendMessage: "EVERYONE" | "ADMIN";
+    createReminders: "EVERYONE" | "ADMIN";
   };
   // Các trường do timestamps tự sinh ra:
   createdAt: Date;
@@ -92,11 +93,36 @@ const conversationSchema = new Schema<IConversation>(
     },
     isHighlightEnabled: { type: Boolean, default: false },
     permissions: {
-      editGroupInfo: { type: String, enum: ["EVERYONE", "ADMIN"], default: "ADMIN" },
-      createNotes: { type: String, enum: ["EVERYONE", "ADMIN"], default: "EVERYONE" },
-      createPolls: { type: String, enum: ["EVERYONE", "ADMIN"], default: "EVERYONE" },
-      pinMessages: { type: String, enum: ["EVERYONE", "ADMIN"], default: "ADMIN" },
-      sendMessage: { type: String, enum: ["EVERYONE", "ADMIN"], default: "EVERYONE" },
+      editGroupInfo: {
+        type: String,
+        enum: ["EVERYONE", "ADMIN"],
+        default: "EVERYONE",
+      },
+      createNotes: {
+        type: String,
+        enum: ["EVERYONE", "ADMIN"],
+        default: "EVERYONE",
+      },
+      createPolls: {
+        type: String,
+        enum: ["EVERYONE", "ADMIN"],
+        default: "EVERYONE",
+      },
+      pinMessages: {
+        type: String,
+        enum: ["EVERYONE", "ADMIN"],
+        default: "EVERYONE",
+      },
+      sendMessage: {
+        type: String,
+        enum: ["EVERYONE", "ADMIN"],
+        default: "EVERYONE",
+      },
+      createReminders: {
+        type: String,
+        enum: ["EVERYONE", "ADMIN"],
+        default: "EVERYONE",
+      },
     },
   },
   {

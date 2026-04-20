@@ -350,6 +350,7 @@ export const groupService = {
         createPolls?: "EVERYONE" | "ADMIN";
         pinMessages?: "EVERYONE" | "ADMIN";
         sendMessage?: "EVERYONE" | "ADMIN";
+        createReminders?: "EVERYONE" | "ADMIN";
       };
     },
   ) => {

@@ -36,6 +36,9 @@ import {
   CameraIcon,
   LinkIcon,
   Cog6ToothIcon,
+  ChartBarIcon,
+  PencilSquareIcon,
+  CalendarDaysIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -263,6 +266,10 @@ export default function ChatInfoScreen() {
   const isDeputy = currentUserRole === "deputy";
   const isManager = isAdmin || isDeputy;
   const canEdit = isGroup && (isManager || permissions?.editGroupInfo === "EVERYONE");
+  const canCreatePoll = isGroup && (isManager || permissions?.createPolls === "EVERYONE");
+  const canCreateNote = isGroup && (isManager || permissions?.createNotes === "EVERYONE");
+  const canCreateReminder = isGroup && (isManager || permissions?.createReminders === "EVERYONE");
+  const hasAnyUtility = canCreatePoll || canCreateNote || canCreateReminder;
 
   const handleLeaveGroup = () => {
     if (isAdmin) {
@@ -664,6 +671,45 @@ export default function ChatInfoScreen() {
             )}
           </View>
         </View>
+
+        {/* SECTION: TIỆN ÍCH NHÓM */}
+        {isGroup && hasAnyUtility && (
+          <View className="mt-10 px-5">
+            <Text className="text-[11px] font-bold text-gray-500 uppercase tracking-[1px] mb-4">
+              Tiện ích nhóm
+            </Text>
+
+            <View className="bg-[#f5f6f8] rounded-[24px]">
+              {canCreatePoll && (
+                <>
+                  <SettingItem
+                    icon={<ChartBarIcon size={24} color="#4b5563" />}
+                    title="Tạo bình chọn"
+                    onPress={() => router.push(`/chat/create-poll?id=${id}`)}
+                  />
+                  <View className="h-[1px] bg-white w-[90%] self-end" />
+                </>
+              )}
+              {canCreateNote && (
+                <>
+                  <SettingItem
+                    icon={<PencilSquareIcon size={24} color="#4b5563" />}
+                    title="Tạo ghi chú"
+                    onPress={() => Alert.alert("Thông báo", "Tính năng Tạo ghi chú đang được phát triển.")}
+                  />
+                  <View className="h-[1px] bg-white w-[90%] self-end" />
+                </>
+              )}
+              {canCreateReminder && (
+                <SettingItem
+                  icon={<CalendarDaysIcon size={24} color="#4b5563" />}
+                  title="Tạo nhắc hẹn"
+                  onPress={() => Alert.alert("Thông báo", "Tính năng Tạo nhắc hẹn đang được phát triển.")}
+                />
+              )}
+            </View>
+          </View>
+        )}
 
         {/* SECTION: THÔNG TIN KHÁC */}
         {isGroup && (
