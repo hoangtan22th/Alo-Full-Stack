@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import axiosClient from "@/services/api";
+import { chatbotApi } from "@/api/chatbot.api"; // Dùng chatbotApi thay vì axios trực tiếp
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -20,15 +20,15 @@ interface AIMessage {
 }
 
 const BOT_INFO = {
-  name: "Trợ lý Alo Chat",
+  name: "Alo Bot (AI Assistant)",
   avatar: "/alochat.png",
 };
 
 const SUGGESTED_PROMPTS = [
-  "Thời tiết Hồ Chí Minh hôm nay thế nào?",
-  "Tôi có những ai là bạn bè?",
-  "Có những ai đã gửi kết bạn cho tôi?",
-  "Tìm xem số 0987654321 có trên hệ thống không",
+  "Hướng dẫn sử dụng các tính năng của Alo Chat",
+  "Thời tiết hôm nay thế nào?",
+  "Danh sách bạn bè của mình",
+  "Có ai gửi lời mời kết bạn cho mình không?",
 ];
 
 export default function BotChatArea({ currentUser }: { currentUser: any }) {
@@ -36,19 +36,46 @@ export default function BotChatArea({ currentUser }: { currentUser: any }) {
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
+  const [loadingHistory, setLoadingHistory] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // 1. Tải lịch sử tin nhắn khi component mount
   useEffect(() => {
-    setMessages([
-      {
-        id: "welcome-msg",
-        role: "bot",
-        content: `Chào **${currentUser?.fullName || currentUser?.name || "bạn"}**, mình là AI của Alo Chat! 🤖\n\nBạn cần mình giúp gì nào?`,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
+    const fetchHistory = async () => {
+      const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+      if (!myId) return;
+
+      setLoadingHistory(true);
+      const res = await chatbotApi.getHistory(myId);
+      
+      if (res.data && Array.isArray(res.data)) {
+        const historyMessages: AIMessage[] = res.data.map((h: any) => ({
+          id: h.id.toString(),
+          role: h.role === "assistant" ? "bot" : "user",
+          content: h.content,
+          createdAt: h.createdAt
+        }));
+
+        if (historyMessages.length > 0) {
+          setMessages(historyMessages);
+        } else {
+          // Nếu không có lịch sử, hiện tin nhắn chào mừng
+          setMessages([
+            {
+              id: "welcome-msg",
+              role: "bot",
+              content: `Chào **${currentUser?.fullName || currentUser?.name || "bạn"}**, mình là **Alo Bot**! 🤖\n\nMình đã được thiết lập để hỗ trợ riêng cho hệ thống Alo Chat. Bạn cần mình giúp gì nào?`,
+              createdAt: new Date().toISOString(),
+            },
+          ]);
+        }
+      }
+      setLoadingHistory(false);
+    };
+
+    fetchHistory();
   }, [currentUser]);
 
   useEffect(() => {
@@ -73,58 +100,17 @@ export default function BotChatArea({ currentUser }: { currentUser: any }) {
     setIsTyping(true);
 
     try {
-      const res: any = await axiosClient.post(
-        "/chatbot/ask",
-        {
-          message: text,
-          userId: myId,
-        },
-        {
-          headers: {
-            "X-User-Id": myId,
-          },
-          timeout: 60000,
-        },
-      );
-
-      let botContent = "Không có phản hồi từ AI";
-      if (typeof res === "string") {
-        botContent = res;
-      } else if (res?.data?.data) {
-        botContent = res.data.data;
-      } else if (res?.data) {
-        botContent =
-          typeof res.data === "string" ? res.data : JSON.stringify(res.data);
-      } else if (res?.message) {
-        botContent = res.message;
-      } else if (res) {
-        botContent = JSON.stringify(res);
-      }
-
+      const res = await chatbotApi.ask(text, myId);
+      
       const botMsg: AIMessage = {
         id: `bot_${Date.now()}`,
         role: "bot",
-        content: botContent,
+        content: res.data || res.error || "Xin lỗi, mình gặp chút trục trặc.",
         createdAt: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, botMsg]);
-    } catch (err: any) {
-      console.error("Lỗi gọi AI chi tiết:", err);
-      let errorMsg = "❌ *Đã có lỗi xảy ra khi kết nối máy chủ.*";
-      if (err.code === "ECONNABORTED") {
-        errorMsg = "❌ *Máy chủ AI suy nghĩ quá lâu (Timeout).*";
-      } else if (err.response) {
-        errorMsg = `❌ *Lỗi từ Backend: ${err.response.data?.message || err.response.status}*`;
-      }
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `err_${Date.now()}`,
-          role: "bot",
-          content: errorMsg,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+    } catch (err) {
+      console.error("Lỗi gọi AI:", err);
     } finally {
       setIsTyping(false);
       setTimeout(() => inputRef.current?.focus(), 0);
@@ -145,30 +131,26 @@ export default function BotChatArea({ currentUser }: { currentUser: any }) {
         <div className="h-19 px-6 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md z-10">
           <div className="flex items-center gap-3">
             <div className="relative shrink-0">
-              <img
-                src={BOT_INFO.avatar}
-                className="w-10 h-10 rounded-full object-cover p-0.5 border border-blue-200"
-                alt="AI"
-              />
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 border-2 border-white rounded-full" />
+              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center border border-gray-100 shadow-sm overflow-hidden">
+                <img 
+                  src={BOT_INFO.avatar} 
+                  alt="Alo Bot" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" />
             </div>
             <div>
               <h2 className="text-[16px] font-black tracking-tight">
                 {BOT_INFO.name}
               </h2>
               <p className="text-[12px] font-bold text-blue-500 mt-0.5">
-                Trí tuệ nhân tạo
+                Chuyên gia hỗ trợ Alo Chat
               </p>
             </div>
           </div>
           <div className="flex items-center gap-4 text-gray-400">
-            <button
-              onClick={() => setMessages([])}
-              className="hover:text-red-500 transition"
-              title="Xóa lịch sử trò chuyện"
-            >
-              <TrashIcon className="w-5 h-5" />
-            </button>
+            {loadingHistory && <ArrowPathIcon className="w-4 h-4 animate-spin text-blue-500" />}
             <button
               onClick={() => setShowInfoPanel(!showInfoPanel)}
               className={`transition ${showInfoPanel ? "text-black" : "hover:text-gray-600"}`}
@@ -188,19 +170,21 @@ export default function BotChatArea({ currentUser }: { currentUser: any }) {
                   className={`flex ${isUser ? "justify-end" : "justify-start"}`}
                 >
                   {!isUser && (
-                    <img
-                      src={BOT_INFO.avatar}
-                      className="w-8 h-8 rounded-full mr-2 self-end shadow-sm"
-                      alt="AI"
-                    />
+                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-2 self-end shadow-sm border border-gray-100 overflow-hidden shrink-0">
+                       <img 
+                         src={BOT_INFO.avatar} 
+                         alt="Bot" 
+                         className="w-full h-full object-cover" 
+                       />
+                    </div>
                   )}
                   <div
-                    className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-[14px] shadow-sm ${isUser ? "bg-black text-white rounded-br-sm" : "bg-white border border-gray-100 rounded-bl-sm"}`}
+                    className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-[14px] shadow-sm ${isUser ? "bg-blue-600 text-white rounded-br-sm" : "bg-white border border-gray-100 rounded-bl-sm"}`}
                   >
                     {isUser ? (
                       msg.content
                     ) : (
-                      <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0 prose-strong:text-blue-600 prose-a:text-blue-500">
+                      <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-2 prose-li:my-0.5 prose-strong:text-blue-600 prose-strong:font-bold">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                           {msg.content}
                         </ReactMarkdown>
@@ -212,19 +196,17 @@ export default function BotChatArea({ currentUser }: { currentUser: any }) {
             })}
             {isTyping && (
               <div className="flex justify-start">
-                <img
-                  src={BOT_INFO.avatar}
-                  className="w-8 h-8 rounded-full mr-2 self-end"
-                  alt="AI"
-                />
+                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center mr-2 self-end shadow-sm border border-gray-100 overflow-hidden animate-pulse">
+                   <img src={BOT_INFO.avatar} alt="Bot" className="w-full h-full object-cover grayscale opacity-50" />
+                </div>
                 <div className="bg-white border border-gray-100 px-4 py-3 rounded-2xl rounded-bl-sm flex gap-1 shadow-sm">
-                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span>
+                  <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></span>
                   <span
-                    className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"
+                    className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"
                     style={{ animationDelay: "0.2s" }}
                   ></span>
                   <span
-                    className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"
+                    className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"
                     style={{ animationDelay: "0.4s" }}
                   ></span>
                 </div>
@@ -235,39 +217,39 @@ export default function BotChatArea({ currentUser }: { currentUser: any }) {
         </div>
 
         <div className="p-4 bg-white border-t border-gray-100 shrink-0 relative">
-          {messages.length <= 1 && !isTyping && (
-            <div className="flex flex-wrap gap-2 mb-3 max-w-3xl mx-auto">
+          {messages.length <= 1 && !isTyping && !loadingHistory && (
+            <div className="flex flex-wrap gap-2 mb-3 max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-2">
               {SUGGESTED_PROMPTS.map((prompt, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleSend(prompt)}
-                  className="text-[11px] font-bold text-gray-600 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-all"
+                  className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-4 py-2 rounded-full hover:bg-blue-600 hover:text-white transition-all duration-200"
                 >
                   {prompt}
                 </button>
               ))}
             </div>
           )}
-          <div className="max-w-3xl mx-auto flex items-center gap-3 bg-[#F5F5F5] p-2 rounded-full focus-within:bg-white focus-within:shadow-sm border border-transparent focus-within:border-gray-200 transition-all">
+          <div className="max-w-3xl mx-auto flex items-center gap-3 bg-gray-50 p-1.5 rounded-full focus-within:bg-white focus-within:shadow-md border border-transparent focus-within:border-blue-100 transition-all duration-300">
             <input
               ref={inputRef}
               type="text"
-              placeholder={isTyping ? "AI đang trả lời..." : "Hỏi AI..."}
+              placeholder={isTyping ? "AI đang trả lời..." : "Hỏi Alo Bot về ứng dụng..."}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isTyping}
-              className="flex-1 bg-transparent outline-none text-[14px] px-3 disabled:opacity-50"
+              className="flex-1 bg-transparent outline-none text-[14px] px-4 disabled:opacity-50"
             />
             <button
               onClick={() => handleSend(inputText)}
               disabled={!inputText.trim() || isTyping}
-              className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-800 disabled:opacity-40"
+              className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 disabled:opacity-40 shadow-lg shadow-blue-200 transition-all active:scale-95"
             >
               {isTyping ? (
-                <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                <ArrowPathIcon className="w-5 h-5 animate-spin" />
               ) : (
-                <PaperAirplaneIcon className="w-4 h-4 -mr-0.5" />
+                <PaperAirplaneIcon className="w-5 h-5 -mr-0.5" />
               )}
             </button>
           </div>
@@ -278,24 +260,41 @@ export default function BotChatArea({ currentUser }: { currentUser: any }) {
         className={`hidden lg:flex flex-col shrink-0 bg-[#FAFAFA] h-full transition-all duration-300 ease-in-out overflow-hidden ${showInfoPanel ? "w-[320px] opacity-100 border-l border-gray-100" : "w-0 opacity-0 border-l-0"}`}
       >
         <div className="flex flex-col items-center pt-10 pb-8 border-b border-gray-100/60">
-          <img
-            src={BOT_INFO.avatar}
-            alt="Profile"
-            className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg bg-blue-50 p-2"
-          />
+           <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center border-4 border-white shadow-xl overflow-hidden">
+              <img src={BOT_INFO.avatar} alt="Alo Bot" className="w-full h-full object-cover" />
+           </div>
           <h2 className="text-[18px] font-black text-gray-900 tracking-tight mt-4">
             {BOT_INFO.name}
           </h2>
-          <p className="text-[12px] font-bold text-blue-500 mt-1">
-            Sẵn sàng hỗ trợ 24/7
+          <p className="text-[12px] font-bold text-blue-500 mt-1 uppercase tracking-wider">
+            Guardrails Protected
           </p>
         </div>
-        <div className="p-6">
-          <div className="bg-blue-50 text-blue-700 text-[13px] p-4 rounded-2xl font-medium leading-relaxed">
-            <SparklesIcon className="w-5 h-5 mb-2" />
-            Trợ lý ảo thông minh được tích hợp trực tiếp vào ứng dụng. Có khả
-            năng tìm kiếm người dùng, quản lý bạn bè và cung cấp thông tin thời
-            tiết.
+        <div className="p-6 space-y-6">
+          <div className="bg-blue-600 text-white text-[13px] p-5 rounded-[24px] font-medium leading-relaxed shadow-lg shadow-blue-100 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-20">
+                <SparklesIcon className="w-12 h-12" />
+            </div>
+            <p className="relative z-10">
+              Chào bạn! Mình là AI được huấn luyện đặc biệt để hỗ trợ riêng cho <strong>Alo Chat</strong>.
+            </p>
+          </div>
+          
+          <div className="space-y-4">
+             <h4 className="text-[12px] font-black text-gray-400 uppercase tracking-widest px-1">Quy tắc bảo vệ</h4>
+             <div className="space-y-3">
+                {[
+                  "Chỉ trả lời về Alo Chat",
+                  "Từ chối các chủ đề ngoài lề",
+                  "Bảo mật thông tin người dùng",
+                  "Hỗ trợ tính năng thời tiết"
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center gap-3 px-1">
+                     <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                     <span className="text-[13px] font-bold text-gray-700">{item}</span>
+                  </div>
+                ))}
+             </div>
           </div>
         </div>
       </div>
