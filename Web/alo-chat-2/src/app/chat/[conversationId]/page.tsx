@@ -99,6 +99,9 @@ export default function ChatPage() {
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
   const [showPinnedModal, setShowPinnedModal] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
@@ -297,17 +300,22 @@ export default function ChatPage() {
   };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const topSentinelRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isLoadingHistoryRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   // Track conversationId in a ref so socket callback always has latest value
   const conversationIdRef = useRef(conversationId);
   useEffect(() => {
     conversationIdRef.current = conversationId;
+    setIsInitialLoad(true); // Reset on change
   }, [conversationId]);
 
   /* ─── Fetch messages for current conversation ─── */
   const fetchMessages = useCallback(async () => {
     if (!conversationId || conversationId === "alo-bot") return;
     setLoadingMessages(true);
+    setHasMore(true);
     try {
       const msgs = await messageService.getMessageHistory(
         conversationId,
@@ -315,6 +323,8 @@ export default function ChatPage() {
         0,
       );
       setMessages(msgs);
+      if (msgs.length < 50) setHasMore(false);
+
       // Lấy tất cả tin nhắn ghim
       const pinned = msgs.filter((m) => m.isPinned);
       setPinnedMessages(pinned);
@@ -326,6 +336,60 @@ export default function ChatPage() {
       setLoadingMessages(false);
     }
   }, [conversationId]);
+
+  const loadMoreHistory = useCallback(async () => {
+    if (
+      !conversationId ||
+      !hasMore ||
+      loadingMoreHistory ||
+      loadingMessages ||
+      conversationId === "alo-bot"
+    )
+      return;
+
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const oldScrollHeight = container.scrollHeight;
+    setLoadingMoreHistory(true);
+    isLoadingHistoryRef.current = true;
+
+    try {
+      const olderMsgs = await messageService.getMessageHistory(
+        conversationId,
+        50,
+        messages.length,
+      );
+
+      if (olderMsgs.length === 0) {
+        setHasMore(false);
+        return;
+      }
+
+      if (olderMsgs.length < 50) setHasMore(false);
+
+      setMessages((prev) => [...olderMsgs, ...prev]);
+
+      // Adjust scroll position after messages are prepended
+      setTimeout(() => {
+        if (container) {
+          const newScrollHeight = container.scrollHeight;
+          container.scrollTop = newScrollHeight - oldScrollHeight;
+        }
+        isLoadingHistoryRef.current = false;
+      }, 0);
+    } catch (err) {
+      console.error("Lỗi tải thêm tin nhắn cũ:", err);
+    } finally {
+      setLoadingMoreHistory(false);
+    }
+  }, [
+    conversationId,
+    hasMore,
+    loadingMoreHistory,
+    loadingMessages,
+    messages.length,
+  ]);
 
   /* ─── Fetch conversation info ─── */
   const fetchConversationInfo = useCallback(async () => {
@@ -561,8 +625,57 @@ export default function ChatPage() {
 
   /* ─── Auto scroll to bottom ─── */
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (!messagesEndRef.current || messages.length === 0 || isLoadingHistoryRef.current) return;
+
+    if (isInitialLoad) {
+      // Nhảy ngay lập tức cho lần đầu
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+        setIsInitialLoad(false);
+      }, 100);
+    } else {
+      // Chỉ tự động cuộn xuống nếu đang ở gần đáy (trong khoảng 200px)
+      const container = scrollContainerRef.current;
+      if (container) {
+        const { scrollTop, scrollHeight, clientHeight } = container;
+        // Kiểm tra xem có đang ở gần đáy không
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 200;
+        if (isNearBottom) {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }
+      }
+    }
+  }, [messages, isInitialLoad]);
+
+  /* ─── Infinite Scroll Observer ─── */
+  useEffect(() => {
+    const sentinel = topSentinelRef.current;
+    if (!sentinel || !hasMore || isInitialLoad) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMoreHistory) {
+          loadMoreHistory();
+        }
+      },
+      { threshold: 0.1, root: scrollContainerRef.current },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMoreHistory, loadMoreHistory, isInitialLoad]);
+
+  const handleImageLoad = useCallback(() => {
+    if (isInitialLoad || isLoadingHistoryRef.current) return;
+    const container = scrollContainerRef.current;
+    if (container) {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 300;
+      if (isAtBottom) {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }
+    }
+  }, []);
 
   /* ─── Reactions ─── */
   const handleToggleReaction = async (messageId: string, emoji: string) => {
@@ -1310,7 +1423,10 @@ export default function ChatPage() {
             )}
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 scrollbar-hide">
+            <div
+              ref={scrollContainerRef}
+              className="flex-1 overflow-y-auto px-5 py-4 scrollbar-hide"
+            >
               {loadingMessages ? (
                 <div className="flex items-center justify-center h-full">
                   <ArrowPathIcon className="w-6 h-6 text-gray-400 animate-spin" />
@@ -1324,6 +1440,16 @@ export default function ChatPage() {
                 </div>
               ) : (
                 <div className="flex flex-col gap-1">
+                  {/* Top Sentinel for Infinite Scroll */}
+                  <div ref={topSentinelRef} className="h-4 w-full" />
+
+                  {/* Loading History Spinner */}
+                  {loadingMoreHistory && (
+                    <div className="flex justify-center p-4">
+                      <ArrowPathIcon className="w-5 h-5 text-blue-500 animate-spin" />
+                    </div>
+                  )}
+
                   {messageGroups.map((group, groupIdx) => {
                     const { isMine, messages: gMsgs, senderId } = group;
 
@@ -1689,6 +1815,7 @@ export default function ChatPage() {
                                                               )}
                                                               alt={`album-${idx}`}
                                                               className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                                                              onLoad={handleImageLoad}
                                                             />
                                                             {/* Individual actions overlay */}
                                                             <div className="absolute top-1 right-1 opacity-0 group-hover/img:opacity-100 transition-opacity flex flex-col gap-1">
@@ -1863,6 +1990,7 @@ export default function ChatPage() {
                                             src={getMediaUrl(msg.content)}
                                             alt="img"
                                             className="object-cover max-h-[420px] rounded-lg cursor-pointer"
+                                            onLoad={handleImageLoad}
                                             onClick={() => {
                                               // For legacy single images, we can also use the album preview logic if we want
                                               // but let's keep it simple for now or set a dummy album
