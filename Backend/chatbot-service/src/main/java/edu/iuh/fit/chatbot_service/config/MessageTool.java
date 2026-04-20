@@ -1,11 +1,12 @@
 package edu.iuh.fit.chatbot_service.config;
 
 import edu.iuh.fit.chatbot_service.client.MessageClient;
+import edu.iuh.fit.chatbot_service.dto.MessageDTO;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
-import java.util.List;
-import java.util.Map;
+
+import java.text.SimpleDateFormat;
 
 @Component
 public class MessageTool {
@@ -16,24 +17,47 @@ public class MessageTool {
         this.messageClient = messageClient;
     }
 
-    @Tool(description = "Tìm kiếm tin nhắn cũ của người dùng hiện tại theo từ khóa.")
-    public String searchMessages(@ToolParam(description = "ID người dùng hiện tại") String userId,
-                                 @ToolParam(description = "Từ khóa cần tìm") String keyword) {
-        if (keyword == null || keyword.isBlank()) return "Vui lòng nhập từ khóa.";
-        if (userId == null || userId.isBlank()) return "Không xác định được người dùng.";
+    @Tool(description = "Lấy lịch sử 50 tin nhắn gần nhất của một cuộc trò chuyện để AI đọc hiểu, tìm kiếm hoặc tóm tắt nội dung.")
+    public String getMessageHistory(
+            @ToolParam(description = "Mã ID của cuộc trò chuyện (conversationId)", required = true) String conversationId,
+            @ToolParam(description = "ID của người dùng đang đăng nhập", required = true) String userId) {
+
+        System.out.println(">>> [TOOL CALLED] getMessageHistory cho Conversation: " + conversationId);
+
         try {
-            List<Map<String, Object>> messages = messageClient.searchMessages(userId, keyword);
-            if (messages == null || messages.isEmpty())
-                return "Không tìm thấy tin nhắn nào chứa: " + keyword;
-            StringBuilder sb = new StringBuilder("📩 Tin nhắn tìm thấy:\n");
-            for (Map<String, Object> m : messages) {
-                sb.append(String.format("[%s] %s: %s\n",
-                        m.get("sentAt"), m.get("senderName"), m.get("content")));
-                if (sb.length() > 1000) break;
+            // Gọi qua Node.js lấy 50 tin nhắn
+            var response = messageClient.getHistory(conversationId, 50, userId);
+
+            if (response == null || response.getMessages() == null || response.getMessages().isEmpty()) {
+                return "Cuộc trò chuyện này hiện tại chưa có tin nhắn nào.";
             }
-            return sb.toString();
+
+            // Dịch đống JSON thành kịch bản văn bản (Transcript) cho AI đọc
+            StringBuilder transcript = new StringBuilder("Dữ liệu tin nhắn gần nhất (đã sắp xếp theo thời gian):\n\n");
+            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm dd/MM");
+
+            for (MessageDTO msg : response.getMessages()) {
+                // Phân biệt Ai là người gửi (Tui hay đối phương)
+                String sender = msg.getSenderId().equals(userId) ? "TÔI" : "NGƯỜI KIA";
+                String time = sdf.format(msg.getCreatedAt());
+
+                // Xử lý loại tin nhắn
+                String contentToRead = msg.getContent();
+                if (msg.isRevoked()) {
+                    contentToRead = "[Tin nhắn đã bị thu hồi]";
+                } else if ("image".equals(msg.getType())) {
+                    contentToRead = "[Đã gửi một hình ảnh]";
+                } else if ("file".equals(msg.getType())) {
+                    contentToRead = "[Đã gửi một tệp đính kèm]";
+                }
+
+                transcript.append(String.format("[%s] %s: %s\n", time, sender, contentToRead));
+            }
+
+            return transcript.toString();
+
         } catch (Exception e) {
-            return "Lỗi gọi API tìm tin nhắn: " + e.getMessage();
+            return "Lỗi khi lấy lịch sử tin nhắn: Hệ thống nhắn tin đang tạm gián đoạn.";
         }
     }
 }
