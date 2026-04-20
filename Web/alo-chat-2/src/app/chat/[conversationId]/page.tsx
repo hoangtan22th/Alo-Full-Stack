@@ -5,6 +5,7 @@ import axiosClient from "@/services/api";
 import { messageService, MessageDTO } from "@/services/messageService";
 import { groupService } from "@/services/groupService";
 import { socketService } from "@/services/socketService";
+import { toast } from "sonner";
 import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import JSZip from "jszip";
 import {
@@ -209,6 +210,17 @@ export default function ChatPage() {
       });
     }
   }, [currentUser]);
+
+  // Fetch thông tin cho tất cả thành viên trong nhóm
+  useEffect(() => {
+    if (conversationInfo?.isGroup && conversationInfo.members) {
+      conversationInfo.members.forEach((m: any) => {
+        if (m.userId && !userCache[m.userId]) {
+          fetchUserInfo(m.userId);
+        }
+      });
+    }
+  }, [conversationInfo, userCache]);
 
   const EMOJI_MAP: Record<string, string> = {
     like: "👍",
@@ -617,6 +629,52 @@ export default function ChatPage() {
     } catch (err) {
       console.error("Lỗi giải tán nhóm:", err);
       alert("Không thể giải tán nhóm.");
+    }
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!confirm("Xác nhận mời thành viên này ra khỏi nhóm?")) return;
+    try {
+      await groupService.removeMember(conversationId, userId);
+      toast.success("Đã mời thành viên ra khỏi nhóm");
+      handleRefreshData();
+    } catch (err) {
+      console.error("Lỗi xóa thành viên:", err);
+      toast.error("Không thể xóa thành viên.");
+    }
+  };
+
+  const handleUpdateRole = async (userId: string, newRole: string) => {
+    try {
+      await groupService.updateRole(conversationId, userId, newRole);
+      toast.success("Đã cập nhật vai trò thành công");
+      handleRefreshData();
+    } catch (err) {
+      console.error("Lỗi cập nhật vai trò:", err);
+      toast.error("Không thể cập nhật vai trò.");
+    }
+  };
+
+  const handleAssignLeader = async (userId: string) => {
+    if (!confirm("Bạn có chắc chắn muốn chuyển quyền Trưởng nhóm cho người này? Bạn sẽ trở thành thành viên thường.")) return;
+    try {
+      await groupService.assignLeader(conversationId, userId);
+      toast.success("Đã chuyển quyền trưởng nhóm thành công");
+      handleRefreshData();
+    } catch (err) {
+      console.error("Lỗi chuyển trưởng nhóm:", err);
+      toast.error("Không thể chuyển quyền trưởng nhóm.");
+    }
+  };
+
+  const handleRefreshData = async () => {
+    try {
+      // Reload conversation info
+      const res: any = await groupService.getGroupById(conversationId);
+      const raw = res?.data ? res.data : res;
+      setConversationInfo(raw);
+    } catch (err) {
+      console.error("Lỗi tải lại dữ liệu nhóm:", err);
     }
   };
 
@@ -2050,6 +2108,11 @@ export default function ChatPage() {
             onDisbandGroup={handleDisbandGroup}
             onViewAllMedia={() => {/* Future: Open media gallery */}}
             onViewAllFiles={() => {/* Future: Open file list */}}
+            onRemoveMember={handleRemoveMember}
+            onUpdateRole={handleUpdateRole}
+            onAssignLeader={handleAssignLeader}
+            onRefreshData={handleRefreshData}
+            userCache={userCache}
           />
 
           {/* ALBUM PREVIEW MODAL */}

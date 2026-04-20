@@ -26,6 +26,7 @@ import {
   PhotoIcon,
 } from '@heroicons/react/24/outline';
 import { MessageDTO } from '@/services/messageService';
+import AddMemberModal from '../ui/group/AddMemberModal';
 
 const getMediaUrl = (url: string | undefined): string => {
   if (!url) return "";
@@ -54,10 +55,16 @@ interface ChatInfoPanelProps {
   onDisbandGroup?: () => void;
   onViewAllMedia?: () => void;
   onViewAllFiles?: () => void;
+  onRemoveMember: (userId: string) => void;
+  onUpdateRole: (userId: string, role: string) => void;
+  onAssignLeader: (userId: string) => void;
+  onRefreshData?: () => void;
+  userCache?: Record<string, { name: string; avatar: string }>;
 }
 
 const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   show,
+  conversationId,
   conversationInfo,
   messages,
   currentUser,
@@ -67,8 +74,15 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   onDisbandGroup,
   onViewAllMedia,
   onViewAllFiles,
+  onRemoveMember,
+  onUpdateRole,
+  onAssignLeader,
+  onRefreshData,
+  userCache = {},
 }) => {
   const [showMembers, setShowMembers] = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const isGroup = conversationInfo?.isGroup;
   
@@ -163,7 +177,13 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
               <ActionButton icon={<BellSlashIcon />} label="Tắt báo" />
               <ActionButton icon={<MapPinIcon />} label="Ghim" />
               <ActionButton icon={<MagnifyingGlassIcon />} label="Tìm kiếm" />
-              {isGroup && <ActionButton icon={<UserGroupIcon />} label="Thêm" />}
+              {isGroup && (
+                <ActionButton 
+                  icon={<UserGroupIcon />} 
+                  label="Thêm" 
+                  onClick={() => setShowAddMemberModal(true)}
+                />
+              )}
             </div>
           </div>
 
@@ -186,18 +206,90 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                   {conversationInfo?.members?.map((m: any) => (
                     <div key={m.userId} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition cursor-pointer">
                       <div className="w-9 h-9 rounded-full bg-gray-100 flex-shrink-0 flex items-center justify-center overflow-hidden">
-                        {m.user?.avatar ? (
-                          <img src={getMediaUrl(m.user.avatar)} className="w-full h-full object-cover" />
+                        {(m.user?.avatar || userCache[m.userId]?.avatar) ? (
+                          <img 
+                            src={getMediaUrl(m.user?.avatar || userCache[m.userId]?.avatar)} 
+                            className="w-full h-full object-cover" 
+                          />
                         ) : (
-                          <span className="text-xs font-bold text-gray-400">{(m.user?.fullName || "?").charAt(0)}</span>
+                          <span className="text-xs font-bold text-gray-400">
+                            {(m.user?.fullName || userCache[m.userId]?.name || "?").charAt(0)}
+                          </span>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-bold text-gray-900 truncate">{m.user?.fullName || "Thành viên"}</p>
+                        <p className="text-[13px] font-bold text-gray-900 truncate">
+                          {m.user?.fullName || userCache[m.userId]?.name || "Thành viên"}
+                        </p>
                         <p className="text-[10px] font-medium text-gray-400 uppercase tracking-tight">
-                          {m.role === 'leader' ? 'Trưởng nhóm' : m.role === 'deputy' ? 'Phó nhóm' : 'Thành viên'}
+                          {m.role?.toLowerCase() === 'leader' ? 'Trưởng nhóm' : m.role?.toLowerCase() === 'deputy' ? 'Phó nhóm' : 'Thành viên'}
                         </p>
                       </div>
+
+                      {/* Member Actions Menu */}
+                      {isGroup && m.userId !== myId && (isAdmin || currentUserRole === 'deputy') && (
+                        <div className="relative">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMemberMenu(activeMemberMenu === m.userId ? null : m.userId);
+                            }}
+                            className="p-1.5 hover:bg-white rounded-lg transition-colors text-gray-400 hover:text-gray-600"
+                          >
+                            <EllipsisHorizontalIcon className="w-5 h-5" />
+                          </button>
+
+                          {activeMemberMenu === m.userId && (
+                            <>
+                              <div 
+                                className="fixed inset-0 z-40" 
+                                onClick={() => setActiveMemberMenu(null)}
+                              />
+                              <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
+                                {/* Leader specific actions */}
+                                {isAdmin && (
+                                  <>
+                                    <button 
+                                      onClick={() => { onAssignLeader(m.userId); setActiveMemberMenu(null); }}
+                                      className="w-full flex items-center gap-3 px-4 py-2 text-[13px] font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+                                    >
+                                      <UserIcon className="w-4 h-4 text-blue-500" />
+                                      Chuyển trưởng nhóm
+                                    </button>
+                                    <button 
+                                      onClick={() => { onUpdateRole(m.userId, m.role?.toLowerCase() === 'deputy' ? 'MEMBER' : 'DEPUTY'); setActiveMemberMenu(null); }}
+                                      className="w-full flex items-center gap-3 px-4 py-2 text-[13px] font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+                                    >
+                                      {m.role?.toLowerCase() === 'deputy' ? (
+                                        <>
+                                          <ChevronDownIcon className="w-4 h-4 text-orange-500" />
+                                          Gỡ phó nhóm
+                                        </>
+                                      ) : (
+                                        <>
+                                          <ChevronUpIcon className="w-4 h-4 text-green-500" />
+                                          Thêm phó nhóm
+                                        </>
+                                      )}
+                                    </button>
+                                  </>
+                                )}
+                                
+                                {/* Kick action (Leader can kick anyone, Deputy can only kick Members) */}
+                                {(isAdmin || (currentUserRole === 'deputy' && m.role?.toLowerCase() === 'member')) && (
+                                  <button 
+                                    onClick={() => { onRemoveMember(m.userId); setActiveMemberMenu(null); }}
+                                    className="w-full flex items-center gap-3 px-4 py-2 text-[13px] font-bold text-red-500 hover:bg-red-50 transition-colors"
+                                  >
+                                    <TrashIcon className="w-4 h-4" />
+                                    Mời ra khỏi nhóm
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -309,6 +401,18 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           </div>
         </div>
       </div>
+      
+      {/* Modals */}
+      {showAddMemberModal && (
+        <AddMemberModal 
+          groupId={conversationId}
+          currentMembers={conversationInfo?.members || []}
+          onClose={() => setShowAddMemberModal(false)}
+          onSuccess={() => {
+            if (onRefreshData) onRefreshData();
+          }}
+        />
+      )}
     </div>
   );
 };
