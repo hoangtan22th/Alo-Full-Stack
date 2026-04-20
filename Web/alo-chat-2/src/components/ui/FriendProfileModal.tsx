@@ -16,6 +16,8 @@ import axiosClient from "@/services/api";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { groupService } from "@/services/groupService";
+import { socketService } from "@/services/socketService";
+import { useAuthStore } from "@/store/useAuthStore";
 
 export default function FriendProfileModal({
   isOpen,
@@ -56,6 +58,16 @@ export default function FriendProfileModal({
     setActionLoading(true);
     try {
       await axiosClient.post("/contacts/request", { recipientId: userId });
+      
+      // [REALTIME] Emit socket event trực tiếp
+      const me: any = await axiosClient.get("/auth/me");
+      const myData = me?.data || me;
+      socketService.emitFriendRequestSent({
+        recipientId: userId,
+        requesterName: myData.fullName,
+        requesterAvatar: myData.avatar
+      });
+
       toast.success("Đã gửi lời mời kết bạn!");
       onActionSuccess?.();
       onClose();
@@ -83,12 +95,41 @@ export default function FriendProfileModal({
   const handleAccept = async () => {
     setActionLoading(true);
     try {
+      // 1. Chấp nhận kết bạn trên DB
       await axiosClient.put(`/contacts/${userId}/accept`);
+      
+      // 2. [REALTIME] Emit socket event cho người gửi lời mời
+      const me: any = await axiosClient.get("/auth/me");
+      const myData = me?.data || me;
+      socketService.emitFriendRequestAccepted({
+        recipientId: userId,
+        accepterName: myData.fullName
+      });
+
       toast.success("Đã trở thành bạn bè!");
-      onActionSuccess?.();
-      onClose();
+
+      // 3. Tự động tạo cuộc hội thoại và gửi tin nhắn chúc mừng
+      const conversation = await groupService.createDirectConversation(userId);
+      const convoId = conversation?._id || conversation?.id || conversation?.data?._id || conversation?.data?.id;
+
+      if (convoId) {
+        // Gửi tin nhắn hệ thống
+        await axiosClient.post("/messages", {
+          conversationId: convoId,
+          type: "system",
+          content: "🎉 Hai bạn đã trở thành bạn bè. Hãy bắt đầu trò chuyện!",
+        });
+
+        // 4. Nhảy vào khung chat
+        onClose();
+        router.push(`/chat/${convoId}`);
+      } else {
+        onActionSuccess?.();
+        onClose();
+      }
     } catch (err) {
-      toast.error("Lỗi khi chấp nhận");
+      console.error("Lỗi khi chấp nhận kết bạn:", err);
+      toast.error("Lỗi khi chấp nhận kết bạn");
     } finally {
       setActionLoading(false);
     }

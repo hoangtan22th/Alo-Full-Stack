@@ -42,12 +42,6 @@ api.interceptors.request.use(
     const localToken = localStorage.getItem("accessToken");
     const accessToken = storeToken || localToken;
 
-    console.log("🚀 [REQUEST]", {
-      url: config.baseURL + (config.url || ""),
-      method: config.method,
-      hasToken: !!accessToken,
-    });
-
     if (accessToken) {
       config.headers.set("Authorization", `Bearer ${accessToken}`);
     }

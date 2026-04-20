@@ -1524,21 +1524,29 @@ export default function ChatPage() {
                               <div
                                 className={`relative max-w-[75%] flex flex-col ${isMine ? "items-end" : "items-start"}`}
                               >
-                                {/* System call messages bypass the bubble wrapper entirely */}
-                                {msg.type === "system" && msg.metadata?.callType ? (
-                                  <CallSystemMessage
-                                    isMine={isMine}
-                                    metadata={msg.metadata as any}
-                                    createdAt={msg.createdAt}
-                                    onCallAgain={(isVideo) => handleStartCall(isVideo)}
-                                  />
+                                {/* System messages (General & Call) */}
+                                {msg.type === "system" ? (
+                                  msg.metadata?.callType ? (
+                                    <CallSystemMessage
+                                      isMine={isMine}
+                                      metadata={msg.metadata as any}
+                                      createdAt={msg.createdAt}
+                                      onCallAgain={(isVideo) => handleStartCall(isVideo)}
+                                    />
+                                  ) : (
+                                    <div className="flex justify-center w-full my-4 px-10">
+                                      <div className="bg-gray-100/50 backdrop-blur-sm text-gray-500 text-[11px] font-bold py-1.5 px-4 rounded-full border border-gray-200/50 shadow-sm text-center uppercase tracking-tight">
+                                        {msg.content}
+                                      </div>
+                                    </div>
+                                  )
                                 ) : (
-                                <div
-                                  className={`relative max-w-full overflow-hidden flex flex-col p-1.5 px-2 border shadow-sm ${isMine
-                                    ? "bg-blue-50/80 border-blue-100 shadow-blue-900/5 items-end"
-                                    : "bg-white border-gray-100 shadow-gray-900/5 items-start"
-                                    } ${bubbleRadius}`}
-                                >
+                                  <div
+                                    className={`relative max-w-full overflow-hidden flex flex-col p-1.5 px-2 border shadow-sm ${isMine
+                                      ? "bg-blue-50/80 border-blue-100 shadow-blue-900/5 items-end"
+                                      : "bg-white border-gray-100 shadow-gray-900/5 items-start"
+                                      } ${bubbleRadius}`}
+                                  >
                                   {/* Reply Quote Box */}
                                   {msg.replyTo && msg.replyTo.messageId && !isRevoked && (
                                     <div

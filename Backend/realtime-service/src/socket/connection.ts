@@ -145,6 +145,27 @@ export function initSocketConnection(io: Server) {
       }
     });
 
+    // 7. Social Events (Bypass RabbitMQ for simple UI notifications)
+    socket.on("EMIT_FRIEND_REQUEST_SENT", (data: { recipientId: string; requesterName: string; requesterAvatar?: string }) => {
+      console.log(`[Socket.IO] Friend request from ${userId} to ${data.recipientId}`);
+      socket.to(`user_${data.recipientId}`).emit("NEW_FRIEND_REQUEST", {
+        requesterId: userId,
+        requesterName: data.requesterName,
+        requesterAvatar: data.requesterAvatar,
+      });
+    });
+
+    socket.on("EMIT_FRIEND_REQUEST_ACCEPTED", (data: { recipientId: string; accepterName: string }) => {
+      console.log(`[Socket.IO] Friend request accepted by ${userId} for ${data.recipientId}`);
+      // Notify the original requester
+      socket.to(`user_${data.recipientId}`).emit("FRIEND_REQUEST_ACCEPTED", {
+        accepterId: userId,
+        accepterName: data.accepterName,
+      });
+      // Also notify everyone to refresh friend lists
+      io.to(`user_${data.recipientId}`).to(`user_${userId}`).emit("FRIEND_LIST_UPDATED", {});
+    });
+
     // ============================================
     // CONNECTION MANAGEMENT (DISCONNECT)
     // ============================================
