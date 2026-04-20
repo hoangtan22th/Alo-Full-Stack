@@ -793,8 +793,12 @@ export default function ChatPage() {
         new Date(lastMsg.createdAt).getTime()
         : Infinity;
 
+      const isSystem = msg.type === "system";
+      const lastIsSystem = lastMsg?.type === "system";
+
       // Nhóm theo SENDER ID để tránh gộp nhiều người khác vào 1 khối trong group chat
-      if (last && last.senderId === msg.senderId && gap < FIVE_MIN) {
+      // Không gộp nếu là tin nhắn hệ thống hoặc tin nhắn trước đó là hệ thống
+      if (last && last.senderId === msg.senderId && gap < FIVE_MIN && !isSystem && !lastIsSystem) {
         last.messages.push(msg);
       } else {
         groups.push({ isMine, senderId: msg.senderId, messages: [msg] });
@@ -1034,6 +1038,23 @@ export default function ChatPage() {
 
                     // Tin cuối cùng của nhóm — để lấy senderName/avatar và timestamp + trạng thái
                     const lastMsg = gMsgs[gMsgs.length - 1];
+
+                    if (lastMsg.type === "system") {
+                      return (
+                        <div key={`group-${groupIdx}`} className="flex justify-center my-4 w-full px-10">
+                          <div className="flex flex-col items-center gap-1.5 max-w-full">
+                            {gMsgs.map((msg) => (
+                              <div key={msg._id} className="bg-gray-100 px-4 py-1.5 rounded-full shadow-sm border border-gray-200/50 max-w-full">
+                                <span className="text-[12px] text-gray-500 font-bold text-center block">
+                                  {msg.content}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
                     const senderName = getSenderDisplayName(senderId, lastMsg);
                     let senderAvatar = "";
 
