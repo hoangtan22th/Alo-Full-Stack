@@ -207,6 +207,27 @@ class SocketService {
     this.listeners.delete(event);
     this.socket?.off(event);
   }
+
+  // --- Call Signaling ---
+  initiateCall(data: { targetRoom: string; caller: any; isVideo: boolean }) {
+    if (this.socket?.connected) {
+      this.socket.emit("CALL_INITIATED", data);
+    }
+  }
+
+  onIncomingCall(callback: (data: { roomId: string; caller: any; isVideo: boolean }) => void) {
+    this.addListener("INCOMING_CALL", callback);
+  }
+
+  cancelCall(data: { targetRoom: string }) {
+    if (this.socket?.connected) {
+      this.socket.emit("CANCEL_CALL", data);
+    }
+  }
+
+  onCallCanceled(callback: (data: { roomId: string }) => void) {
+    this.addListener("CALL_CANCELED", callback);
+  }
 }
 
 // Singleton — dùng chung toàn app
