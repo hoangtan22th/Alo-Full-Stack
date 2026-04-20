@@ -1,3 +1,8 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useGroups } from "@/hooks/useGroups";
+import { useConfirmStore } from "@/store/useConfirmStore";
 import {
   ChatBubbleLeftRightIcon,
   UsersIcon,
@@ -6,14 +11,73 @@ import {
   ArrowRightIcon,
   FunnelIcon,
   PlusCircleIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
+  MagnifyingGlassIcon,
+  NoSymbolIcon,
+  ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { GroupRow } from "@/components/groups/GroupRow";
+import { Pagination } from "@/components/ui/Pagination";
 
 export default function GroupManagementPage() {
+  const { groups, pagination, loading, error, fetchGroups, toggleBanGroup } =
+    useGroups();
+  const { confirm } = useConfirmStore();
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [activeStatus, setActiveStatus] = useState("ALL");
+  const [currentPage, setCurrentPage] = useState(0);
+  const pageSize = 10;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(0);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const loadData = () => {
+    fetchGroups({
+      page: currentPage,
+      size: pageSize,
+      name: debouncedSearch || undefined,
+      isBanned: activeStatus,
+      isGroup: true, // we only care about real groups, not direct chats
+    });
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [currentPage, debouncedSearch, activeStatus, fetchGroups]);
+
+  const handleBanToggle = (id: string, currentStatus: boolean) => {
+    if (currentStatus) {
+      confirm({
+        title: "Unban Group",
+        description:
+          "Are you sure you want to unban this group? Members will be able to access it again.",
+        confirmText: "Unban Group",
+        cancelText: "Cancel",
+        type: "info",
+        onConfirm: () => toggleBanGroup(id, false),
+      });
+      return;
+    }
+    confirm({
+      title: "Ban Group",
+      description:
+        "Are you sure you want to ban this group? It will no longer be active.",
+      confirmText: "Ban Group",
+      cancelText: "Cancel",
+      type: "danger",
+      onConfirm: () => toggleBanGroup(id, true),
+    });
+  };
+
   return (
     <>
       {/* Page Header */}
@@ -77,6 +141,64 @@ export default function GroupManagementPage() {
         </div>
       </div>
 
+      {/* Filters and Search */}
+      <div className="bg-surface-container-low rounded-xl p-4 mb-6 flex flex-wrap gap-4 items-center border border-outline-variant/15">
+        <div className="text-xs font-bold text-on-surface mr-2 tracking-wide uppercase">
+          Filters
+        </div>
+
+        <div className="relative flex-1 min-w-[200px] max-w-[300px]">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <MagnifyingGlassIcon className="h-5 w-5 text-on-surface-variant" />
+          </div>
+          <input
+            type="text"
+            placeholder="Search by ID or name..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 text-sm bg-surface-container-lowest border border-outline-variant/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+          />
+        </div>
+
+        <div className="flex bg-surface-container-lowest rounded-lg border border-outline-variant/15 p-1">
+          {["ALL", "ACTIVE", "BANNED"].map((status) => (
+            <button
+              key={status}
+              onClick={() => {
+                setActiveStatus(status);
+                setCurrentPage(0);
+              }}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                activeStatus === status
+                  ? "bg-primary text-on-primary shadow-sm"
+                  : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest"
+              }`}
+            >
+              {status}
+            </button>
+          ))}
+        </div>
+
+        <div className="ml-auto text-sm text-on-surface-variant font-medium">
+          Showing{" "}
+          <span className="text-on-surface font-bold">
+            {pagination.totalElements === 0
+              ? 0
+              : pagination.page * pageSize + 1}
+            -
+            {Math.min(
+              (pagination.page + 1) * pageSize,
+              pagination.totalElements,
+            )}
+          </span>{" "}
+          of{" "}
+          <span className="text-on-surface font-bold">
+            {pagination.totalElements}
+          </span>{" "}
+          groups
+        </div>
+      </div>
+
       {/* Data Table Container */}
       <div className="bg-surface-container-lowest rounded-xl overflow-hidden flex flex-col shadow-minimal border-none">
         <div className="p-6 pb-4 flex justify-between items-center bg-surface-container-lowest">
@@ -96,95 +218,123 @@ export default function GroupManagementPage() {
                 <th className="py-4 px-6 font-semibold">Group</th>
                 <th className="py-4 px-6 font-semibold">Owner</th>
                 <th className="py-4 px-6 font-semibold">Members</th>
-                <th className="py-4 px-6 font-semibold">Created</th>
+                <th className="py-4 px-6 font-semibold">Last Msg / Created</th>
+                <th className="py-4 px-6 font-semibold">Status</th>
                 <th className="py-4 px-6 font-semibold text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="text-sm divide-y divide-outline-variant/10">
-              <GroupRow
-                name="UI/UX Design Sync"
-                id="G-8921"
-                visibility="Public"
-                image="https://lh3.googleusercontent.com/aida-public/AB6AXuDpDOszIxNn39Y9AfNmnKAkzWag2pqbIeQ7nf3lBo6DbsPw4_cPvosZ5yrU9wfPDkMY4xUCs9vaol0trHEMpPgrE_hl1u1HAyTUaKcu2KyVTWHhlZQnIQssZtCn9bLONCm3hja4E7y8E42zcjDifk6JfIXmkKZOIQLKBZPALdiMZFFOPi32cTuNm3wHXuWDcgOcCbWBz88N8aDHoYLTymAg5CjvR2tetv1VggK3Rc-AZ4x98h5JCHkASkPRcKCaPv2rHUAG8jBxHmoo"
-                initials="UX"
-                ownerName="Sarah Jenkins"
-                ownerImage="https://lh3.googleusercontent.com/aida-public/AB6AXuDHONYyCsLnRtnTimtaXw4yYex5DSujGIGa8ww8fIqFHZMUD1--RLbiHHleg2SNdxJYbsY7-RfHizSU2j4nfs_Hp9neP-lnZ5JkH2rl6C9cE0-RbTmvF4Ph0Urspe98_OXSqp9rlQVrFJjXEgvUn2PRzDufNe7bM1IpbN0t3aesnSlv8vP536poGAhRW8Y7zz-bbVp07GCie1n2m7VsYz3OI9FSpT4XkocN1cN2lfn7YUp62xXQBJCg7TRYB3QDr2ATO2KjOHeR4w8R"
-                members="124"
-                created="Oct 12, 2023"
-              />
-              <GroupRow
-                name="Engineering All-Hands"
-                id="G-1042"
-                visibility="Private"
-                initials="E"
-                ownerName="Michael Chen"
-                ownerImage="https://lh3.googleusercontent.com/aida-public/AB6AXuA1RK4kTv1JgEIeRq2LIR0WbE_KM-CjrKKEoGKeXjfJIc51gZqoE3pPp0X6mFmEOAg7CEgpJW3yj4B2fQ_V8mTHWCv9GRq_IG5I6gPi4KBdaBlQR8fhYUq_-2snHYo99v7W3_WJLPAvaTjvKMo8UsJfvzN396KVzxMTljTtWlVxEH_UrSk2nSqIj5RYlBDrLnVY0vFeBzDWSLAIEa5Uv0JKHN_VNhoyKo-wOJuQJeDMFZZPnQt8R6n_qBYfYnoV8u5LYvD5OHbxltIU"
-                members="382"
-                created="Sep 01, 2023"
-              />
-              <GroupRow
-                name="Weekend Gamers"
-                id="G-5521"
-                visibility="Public"
-                image="https://lh3.googleusercontent.com/aida-public/AB6AXuBuDoD7kBjz4gnaohb7cjWc9ysWBEEgYaSgTuhpHGO1X1m_9AvcvFu19HUbKZIrOPfnaBnJpo0quElXs9DbvQAVUWh28eKW9a0eSWZtQsAk0Mp6T5SzQNgbiPQIcIMbUr5Bk6tL29FfvggXrvdpmpGwN218TgaRpiIVsS5c775mDiue2ij_yjOq-e_IHZYBvisr1_7mqR3qVzE7v5SqoyGH8mkq2qQHXhNxJWMdRbp9MBVljpVB-r-CzpvIa6d-7LMYhNkZHUggBNFl"
-                initials="WG"
-                ownerName="Emily Ross"
-                ownerImage="https://lh3.googleusercontent.com/aida-public/AB6AXuB5ScOdz6OD0GKtDufvLl0QIhJ3MVe5bv5AVIuWKB0jgNLUIooN0AVJw7jW4aFeMbQVg7la9wT5QCrrQKmFgf6WMYsZgEm-pogFEj3RJlPTIP7EtmmB7EO1bi27kX4ZLjUglvfV-abYL_jaqz29yJ3yOjckayW43-Sx_1iw_d-qbxDDq5s6Q6i3mRF_qkPOM-1EozXC4yxCnQmqKS1MOSdhWOPgGNMSl24h-2RVRrOrqj5MFFKwam_F0_yVGPzl4OL8Sm0nnvov15td"
-                members="1,204"
-                created="Nov 22, 2023"
-              />
+              {loading ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="py-8 text-center text-on-surface-variant"
+                  >
+                    <div className="animate-pulse">Loading groups...</div>
+                  </td>
+                </tr>
+              ) : groups.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="py-8 text-center text-on-surface-variant"
+                  >
+                    No groups found matching your criteria.
+                  </td>
+                </tr>
+              ) : (
+                groups.map((group) => {
+                  const owner =
+                    group.members.find((m) => m.role === "LEADER") ||
+                    group.members[0];
+                  const ownerId = owner?.userId || "Unknown";
+                  // the frontend usually uses `GroupRow` component if available, let's fix the schema for group row
+                  // we can inject direct JSX to support Ban actions here
+                  return (
+                    <tr
+                      key={group._id}
+                      className="hover:bg-surface-container-low/30 transition-colors"
+                    >
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10 border border-outline-variant/20 rounded-xl">
+                            <AvatarImage
+                              src={group.groupAvatar}
+                              className="object-cover"
+                            />
+                            <AvatarFallback className="bg-primary/10 text-primary font-bold rounded-xl rounded-tl-sm">
+                              {group.name?.substring(0, 2).toUpperCase() || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-bold text-on-surface">
+                              {group.name}
+                            </div>
+                            <div className="text-xs text-on-surface-variant line-clamp-1">
+                              {group._id}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="text-sm font-semibold text-on-surface">
+                          {ownerId}
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 text-on-surface font-medium">
+                        {group.members?.length || 0}
+                      </td>
+                      <td className="py-4 px-6 text-on-surface-variant">
+                        {new Date(
+                          group.lastMessageAt || group.createdAt,
+                        ).toLocaleDateString()}
+                      </td>
+                      <td className="py-4 px-6">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            group.isBanned
+                              ? "bg-error-container/30 text-error"
+                              : "bg-tertiary-container text-on-tertiary-container"
+                          }`}
+                        >
+                          {group.isBanned ? "Banned" : "Active"}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title={group.isBanned ? "Unban Group" : "Ban Group"}
+                          className={`h-8 w-8 mx-0.5 ${
+                            group.isBanned
+                              ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
+                              : "text-error hover:text-error hover:bg-error-container/50"
+                          }`}
+                          onClick={() =>
+                            handleBanToggle(group._id, group.isBanned)
+                          }
+                        >
+                          {group.isBanned ? (
+                            <ShieldCheckIcon className="w-5 h-5" />
+                          ) : (
+                            <NoSymbolIcon className="w-5 h-5" />
+                          )}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
-        {/* Pagination Wrapper */}
-        <div className="bg-surface-container-low/50 border-t border-outline-variant/10 px-6 py-4 flex items-center justify-between">
-          <Button
-            variant="ghost"
-            disabled
-            className="text-sm font-medium text-on-surface-variant hover:text-on-surface"
-          >
-            <ChevronLeftIcon className="w-5 h-5 mr-1" />
-            Previous
-          </Button>
 
-          <div className="flex space-x-1">
-            <Button
-              variant="outline"
-              className="h-8 w-8 p-0 bg-surface-container-lowest border-outline-variant/20 text-on-surface font-bold"
-            >
-              1
-            </Button>
-            <Button
-              variant="ghost"
-              className="h-8 w-8 p-0 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-medium"
-            >
-              2
-            </Button>
-            <Button
-              variant="ghost"
-              className="h-8 w-8 p-0 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-medium"
-            >
-              3
-            </Button>
-            <span className="h-8 w-8 flex items-center justify-center text-on-surface-variant">
-              ...
-            </span>
-            <Button
-              variant="ghost"
-              className="h-8 w-8 p-0 text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface font-medium"
-            >
-              24
-            </Button>
-          </div>
-
-          <Button
-            variant="ghost"
-            className="text-sm font-medium text-on-surface-variant hover:text-on-surface"
-          >
-            Next
-            <ChevronRightIcon className="w-5 h-5 ml-1" />
-          </Button>
-        </div>
+        <Pagination
+          currentPage={pagination.page}
+          totalPages={pagination.totalPages}
+          totalElements={pagination.totalElements}
+          onPageChange={setCurrentPage}
+        />
       </div>
     </>
   );

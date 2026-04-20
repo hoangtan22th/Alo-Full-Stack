@@ -16,13 +16,24 @@ router.put("/api/v1/groups/labels/:id", labelController.updateLabel);
 router.delete("/api/v1/groups/labels/:id", labelController.deleteLabel);
 
 // Gán nhãn cho cuộc hội thoại
-router.get("/api/v1/groups/conversations/labels", labelController.getConversationLabels);
-router.post("/api/v1/groups/conversations/:conversationId/label", labelController.assignLabel);
+router.get(
+  "/api/v1/groups/conversations/labels",
+  labelController.getConversationLabels,
+);
+router.post(
+  "/api/v1/groups/conversations/:conversationId/label",
+  labelController.assignLabel,
+);
 
 // --- Ghim cuộc hội thoại ---
-router.get("/api/v1/groups/conversations/pinned", pinnedController.getPinnedList);
-router.post("/api/v1/groups/conversations/:conversationId/pin", pinnedController.togglePin);
-
+router.get(
+  "/api/v1/groups/conversations/pinned",
+  pinnedController.getPinnedList,
+);
+router.post(
+  "/api/v1/groups/conversations/:conversationId/pin",
+  pinnedController.togglePin,
+);
 
 // Quản lý thông tin nhóm
 router.post(
@@ -36,6 +47,13 @@ router.post(
   groupController.getOrCreateDirectConversation,
 );
 router.post("/api/v1/groups/assign-leader", groupController.assignNewLeader);
+
+// --- Admin APIs ---
+router.get("/api/v1/groups/admin/search", groupController.searchGroupsAdmin);
+router.put(
+  "/api/v1/groups/admin/:groupId/ban",
+  groupController.toggleBanGroupAdmin,
+);
 
 // Các route có :groupId (PHẢI ĐẶT SAU CÁC ROUTE TĨNH)
 router.get("/api/v1/groups/:groupId", groupController.getGroupById);
