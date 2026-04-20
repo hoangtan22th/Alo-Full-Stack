@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Manrope, Geist } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/ui/sonner";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -26,6 +27,7 @@ export default function RootLayout({
     <html lang="en" className={cn("font-sans", geist.variable)}>
       <body className="bg-surface text-on-surface antialiased min-h-screen flex flex-col font-sans">
         {children}
+        <Toaster />
       </body>
     </html>
   );

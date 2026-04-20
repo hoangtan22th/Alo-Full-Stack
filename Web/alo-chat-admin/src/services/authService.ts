@@ -1,63 +1,46 @@
+﻿import { axiosClient } from "@/lib/axiosClient";
+import { useAuthStore } from "@/store/useAuthStore";
+
+const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8888";
+
 export const authService = {
   login: async (email: string, password: string) => {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8888";
+    try {
+      // axiosClient accepts full URLs and overrides baseURL automatically
+      const response = await axiosClient.post(`${GATEWAY_URL}/api/v1/admin/auth/login`, {
+        email,
+        password,
+      });
 
-    const res = await fetch(`${baseUrl}/api/v1/admin/auth/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok || !data.data?.accessToken) {
+      const token = response.data?.data?.accessToken;
+      if (!token) {
+        throw new Error("Invalid credentials or unauthorized role");
+      }
+      return token;
+    } catch (error: any) {
       throw new Error(
-        data.message ||
-          data.error ||
-          "Invalid credentials or unauthorized role",
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        "Login failed"
       );
     }
-
-    return data.data.accessToken;
   },
+
   logout: async () => {
     try {
-      const baseUrl =
-        process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8888";
-
-      // Lấy admin_token (accessToken) hiện tại để đính kèm vào Header
-      const getCookie = (name: string) => {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop()?.split(";").shift();
-        return null;
-      };
-
-      const token = getCookie("admin_token");
-
-      if (token) {
-        // Gọi API Đăng xuất của hệ thống (nằm ở user AuthController do chung hàm logic huỷ RefreshToken)
-        await fetch(`${baseUrl}/api/v1/auth/logout`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          // Gửi HttpOnly cookie refreshToken lên server để blacklist
-          credentials: "include",
-        });
-      }
+      // axiosClient automatically extracts the token from cookies and injects it into headers
+      await axiosClient.post(
+        `${GATEWAY_URL}/api/v1/auth/logout`,
+        {},
+        {
+          withCredentials: true, // forward refreshToken cookie to backend for blacklisting
+        }
+      );
     } catch (error) {
       console.error("Backend logout failed:", error);
     } finally {
-      // Vẫn phải đảm bảo dọn dẹp Cookie ở Frontend
-      document.cookie = "admin_token=; Max-Age=0; path=/;";
-      if (typeof window !== "undefined") {
-        window.location.href = "/login";
-      }
+      // Safe redirect and client state cleanup from out global store
+      useAuthStore.getState().logout();
     }
   },
 };
