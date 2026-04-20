@@ -327,7 +327,7 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
 export const removeMember = async (
   req: Request,
   res: Response,
-): Promise<void> => {
+  ): Promise<void> => {
   try {
     const groupId = String(req.params.groupId || "");
     const userId = String(req.params.userId || "");
@@ -1020,12 +1020,18 @@ export const updateGroup = async (
       (m: any) => m.userId.toString() === currentUserId,
     );
 
-    if (
-      !currentMember ||
-      (currentMember.role !== "LEADER" && currentMember.role !== "DEPUTY")
-    ) {
+    if (!currentMember) {
+      res.status(403).json({ error: "Bạn không phải thành viên của nhóm này" });
+      return;
+    }
+
+    const editPermission = group.permissions?.editGroupInfo || "ADMIN";
+    const isAdmin =
+      currentMember.role === "LEADER" || currentMember.role === "DEPUTY";
+
+    if (editPermission === "ADMIN" && !isAdmin) {
       res.status(403).json({
-        error: "Bạn không có quyền cập nhật thông tin nhóm này",
+        error: "Chỉ Trưởng nhóm và Phó nhóm mới có quyền cập nhật thông tin",
       });
       return;
     }
