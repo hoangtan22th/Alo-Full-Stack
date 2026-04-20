@@ -10,8 +10,13 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "user_profiles")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class UserProfile {
+
     @Id
     private String id; // Nối trực tiếp 1-1 với Account ID ở Auth Service
 
@@ -49,6 +54,11 @@ public class UserProfile {
     @Column(name = "last_active_at")
     private LocalDateTime lastActiveAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_status")
+    @Builder.Default
+    private UserStatus status = UserStatus.ACTIVE;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -59,5 +69,12 @@ public class UserProfile {
 
     public enum Gender {
         MALE, FEMALE, OTHER, PREFER_NOT_TO_SAY
+    }
+
+    public enum UserStatus {
+        ACTIVE,
+        INACTIVE,
+        SUSPENDED,
+        BANNED
     }
 }
