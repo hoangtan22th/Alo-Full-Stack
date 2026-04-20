@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -15,11 +15,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { XMarkIcon, LinkIcon, TrashIcon } from "react-native-heroicons/outline";
+import { noteService } from "../../services/noteService";
 
 export default function CreateNoteScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, noteId, initialContent, initialLinks } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
+  const isEditing = !!noteId;
 
   const [content, setContent] = useState("");
   const [links, setLinks] = useState<string[]>([]);
@@ -27,20 +30,57 @@ export default function CreateNoteScreen() {
   const [currentLink, setCurrentLink] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSave = () => {
+  useEffect(() => {
+    if (isEditing) {
+      if (initialContent) setContent(initialContent as string);
+      if (initialLinks) {
+        try {
+          setLinks(JSON.parse(initialLinks as string));
+        } catch (e) {
+          console.error("Lỗi parse initialLinks:", e);
+        }
+      }
+    }
+  }, [isEditing, initialContent, initialLinks]);
+
+  const handleSave = async () => {
     if (!content.trim()) {
       Alert.alert("Thông báo", "Vui lòng nhập nội dung ghi chú.");
       return;
     }
 
     setIsSubmitting(true);
-    // Giả lập lưu ghi chú (có thể tích hợp API tại đây)
-    setTimeout(() => {
+    try {
+      let res;
+      if (isEditing) {
+        res = await noteService.updateNote(
+          noteId as string,
+          content.trim(),
+          links,
+        );
+      } else {
+        res = await noteService.createNote(
+          id as string,
+          content.trim(),
+          links,
+        );
+      }
+
+      if (res) {
+        Alert.alert(
+          "Thành công",
+          isEditing ? "Ghi chú đã được cập nhật." : "Ghi chú đã được tạo.",
+          [{ text: "OK", onPress: () => router.back() }],
+        );
+      } else {
+        Alert.alert("Lỗi", "Không thể lưu ghi chú. Vui lòng thử lại.");
+      }
+    } catch (error) {
+      console.error("Lỗi handleSave note:", error);
+      Alert.alert("Lỗi", "Có lỗi xảy ra khi lưu ghi chú.");
+    } finally {
       setIsSubmitting(false);
-      Alert.alert("Thành công", "Ghi chú đã được tạo thành công.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
-    }, 1000);
+    }
   };
 
   const handleAddLink = () => {
@@ -67,7 +107,9 @@ export default function CreateNoteScreen() {
         <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
           <XMarkIcon size={24} color="#374151" />
         </TouchableOpacity>
-        <Text className="text-lg font-bold text-gray-900">Tạo ghi chú</Text>
+        <Text className="text-lg font-bold text-gray-900">
+          {isEditing ? "Chỉnh sửa ghi chú" : "Tạo ghi chú"}
+        </Text>
         <TouchableOpacity
           onPress={handleSave}
           disabled={isSubmitting}
@@ -91,7 +133,7 @@ export default function CreateNoteScreen() {
             textAlignVertical="top"
             value={content}
             onChangeText={setContent}
-            autoFocus
+            autoFocus={!isEditing}
           />
 
           {/* Links List */}
@@ -181,3 +223,4 @@ export default function CreateNoteScreen() {
     </View>
   );
 }
+

@@ -153,6 +153,27 @@ export class RabbitMQProducerService {
     });
     console.log(`[RabbitMQProducer] Event 'JOIN_REQUEST_REJECTED' published to user: ${userId} for group: ${groupName}`);
   }
+
+  async publishNoteCreated(conversationId: string, note: any) {
+    await this.publishToRealtimeService("NOTE_CREATED", {
+      room: conversationId.toString(),
+      data: note,
+    });
+  }
+
+  async publishNoteDeleted(conversationId: string, noteId: string) {
+    await this.publishToRealtimeService("NOTE_DELETED", {
+      room: conversationId.toString(),
+      data: { conversationId, noteId },
+    });
+  }
+
+  async publishNoteUpdated(conversationId: string, note: any) {
+    await this.publishToRealtimeService("NOTE_UPDATED", {
+      room: conversationId.toString(),
+      data: note,
+    });
+  }
 }
 
 export default new RabbitMQProducerService();

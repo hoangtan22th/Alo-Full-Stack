@@ -4,6 +4,7 @@ import multer from "multer";
 import * as groupController from "../controllers/group.controller";
 import * as labelController from "../controllers/label.controller";
 import * as pinnedController from "../controllers/pinned.controller";
+import * as noteController from "../controllers/note.controller";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -99,5 +100,11 @@ router.put(
   "/api/v1/groups/:groupId/settings",
   groupController.updateSettings,
 );
+
+// --- Quản lý Ghi chú (Notes) ---
+router.get("/api/v1/groups/:groupId/notes", noteController.getNotesByConversation);
+router.post("/api/v1/groups/:groupId/notes", noteController.createNote);
+router.put("/api/v1/groups/notes/:noteId", noteController.updateNote);
+router.delete("/api/v1/groups/notes/:noteId", noteController.deleteNote);
 
 export default router;
