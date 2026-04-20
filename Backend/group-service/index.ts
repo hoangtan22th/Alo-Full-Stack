@@ -48,6 +48,10 @@ app.listen(PORT, async () => {
     // Khởi chạy Consumer để lắng nghe tin nhắn mới nhằm update lastMessage
     const { startRabbitMQConsumer } = require("./src/services/rabbitMQConsumer");
     await startRabbitMQConsumer();
+
+    // Khởi chạy worker nhắc hẹn
+    const { startReminderWorker } = require("./src/services/reminderWorker");
+    startReminderWorker();
   } catch (err) {
     console.error("❌ Lỗi kết nối RabbitMQ:", err);
   }

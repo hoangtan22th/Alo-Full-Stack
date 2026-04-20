@@ -174,6 +174,34 @@ export class RabbitMQProducerService {
       data: note,
     });
   }
+
+  async publishReminderCreated(conversationId: string, reminder: any) {
+    await this.publishToRealtimeService("REMINDER_CREATED", {
+      room: conversationId.toString(),
+      data: reminder,
+    });
+  }
+
+  async publishReminderDeleted(conversationId: string, reminderId: string) {
+    await this.publishToRealtimeService("REMINDER_DELETED", {
+      room: conversationId.toString(),
+      data: { conversationId, reminderId },
+    });
+  }
+
+  async publishReminderUpdated(conversationId: string, reminder: any) {
+    await this.publishToRealtimeService("REMINDER_UPDATED", {
+      room: conversationId.toString(),
+      data: reminder,
+    });
+  }
+
+  async publishReminderDue(userId: string, reminder: any) {
+    await this.publishToRealtimeService("REMINDER_DUE", {
+      target: userId.toString(),
+      data: reminder,
+    });
+  }
 }
 
 export default new RabbitMQProducerService();
