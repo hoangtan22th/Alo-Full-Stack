@@ -202,8 +202,8 @@ export default function PollDetailsScreen() {
   }
 
   const isClosed = poll.status === "CLOSED";
-  const isExpired = poll.expiresAt && new Date(poll.expiresAt).getTime() < new Date().getTime();
-  const readonly = isClosed || isExpired;
+  const isExpired = !!(poll.expiresAt && new Date(poll.expiresAt).getTime() < new Date().getTime());
+  const readonly = !!(isClosed || isExpired);
   const isCreator = currentUserId && poll.creatorId === currentUserId;
 
   const totalVotes = results.reduce((acc, r) => acc + r.count, 0) || 1; 
