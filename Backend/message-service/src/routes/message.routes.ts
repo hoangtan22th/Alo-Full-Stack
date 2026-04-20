@@ -14,6 +14,7 @@ const upload = multer({
 });
 
 router.get("/:conversationId", messageController.getMessageHistory);
+router.get("/:conversationId/search", messageController.searchMessages);
 router.get("/:conversationId/pinned", messageController.getPinnedMessages);
 router.patch("/:messageId/pin", messageController.pinMessage);
 router.patch("/:messageId/unpin", messageController.unpinMessage);

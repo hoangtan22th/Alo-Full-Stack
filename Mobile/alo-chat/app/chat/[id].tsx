@@ -18,6 +18,7 @@ import {
   Image,
   TouchableOpacity,
   Modal,
+  TextInput,
 } from "react-native";
 
 if (Platform.OS === "android") {
@@ -31,6 +32,8 @@ import {
 } from "react-native-gesture-handler";
 import {
   ChevronDownIcon,
+  MagnifyingGlassIcon,
+  XMarkIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
@@ -64,6 +67,7 @@ export default function GlobalChatScreen() {
   const { socket, onlineUsers } = useSocket();
   const { user } = useAuth();
   const currentUserId = user?.id || user?._id || user?.userId;
+
   const messageRefs = useRef<Record<string, View>>({});
   const flatListRef = useRef<FlatList>(null);
 
@@ -92,6 +96,30 @@ export default function GlobalChatScreen() {
   const [userCache, setUserCache] = useState<Record<string, UserProfileDTO>>({});
   const [resolvedConversationId, setResolvedConversationId] = useState<string | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [replyingTo, setReplyingTo] = useState<MessageDTO | null>(null);
+  const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<MessageDTO[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+
+  const chatInputRef = useRef<any>(null);
+  const replyingToRef = useRef<MessageDTO | null>(null);
+
+  const setReplyingToWithRef = (msg: MessageDTO | null) => {
+    setReplyingTo(msg);
+    replyingToRef.current = msg;
+  };
+
+  useEffect(() => {
+    if (highlightedMsgId) {
+      const timer = setTimeout(() => {
+        setHighlightedMsgId(null);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightedMsgId]);
 
   // Real-time Group Info
   const [realtimeGroupName, setRealtimeGroupName] = useState<string>((name as string) || "");
@@ -397,6 +425,33 @@ export default function GlobalChatScreen() {
     };
   }, [socket, resolvedConversationId, isGroupChat, targetUserId]);
 
+  const handleSearch = async (text: string) => {
+    setSearchQuery(text);
+    if (!text.trim() || !resolvedConversationId) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const results = await messageService.searchMessages(
+        resolvedConversationId,
+        text.trim(),
+      );
+      setSearchResults(results);
+    } catch (error) {
+      console.error("Lỗi tìm kiếm:", error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const closeSearch = () => {
+    setIsSearchMode(false);
+    setSearchQuery("");
+    setSearchResults([]);
+  };
+
   useEffect(() => {
     if (socket && targetUserId && !isGroupChat) {
       socket.emit("CHECK_USER_STATUS", targetUserId);
@@ -416,17 +471,94 @@ export default function GlobalChatScreen() {
     }, 2000);
   };
 
+  const handleReply = (msg: MessageDTO) => {
+    setReplyingToWithRef(msg);
+    closeModal();
+    setTimeout(() => chatInputRef.current?.focus(), 100);
+  };
+
+  const scrollToMessage = (msgId: string) => {
+    const group = messageGroups.find((g) =>
+      g.messages.some((m) => m._id === msgId),
+    );
+    if (group) {
+      const reversedGroups = [...messageGroups].reverse();
+      const index = reversedGroups.findIndex((g) => g === group);
+      if (index !== -1) {
+        flatListRef.current?.scrollToIndex({
+          index,
+          animated: true,
+          viewPosition: 0.5,
+        });
+        // Highlight tin nhắn
+        setHighlightedMsgId(msgId);
+        // Highlight tin nhắn bằng cách mở rộng hiển thị thời gian
+        setExpandedTimeMsgId(msgId);
+      }
+    } else {
+      // Nếu không tìm thấy trong history hiện tại, có thể cần load thêm
+      // Nhưng hiện tại ta chỉ báo cáo là không tìm thấy
+      Alert.alert(
+        "Thông báo",
+        "Tin nhắn này nằm ở quá khứ xa, vui lòng cuộn lên để tải thêm lịch sử",
+      );
+    }
+  };
+
+  const currentUserName = user?.fullName || user?.displayName || "Người dùng";
+
+  const getReplyData = (msg: MessageDTO | null) => {
+    if (!msg || !msg._id) return undefined;
+    let content = msg.content;
+    if (msg.type === "image") content = "[Hình ảnh]";
+    else if (msg.type === "file")
+      content = msg.metadata?.fileName || "[Tệp tin]";
+
+    return {
+      messageId: msg._id,
+      senderId: msg.senderId,
+      senderName:
+        msg.senderId === currentUserId
+          ? "Bạn"
+          : msg.senderName ||
+            userCache[msg.senderId]?.fullName ||
+            "Người dùng",
+      content: content,
+      type: msg.type,
+    };
+  };
+
   const sendMessage = async () => {
     if (!inputText.trim() || !resolvedConversationId) return;
     const textToSend = inputText.trim();
     setInputText("");
+    const replyData = getReplyData(replyingToRef.current);
+    setReplyingToWithRef(null);
     Keyboard.dismiss();
-    if (socket) socket.emit("STOP_TYPING", { roomId: resolvedConversationId, actorId: currentUserId });
+    if (socket)
+      socket.emit("STOP_TYPING", {
+        roomId: resolvedConversationId,
+        actorId: currentUserId,
+      });
     try {
-      const sentMessage = await messageService.sendMessage({ conversationId: resolvedConversationId, type: "text", content: textToSend });
+      const sentMessage = await messageService.sendMessage({
+        conversationId: resolvedConversationId,
+        type: "text",
+        content: textToSend,
+        senderName: currentUserName,
+        replyTo: replyData,
+      });
       if (sentMessage) {
-        setMessages((prev: MessageDTO[]) => (prev.find((m: MessageDTO) => m._id === sentMessage._id) ? prev : [...prev, sentMessage]));
-        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
+        setMessages((prev: MessageDTO[]) =>
+          prev.find((m: MessageDTO) => m._id === sentMessage._id)
+            ? prev
+            : [...prev, sentMessage],
+        );
+        setTimeout(
+          () =>
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
+          100,
+        );
       }
     } catch (e) { }
   };
@@ -442,11 +574,15 @@ export default function GlobalChatScreen() {
 
       if (fileRes.canceled || !fileRes.assets?.length) return;
 
+      const replyData = getReplyData(replyingToRef.current);
+      setReplyingTo(null);
       const sentMessages: MessageDTO[] = [];
       for (const asset of fileRes.assets) {
         const sentMessage = await messageService.sendFileMessage({
           conversationId: resolvedConversationId,
           file: asset,
+          senderName: currentUserName,
+          replyTo: replyData,
         });
         if (sentMessage) {
           sentMessages.push(sentMessage);
@@ -477,12 +613,16 @@ export default function GlobalChatScreen() {
 
       if (imgRes.canceled || !imgRes.assets?.length) return;
 
+      const replyData = getReplyData(replyingToRef.current);
+      setReplyingTo(null);
       const sentMessages: MessageDTO[] = [];
       for (const asset of imgRes.assets) {
         const sentMessage = await messageService.sendFileMessage({
           conversationId: resolvedConversationId,
           file: asset,
           isImage: true,
+          senderName: currentUserName,
+          replyTo: replyData,
         });
         if (sentMessage) {
           sentMessages.push(sentMessage);
@@ -555,39 +695,59 @@ export default function GlobalChatScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#f9fafb" }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <View style={{ paddingTop: insets.top, backgroundColor: "white", zIndex: 10 }}>
-        <ChatHeader
-          id={id as string}
-          name={realtimeGroupName}
-          avatar={realtimeAvatar}
-          membersCount={realtimeMembersCount}
-          isGroupChat={isGroupChat}
-          isOnline={isOnline}
-          userStatus={userStatus}
-          onBack={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))}
-          onInfo={() => {
-            if (isGroupChat) {
-              router.push({
-                pathname: "/chat/info",
-                params: {
-                  id: resolvedConversationId || id,
-                  name: realtimeGroupName,
-                  avatar: realtimeAvatar,
-                  membersCount: realtimeMembersCount,
-                  isGroup: "true",
-                  targetUserId,
-                },
-              });
-            } else {
-              router.push({
-                pathname: "/(tabs)/contacts/send-request",
-                params: {
-                  userId: targetUserId,
-                  from: "chat",
-                },
-              });
-            }
-          }}
-        />
+        {isSearchMode ? (
+          <View className="flex-row items-center px-4 py-2 border-b border-gray-100 bg-white">
+            <TouchableOpacity onPress={closeSearch} className="p-2 -ml-2">
+              <XMarkIcon size={24} color="#374151" />
+            </TouchableOpacity>
+            <View className="flex-1 flex-row items-center bg-gray-100 rounded-full px-3 py-1 ml-2">
+              <MagnifyingGlassIcon size={20} color="#9ca3af" />
+              <TextInput
+                placeholder="Tìm tin nhắn..."
+                value={searchQuery}
+                onChangeText={handleSearch}
+                autoFocus
+                className="flex-1 ml-2 text-sm text-gray-900 py-1"
+                onSubmitEditing={() => Keyboard.dismiss()}
+              />
+            </View>
+          </View>
+        ) : (
+          <ChatHeader
+            id={id as string}
+            name={realtimeGroupName}
+            avatar={realtimeAvatar}
+            membersCount={realtimeMembersCount}
+            isGroupChat={isGroupChat}
+            isOnline={isOnline}
+            userStatus={userStatus}
+            onBack={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))}
+            onSearchToggle={() => setIsSearchMode(true)}
+            onInfo={() => {
+              if (isGroupChat) {
+                router.push({
+                  pathname: "/chat/info",
+                  params: {
+                    id: resolvedConversationId || id,
+                    name: realtimeGroupName,
+                    avatar: realtimeAvatar,
+                    membersCount: realtimeMembersCount,
+                    isGroup: "true",
+                    targetUserId,
+                  },
+                });
+              } else {
+                router.push({
+                  pathname: "/(tabs)/contacts/send-request",
+                  params: {
+                    userId: targetUserId,
+                    from: "chat",
+                  },
+                });
+              }
+            }}
+          />
+        )}
       </View>
 
       <View className="flex-1 relative">
@@ -651,6 +811,8 @@ export default function GlobalChatScreen() {
                         messageRefs={messageRefs}
                         expandedTimeMsgId={expandedTimeMsgId}
                         setExpandedTimeMsgId={setExpandedTimeMsgId}
+                        onReplyClick={scrollToMessage}
+                        isHighlighted={msg._id === highlightedMsgId}
                       />
                     ))}
                   </View>
@@ -659,6 +821,54 @@ export default function GlobalChatScreen() {
             }}
           />
         </View>
+
+        {isSearchMode && searchQuery.length > 0 && (
+          <View className="absolute top-0 left-0 right-0 bottom-0 bg-white z-[60]" style={{ marginTop: pinnedMessages.length > 0 ? 64 : 0 }}>
+            {isSearching ? (
+              <View className="p-10 items-center">
+                <ActivityIndicator color="#3b82f6" />
+                <Text className="mt-2 text-gray-400">Đang tìm kiếm...</Text>
+              </View>
+            ) : searchResults.length > 0 ? (
+              <FlatList
+                data={searchResults}
+                keyExtractor={(item) => item._id}
+                className="flex-1"
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    className="px-5 py-3 border-b border-gray-50 flex-row items-center"
+                    onPress={() => {
+                      closeSearch();
+                      setTimeout(() => scrollToMessage(item._id), 300);
+                    }}
+                  >
+                    <View className="w-10 h-10 rounded-full bg-blue-50 items-center justify-center mr-3">
+                      {userCache[item.senderId]?.avatar ? (
+                        <Image source={{ uri: userCache[item.senderId].avatar }} className="w-10 h-10 rounded-full" />
+                      ) : (
+                        <View className="w-10 h-10 rounded-full bg-blue-100 items-center justify-center">
+                          <Text className="text-blue-600 font-bold">{(userCache[item.senderId]?.fullName || "U").charAt(0).toUpperCase()}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View className="flex-1">
+                      <View className="flex-row justify-between items-center mb-1">
+                        <Text className="font-bold text-gray-900" numberOfLines={1}>{userCache[item.senderId]?.fullName || "Người dùng"}</Text>
+                        <Text className="text-[10px] text-gray-400">{new Date(item.createdAt).toLocaleDateString()}</Text>
+                      </View>
+                      <Text className="text-gray-600 text-sm" numberOfLines={2}>{item.content}</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={<View className="p-10 items-center"><Text className="text-gray-400">Không tìm thấy tin nhắn nào</Text></View>}
+              />
+            ) : (
+              <View className="p-10 items-center">
+                <Text className="text-gray-400">Không tìm thấy tin nhắn nào</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {!isAtBottom && (
           <View className="absolute bottom-28 left-0 right-0 items-center z-50">
@@ -687,6 +897,7 @@ export default function GlobalChatScreen() {
 
         <View className="flex-1 justify-end" pointerEvents="box-none">
           <ChatInput
+            ref={chatInputRef}
             inputText={inputText}
             onInputChange={handleInputChange}
             onSendMessage={sendMessage}
@@ -701,6 +912,8 @@ export default function GlobalChatScreen() {
               }
             }}
             isKeyboardVisible={isKeyboardVisible}
+            replyingTo={replyingTo}
+            onCancelReply={() => setReplyingToWithRef(null)}
           />
         </View>
       </View>
@@ -719,6 +932,7 @@ export default function GlobalChatScreen() {
         onDeleteLocal={handleDeleteLocal}
         onPin={handlePinMessage}
         onUnpin={handleUnpinMessage}
+        onReply={handleReply}
         isPinned={!!selectedMessageId && pinnedMessages.some((m: MessageDTO) => m._id === selectedMessageId)}
         currentUserId={currentUserId as string}
       />

@@ -926,3 +926,47 @@ export async function getPinnedMessages(
     next(error);
   }
 }
+
+/**
+ * Tìm kiếm tin nhắn trong cuộc hội thoại
+ */
+export async function searchMessages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId } = req.params;
+    const { query } = req.query;
+    const userId = getUserIdFromHeader(req);
+
+    if (!conversationId || typeof conversationId !== "string") {
+      res.status(400).json({ error: "Missing or invalid conversationId" });
+      return;
+    }
+
+    if (!query || typeof query !== "string") {
+      res.status(400).json({ error: "Missing or invalid search query" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const messages = await messageDataService.searchMessages(
+      conversationId,
+      query,
+      userId,
+    );
+
+    res.json({
+      status: "success",
+      data: messages,
+    });
+  } catch (error) {
+    console.error("[MessageController] searchMessages error:", error);
+    next(error);
+  }
+}

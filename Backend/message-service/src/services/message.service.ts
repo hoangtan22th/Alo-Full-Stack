@@ -380,6 +380,33 @@ export class MessageDataService {
       throw error;
     }
   }
+
+  /**
+   * Tìm kiếm tin nhắn trong cuộc hội thoại
+   */
+  async searchMessages(
+    conversationId: string,
+    query: string,
+    userId: string,
+    limit: number = 50,
+  ): Promise<IMessage[]> {
+    try {
+      const dbQuery: any = {
+        conversationId: new Types.ObjectId(conversationId),
+        content: { $regex: query, $options: "i" },
+        isRevoked: false,
+        deletedByUsers: { $ne: userId },
+      };
+
+      return await Message.find(dbQuery)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
+    } catch (error) {
+      console.error("[MessageDataService] Failed to search messages:", error);
+      throw error;
+    }
+  }
 }
 
 export default new MessageDataService();

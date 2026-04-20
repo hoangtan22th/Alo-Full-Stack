@@ -30,6 +30,7 @@ interface MessageContextMenuProps {
   onDeleteLocal: () => void;
   onPin: () => void;
   onUnpin: () => void;
+  onReply: (msg: MessageDTO) => void;
   isPinned: boolean;
   currentUserId: string;
 }
@@ -46,6 +47,7 @@ export const MessageContextMenu = ({
   onDeleteLocal,
   onPin,
   onUnpin,
+  onReply,
   isPinned,
   currentUserId,
 }: MessageContextMenuProps) => {
@@ -85,6 +87,35 @@ export const MessageContextMenu = ({
                       : "bg-white rounded-3xl rounded-bl-lg")
               }`}
             >
+              {selectedMsg.replyTo && (
+                <View
+                  className={`mb-2 p-2 rounded-lg border-l-4 border-blue-400 ${
+                    isSender ? "bg-gray-800" : "bg-gray-100"
+                  }`}
+                >
+                  <Text
+                    className={`text-[12px] font-bold mb-0.5 ${
+                      isSender ? "text-blue-300" : "text-blue-600"
+                    }`}
+                  >
+                    {selectedMsg.replyTo.senderName || "Người dùng"}
+                  </Text>
+                  <Text
+                    className={`text-[12px] ${
+                      isSender ? "text-gray-400" : "text-gray-500"
+                    }`}
+                    numberOfLines={1}
+                  >
+                    {selectedMsg.replyTo.type === "text"
+                      ? selectedMsg.replyTo.content
+                      : selectedMsg.replyTo.type === "image"
+                        ? selectedMsg.replyTo.content === "[Album Ảnh]"
+                          ? "[Album Ảnh]"
+                          : "[Hình ảnh]"
+                        : "[Tệp tin]"}
+                  </Text>
+                </View>
+              )}
               {selectedMsg.isRevoked ? (
                 <Text className="italic text-sm text-gray-400">
                   Tin nhắn đã bị thu hồi
@@ -161,6 +192,20 @@ export const MessageContextMenu = ({
               onStartShouldSetResponder={() => true}
               className="bg-white rounded-2xl w-48 shadow-2xl border border-gray-100 overflow-hidden"
             >
+              <TouchableOpacity
+                onPress={() => onReply(selectedMsg)}
+                className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
+              >
+                <ArrowUturnLeftIcon
+                  size={18}
+                  color="#4b5563"
+                  style={{ transform: [{ scaleX: -1 }] }}
+                />
+                <Text className="text-[14px] font-medium text-gray-700">
+                  Trả lời
+                </Text>
+              </TouchableOpacity>
+
               {!selectedMsg.isRevoked && selectedMsg.type === "text" && (
                 <TouchableOpacity
                   onPress={onCopy}

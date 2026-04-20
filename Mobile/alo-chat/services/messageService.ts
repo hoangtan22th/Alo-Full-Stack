@@ -5,18 +5,28 @@ export interface SendFileMessagePayload {
   conversationId: string;
   file: any; // DocumentPicker hoặc ImagePicker asset
   isImage?: boolean;
+  senderName?: string;
+  replyTo?: {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    type: string;
+  };
 }
 
 export interface MessageDTO {
   _id: string;
   conversationId: string;
   senderId: string;
+  senderName?: string;
   type: "text" | "image" | "file" | "system" | "poll";
   content: string;
   metadata?: {
     fileName?: string;
     fileSize?: number;
     fileType?: string;
+    pollId?: string;
   };
   isRead: boolean;
   isRevoked?: boolean;
@@ -24,13 +34,28 @@ export interface MessageDTO {
   reactions?: any[];
   createdAt: string;
   updatedAt?: string;
+  replyTo?: {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    type: string;
+  };
 }
 
 export interface SendMessagePayload {
   conversationId: string;
-  type?: "text" | "image" | "file";
+  type?: "text" | "image" | "file" | "poll";
   content: string;
+  senderName?: string;
   metadata?: Record<string, any>;
+  replyTo?: {
+    messageId: string;
+    senderId: string;
+    senderName: string;
+    content: string;
+    type: string;
+  };
 }
 
 export interface MessageHistoryResponse {
@@ -146,6 +171,31 @@ export const messageService = {
   },
 
   /**
+   * Tìm kiếm tin nhắn (GET /messages/:conversationId/search)
+   */
+  async searchMessages(
+    conversationId: string,
+    query: string,
+    limit: number = 50,
+  ): Promise<MessageDTO[]> {
+    try {
+      const raw = await api.get<any, any>(
+        `/messages/${conversationId}/search`,
+        {
+          params: { query, limit },
+        },
+      );
+      // Backend trả về { status: 'success', data: IMessage[] }
+      if (Array.isArray(raw?.data)) return raw.data;
+      if (Array.isArray(raw)) return raw;
+      return [];
+    } catch (error) {
+      console.error("Lỗi tìm kiếm tin nhắn:", error);
+      return [];
+    }
+  },
+
+  /**
    * Gửi file hoặc ảnh từ React Native (DocumentPicker/ImagePicker)
    * file: asset từ DocumentPicker hoặc ImagePicker
    * isImage: true nếu là ảnh
@@ -154,11 +204,15 @@ export const messageService = {
     conversationId,
     file,
     isImage,
+    senderName,
+    replyTo,
   }: SendFileMessagePayload): Promise<MessageDTO | null> {
     try {
       // Chuẩn hóa file cho FormData
       const formData = new FormData();
       formData.append("conversationId", conversationId);
+      if (senderName) formData.append("senderName", senderName);
+      if (replyTo) formData.append("replyTo", JSON.stringify(replyTo));
       // Xử lý file từ DocumentPicker hoặc ImagePicker
       if (file) {
         // Expo DocumentPicker: { uri, name, mimeType }
@@ -193,7 +247,9 @@ export const messageService = {
         conversationId: payload.conversationId,
         type: payload.type || "text",
         content: payload.content,
+        senderName: payload.senderName,
         metadata: payload.metadata || {},
+        replyTo: payload.replyTo,
       });
       return extractSentMessage(raw);
     } catch (error) {
