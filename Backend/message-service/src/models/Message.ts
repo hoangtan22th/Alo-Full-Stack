@@ -52,7 +52,7 @@ const messageSchema = new Schema<IMessage>(
     },
     type: {
       type: String,
-      enum: ["text", "image", "file", "emoji", "system"],
+      enum: ["text", "image", "file", "emoji", "system", "poll"],
       default: "text",
     },
     content: {
@@ -117,7 +117,7 @@ const messageSchema = new Schema<IMessage>(
       senderId: String,
       senderName: String,
       content: String,
-      type: { type: String, enum: ["text", "image", "file", "emoji", "system"] },
+      type: { type: String, enum: ["text", "image", "file", "emoji", "system", "poll"] },
     },
   },
   {

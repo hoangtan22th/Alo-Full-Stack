@@ -20,12 +20,13 @@ export interface MessageDTO {
   conversationId: string;
   senderId: string;
   senderName?: string;
-  type: "text" | "image" | "file" | "system";
+  type: "text" | "image" | "file" | "system" | "poll";
   content: string;
   metadata?: {
     fileName?: string;
     fileSize?: number;
     fileType?: string;
+    pollId?: string;
   };
   isRead: boolean;
   isRevoked?: boolean;
@@ -44,7 +45,7 @@ export interface MessageDTO {
 
 export interface SendMessagePayload {
   conversationId: string;
-  type?: "text" | "image" | "file";
+  type?: "text" | "image" | "file" | "poll";
   content: string;
   senderName?: string;
   metadata?: Record<string, any>;
