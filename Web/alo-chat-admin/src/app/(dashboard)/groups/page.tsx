@@ -21,8 +21,16 @@ import { GroupRow } from "@/components/groups/GroupRow";
 import { Pagination } from "@/components/ui/Pagination";
 
 export default function GroupManagementPage() {
-  const { groups, pagination, loading, error, fetchGroups, toggleBanGroup } =
-    useGroups();
+  const {
+    groups,
+    stats,
+    pagination,
+    loading,
+    error,
+    fetchGroups,
+    fetchGroupStats,
+    toggleBanGroup,
+  } = useGroups();
   const { confirm } = useConfirmStore();
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -52,7 +60,14 @@ export default function GroupManagementPage() {
 
   useEffect(() => {
     loadData();
-  }, [currentPage, debouncedSearch, activeStatus, fetchGroups]);
+    fetchGroupStats();
+  }, [
+    currentPage,
+    debouncedSearch,
+    activeStatus,
+    fetchGroups,
+    fetchGroupStats,
+  ]);
 
   const handleBanToggle = (id: string, currentStatus: boolean) => {
     if (currentStatus) {
@@ -100,11 +115,10 @@ export default function GroupManagementPage() {
             </span>
             <ChatBubbleLeftRightIcon className="w-5 h-5 text-outline-variant" />
           </div>
-          <div className="text-4xl font-extrabold text-on-surface">12,483</div>
-          <div className="mt-2 text-sm text-on-surface-variant flex items-center">
-            <ArrowTrendingUpIcon className="w-4 h-4 text-[#4b525f] mr-1" />
-            <span className="font-semibold text-[#4b525f]">+4.2%</span>{" "}
-            <span className="ml-1 opacity-70">from last month</span>
+          <div className="text-4xl font-extrabold text-on-surface">
+            {stats?.totalGroups !== undefined
+              ? stats.totalGroups.toLocaleString()
+              : "-"}
           </div>
         </div>
 
@@ -116,10 +130,36 @@ export default function GroupManagementPage() {
             </span>
             <PlusCircleIcon className="w-5 h-5 text-outline-variant" />
           </div>
-          <div className="text-4xl font-extrabold text-on-surface">142</div>
+          <div className="text-4xl font-extrabold text-on-surface">
+            {stats?.createdToday !== undefined
+              ? stats.createdToday.toLocaleString()
+              : "-"}
+          </div>
           <div className="mt-2 text-sm text-on-surface-variant flex items-center">
-            <ArrowTrendingDownIcon className="w-4 h-4 text-error mr-1" />
-            <span className="font-semibold text-error">-1.5%</span>{" "}
+            {stats?.createdTodayTrend !== undefined &&
+            stats.createdTodayTrend > 0 ? (
+              <ArrowTrendingUpIcon className="w-4 h-4 text-emerald-600 mr-1" />
+            ) : stats?.createdTodayTrend !== undefined &&
+              stats.createdTodayTrend < 0 ? (
+              <ArrowTrendingDownIcon className="w-4 h-4 text-error mr-1" />
+            ) : (
+              <ArrowRightIcon className="w-4 h-4 text-[#4b525f] mr-1" />
+            )}
+            <span
+              className={`font-semibold ${
+                stats?.createdTodayTrend !== undefined &&
+                stats.createdTodayTrend > 0
+                  ? "text-emerald-600"
+                  : stats?.createdTodayTrend !== undefined &&
+                      stats.createdTodayTrend < 0
+                    ? "text-error"
+                    : "text-[#4b525f]"
+              }`}
+            >
+              {stats?.createdTodayTrend !== undefined
+                ? `${stats.createdTodayTrend > 0 ? "+" : ""}${stats.createdTodayTrend}%`
+                : "0%"}
+            </span>{" "}
             <span className="ml-1 opacity-70">from yesterday</span>
           </div>
         </div>
@@ -132,11 +172,8 @@ export default function GroupManagementPage() {
             </span>
             <UsersIcon className="w-5 h-5 text-outline-variant" />
           </div>
-          <div className="text-4xl font-extrabold text-on-surface">48</div>
-          <div className="mt-2 text-sm text-on-surface-variant flex items-center">
-            <ArrowRightIcon className="w-4 h-4 text-[#4b525f] mr-1" />
-            <span className="font-semibold text-[#4b525f]">0.0%</span>{" "}
-            <span className="ml-1 opacity-70">steady</span>
+          <div className="text-4xl font-extrabold text-on-surface">
+            {stats?.avgMembers !== undefined ? stats.avgMembers : "-"}
           </div>
         </div>
       </div>

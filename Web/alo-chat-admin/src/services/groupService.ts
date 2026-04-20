@@ -33,7 +33,33 @@ export interface PaginatedGroups {
   size?: number;
 }
 
+export interface GroupStats {
+  totalGroups: number;
+  createdToday: number;
+  createdYesterday: number;
+  createdTodayTrend: number;
+  avgMembers: number;
+}
+
 export const groupService = {
+  getGroupStats: async (): Promise<GroupStats> => {
+    try {
+      const response = await axiosClient.get(`${API_URL}/stats`);
+      return (
+        response.data?.data || {
+          totalGroups: 0,
+          createdToday: 0,
+          createdYesterday: 0,
+          createdTodayTrend: 0,
+          avgMembers: 0,
+        }
+      );
+    } catch (error) {
+      console.error("Error fetching group stats:", error);
+      throw error;
+    }
+  },
+
   getAllGroups: async (query?: {
     name?: string;
     isGroup?: boolean;

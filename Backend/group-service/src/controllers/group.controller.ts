@@ -1372,3 +1372,67 @@ export const updateSettings = async (
     console.error("[updateSettings] Error:", error);
   }
 };
+
+// 22. Admin: Lấy thống kê về nhóm
+export const getGroupStatsAdmin = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    // 1. Tổng số nhóm
+    const totalGroups = await Conversation.countDocuments({ isGroup: true });
+
+    // 2. Số nhóm tạo trong ngày hôm nay và hôm qua
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const createdToday = await Conversation.countDocuments({
+      isGroup: true,
+      createdAt: { $gte: startOfToday, $lte: endOfToday },
+    });
+
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+    const endOfYesterday = new Date(endOfToday);
+    endOfYesterday.setDate(endOfYesterday.getDate() - 1);
+
+    const createdYesterday = await Conversation.countDocuments({
+      isGroup: true,
+      createdAt: { $gte: startOfYesterday, $lte: endOfYesterday },
+    });
+
+    let createdTodayTrend = 0;
+    if (createdYesterday === 0) {
+      createdTodayTrend = createdToday > 0 ? 100 : 0;
+    } else {
+      createdTodayTrend =
+        Math.round(
+          ((createdToday - createdYesterday) / createdYesterday) * 100 * 10,
+        ) / 10;
+    }
+
+    // 3. Trung bình số lượng thành viên
+    const avgResult = await Conversation.aggregate([
+      { $match: { isGroup: true } },
+      { $project: { memberCount: { $size: { $ifNull: ["$members", []] } } } },
+      { $group: { _id: null, avgMembers: { $avg: "$memberCount" } } },
+    ]);
+
+    const avgMembers =
+      avgResult.length > 0 ? Math.round(avgResult[0].avgMembers) : 0;
+
+    res.status(200).json({
+      data: {
+        totalGroups,
+        createdToday,
+        createdYesterday,
+        createdTodayTrend,
+        avgMembers,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};

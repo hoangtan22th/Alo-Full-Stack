@@ -52,6 +52,7 @@ router.post("/api/v1/groups/assign-leader", groupController.assignNewLeader);
 
 // --- Admin APIs ---
 router.get("/api/v1/groups/admin/search", groupController.searchGroupsAdmin);
+router.get("/api/v1/groups/admin/stats", groupController.getGroupStatsAdmin);
 router.put(
   "/api/v1/groups/admin/:groupId/ban",
   groupController.toggleBanGroupAdmin,
@@ -115,21 +116,33 @@ router.put(
 );
 
 // Cài đặt nâng cao của nhóm
-router.put(
-  "/api/v1/groups/:groupId/settings",
-  groupController.updateSettings,
-);
+router.put("/api/v1/groups/:groupId/settings", groupController.updateSettings);
 
 // --- Quản lý Ghi chú (Notes) ---
-router.get("/api/v1/groups/:groupId/notes", noteController.getNotesByConversation);
+router.get(
+  "/api/v1/groups/:groupId/notes",
+  noteController.getNotesByConversation,
+);
 router.post("/api/v1/groups/:groupId/notes", noteController.createNote);
 router.put("/api/v1/groups/notes/:noteId", noteController.updateNote);
 router.delete("/api/v1/groups/notes/:noteId", noteController.deleteNote);
 
 // --- Quản lý Nhắc hẹn (Reminders) ---
-router.get("/api/v1/groups/:groupId/reminders", reminderController.getRemindersByConversation);
-router.post("/api/v1/groups/:groupId/reminders", reminderController.createReminder);
-router.put("/api/v1/groups/reminders/:reminderId", reminderController.updateReminder);
-router.delete("/api/v1/groups/reminders/:reminderId", reminderController.deleteReminder);
+router.get(
+  "/api/v1/groups/:groupId/reminders",
+  reminderController.getRemindersByConversation,
+);
+router.post(
+  "/api/v1/groups/:groupId/reminders",
+  reminderController.createReminder,
+);
+router.put(
+  "/api/v1/groups/reminders/:reminderId",
+  reminderController.updateReminder,
+);
+router.delete(
+  "/api/v1/groups/reminders/:reminderId",
+  reminderController.deleteReminder,
+);
 
 export default router;

@@ -1,9 +1,10 @@
 import { useState, useCallback } from "react";
-import { groupService, Group } from "@/services/groupService";
+import { groupService, Group, GroupStats } from "@/services/groupService";
 import { toast } from "sonner";
 
 export function useGroups() {
   const [groups, setGroups] = useState<Group[]>([]);
+  const [stats, setStats] = useState<GroupStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState({
@@ -51,6 +52,15 @@ export function useGroups() {
     [],
   );
 
+  const fetchGroupStats = useCallback(async () => {
+    try {
+      const res = await groupService.getGroupStats();
+      setStats(res);
+    } catch (err: any) {
+      console.error("Failed to load group stats");
+    }
+  }, []);
+
   const toggleBanGroup = async (id: string, isBanned: boolean) => {
     try {
       await groupService.toggleBanGroup(id, isBanned);
@@ -67,10 +77,12 @@ export function useGroups() {
 
   return {
     groups,
+    stats,
     pagination,
     loading,
     error,
     fetchGroups,
+    fetchGroupStats,
     toggleBanGroup,
   };
 }
