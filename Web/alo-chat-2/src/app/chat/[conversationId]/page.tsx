@@ -39,6 +39,7 @@ import {
 } from "@heroicons/react/24/outline";
 import BotChatArea from "@/components/ui/BotChatArea";
 import { useAuthStore } from "@/store/useAuthStore";
+import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -54,6 +55,21 @@ function formatListTime(iso: string) {
     minute: "2-digit",
   });
 }
+
+const getMediaUrl = (url: string | undefined): string => {
+  if (!url) return "";
+  if (
+    url.startsWith("http") ||
+    url.startsWith("blob:") ||
+    url.startsWith("data:")
+  ) {
+    return url;
+  }
+  const backendHost =
+    process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") ||
+    "http://localhost:8888";
+  return `${backendHost}${url.startsWith("/") ? "" : "/"}${url}`;
+};
 
 /* ─────────────────────────────────────────
    Page Component
@@ -565,6 +581,45 @@ export default function ChatPage() {
     }
   };
 
+  /* ─── Clear History & Group Management ─── */
+  const handleClearHistory = async () => {
+    if (!confirm("Bạn có chắc chắn muốn xóa lịch sử trò chuyện này?")) return;
+    try {
+      await groupService.clearConversation(conversationId);
+      setMessages([]);
+      alert("Đã xóa lịch sử trò chuyện.");
+    } catch (err) {
+      console.error("Lỗi xóa lịch sử:", err);
+      alert("Không thể xóa lịch sử trò chuyện.");
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    if (!confirm("Bạn có chắc chắn muốn rời khỏi nhóm này?")) return;
+    try {
+      const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+      if (!myId) return;
+      await groupService.removeMember(conversationId, myId);
+      alert("Đã rời nhóm.");
+      router.push("/chat");
+    } catch (err) {
+      console.error("Lỗi rời nhóm:", err);
+      alert("Không thể rời nhóm.");
+    }
+  };
+
+  const handleDisbandGroup = async () => {
+    if (!confirm("CẢNH BÁO: Bạn có chắc chắn muốn giải tán nhóm này? Hành động này không thể hoàn tác.")) return;
+    try {
+      await groupService.deleteGroup(conversationId);
+      alert("Nhóm đã bị giải tán.");
+      router.push("/chat");
+    } catch (err) {
+      console.error("Lỗi giải tán nhóm:", err);
+      alert("Không thể giải tán nhóm.");
+    }
+  };
+
   /* ─── Send message ─── */
   const handleSend = async () => {
     const text = messageText.trim();
@@ -835,7 +890,7 @@ export default function ChatPage() {
                 <div className="relative shrink-0">
                   {conversationInfo?.displayAvatar ? (
                     <img
-                      src={conversationInfo.displayAvatar}
+                      src={getMediaUrl(conversationInfo.displayAvatar)}
                       alt={conversationInfo.displayName || ""}
                       className="w-10 h-10 rounded-full object-cover"
                     />
@@ -1254,7 +1309,7 @@ export default function ChatPage() {
                                                     ) : (
                                                       <>
                                                         <img
-                                                          src={img.url}
+                                                          src={getMediaUrl(img.url)}
                                                           alt={`album-${idx}`}
                                                           className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                                                         />
@@ -1346,7 +1401,7 @@ export default function ChatPage() {
                                           })()
                                         ) : (
                                           <img
-                                            src={msg.content}
+                                            src={getMediaUrl(msg.content)}
                                             alt="img"
                                             className="object-cover max-h-[420px] rounded-lg cursor-pointer"
                                             onClick={() => {
@@ -1371,7 +1426,7 @@ export default function ChatPage() {
                                       <div
                                         className="flex items-center gap-3 flex-1 min-w-0"
                                         onClick={() =>
-                                          window.open(msg.content, "_blank")
+                                          window.open(getMediaUrl(msg.content), "_blank")
                                         }
                                       >
                                         <div className="w-10 h-12 bg-blue-500 rounded-lg flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
@@ -1386,7 +1441,7 @@ export default function ChatPage() {
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleDownload(msg.content, msg.metadata?.fileName || "file");
+                                          handleDownload(getMediaUrl(msg.content), msg.metadata?.fileName || "file");
                                         }}
                                         className="w-8 h-8 bg-white border border-gray-100 rounded-md flex items-center justify-center text-gray-600 hover:bg-gray-50 transition"
                                       >
@@ -1983,109 +2038,19 @@ export default function ChatPage() {
           </div>
 
           {/* ═══ CỘT PHẢI: THÔNG TIN CHI TIẾT ═══ */}
-          <div
-            className={`hidden lg:flex flex-col shrink-0 bg-[#FAFAFA] h-full transition-all duration-300 ease-in-out overflow-hidden ${showInfoPanel
-              ? "w-[320px] xl:w-85 opacity-100 border-l border-gray-100"
-              : "w-0 opacity-0 border-l-0"
-              }`}
-          >
-            <div className="w-[320px] xl:w-85 h-full flex flex-col">
-              <div className="flex-1 overflow-y-auto scrollbar-hide">
-                {/* Profile Section */}
-                <div className="flex flex-col items-center pt-10 pb-8 border-b border-gray-100/60">
-                  <div className="relative mb-4">
-                    {conversationInfo?.displayAvatar ? (
-                      <img
-                        src={conversationInfo.displayAvatar}
-                        alt="Profile"
-                        className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
-                      />
-                    ) : (
-                      <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-3xl border-4 border-white shadow-lg">
-                        {(conversationInfo?.displayName || "?")
-                          .charAt(0)
-                          .toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                  <h2 className="text-[18px] font-black text-gray-900 tracking-tight">
-                    {conversationInfo?.displayName ||
-                      conversationInfo?.name ||
-                      "..."}
-                  </h2>
-                  <p className="text-[12px] font-bold text-gray-400 mt-1">
-                    {conversationInfo?.isGroup
-                      ? `${conversationInfo?.members?.length ?? 0} thành viên`
-                      : "Người dùng"}
-                  </p>
-
-                  <div className="flex items-center gap-3 mt-6">
-                    <button className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:bg-gray-50 transition shadow-sm">
-                      <UserIcon className="w-4 h-4" />
-                    </button>
-                    <button className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:bg-gray-50 transition shadow-sm">
-                      <BellIcon className="w-4 h-4" />
-                    </button>
-                    <button className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:bg-gray-50 transition shadow-sm">
-                      <EllipsisHorizontalIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Shared Files */}
-                <div className="p-6 border-b border-gray-100/60">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                      Shared Files
-                    </h3>
-                  </div>
-                  <div className="space-y-4">
-                    {messages
-                      .filter((m) => m.type === "file")
-                      .slice(-5)
-                      .map((m) => (
-                        <a
-                          key={m._id}
-                          href={m.content}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-4 cursor-pointer group"
-                        >
-                          <div className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-400 group-hover:bg-gray-50 transition">
-                            <FolderIcon className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-bold text-gray-900 truncate">
-                              {m.metadata?.fileName || "File"}
-                            </p>
-                            <p className="text-[11px] font-bold text-gray-400">
-                              {m.metadata?.fileType || ""}
-                            </p>
-                          </div>
-                        </a>
-                      ))}
-                    {messages.filter((m) => m.type === "file").length === 0 && (
-                      <p className="text-[12px] text-gray-400 font-medium">
-                        Chưa có file nào được chia sẻ
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Danger Actions */}
-                <div className="p-6 space-y-4 pb-10">
-                  <button className="w-full flex items-center justify-between text-[13px] font-bold text-red-500 hover:bg-red-50 p-2 -mx-2 rounded-lg transition">
-                    Block User
-                    <NoSymbolIcon className="w-4 h-4" />
-                  </button>
-                  <button className="w-full flex items-center justify-between text-[13px] font-bold text-gray-500 hover:bg-gray-100 p-2 -mx-2 rounded-lg transition">
-                    Report Conversation
-                    <ExclamationCircleIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <ChatInfoPanel
+            show={showInfoPanel}
+            conversationId={conversationId}
+            conversationInfo={conversationInfo}
+            messages={messages}
+            currentUser={currentUser}
+            onClose={() => setShowInfoPanel(false)}
+            onClearHistory={handleClearHistory}
+            onLeaveGroup={handleLeaveGroup}
+            onDisbandGroup={handleDisbandGroup}
+            onViewAllMedia={() => {/* Future: Open media gallery */}}
+            onViewAllFiles={() => {/* Future: Open file list */}}
+          />
 
           {/* ALBUM PREVIEW MODAL */}
           {activeAlbumIndex && (
@@ -2142,7 +2107,7 @@ export default function ChatPage() {
                       ) : (
                         currentImg && (
                           <img
-                            src={currentImg.url}
+                            src={getMediaUrl(currentImg.url)}
                             className="max-w-full max-h-full object-contain shadow-2xl rounded-sm"
                             alt="preview"
                           />
@@ -2156,7 +2121,7 @@ export default function ChatPage() {
                           </p>
                           {!currentImg.isRevoked && (
                             <button
-                              onClick={() => handleDownload(currentImg.url, currentImg.fileName || "image.png")}
+                              onClick={() => handleDownload(getMediaUrl(currentImg.url), currentImg.fileName || "image.png")}
                               className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full text-sm font-bold transition"
                             >
                               <ArrowDownTrayIcon className="w-4 h-4" />
