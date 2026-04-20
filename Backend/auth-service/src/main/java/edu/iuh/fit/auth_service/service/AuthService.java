@@ -182,6 +182,76 @@ public class AuthService {
         return Map.of("accessToken", accessToken, "refreshToken", refreshToken);
     }
 
+    @Transactional
+    public Map<String, String> adminLogin(LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse response) {
+        Account user = accountRepository.findByEmailOrPhoneNumber(request.email(), request.email())
+                .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
+
+        // SECURITY CHECK: Verify if the user has ADMIN or SUPER_ADMIN roles
+        boolean isAdmin = user.getRoles().stream()
+                .anyMatch(role -> role.getName().equals("ROLE_ADMIN") || role.getName().equals("ROLE_SUPER_ADMIN"));
+
+        if (!isAdmin) {
+            throw new ForbiddenException("Bạn không có quyền truy cập trang quản trị.");
+        }
+
+        String lockKey = "USER_LOCK:" + user.getId();
+        String attemptsKey = "FAILED_ATTEMPTS:" + user.getId();
+
+        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(lockKey))) {
+            throw new UnauthorizedException("Tài khoản đang bị khóa tạm thời hệ thống.");
+        }
+
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            Long attempts = stringRedisTemplate.opsForValue().increment(attemptsKey);
+            user.setFailedLoginAttempts((user.getFailedLoginAttempts() != null ? user.getFailedLoginAttempts() : 0) + 1);
+
+            if (attempts != null && attempts >= MAX_FAILED_ATTEMPTS) {
+                stringRedisTemplate.opsForValue().set(lockKey, "LOCKED", LOCK_TIME_DURATION, TimeUnit.MINUTES);
+                stringRedisTemplate.delete(attemptsKey);
+                user.setStatus(AccountStatus.SUSPENDED);
+                user.setLockoutEnd(LocalDateTime.now().plusMinutes(LOCK_TIME_DURATION));
+                accountRepository.save(user);
+                throw new UnauthorizedException("Bạn đã nhập sai 5 lần. Tài khoản bị khóa 15 phút bảo vệ.");
+            }
+            if (attempts != null && attempts == 1) {
+                stringRedisTemplate.expire(attemptsKey, 1, TimeUnit.HOURS);
+            }
+            accountRepository.save(user);
+            throw new UnauthorizedException("Sai mật khẩu. Bạn còn " + (Math.max(0, MAX_FAILED_ATTEMPTS - (attempts != null ? attempts : 1))) + " lần thử.");
+        }
+
+        stringRedisTemplate.delete(attemptsKey);
+        user.setFailedLoginAttempts(0);
+        user.setStatus(AccountStatus.ACTIVE);
+        user.setLockoutEnd(null);
+        accountRepository.save(user);
+
+        String deviceId = (request.deviceId() == null) ? "unknown" : request.deviceId();
+        String sessionId = UUID.randomUUID().toString();
+
+        String accessToken = tokenService.generateAccessToken(user, sessionId);
+        String refreshToken = tokenService.generateRefreshToken(user, deviceId);
+        String tokenId = tokenService.getTokenIdFromJWT(refreshToken);
+
+        invalidateOldSessions(user.getId(), sessionId, deviceId);
+
+        String ipAddress = getClientIpString(httpRequest);
+        
+        UserSession session = UserSession.builder()
+                .id(sessionId)
+                .account(user)
+                .deviceId(deviceId)
+                .refreshTokenId(tokenId)
+                .ipAddress(ipAddress)
+                .expiresAt(LocalDateTime.now().plusDays(7))
+                .build();
+        sessionRepository.save(session);
+        cookieUtil.createHttpOnlyCookie(response, "refreshToken", refreshToken, 604800);
+
+        return Map.of("accessToken", accessToken, "refreshToken", refreshToken);
+    }
+
     // 1. Dùng DTO fallback cho Profile vì thông tin này hằng ngày nằm trên User Service.
     public UserResponse getProfile(String userId) {
         Account acc = accountRepository.findById(userId)

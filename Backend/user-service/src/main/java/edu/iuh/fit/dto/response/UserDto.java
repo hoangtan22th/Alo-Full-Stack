@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 @Data
 @Builder
 public class UserDto {
+
     private String id;
     private String email;
     private String fullName;
@@ -17,10 +18,10 @@ public class UserDto {
     private String phoneNumber;
     private String avatar;
     private String coverImage;
-    private String gender; 
+    private String gender;
     private java.time.LocalDate dateOfBirth;
-    private Boolean isOnline; 
-    private Boolean isBanned; 
+    private Boolean isOnline;
+    private Boolean isBanned;
     private LocalDateTime lastActive;
     private LocalDateTime createdAt;
     private String bio;
@@ -28,12 +29,18 @@ public class UserDto {
     private String locale;
 
     public static UserDto fromEntity(UserProfile profile) {
-        if (profile == null) return null;
-        
+        if (profile == null) {
+            return null;
+        }
+
         String fullName = "";
-        if (profile.getFirstName() != null) fullName += profile.getFirstName() + " ";
-        if (profile.getLastName() != null) fullName += profile.getLastName();
-        
+        if (profile.getFirstName() != null) {
+            fullName += profile.getFirstName() + " ";
+        }
+        if (profile.getLastName() != null) {
+            fullName += profile.getLastName();
+        }
+
         return UserDto.builder()
                 .id(profile.getId())
                 .email(profile.getEmail())
@@ -45,8 +52,8 @@ public class UserDto {
                 .coverImage(profile.getCoverUrl())
                 .gender(profile.getGender() != null ? profile.getGender().name() : null)
                 .dateOfBirth(profile.getDateOfBirth())
-                .isOnline(false) 
-                .isBanned(false) 
+                .isOnline(false)
+                .isBanned(profile.getStatus() == UserProfile.UserStatus.BANNED)
                 .lastActive(profile.getLastActiveAt())
                 .createdAt(profile.getCreatedAt())
                 .bio(profile.getBio())

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     timezone VARCHAR(255),
     locale VARCHAR(255),
     last_active_at DATETIME,
+    account_status VARCHAR(50) DEFAULT 'ACTIVE',
     created_at DATETIME,
     updated_at DATETIME
 );

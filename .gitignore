@@ -34,3 +34,6 @@ $RECYCLE.BIN/
 ### Chặn tuyệt đối biến môi trường ở mọi nơi ###
 .env
 *.env
+# Global Node Modules
+node_modules/
+.next/

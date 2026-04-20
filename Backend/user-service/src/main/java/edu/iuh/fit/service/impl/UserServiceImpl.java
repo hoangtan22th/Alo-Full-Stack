@@ -54,10 +54,12 @@ public class UserServiceImpl implements UserService {
                 user.setLastName("");
             }
         }
-        if (request.getAvatar() != null)
+        if (request.getAvatar() != null) {
             user.setAvatarUrl(request.getAvatar());
-        if (request.getCoverImage() != null)
+        }
+        if (request.getCoverImage() != null) {
             user.setCoverUrl(request.getCoverImage());
+        }
 
         String reqPhone = request.getPhoneNumber();
         if (reqPhone != null && !reqPhone.trim().isEmpty() && !reqPhone.equals(user.getPhoneNumber())) {
@@ -68,10 +70,12 @@ public class UserServiceImpl implements UserService {
                     UserProfile.Gender.values().length - 1)]);
         }
 
-        if (request.getDateOfBirth() != null)
+        if (request.getDateOfBirth() != null) {
             user.setDateOfBirth(request.getDateOfBirth());
-        if (request.getBio() != null)
+        }
+        if (request.getBio() != null) {
             user.setBio(request.getBio());
+        }
 
         UserProfile updatedUser = userProfileRepository.save(user);
 
@@ -82,13 +86,44 @@ public class UserServiceImpl implements UserService {
     public void deleteUser(String id) {
         UserProfile user = userProfileRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("UserProfile not found with id: " + id));
-        // Soft delete logic should ideally be handled via Account,
-        // Here we just ignore or clear data
+        // Logic ban/delete user:
+        // Cập nhật trạng thái trong user-service
+        user.setStatus(UserProfile.UserStatus.BANNED);
+        userProfileRepository.save(user);
+
+        // Phát sự kiện sang auth-service để ban account
+        rabbitMQPublisher.publishUserBannedEvent(id);
+    }
+
+    @Override
+    public void unbanUser(String id) {
+        UserProfile user = userProfileRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("UserProfile not found with id: " + id));
+
+        user.setStatus(UserProfile.UserStatus.ACTIVE);
+        userProfileRepository.save(user);
+
+        // Phát sự kiện sang auth-service để activate account lại
+        rabbitMQPublisher.publishUserUnbannedEvent(id);
     }
 
     @Override
     public Page<UserDto> searchUsersDynamic(String fullName, String email, String phoneNumber, Pageable pageable) {
         return userProfileRepository.searchUsersDynamic(fullName, email, phoneNumber, pageable)
+                .map(UserDto::fromEntity);
+    }
+
+    @Override
+    public Page<UserDto> searchAdminUsers(String keyword, String statusStr, Pageable pageable) {
+        UserProfile.UserStatus status = null;
+        if (statusStr != null && !statusStr.isBlank()) {
+            try {
+                status = UserProfile.UserStatus.valueOf(statusStr.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Ignore invalid status mapping or throw exception
+            }
+        }
+        return userProfileRepository.searchAdminUsers(keyword, status, pageable)
                 .map(UserDto::fromEntity);
     }
 

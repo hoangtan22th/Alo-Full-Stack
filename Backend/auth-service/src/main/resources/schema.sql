@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS accounts (
     id VARCHAR(191) PRIMARY KEY,
+    full_name VARCHAR(191),
     email VARCHAR(191) UNIQUE NOT NULL,
     phone_number VARCHAR(191) UNIQUE,
     password_hash VARCHAR(255),

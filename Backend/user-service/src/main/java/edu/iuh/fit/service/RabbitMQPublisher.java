@@ -27,4 +27,30 @@ public class RabbitMQPublisher {
         );
         log.info("Published UserUpdatedEvent for userID: {}", userId);
     }
+
+    public void publishUserBannedEvent(String userId) {
+        UserUpdatedEvent event = UserUpdatedEvent.builder()
+                .id(userId)
+                .status("BANNED")
+                .build();
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.EXCHANGE_NAME,
+                RabbitMQConfig.ROUTING_KEY_UPDATE,
+                event
+        );
+        log.info("Published UserBannedEvent for userID: {}", userId);
+    }
+
+    public void publishUserUnbannedEvent(String userId) {
+        UserUpdatedEvent event = UserUpdatedEvent.builder()
+                .id(userId)
+                .status("ACTIVE")
+                .build();
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.EXCHANGE_NAME,
+                RabbitMQConfig.ROUTING_KEY_UPDATE,
+                event
+        );
+        log.info("Published UserUnbannedEvent for userID: {}", userId);
+    }
 }
