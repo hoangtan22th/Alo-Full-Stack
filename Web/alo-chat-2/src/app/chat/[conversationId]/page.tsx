@@ -1406,7 +1406,11 @@ export default function ChatPage() {
             {conversationId !== "alo-bot" && (
               <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex justify-center w-full">
                 <div className="pointer-events-auto">
-                  <ChatSummaryButton conversationId={conversationId} userId={myId} />
+                  <ChatSummaryButton 
+                    conversationId={conversationId} 
+                    userId={myId} 
+                    messages={messages} 
+                  />
                 </div>
               </div>
             )}

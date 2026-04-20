@@ -4,13 +4,15 @@ import { createPortal } from "react-dom";
 import { SparklesIcon, XMarkIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
 import { chatbotApi } from "@/api/chatbot.api";
 import { toast } from "sonner";
+import { MessageDTO } from "@/services/messageService";
 
 interface Props {
   conversationId: string;
   userId: string;
+  messages: MessageDTO[]; // Thêm danh sách tin nhắn từ UI
 }
 
-export default function ChatSummaryButton({ conversationId, userId }: Props) {
+export default function ChatSummaryButton({ conversationId, userId, messages }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState("");
@@ -30,7 +32,26 @@ export default function ChatSummaryButton({ conversationId, userId }: Props) {
     setLoading(true);
     setSummary("");
 
-    const res = await chatbotApi.getSummary(conversationId, userId);
+    // 1. Tạo context từ những tin nhắn "thực sự nhìn thấy"
+    // Lọc bỏ tin nhắn thu hồi và tin nhắn hệ thống không cần thiết
+    const visibleMessages = messages.filter(msg => !msg.isRevoked && msg.type !== 'system');
+    
+    // 2. Chuyển đổi thành chuỗi văn bản để AI dễ đọc
+    const chatContext = visibleMessages
+      .map(msg => {
+        const sender = msg.senderName || (msg.senderId === userId ? "Tôi" : "Bạn");
+        let content = msg.content;
+        
+        // Nếu là file hoặc ảnh thì tóm tắt loại nội dung
+        if (msg.type === 'image') content = "[Hình ảnh]";
+        if (msg.type === 'file') content = `[Tệp tin: ${msg.metadata?.fileName || "không rõ"}]`;
+
+        return `${sender}: ${content}`;
+      })
+      .join("\n");
+
+    // 3. Gọi API với ngữ cảnh đã lọc
+    const res = await chatbotApi.getSummary(conversationId, userId, chatContext);
     
     if (res.error) {
       setSummary(`❌ ${res.error}`);
@@ -45,18 +66,21 @@ export default function ChatSummaryButton({ conversationId, userId }: Props) {
     const lines = text.split('\n');
     
     return (
-      <div className="space-y-4">
+      <div className="space-y-5">
         {lines.map((line, idx) => {
           if (!line.trim()) return null;
 
           // Xử lý in đậm
-          let cleanContent = line.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900 font-bold">$1</strong>');
+          let cleanContent = line.replace(/\*\*(.*?)\*\*/g, '<strong class="text-blue-700 font-extrabold">$1</strong>');
 
           // Header (Bắt đầu bằng ### hoặc ##)
           if (cleanContent.startsWith('### ') || cleanContent.startsWith('## ')) {
             cleanContent = cleanContent.replace(/^#+\s*/, '');
             return (
-              <h3 key={idx} className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 mt-4 mb-2" dangerouslySetInnerHTML={{ __html: cleanContent }} />
+              <div key={idx} className="flex items-center gap-2 mt-6 mb-3 first:mt-0">
+                <div className="w-1.5 h-6 bg-gradient-to-b from-blue-600 to-purple-600 rounded-full"></div>
+                <h3 className="text-[18px] font-black text-gray-900 tracking-tight" dangerouslySetInnerHTML={{ __html: cleanContent }} />
+              </div>
             );
           }
 
@@ -65,12 +89,12 @@ export default function ChatSummaryButton({ conversationId, userId }: Props) {
           if (isListItem) {
             cleanContent = cleanContent.replace(/^[-*]\s*/, '');
             return (
-              <div key={idx} className="flex items-start gap-3 group">
-                <div className="mt-1 shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-blue-50 text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-colors duration-300">
+              <div key={idx} className="flex items-start gap-3.5 group pl-1">
+                <div className="mt-1 shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-blue-50 text-blue-500 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300 shadow-sm border border-blue-100">
                   <CheckCircleIcon className="w-3.5 h-3.5" />
                 </div>
                 <span 
-                  className="flex-1 text-[15px] text-gray-700 leading-relaxed"
+                  className="flex-1 text-[15px] text-gray-700 leading-relaxed font-medium"
                   dangerouslySetInnerHTML={{ __html: cleanContent }} 
                 />
               </div>
@@ -81,7 +105,7 @@ export default function ChatSummaryButton({ conversationId, userId }: Props) {
           return (
             <p 
               key={idx} 
-              className="text-[15px] text-gray-700 leading-relaxed bg-gray-50/50 p-3 rounded-2xl border border-gray-100/50"
+              className="text-[15px] text-gray-600 leading-relaxed bg-blue-50/30 p-4 rounded-2xl border border-blue-100/50 shadow-sm font-medium"
               dangerouslySetInnerHTML={{ __html: cleanContent }}
             />
           );
@@ -103,8 +127,8 @@ export default function ChatSummaryButton({ conversationId, userId }: Props) {
           {/* Header */}
           <div className="px-6 py-5 border-b border-gray-100/80 flex justify-between items-center bg-white/80 backdrop-blur-xl shrink-0 sticky top-0 z-10">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center border border-blue-200/50">
-                <SparklesIcon className="w-5 h-5 text-blue-600" />
+              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center border border-gray-100 shadow-sm overflow-hidden">
+                <img src="/alochat.png" alt="Bot" className="w-full h-full object-cover" />
               </div>
               <h2 className="text-[17px] font-black tracking-tight text-gray-900">
                 AI Tóm Tắt
@@ -123,16 +147,14 @@ export default function ChatSummaryButton({ conversationId, userId }: Props) {
             {loading ? (
               <div className="flex flex-col items-center justify-center h-full gap-6 py-12">
                 <div className="relative flex items-center justify-center w-24 h-24">
-                  {/* Outer spinning ring */}
                   <div className="absolute inset-0 border-4 border-transparent border-t-blue-500 border-l-purple-500 rounded-full animate-spin"></div>
-                  {/* Inner pulsing orb */}
-                  <div className="absolute inset-2 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-full animate-pulse opacity-80 blur-sm"></div>
-                  {/* Center icon */}
-                  <SparklesIcon className="w-8 h-8 text-white relative z-10 animate-bounce" />
+                  <div className="absolute inset-2 bg-white rounded-full shadow-inner overflow-hidden flex items-center justify-center">
+                    <img src="/alochat.png" alt="Bot" className="w-12 h-12 object-cover animate-pulse" />
+                  </div>
                 </div>
                 <div className="text-center space-y-2">
                   <h3 className="text-lg font-bold text-gray-900 animate-pulse">AI đang phân tích...</h3>
-                  <p className="text-sm text-gray-500 font-medium">Việc này có thể mất vài giây, vui lòng đợi nhé.</p>
+                  <p className="text-sm text-gray-500 font-medium">Đang tóm tắt dựa trên các tin nhắn đang hiển thị.</p>
                 </div>
               </div>
             ) : (
@@ -162,7 +184,6 @@ export default function ChatSummaryButton({ conversationId, userId }: Props) {
   return (
     <>
       <div className="relative group/btn z-50">
-        {/* Glow effect under button */}
         <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full blur-md opacity-30 group-hover/btn:opacity-60 transition duration-300"></div>
         
         <button 
