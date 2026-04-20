@@ -1,4 +1,5 @@
 import Reminder, { IReminder } from "../models/Reminder";
+import Conversation from "../models/Conversation";
 import rabbitMQProducer from "./rabbitMQProducer";
 import mongoose from "mongoose";
 
@@ -24,6 +25,10 @@ async function postSystemMessage(groupId: string, reminderTitle: string) {
         conversationId: groupId,
         type: "system",
         content: `🔔 NHẮC HẸN: ${reminderTitle}`,
+        metadata: {
+          isReminder: true,
+          title: reminderTitle
+        }
       }),
     });
   } catch (error) {
@@ -112,12 +117,38 @@ export const processReminders = async () => {
     console.log(`[reminderWorker] Processing ${dueReminders.length} due reminders...`);
 
     for (const reminder of dueReminders) {
+      console.log(`[reminderWorker] Processing reminder: ${reminder.title} (${reminder.remindFor})`);
+      
       // 1. Dispatch Notification
       if (reminder.remindFor === "GROUP") {
+        // Post system message for history
         await postSystemMessage(reminder.conversationId, reminder.title);
+        
+        // Also send direct REMINDER_DUE events to all members so they get notified regardless of screen
+        try {
+          const conversation = await Conversation.findById(reminder.conversationId);
+          if (conversation && conversation.members) {
+            console.log(`[reminderWorker] Notifying ${conversation.members.length} members for group reminder: ${reminder.title}`);
+            for (const member of conversation.members) {
+              await rabbitMQProducer.publishReminderDue(member.userId, {
+                _id: reminder._id,
+                title: reminder.title,
+                conversationId: reminder.conversationId,
+                remindFor: reminder.remindFor
+              });
+            }
+          }
+        } catch (err) {
+          console.error(`[reminderWorker] Failed to fetch members for group reminder:`, err);
+        }
       } else {
         // Send private socket event
-        await rabbitMQProducer.publishReminderDue(reminder.creatorId, reminder);
+        await rabbitMQProducer.publishReminderDue(reminder.creatorId, {
+          _id: reminder._id,
+          title: reminder.title,
+          conversationId: reminder.conversationId,
+          remindFor: reminder.remindFor
+        });
       }
 
       // 2. Handle Recurrence or Completion
@@ -145,5 +176,5 @@ export const startReminderWorker = () => {
   // Run once immediately (optional)
   processReminders();
   // Schedule
-  setInterval(processReminders, 60 * 1000);
+  setInterval(processReminders, 10 * 1000);
 };

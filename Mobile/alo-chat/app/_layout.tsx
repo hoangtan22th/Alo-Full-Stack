@@ -140,6 +140,12 @@ function RootLayoutNav() {
                 },
               });
             }
+          } else if (notification.type === "REMINDER") {
+            if (notification.data?.groupId) {
+              router.push({
+                pathname: `/chat/${notification.data.groupId}` as any,
+              });
+            }
           }
         }}
       />
