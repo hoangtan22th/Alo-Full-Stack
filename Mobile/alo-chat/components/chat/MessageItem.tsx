@@ -25,6 +25,8 @@ interface MessageItemProps {
   messageRefs: React.MutableRefObject<Record<string, View>>;
   expandedTimeMsgId: string | null;
   setExpandedTimeMsgId: React.Dispatch<React.SetStateAction<string | null>>;
+  onReplyClick?: (messageId: string) => void;
+  isHighlighted?: boolean;
 }
 
 export const MessageItem = ({
@@ -38,6 +40,8 @@ export const MessageItem = ({
   messageRefs,
   expandedTimeMsgId,
   setExpandedTimeMsgId,
+  onReplyClick,
+  isHighlighted,
 }: MessageItemProps) => {
   const timeString = new Date(msg.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
@@ -48,6 +52,12 @@ export const MessageItem = ({
     <View
       className={`${isLastInBlock ? "" : "mb-1"} w-full ${isSender ? "items-end" : "items-start"}`}
     >
+      {isHighlighted && (
+        <View
+          className="absolute top-0 bottom-0 left-[-20px] right-[-20px] bg-yellow-100/50 z-0"
+          pointerEvents="none"
+        />
+      )}
       <TouchableOpacity
         ref={(r) => {
           if (r) messageRefs.current[msg._id] = r as any;
@@ -74,6 +84,36 @@ export const MessageItem = ({
                   : "bg-white rounded-3xl rounded-bl-lg")
           }`}
         >
+          {msg.replyTo && msg.replyTo.messageId && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => onReplyClick?.(msg.replyTo!.messageId)}
+              className={`mb-2 p-2 rounded-lg border-l-4 border-blue-400 ${
+                isSender ? "bg-gray-800" : "bg-gray-100"
+              }`}
+            >
+              <Text
+                className={`text-[12px] font-bold mb-0.5 ${
+                  isSender ? "text-blue-300" : "text-blue-600"
+                }`}
+              >
+                {msg.replyTo.senderName || "Người dùng"}
+              </Text>
+              <Text
+                className={`text-[12px] ${
+                  isSender ? "text-gray-400" : "text-gray-500"
+                }`}
+                numberOfLines={1}
+              >
+                {msg.replyTo.type === "text"
+                  ? msg.replyTo.content
+                  : msg.replyTo.type === "image"
+                    ? (msg.replyTo.content === "[Album Ảnh]" ? "[Album Ảnh]" : "[Hình ảnh]")
+                    : "[Tệp tin]"}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {msg.isRevoked ? (
             <Text
               className={

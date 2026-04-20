@@ -1,15 +1,17 @@
-import React, { useState } from "react";
+import React, { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import {
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import {
+  ArrowUturnLeftIcon,
   DocumentIcon,
   FaceSmileIcon,
   MicrophoneIcon,
   PhotoIcon,
   PlusIcon,
+  XMarkIcon,
 } from "react-native-heroicons/outline";
 import { PaperAirplaneIcon } from "react-native-heroicons/solid";
 import Animated, {
@@ -17,6 +19,12 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { MessageDTO } from "../../services/messageService";
+
+export interface ChatInputHandle {
+  focus: () => void;
+  blur: () => void;
+}
 
 interface ChatInputProps {
   inputText: string;
@@ -25,18 +33,32 @@ interface ChatInputProps {
   onSendImage: () => void;
   onSendFile: () => void;
   isKeyboardVisible: boolean;
+  replyingTo?: MessageDTO | null;
+  onCancelReply?: () => void;
 }
 
-export const ChatInput = ({
-  inputText,
-  onInputChange,
-  onSendMessage,
-  onSendImage,
-  onSendFile,
-  isKeyboardVisible,
-}: ChatInputProps) => {
-  const insets = useSafeAreaInsets();
-  const [showExtensionMenu, setShowExtensionMenu] = useState(false);
+export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
+  (
+    {
+      inputText,
+      onInputChange,
+      onSendMessage,
+      onSendImage,
+      onSendFile,
+      isKeyboardVisible,
+      replyingTo,
+      onCancelReply,
+    },
+    ref,
+  ) => {
+    const insets = useSafeAreaInsets();
+    const [showExtensionMenu, setShowExtensionMenu] = useState(false);
+    const textInputRef = useRef<TextInput>(null);
+
+    useImperativeHandle(ref, () => ({
+      focus: () => textInputRef.current?.focus(),
+      blur: () => textInputRef.current?.blur(),
+    }));
 
   const spinMenu = useAnimatedStyle(() => {
     return {
@@ -88,6 +110,38 @@ export const ChatInput = ({
         </View>
       )}
 
+      {/* Reply Preview */}
+      {replyingTo && (
+        <View className="px-5 py-2.5 bg-gray-50/90 border-t border-gray-100 flex-row items-center">
+          <View className="flex-1 border-l-2 border-blue-500 pl-3 py-0.5">
+            <View className="flex-row items-center mb-1">
+              <ArrowUturnLeftIcon
+                size={12}
+                color="#3b82f6"
+                style={{ transform: [{ scaleX: -1 }], marginRight: 6 }}
+              />
+              <Text className="text-[11px] font-bold text-blue-600 uppercase tracking-tight">
+                Trả lời {replyingTo.senderName || "người dùng"}
+              </Text>
+            </View>
+            <Text className="text-[13px] text-gray-500 italic" numberOfLines={1}>
+              {replyingTo.type === "text"
+                ? replyingTo.content
+                : replyingTo.type === "image"
+                  ? "[Hình ảnh]"
+                  : replyingTo.metadata?.fileName || "[Tệp tin]"}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={onCancelReply}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            className="w-5 h-5 items-center justify-center bg-gray-200 rounded-full ml-3"
+          >
+            <XMarkIcon size={12} color="#6b7280" />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Input Area */}
       <View
         className="w-full flex-row items-end px-4 py-3 bg-transparent"
@@ -108,6 +162,7 @@ export const ChatInput = ({
 
         <View className="flex-1 flex-row items-end bg-white rounded-[25px] pl-4 pr-1.5 py-1.5 shadow-sm border border-gray-200 min-h-[50px]">
           <TextInput
+            ref={textInputRef}
             className="flex-1 text-[15px] text-gray-800 max-h-24 pt-2 pb-2 mt-0.5 mb-0.5"
             placeholder="Nhập tin nhắn..."
             placeholderTextColor="#9ca3af"
@@ -137,10 +192,22 @@ export const ChatInput = ({
       </View>
     </>
   );
-};
+});
 
 // Internal Text component for the menu
-const Text = ({ children, className }: { children: any; className?: string }) => {
+const Text = ({
+  children,
+  className,
+  numberOfLines,
+}: {
+  children: any;
+  className?: string;
+  numberOfLines?: number;
+}) => {
   const { Text: RNText } = require("react-native");
-  return <RNText className={className}>{children}</RNText>;
+  return (
+    <RNText className={className} numberOfLines={numberOfLines}>
+      {children}
+    </RNText>
+  );
 };
