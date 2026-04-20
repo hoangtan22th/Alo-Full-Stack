@@ -18,6 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import jakarta.annotation.PostConstruct;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -45,8 +48,8 @@ public class SuperAdminService {
         }
     }
 
-    public List<AdminResponse> getAdmins() {
-        return accountRepository.findByRolesNameIn(List.of("ROLE_ADMIN", "ROLE_SUPER_ADMIN")).stream()
+    public Page<AdminResponse> getAdmins(String search, String roleFilter, Pageable pageable) {
+        return accountRepository.findAdminsFilteredAndPaginated(search, roleFilter, pageable)
                 .map(acc -> {
                     boolean isSuperAdmin = acc.getRoles().stream()
                             .anyMatch(r -> r.getName().equals("ROLE_SUPER_ADMIN"));
@@ -60,8 +63,7 @@ public class SuperAdminService {
                             role,
                             acc.getCreatedAt()
                     );
-                })
-                .collect(Collectors.toList());
+                });
     }
 
     @Transactional

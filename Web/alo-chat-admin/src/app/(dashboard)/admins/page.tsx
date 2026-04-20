@@ -9,11 +9,13 @@ import {
   PlusIcon,
   PencilIcon,
   ShieldCheckIcon,
+  MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
 
 export default function AdminManagementPage() {
   const {
     admins,
+    pagination,
     loading,
     error,
     fetchAdmins,
@@ -34,16 +36,42 @@ export default function AdminManagementPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("ROLE_ADMIN");
 
+  // Search and filter state
+  const [searchTerm, setSearchTerm] = useState("");
+  const [roleFilter, setRoleFilter] = useState("ALL");
+  const [currentPage, setCurrentPage] = useState(0);
+
   useEffect(() => {
     checkAuth();
     setIsAuthChecked(true);
   }, [checkAuth]);
 
+  // Debounce search effect to trigger backend request
   useEffect(() => {
     if (isAuthChecked && isSuperAdmin) {
-      fetchAdmins();
+      const delayDebounceFn = setTimeout(() => {
+        fetchAdmins({
+          search: searchTerm,
+          roleFilter: roleFilter,
+          page: currentPage,
+        });
+      }, 500); // 500ms delay
+
+      return () => clearTimeout(delayDebounceFn);
     }
-  }, [isAuthChecked, isSuperAdmin, fetchAdmins]);
+  }, [
+    isAuthChecked,
+    isSuperAdmin,
+    searchTerm,
+    roleFilter,
+    currentPage,
+    fetchAdmins,
+  ]);
+
+  // Reset page when search or filter changes
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, roleFilter]);
 
   const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,6 +172,29 @@ export default function AdminManagementPage() {
         </div>
       )}
 
+      {/* Search and Filters */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="relative flex-1">
+          <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
+          <input
+            type="text"
+            placeholder="Search admins by name or email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+          />
+        </div>
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className="px-4 py-2 bg-surface-container-low border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all min-w-[150px]"
+        >
+          <option value="ALL">All Roles</option>
+          <option value="SUPER_ADMIN">Super Admin</option>
+          <option value="ADMIN">Admin</option>
+        </select>
+      </div>
+
       <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-[#ebeef0] overflow-hidden">
         {loading && admins.length === 0 ? (
           <div className="p-8 text-center text-on-surface-variant animate-pulse">
@@ -169,7 +220,7 @@ export default function AdminManagementPage() {
                     colSpan={5}
                     className="py-8 text-center text-on-surface-variant"
                   >
-                    No admins found.
+                    No admins found matching your criteria.
                   </td>
                 </tr>
               ) : (
@@ -229,6 +280,51 @@ export default function AdminManagementPage() {
           </table>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {!loading && pagination.totalPages > 1 && (
+        <div className="flex justify-between flex-wrap gap-4 items-center mt-6 p-4 bg-surface-container-lowest rounded-xl border border-[#ebeef0]">
+          <span className="text-sm text-on-surface-variant font-medium">
+            Showing page {pagination.page + 1} of {pagination.totalPages} (
+            {pagination.totalElements} total admins)
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={pagination.page === 0}
+              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+              className="px-3 py-1.5 text-sm font-medium rounded-lg border border-[#ebeef0] text-on-surface hover:bg-surface-container-low disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Previous
+            </button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: pagination.totalPages }).map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentPage(i)}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
+                    pagination.page === i
+                      ? "bg-primary text-on-primary shadow-sm"
+                      : "text-on-surface-variant hover:bg-surface-container-low"
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+            <button
+              disabled={pagination.page >= pagination.totalPages - 1}
+              onClick={() =>
+                setCurrentPage((p) =>
+                  Math.min(pagination.totalPages - 1, p + 1),
+                )
+              }
+              className="px-3 py-1.5 text-sm font-medium rounded-lg border border-[#ebeef0] text-on-surface hover:bg-surface-container-low disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Create Admin Modal */}
       {isModalOpen && (

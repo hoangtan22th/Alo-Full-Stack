@@ -10,11 +10,30 @@ export interface AdminUser {
   createdAt: string;
 }
 
+export interface PaginatedAdmins {
+  content: AdminUser[];
+  totalPages: number;
+  totalElements: number;
+  number: number;
+}
+
 export const adminService = {
-  getAllAdmins: async (): Promise<AdminUser[]> => {
+  getAllAdmins: async (query?: {
+    search?: string;
+    roleFilter?: string;
+    page?: number;
+    size?: number;
+  }): Promise<PaginatedAdmins> => {
     try {
-      const response = await axiosClient.get(API_URL);
-      return response.data?.data || [];
+      const response = await axiosClient.get(API_URL, { params: query });
+      return (
+        response.data?.data || {
+          content: [],
+          totalPages: 0,
+          totalElements: 0,
+          number: 0,
+        }
+      );
     } catch (error: any) {
       throw new Error(
         error.response?.data?.message || "Failed to fetch admins",

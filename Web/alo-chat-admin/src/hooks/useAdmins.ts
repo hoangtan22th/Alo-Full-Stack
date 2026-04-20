@@ -1,26 +1,48 @@
 ﻿import { useState, useCallback } from "react";
-import { adminService, AdminUser } from "@/services/adminService";
+import {
+  adminService,
+  AdminUser,
+  PaginatedAdmins,
+} from "@/services/adminService";
 import { toast } from "sonner";
 
 export const useAdmins = () => {
   const [admins, setAdmins] = useState<AdminUser[]>([]);
+  const [pagination, setPagination] = useState({
+    totalPages: 0,
+    totalElements: 0,
+    page: 0,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchAdmins = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await adminService.getAllAdmins();
-      setAdmins(data);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Failed to fetch admins");
-      toast.error(err.message || "Failed to fetch admins");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const fetchAdmins = useCallback(
+    async (query?: {
+      search?: string;
+      roleFilter?: string;
+      page?: number;
+      size?: number;
+    }) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await adminService.getAllAdmins(query);
+        setAdmins(data.content);
+        setPagination({
+          totalPages: data.totalPages,
+          totalElements: data.totalElements,
+          page: data.number,
+        });
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || "Failed to fetch admins");
+        toast.error(err.message || "Failed to fetch admins");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   const createAdmin = useCallback(
     async (
@@ -112,6 +134,7 @@ export const useAdmins = () => {
 
   return {
     admins,
+    pagination,
     loading,
     error,
     fetchAdmins,
