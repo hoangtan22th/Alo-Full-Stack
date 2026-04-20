@@ -1,10 +1,13 @@
 package edu.iuh.fit.chatbot_service.controller;
 
+import edu.iuh.fit.chatbot_service.entity.ChatHistory;
 import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import edu.iuh.fit.chatbot_service.dto.ChatRequest;
 import edu.iuh.fit.chatbot_service.service.ChatService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/chatbot")
@@ -32,18 +35,25 @@ public class ChatController {
         ChatRequest fullRequest = new ChatRequest(
                 request.message(),
                 finalUserId,
-                request.roomId()
+                request.roomId(),
+                request.context()
         );
 
         String result = chatService.chat(fullRequest);
 
-        // 4. Xử lý hậu kỳ cho chuỗi kết quả
         if (result == null || result.isBlank()) {
-            result = "AI hiện tại không thể phản hồi câu hỏi này. thử lại câu khác xem sao?";
+            result = "Alo Bot hiện tại không thể phản hồi câu hỏi này. Bạn thử hỏi về tính năng của app nhé!";
         } else {
             result = result.strip();
         }
 
         return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    // API lấy lịch sử chat với Bot
+    @GetMapping("/history/{userId}")
+    public ResponseEntity<ApiResponse<List<ChatHistory>>> getHistory(@PathVariable String userId) {
+        List<ChatHistory> history = chatService.getHistory(userId);
+        return ResponseEntity.ok(ApiResponse.success(history));
     }
 }
