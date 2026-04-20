@@ -108,6 +108,23 @@ export function initSocketConnection(io: Server) {
       socket.join(`room_${roomId}`);
     });
 
+    // 5.2 Handle Call Signaling
+    socket.on("CALL_INITIATED", (data: { targetRoom: string; caller: any; isVideo: boolean }) => {
+      console.log(`[Socket.IO] Call initiated by ${userId} to room_${data.targetRoom}`);
+      socket.to(`room_${data.targetRoom}`).emit("INCOMING_CALL", {
+        roomId: data.targetRoom,
+        caller: data.caller,
+        isVideo: data.isVideo,
+      });
+    });
+
+    socket.on("CANCEL_CALL", (data: { targetRoom: string }) => {
+      console.log(`[Socket.IO] Call canceled by ${userId} for room_${data.targetRoom}`);
+      socket.to(`room_${data.targetRoom}`).emit("CALL_CANCELED", {
+        roomId: data.targetRoom,
+      });
+    });
+
     // 6. Check User Status
     socket.on("CHECK_USER_STATUS", async (targetUserId: string) => {
       try {
@@ -126,6 +143,27 @@ export function initSocketConnection(io: Server) {
       } catch (error) {
         console.error("Error checking user status", error);
       }
+    });
+
+    // 7. Social Events (Bypass RabbitMQ for simple UI notifications)
+    socket.on("EMIT_FRIEND_REQUEST_SENT", (data: { recipientId: string; requesterName: string; requesterAvatar?: string }) => {
+      console.log(`[Socket.IO] Friend request from ${userId} to ${data.recipientId}`);
+      socket.to(`user_${data.recipientId}`).emit("NEW_FRIEND_REQUEST", {
+        requesterId: userId,
+        requesterName: data.requesterName,
+        requesterAvatar: data.requesterAvatar,
+      });
+    });
+
+    socket.on("EMIT_FRIEND_REQUEST_ACCEPTED", (data: { recipientId: string; accepterName: string }) => {
+      console.log(`[Socket.IO] Friend request accepted by ${userId} for ${data.recipientId}`);
+      // Notify the original requester
+      socket.to(`user_${data.recipientId}`).emit("FRIEND_REQUEST_ACCEPTED", {
+        accepterId: userId,
+        accepterName: data.accepterName,
+      });
+      // Also notify everyone to refresh friend lists
+      io.to(`user_${data.recipientId}`).to(`user_${userId}`).emit("FRIEND_LIST_UPDATED", {});
     });
 
     // ============================================

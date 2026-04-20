@@ -1,12 +1,16 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import axiosClient from "@/services/api";
 import { messageService, MessageDTO } from "@/services/messageService";
 import { groupService } from "@/services/groupService";
 import { socketService } from "@/services/socketService";
 import { toast } from "sonner";
 import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
+import ChatSummaryButton from "@/components/ui/chatbot/ChatSummaryButton";
+import ZegoCallRoom from "@/components/ui/call/ZegoCallRoom";
+import { CallSystemMessage } from "@/components/ui/call/CallSystemMessage";
+
 import JSZip from "jszip";
 import {
   PlusIcon,
@@ -78,11 +82,15 @@ const getMediaUrl = (url: string | undefined): string => {
 export default function ChatPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const conversationId = params?.conversationId as string;
 
   // File upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
+
+  // Audio state for ringtone
+  const ringtoneRef = useRef<HTMLAudioElement>(null);
 
   /* ---------- chat area state ---------- */
   const { user: currentUser } = useAuthStore();
@@ -120,6 +128,62 @@ export default function ChatPage() {
 
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const [activeAlbumIndex, setActiveAlbumIndex] = useState<{ messageId: string, index: number } | null>(null);
+
+  // Call state
+  const callStartTimeRef = useRef<number | null>(null);
+  const [callState, setCallState] = useState<{ active: boolean; isVideo: boolean; roomId?: string; isCaller?: boolean; hasSomeoneJoined?: boolean }>({ active: false, isVideo: false, hasSomeoneJoined: false });
+  const [incomingCall, setIncomingCall] = useState<{ roomId: string; caller: any; isVideo: boolean } | null>(null);
+  const [callEndedUi, setCallEndedUi] = useState(false);
+  const callStateRef = useRef(callState);
+
+  useEffect(() => {
+    callStateRef.current = callState;
+  }, [callState]);
+
+  // Chặn triệt để lỗi "createSpan" của Zego SDK — handler sống ở page level
+  // để vẫn hoạt động sau khi ZegoCallRoom unmount
+  useEffect(() => {
+    const zegoErrorHandler = (e: any) => {
+      const msg = e.message || e.reason?.message || "";
+      if (msg.includes("createSpan") || msg.includes("Cannot read properties of null")) {
+        if (e.preventDefault) e.preventDefault();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        return true;
+      }
+    };
+    window.addEventListener("error", zegoErrorHandler, true);
+    window.addEventListener("unhandledrejection", zegoErrorHandler, true);
+    return () => {
+      // Delay removal để bắt hết lỗi Zego post-destroy
+      setTimeout(() => {
+        window.removeEventListener("error", zegoErrorHandler, true);
+        window.removeEventListener("unhandledrejection", zegoErrorHandler, true);
+      }, 5000);
+    };
+  }, []);
+
+  const playRingtone = () => {
+    if (ringtoneRef.current) {
+      ringtoneRef.current.currentTime = 0;
+      ringtoneRef.current.play().catch(e => console.log("Audio play blocked by browser:", e));
+    }
+  };
+
+  const stopRingtone = () => {
+    if (ringtoneRef.current) {
+      ringtoneRef.current.pause();
+      ringtoneRef.current.currentTime = 0;
+    }
+  };
+
+  useEffect(() => {
+    if (incomingCall && !callState.active) {
+      playRingtone();
+    } else {
+      // Chỉ tự dừng khi hết cuộc gọi đến, nếu đang gọi đi (callState.active && isCaller) thì không dừng ở đây
+      if (!callState.active) stopRingtone();
+    }
+  }, [incomingCall, callState.active]);
 
   // Helper lấy kích thước ảnh tự nhiên trước khi upload
   const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
@@ -392,6 +456,26 @@ export default function ChatPage() {
       }
     });
 
+    // Lắng nghe cuộc gọi đến
+    socketService.off("INCOMING_CALL");
+    socketService.onIncomingCall((data) => {
+      const myCurrentId = currentUser?.id || currentUser?._id || currentUser?.userId;
+      // Chỉ hiện thông báo nếu mình không phải người gọi và hiện tại không trong cuộc gọi nào khác
+      if (String(data.caller.id) !== String(myCurrentId) && !callStateRef.current.active) {
+        setIncomingCall(data);
+      }
+    });
+
+    // Lắng nghe cuộc gọi bị hủy
+    socketService.off("CALL_CANCELED");
+    socketService.onCallCanceled((data) => {
+      if (String(data.roomId) === String(conversationIdRef.current)) {
+        setIncomingCall(null);
+        setCallState({ active: false, isVideo: false, roomId: undefined, isCaller: false, hasSomeoneJoined: false });
+        stopRingtone();
+      }
+    });
+
     return () => {
       socketService.off("message-received");
       socketService.off("messages-read");
@@ -399,6 +483,8 @@ export default function ChatPage() {
       socketService.off("message-revoked");
       socketService.off("message-pinned");
       socketService.off("message-updated");
+      socketService.off("INCOMING_CALL");
+      socketService.off("CALL_CANCELED");
     };
   }, [conversationId, currentUser]);
 
@@ -439,6 +525,34 @@ export default function ChatPage() {
       fetchConversationInfo();
     }
   }, [conversationId, currentUser, fetchConversationInfo]);
+
+  const handleStartCall = useCallback((isVideo: boolean) => {
+    setCallState({ active: true, isVideo, roomId: conversationId, isCaller: true, hasSomeoneJoined: false });
+    playRingtone(); // Nghe tiếng chuông chờ
+    socketService.initiateCall({
+      targetRoom: conversationId,
+      caller: {
+        id: myId,
+        name: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+        avatar: currentUser?.avatar
+      },
+      isVideo
+    });
+  }, [conversationId, myId, currentUser]);
+
+  // Handle call query param
+  useEffect(() => {
+    const callParam = searchParams.get("call");
+    if (!callParam || callState.active || !conversationId || !currentUser || !myId) return;
+
+    if (callParam === "video") {
+      handleStartCall(true);
+      router.replace(`/chat/${conversationId}`);
+    } else if (callParam === "audio") {
+      handleStartCall(false);
+      router.replace(`/chat/${conversationId}`);
+    }
+  }, [searchParams, callState.active, conversationId, currentUser, myId, handleStartCall, router]);
 
   /* ─── Fetch user info for group members who sent messages ─── */
   useEffect(() => {
@@ -933,8 +1047,158 @@ export default function ChatPage() {
   /* ─────────────────────────────────────────
      RENDER
   ───────────────────────────────────────── */
+
+  const avatarMap = useMemo(() => 
+    Object.fromEntries(Object.entries(userCache).map(([k, v]) => [k, v.avatar])),
+  [userCache]);
+
   return (
     <>
+      <audio ref={ringtoneRef} src="/ringtone.mp3" loop preload="auto" />
+
+      {callState.active && conversationId !== BOT_ID && (
+        <ZegoCallRoom
+          roomId={callState.roomId || conversationId}
+          userId={myId}
+          userName={currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi"}
+          isGroup={conversationInfo?.isGroup || false}
+          isVideoCall={callState.isVideo}
+          avatarMap={avatarMap}
+          myAvatar={currentUser?.avatar}
+          targetAvatar={conversationInfo?.isGroup ? undefined : conversationInfo?.displayAvatar}
+          targetName={conversationInfo?.isGroup ? undefined : conversationInfo?.displayName}
+          hasSomeoneJoined={callState.hasSomeoneJoined}
+          isCaller={callState.isCaller}
+          onUserJoin={() => {
+            // Khi có người vào phòng, tắt tiếng chuông và đánh dấu đã có người nghe
+            stopRingtone();
+            if (!callStartTimeRef.current) callStartTimeRef.current = Date.now();
+            setCallState(prev => ({ ...prev, hasSomeoneJoined: true }));
+          }}
+          onUserLeave={(users) => {
+            console.log("ZegoCallRoom: onUserLeave in page.tsx", users);
+            // Nếu là 1-on-1 và người kia thoát, thì mình cũng kết thúc
+            if (!conversationInfo?.isGroup) {
+              setCallEndedUi(true);
+              setTimeout(() => setCallEndedUi(false), 3000);
+              setCallState({ active: false, isVideo: false, roomId: undefined, isCaller: false, hasSomeoneJoined: false });
+              stopRingtone();
+            }
+          }}
+          onLeaveRoom={() => {
+            console.log("ZegoCallRoom: onLeaveRoom in page.tsx");
+            stopRingtone();
+            
+            const durationSecs = callStartTimeRef.current ? Math.floor((Date.now() - callStartTimeRef.current) / 1000) : 0;
+            callStartTimeRef.current = null;
+            
+            if (callStateRef.current.isCaller) {
+              if (callStateRef.current.hasSomeoneJoined) {
+                // Đã có người nghe -> Cuộc gọi kết thúc bình thường
+                setCallEndedUi(true);
+                setTimeout(() => setCallEndedUi(false), 3000);
+                messageService.sendMessage({
+                  conversationId,
+                  content: callStateRef.current.isVideo ? "Cuộc gọi video đã kết thúc" : "Cuộc gọi thoại đã kết thúc",
+                  type: "system",
+                  metadata: { callType: callStateRef.current.isVideo ? 'video' : 'audio', callStatus: 'ended', callDuration: durationSecs }
+                });
+              } else {
+                // Bấm dập máy khi chưa ai nghe -> Báo nhỡ/hủy
+                socketService.cancelCall({ targetRoom: conversationId });
+                messageService.sendMessage({
+                  conversationId,
+                  content: callStateRef.current.isVideo ? "Cuộc gọi video đã hủy" : "Cuộc gọi thoại đã hủy",
+                  type: "system",
+                  metadata: { callType: callStateRef.current.isVideo ? 'video' : 'audio', callStatus: 'canceled', callDuration: 0 }
+                });
+              }
+            } else {
+               // Mình là người nhận, khi thoát ra thì hiện UI kết thúc
+               setCallEndedUi(true);
+               setTimeout(() => setCallEndedUi(false), 3000);
+            }
+            
+            setCallState({ active: false, isVideo: false, roomId: undefined, isCaller: false, hasSomeoneJoined: false });
+          }}
+        />
+      )}
+
+      {/* Call Ended Modal */}
+      {callEndedUi && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-none">
+          <div className="bg-white rounded-3xl p-5 shadow-2xl flex flex-col items-center gap-3 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-300 relative overflow-hidden border border-gray-100">
+            <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 mb-1">
+              <PhoneIcon className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-black text-gray-900">Cuộc gọi đã kết thúc</h3>
+            <p className="text-gray-500 font-bold text-xs text-center px-4">
+              Thời gian gọi đã được lưu vào lịch sử trò chuyện.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Incoming Call Modal */}
+      {incomingCall && !callState.active && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white rounded-[32px] p-8 shadow-2xl flex flex-col items-center gap-6 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-300 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-blue-50 to-white -z-10"></div>
+            
+            {/* Caller Avatar (Ringing effect) */}
+            <div className="relative">
+              <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20"></div>
+              <div className="absolute -inset-4 bg-blue-500 rounded-full animate-pulse opacity-10"></div>
+              {incomingCall.caller?.avatar ? (
+                <img src={incomingCall.caller.avatar} alt="Avatar" className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg relative z-10" />
+              ) : (
+                <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center border-4 border-white shadow-lg relative z-10 text-blue-600 font-bold text-2xl">
+                  {(incomingCall.caller?.name || "?").charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-black text-gray-900">{incomingCall.caller?.name || "Ai đó"}</h3>
+              <p className="text-gray-500 font-medium">
+                Đang gọi {incomingCall.isVideo ? "Video" : "Thoại"} cho bạn...
+              </p>
+            </div>
+
+            <div className="flex w-full gap-4 mt-2">
+              <button 
+                onClick={() => {
+                  stopRingtone();
+                  setIncomingCall(null);
+                  socketService.cancelCall({ targetRoom: conversationId });
+                  messageService.sendMessage({
+                    conversationId,
+                    content: incomingCall.isVideo ? "Đã từ chối cuộc gọi video" : "Đã từ chối cuộc gọi thoại",
+                    type: "system",
+                    metadata: { callType: incomingCall.isVideo ? 'video' : 'audio', callStatus: 'declined', callDuration: 0 }
+                  });
+                }}
+                className="flex-1 py-3.5 bg-gray-100 text-gray-700 font-bold rounded-2xl hover:bg-gray-200 transition-colors"
+              >
+                Từ chối
+              </button>
+              <button 
+                onClick={() => {
+                  stopRingtone();
+                  callStartTimeRef.current = Date.now();
+                  setCallState({ active: true, isVideo: incomingCall.isVideo, roomId: incomingCall.roomId, isCaller: false, hasSomeoneJoined: true });
+                  setIncomingCall(null);
+                }}
+                className="flex-1 py-3.5 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 shadow-lg shadow-green-500/30 transition-all flex justify-center items-center gap-2"
+              >
+                {incomingCall.isVideo ? <VideoCameraIcon className="w-5 h-5"/> : <PhoneIcon className="w-5 h-5"/>}
+                Nghe
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {conversationId === BOT_ID ? (
         <BotChatArea currentUser={currentUser} />
       ) : (
@@ -994,13 +1258,21 @@ export default function ChatPage() {
                 </div>
               </div>
 
+
               <div className="flex items-center gap-4 text-gray-400">
-                <button className="hover:text-black transition">
+                <button 
+                  onClick={() => handleStartCall(false)}
+                  className="hover:text-black transition"
+                >
                   <PhoneIcon className="w-5 h-5" />
                 </button>
-                <button className="hover:text-black transition">
+                <button 
+                  onClick={() => handleStartCall(true)}
+                  className="hover:text-black transition"
+                >
                   <VideoCameraIcon className="w-5 h-5" />
                 </button>
+
                 <button className="hover:text-black transition">
                   <MagnifyingGlassIcon className="w-5 h-5" />
                 </button>
@@ -1130,6 +1402,19 @@ export default function ChatPage() {
               </div>
             )}
 
+            {/* Floating Chat Summary Button */}
+            {conversationId !== "alo-bot" && (
+              <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex justify-center w-full">
+                <div className="pointer-events-auto">
+                  <ChatSummaryButton 
+                    conversationId={conversationId} 
+                    userId={myId} 
+                    messages={messages} 
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto px-5 py-4 scrollbar-hide">
               {loadingMessages ? (
@@ -1151,7 +1436,7 @@ export default function ChatPage() {
                     // Tin cuối cùng của nhóm — để lấy senderName/avatar và timestamp + trạng thái
                     const lastMsg = gMsgs[gMsgs.length - 1];
 
-                    if (lastMsg.type === "system") {
+                    if (lastMsg.type === "system" && !lastMsg.metadata?.callType) {
                       return (
                         <div key={`group-${groupIdx}`} className="flex justify-center my-4 w-full px-10">
                           <div className="flex flex-col items-center gap-1.5 max-w-full">
@@ -1243,13 +1528,29 @@ export default function ChatPage() {
                               <div
                                 className={`relative max-w-[75%] flex flex-col ${isMine ? "items-end" : "items-start"}`}
                               >
-                                {/* Wrapper cho Bubble content và Hover controls để nó luôn căn giữa text */}
-                                <div
-                                  className={`relative max-w-full overflow-hidden flex flex-col p-1.5 px-2 border shadow-sm ${isMine
-                                    ? "bg-blue-50/80 border-blue-100 shadow-blue-900/5 items-end"
-                                    : "bg-white border-gray-100 shadow-gray-900/5 items-start"
-                                    } ${bubbleRadius}`}
-                                >
+                                {/* System messages (General & Call) */}
+                                {msg.type === "system" ? (
+                                  msg.metadata?.callType ? (
+                                    <CallSystemMessage
+                                      isMine={isMine}
+                                      metadata={msg.metadata as any}
+                                      createdAt={msg.createdAt}
+                                      onCallAgain={(isVideo) => handleStartCall(isVideo)}
+                                    />
+                                  ) : (
+                                    <div className="flex justify-center w-full my-4 px-10">
+                                      <div className="bg-gray-100/50 backdrop-blur-sm text-gray-500 text-[11px] font-bold py-1.5 px-4 rounded-full border border-gray-200/50 shadow-sm text-center uppercase tracking-tight">
+                                        {msg.content}
+                                      </div>
+                                    </div>
+                                  )
+                                ) : (
+                                  <div
+                                    className={`relative max-w-full overflow-hidden flex flex-col p-1.5 px-2 border shadow-sm ${isMine
+                                      ? "bg-blue-50/80 border-blue-100 shadow-blue-900/5 items-end"
+                                      : "bg-white border-gray-100 shadow-gray-900/5 items-start"
+                                      } ${bubbleRadius}`}
+                                  >
                                   {/* Reply Quote Box */}
                                   {msg.replyTo && msg.replyTo.messageId && !isRevoked && (
                                     <div
@@ -1477,6 +1778,9 @@ export default function ChatPage() {
                                         Tin nhắn đã được thu hồi
                                       </span>
                                     </div>
+                                  ) : msg.type === "system" && msg.metadata?.callType ? (
+                                    null /* Rendered outside bubble wrapper above */
+
                                   ) : msg.type === "file" ? (
                                     <div
                                       className={`flex items-center justify-between gap-4 px-2 py-1 transition w-80 max-w-full group`}
@@ -1511,7 +1815,8 @@ export default function ChatPage() {
                                       {msg.content}
                                     </div>
                                   )}
-                                </div>
+                                  </div>
+                                )} {/* end: system call bypasses bubble wrapper */}
 
                                 {/* Hover Controls (Reaction & Menu & Redo) */}
                                 <div
@@ -1672,7 +1977,7 @@ export default function ChatPage() {
                                       <PencilIcon className="w-4 h-4" />
                                     </button>
                                   )}
-                                </div>
+                                  </div>
                                 {/* Hiển thị các cảm xúc đã thả */}
                                 {(() => {
                                   if (msg.type === "image" && msg.metadata?.imageGroup) {

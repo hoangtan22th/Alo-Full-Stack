@@ -3,6 +3,7 @@ import { useState } from "react";
 import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import { FaceSmileIcon } from "@heroicons/react/24/outline";
 
+
 export default function ChatPage() {
   const [showNewChatModal, setShowNewChatModal] = useState(false);
 
