@@ -715,7 +715,13 @@ export const requestJoinGroup = async (
       group.joinRequests = [];
     }
 
-    group.joinRequests.push({ userId: requesterId, requestedAt: new Date() });
+    const { answer } = req.body;
+
+    group.joinRequests.push({
+      userId: requesterId,
+      requestedAt: new Date(),
+      answer: answer || "",
+    });
     await group.save();
 
     // Bắn tin cho admin
@@ -1184,7 +1190,7 @@ export const updateSettings = async (
 ): Promise<void> => {
   try {
     const groupId = String(req.params.groupId || "");
-    const { isHighlightEnabled, permissions } = req.body;
+    const { isHighlightEnabled, permissions, membershipQuestion, isQuestionEnabled } = req.body;
     const requesterId = (req.headers["x-user-id"] || "").toString();
 
     const group = await Conversation.findById(groupId);
@@ -1213,6 +1219,14 @@ export const updateSettings = async (
       if (permissions.createPolls) group.permissions.createPolls = permissions.createPolls;
       if (permissions.pinMessages) group.permissions.pinMessages = permissions.pinMessages;
       if (permissions.sendMessage) group.permissions.sendMessage = permissions.sendMessage;
+    }
+
+    if (typeof membershipQuestion === "string") {
+      group.membershipQuestion = membershipQuestion;
+    }
+
+    if (typeof isQuestionEnabled === "boolean") {
+      group.isQuestionEnabled = isQuestionEnabled;
     }
 
     await group.save();

@@ -14,6 +14,7 @@ import {
   Switch,
   ActivityIndicator,
   Modal,
+  TextInput,
 } from "react-native";
 import {
   ArrowLeftIcon,

@@ -20,11 +20,13 @@ export interface IConversation extends Document {
   members: IMember[];
   mutedBy: string[];
   hiddenBy: string[];
-  joinRequests: { userId: string; requestedAt: Date }[];
+  joinRequests: { userId: string; requestedAt: Date; answer?: string }[];
   isBanned: boolean;
   isApprovalRequired: boolean;
   isLinkEnabled: boolean; // Add isLinkEnabled field
   isHistoryVisible: boolean; // Add isHistoryVisible field
+  isQuestionEnabled: boolean;
+  membershipQuestion: string;
   clearedAt: Map<string, Date>; // userId -> timestamp
   unreadCount: Map<string, number>; // userId -> count
   isHighlightEnabled: boolean;
@@ -69,8 +71,11 @@ const conversationSchema = new Schema<IConversation>(
       {
         userId: { type: String, required: true },
         requestedAt: { type: Date, default: Date.now },
+        answer: { type: String, default: "" },
       },
     ],
+    membershipQuestion: { type: String, default: "" },
+    isQuestionEnabled: { type: Boolean, default: false },
     isApprovalRequired: { type: Boolean, default: false },
     isLinkEnabled: { type: Boolean, default: false }, // Add isLinkEnabled schema logic
     isHistoryVisible: { type: Boolean, default: true }, // Add isHistoryVisible schema logic

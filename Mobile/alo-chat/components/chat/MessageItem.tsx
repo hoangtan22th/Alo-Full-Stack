@@ -86,10 +86,10 @@ export const MessageItem = ({
         className="relative"
       >
         <View
-          className={`shadow-sm border-[2px] ${
+          className={`shadow-sm border-[1px] ${
             ((msg.type === "image" || msg.type === "file") && !msg.isRevoked) ||
             msg.type === "poll"
-              ? `p-0 bg-transparent ${msg.type === "image" ? "rounded-[22px]" : "rounded-3xl"}`
+              ? `p-0 bg-transparent ${msg.type === "image" ? "rounded-[22px]" : "rounded-2xl"}`
               : "px-5 py-3 " +
                 (isSender
                   ? "bg-black rounded-3xl rounded-br-lg"

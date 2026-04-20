@@ -151,9 +151,11 @@ export const groupService = {
     }
   },
 
-  requestJoinGroup: async (groupId: string) => {
+  requestJoinGroup: async (groupId: string, answer?: string) => {
     try {
-      const data = await api.post<any, any>(`/groups/${groupId}/join-requests`);
+      const data = await api.post<any, any>(`/groups/${groupId}/join-requests`, {
+        answer,
+      });
       return data;
     } catch (error) {
       // console.error("Lỗi yêu cầu tham gia nhóm:", error);
@@ -340,6 +342,8 @@ export const groupService = {
     groupId: string,
     settings: {
       isHighlightEnabled?: boolean;
+      membershipQuestion?: string;
+      isQuestionEnabled?: boolean;
       permissions?: {
         editGroupInfo?: "EVERYONE" | "ADMIN";
         createNotes?: "EVERYONE" | "ADMIN";
