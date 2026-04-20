@@ -121,9 +121,8 @@ export default function ChatPage() {
     if (msg?.senderName) return msg.senderName;
     if (!userId) return "Người dùng";
     const currentMyId = currentUser?.id || currentUser?._id || currentUser?.userId;
-
     if (String(userId) === String(currentMyId)) {
-      return currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi";
+      return currentUser?.fullName || "Tôi";
     }
 
     if (conversationInfo) {
@@ -187,7 +186,7 @@ export default function ChatPage() {
         return {
           ...prev,
           [myId]: {
-            name: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+            name: currentUser?.fullName || "Tôi",
             avatar: currentUser?.avatar || "",
           },
         };
@@ -520,7 +519,7 @@ export default function ChatPage() {
   const handleDownloadAlbum = async (msg: MessageDTO) => {
     if (!msg.metadata?.imageGroup) return;
     const myId = currentUser?.id || currentUser?._id || currentUser?.userId || "me";
-    const availableImages = (msg.metadata.imageGroup as any[]).filter(
+    const availableImages = (msg.metadata!.imageGroup as any[]).filter(
       (img: any) => !img.isRevoked && !img.deletedByUsers?.includes(myId)
     );
     if (availableImages.length === 0) {
@@ -585,7 +584,7 @@ export default function ChatPage() {
       _id: tempId,
       conversationId,
       senderId: myId,
-      senderName: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+      senderName: currentUser?.fullName || "Tôi",
       type: "text",
       content: text,
       isRead: false,
@@ -607,7 +606,7 @@ export default function ChatPage() {
         conversationId,
         content: text,
         type: "text",
-        senderName: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+        senderName: currentUser?.fullName || "Tôi",
         replyTo: currentReply
           ? {
             messageId: currentReply._id,
@@ -679,7 +678,7 @@ export default function ChatPage() {
           _id: tempId,
           conversationId,
           senderId: myId,
-          senderName: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+          senderName: currentUser?.fullName || "Tôi",
           type: "image",
           content: "[Album Ảnh]",
           isRead: false,
@@ -714,7 +713,7 @@ export default function ChatPage() {
             widths,
             heights,
             currentReply,
-            currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi"
+            currentUser?.fullName || "Tôi"
           );
         } catch (err) {
           console.error("Lỗi gửi album ảnh:", err);
@@ -733,7 +732,7 @@ export default function ChatPage() {
           _id: tempId,
           conversationId,
           senderId: myId,
-          senderName: currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi",
+          senderName: currentUser?.fullName || "Tôi",
           type: file.type.startsWith("image/") ? "image" : "file",
           content: "",
           isRead: false,
@@ -755,7 +754,7 @@ export default function ChatPage() {
         };
         setMessages((prev) => [...prev, tempMsg]);
         try {
-          await messageService.uploadFile(conversationId, file, currentReply, currentUser?.fullName || currentUser?.name || currentUser?.username || "Tôi");
+          await messageService.uploadFile(conversationId, file, currentReply, currentUser?.fullName || "Tôi");
         } catch (err) {
           console.error("Lỗi gửi file:", err);
           setMessages((prev) => prev.filter((m) => m._id !== tempId));
@@ -1177,7 +1176,7 @@ export default function ChatPage() {
                                       {msg.metadata?.imageGroup ? (
                                         (() => {
                                           // 1. Lọc ra danh sách ảnh thực sự đang được hiển thị
-                                          const visibleImages = (msg.metadata.imageGroup || []).filter((img: any) =>
+                                          const visibleImages = (msg.metadata?.imageGroup || []).filter((img: any) =>
                                             !img.deletedByUsers?.includes(myId)
                                           );
 
@@ -1235,7 +1234,7 @@ export default function ChatPage() {
                                                 const shouldShowPlaceholder = msg.isRevoked || img.isRevoked;
 
                                                 // Tìm lại index nguyên thủy trong mảng gốc
-                                                const originalIdx = msg.metadata.imageGroup.findIndex((orig: any) => orig.url === img.url);
+                                                const originalIdx = msg.metadata?.imageGroup?.findIndex((orig: any) => orig.url === img.url);
 
                                                 // CHÌA KHÓA: Giữ đúng kích thước gốc bằng aspectRatio của từng tấm
                                                 const itemAspect = (img.width && img.height) ? `${img.width}/${img.height}` : aspectR;
@@ -1245,7 +1244,7 @@ export default function ChatPage() {
                                                     key={idx}
                                                     className="relative group/img rounded-lg overflow-hidden bg-gray-200 cursor-pointer flex items-center justify-center w-full"
                                                     style={{ aspectRatio: itemAspect }}
-                                                    onClick={() => !shouldShowPlaceholder && setActiveAlbumIndex({ messageId: msg._id, index: originalIdx })}
+                                                    onClick={() => !shouldShowPlaceholder && setActiveAlbumIndex({ messageId: msg._id, index: originalIdx ?? 0 })}
                                                   >
                                                     {shouldShowPlaceholder ? (
                                                       <div className="text-center text-gray-400">
@@ -1271,7 +1270,7 @@ export default function ChatPage() {
                                                                     ...m,
                                                                     metadata: {
                                                                       ...m.metadata,
-                                                                      imageGroup: m.metadata?.imageGroup.map((ig: any, i: number) => i === originalIdx ? {
+                                                                      imageGroup: m.metadata?.imageGroup?.map((ig: any, i: number) => i === originalIdx ? {
                                                                         ...ig,
                                                                         isRevoked: true,
                                                                         revokedAt: new Date().toISOString()
@@ -1279,7 +1278,7 @@ export default function ChatPage() {
                                                                     }
                                                                   } : m));
 
-                                                                  await messageService.revokeImageInGroup(msg._id, originalIdx);
+                                                                  await messageService.revokeImageInGroup(msg._id, originalIdx ?? 0);
                                                                 }
                                                               }}
                                                               className="p-1 bg-black/50 rounded text-white hover:bg-black/70"
@@ -1292,13 +1291,13 @@ export default function ChatPage() {
                                                             onClick={async (e) => {
                                                               e.stopPropagation();
                                                               if (confirm("Xóa ảnh này phía bạn?")) {
-                                                                await messageService.deleteImageInGroupForMe(msg._id, originalIdx);
+                                                                await messageService.deleteImageInGroupForMe(msg._id, originalIdx ?? 0);
                                                                 // Local update
                                                                 setMessages(prev => prev.map(m => m._id === msg._id ? {
                                                                   ...m,
                                                                   metadata: {
                                                                     ...m.metadata,
-                                                                    imageGroup: m.metadata?.imageGroup.map((ig: any, i: number) => i === originalIdx ? {
+                                                                    imageGroup: m.metadata?.imageGroup?.map((ig: any, i: number) => i === originalIdx ? {
                                                                       ...ig,
                                                                       deletedByUsers: [...(ig.deletedByUsers || []), myId]
                                                                     } : ig)
@@ -1567,7 +1566,7 @@ export default function ChatPage() {
                                     // Cả nhóm bị thu hồi → ẩn
                                     if (isRevoked) return false;
                                     // Tất cả ảnh lẻ đều bị thu hồi → ẩn
-                                    const allImgsRevoked = (msg.metadata.imageGroup as any[]).every((img: any) => img.isRevoked === true);
+                                    const allImgsRevoked = (msg.metadata!.imageGroup as any[]).every((img: any) => img.isRevoked === true);
                                     if (allImgsRevoked) return false;
                                     // Còn ít nhất 1 ảnh chưa thu hồi → hiện
                                     return true;
