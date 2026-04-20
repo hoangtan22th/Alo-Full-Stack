@@ -30,6 +30,7 @@ export interface PaginatedUsers {
 export const userService = {
   getAllUsers: async (query?: {
     search?: string;
+    status?: string;
     page?: number;
     size?: number;
   }): Promise<PaginatedUsers> => {

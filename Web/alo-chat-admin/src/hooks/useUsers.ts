@@ -13,7 +13,12 @@ export const useUsers = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchUsers = useCallback(
-    async (query?: { search?: string; page?: number; size?: number }) => {
+    async (query?: {
+      search?: string;
+      status?: string;
+      page?: number;
+      size?: number;
+    }) => {
       setLoading(true);
       setError(null);
       try {

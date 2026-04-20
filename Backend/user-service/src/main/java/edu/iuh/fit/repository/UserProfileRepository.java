@@ -24,8 +24,9 @@ public interface UserProfileRepository extends JpaRepository<UserProfile, String
             + "(:keyword IS NULL OR "
             + "LOWER(CONCAT(u.firstName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
             + "LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) OR "
-            + "u.phoneNumber LIKE CONCAT('%', :keyword, '%'))")
-    Page<UserProfile> searchAdminUsers(@Param("keyword") String keyword, Pageable pageable);
+            + "u.phoneNumber LIKE CONCAT('%', :keyword, '%')) AND "
+            + "(:status IS NULL OR u.status = :status)")
+    Page<UserProfile> searchAdminUsers(@Param("keyword") String keyword, @Param("status") UserProfile.UserStatus status, Pageable pageable);
 
     boolean existsByPhoneNumber(String phoneNumber);
 

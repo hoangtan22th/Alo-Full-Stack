@@ -13,8 +13,10 @@ import {
 } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { UserRow } from "@/components/users/UserRow";
+import { UserDetailModal } from "@/components/users/UserDetailModal";
 import { Pagination } from "@/components/ui/Pagination";
 import { toast } from "sonner";
+import { User } from "@/services/userService";
 
 export default function UserManagementPage() {
   const {
@@ -31,8 +33,12 @@ export default function UserManagementPage() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [activeStatus, setActiveStatus] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(0);
   const pageSize = 10;
+
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   // Handle Search Debounce
   useEffect(() => {
@@ -49,12 +55,13 @@ export default function UserManagementPage() {
       page: currentPage,
       size: pageSize,
       search: debouncedSearch || undefined,
+      status: activeStatus !== "ALL" ? activeStatus : undefined,
     });
   };
 
   useEffect(() => {
     loadData();
-  }, [currentPage, debouncedSearch, fetchUsers]);
+  }, [currentPage, debouncedSearch, activeStatus, fetchUsers]);
 
   const handleBanToggle = (id: string, currentStatus: boolean) => {
     if (currentStatus) {
@@ -122,6 +129,25 @@ export default function UserManagementPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 text-sm bg-surface-container-lowest border border-outline-variant/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
           />
+        </div>
+
+        <div className="flex bg-surface-container-lowest rounded-lg border border-outline-variant/15 p-1">
+          {["ALL", "ACTIVE", "BANNED"].map((status) => (
+            <button
+              key={status}
+              onClick={() => {
+                setActiveStatus(status);
+                setCurrentPage(0);
+              }}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                activeStatus === status
+                  ? "bg-primary text-on-primary shadow-sm"
+                  : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest"
+              }`}
+            >
+              {status}
+            </button>
+          ))}
         </div>
 
         <div className="ml-auto text-sm text-on-surface-variant font-medium">
@@ -194,6 +220,10 @@ export default function UserManagementPage() {
                     key={user.id}
                     user={user}
                     onBan={() => handleBanToggle(user.id, user.isBanned)}
+                    onView={() => {
+                      setSelectedUser(user);
+                      setIsDetailOpen(true);
+                    }}
                   />
                 ))
               )}
@@ -208,6 +238,12 @@ export default function UserManagementPage() {
           onPageChange={setCurrentPage}
         />
       </div>
+
+      <UserDetailModal
+        user={selectedUser}
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+      />
     </>
   );
 }

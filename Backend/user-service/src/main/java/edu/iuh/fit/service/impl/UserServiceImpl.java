@@ -114,8 +114,16 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public Page<UserDto> searchAdminUsers(String keyword, Pageable pageable) {
-        return userProfileRepository.searchAdminUsers(keyword, pageable)
+    public Page<UserDto> searchAdminUsers(String keyword, String statusStr, Pageable pageable) {
+        UserProfile.UserStatus status = null;
+        if (statusStr != null && !statusStr.isBlank()) {
+            try {
+                status = UserProfile.UserStatus.valueOf(statusStr.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Ignore invalid status mapping or throw exception
+            }
+        }
+        return userProfileRepository.searchAdminUsers(keyword, status, pageable)
                 .map(UserDto::fromEntity);
     }
 

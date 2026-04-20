@@ -24,12 +24,13 @@ public class AdminUserController {
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<UserDto>>> getUsers(
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         // Map chung từ khoá search vào tất cả các trường: Tên, Email, Số điện thoại
-        Page<UserDto> users = userService.searchAdminUsers(search, pageable);
+        Page<UserDto> users = userService.searchAdminUsers(search, status, pageable);
 
         PageResponse<UserDto> pageResponse = PageResponse.<UserDto>builder()
                 .content(users.getContent())

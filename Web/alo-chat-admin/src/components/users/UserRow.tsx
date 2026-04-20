@@ -11,9 +11,10 @@ import { User } from "@/services/userService";
 interface UserRowProps {
   user: User;
   onBan: () => void;
+  onView?: () => void;
 }
 
-export function UserRow({ user, onBan }: UserRowProps) {
+export function UserRow({ user, onBan, onView }: UserRowProps) {
   const isBanned = user.isBanned;
 
   const statusBadge = () => {
@@ -83,6 +84,7 @@ export function UserRow({ user, onBan }: UserRowProps) {
         <Button
           variant="ghost"
           size="icon"
+          onClick={onView}
           className="h-8 w-8 text-on-surface-variant hover:text-on-surface mx-0.5"
           title="View Details"
         >
