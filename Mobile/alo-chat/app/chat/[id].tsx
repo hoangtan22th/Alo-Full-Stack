@@ -344,6 +344,17 @@ export default function GlobalChatScreen() {
     }
   };
 
+  const canPinMessage = useMemo(() => {
+    if (!isGroupChat) return true;
+    if (!groupDetails) return false;
+
+    const pinPermission = groupDetails.permissions?.pinMessages || "EVERYONE";
+    if (pinPermission === "EVERYONE") return true;
+
+    // Admin-only: Check if current user is LEADER or DEPUTY
+    return adminIds.has(String(currentUserId));
+  }, [isGroupChat, groupDetails, adminIds, currentUserId]);
+
   useEffect(() => {
     if (!socket || !resolvedConversationId) return;
 
@@ -983,6 +994,7 @@ export default function GlobalChatScreen() {
         onUnpin={handleUnpinMessage}
         onReply={handleReply}
         isPinned={!!selectedMessageId && pinnedMessages.some((m: MessageDTO) => m._id === selectedMessageId)}
+        canPin={canPinMessage}
         currentUserId={currentUserId as string}
       />
     </KeyboardAvoidingView>
