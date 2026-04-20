@@ -10,6 +10,7 @@ import {
   MicrophoneIcon,
   PhotoIcon,
   PlusIcon,
+  ChartBarIcon,
 } from "react-native-heroicons/outline";
 import { PaperAirplaneIcon } from "react-native-heroicons/solid";
 import Animated, {
@@ -24,6 +25,7 @@ interface ChatInputProps {
   onSendMessage: () => void;
   onSendImage: () => void;
   onSendFile: () => void;
+  onCreatePoll?: () => void;
   isKeyboardVisible: boolean;
 }
 
@@ -33,6 +35,7 @@ export const ChatInput = ({
   onSendMessage,
   onSendImage,
   onSendFile,
+  onCreatePoll,
   isKeyboardVisible,
 }: ChatInputProps) => {
   const insets = useSafeAreaInsets();
@@ -76,7 +79,7 @@ export const ChatInput = ({
             <Text className="ml-3 font-medium text-gray-700">Gửi tệp/File</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            className="flex-row items-center px-4 py-3"
+            className="flex-row items-center px-4 py-3 border-b border-gray-50"
             onPress={() => {
               setShowExtensionMenu(false);
               /* Logic gửi icon sau */
@@ -84,6 +87,16 @@ export const ChatInput = ({
           >
             <FaceSmileIcon size={22} color="#f59e0b" />
             <Text className="ml-3 font-medium text-gray-700">Gửi icon</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="flex-row items-center px-4 py-3"
+            onPress={() => {
+              setShowExtensionMenu(false);
+              if (onCreatePoll) onCreatePoll();
+            }}
+          >
+            <ChartBarIcon size={22} color="#8b5cf6" />
+            <Text className="ml-3 font-medium text-gray-700">Tạo bình chọn</Text>
           </TouchableOpacity>
         </View>
       )}

@@ -49,6 +49,11 @@ spring:
               uri: lb://CHATBOT-SERVICE
               predicates:
                 - Path=/api/v1/chatbot/**
+
+            - id: voting-service
+              uri: lb://VOTING-SERVICE
+              predicates:
+                - Path=/api/v1/polls/**
                 
             - id: realtime-service
               uri: lb://REALTIME-SERVICE
