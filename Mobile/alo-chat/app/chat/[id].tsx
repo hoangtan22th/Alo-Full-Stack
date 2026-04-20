@@ -355,6 +355,17 @@ export default function GlobalChatScreen() {
     return adminIds.has(String(currentUserId));
   }, [isGroupChat, groupDetails, adminIds, currentUserId]);
 
+  const canSendMessage = useMemo(() => {
+    if (!isGroupChat) return true;
+    if (!groupDetails) return true; // Default to true if not loaded
+
+    const sendPermission = groupDetails.permissions?.sendMessage || "EVERYONE";
+    if (sendPermission === "EVERYONE") return true;
+
+    // Admin-only: Check if current user is LEADER or DEPUTY
+    return adminIds.has(String(currentUserId));
+  }, [isGroupChat, groupDetails, adminIds, currentUserId]);
+
   useEffect(() => {
     if (!socket || !resolvedConversationId) return;
 
@@ -974,6 +985,7 @@ export default function GlobalChatScreen() {
             isKeyboardVisible={isKeyboardVisible}
             replyingTo={replyingTo}
             onCancelReply={() => setReplyingToWithRef(null)}
+            canSendMessage={canSendMessage}
           />
         </View>
       </View>

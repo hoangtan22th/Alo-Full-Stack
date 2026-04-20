@@ -14,12 +14,13 @@ function getUserIdFromHeader(req: Request): string | null {
 }
 
 /**
- * Helper to check if a user has permission to pin/unpin messages
+ * Helper to check if a user has permission to perform an action in a conversation
  */
-async function hasPinPermission(
+async function hasGroupPermission(
   req: Request,
   conversationId: string,
   userId: string,
+  action: "pinMessages" | "sendMessage" | "createPolls" | "createNotes" | "createReminders" | "editGroupInfo",
 ): Promise<boolean> {
   try {
     const gatewayUrl = process.env.GATEWAY_URL || "http://127.0.0.1:8888";
@@ -38,10 +39,11 @@ async function hasPinPermission(
     const conversation = result.data;
 
     if (!conversation) return false;
-    // Direct matches (1-1) always allow pinning for both participants
+    // Direct matches (1-1) always allow all actions
     if (!conversation.isGroup) return true;
 
-    const permission = conversation.permissions?.pinMessages || "EVERYONE";
+    // Permissions check
+    const permission = conversation.permissions?.[action] || "EVERYONE";
     if (permission === "EVERYONE") return true;
 
     // For ADMIN only, check if the user is LEADER or DEPUTY
@@ -51,7 +53,7 @@ async function hasPinPermission(
     const role = member?.role?.toUpperCase();
     return role === "LEADER" || role === "DEPUTY";
   } catch (error) {
-    console.error("[hasPinPermission] Error checking permission:", error);
+    console.error(`[hasGroupPermission] Error checking ${action}:`, error);
     return false;
   }
 }
@@ -86,10 +88,11 @@ export async function pinMessage(
     }
 
     // 2. Kiểm tra quyền ghim
-    const allowed = await hasPinPermission(
+    const allowed = await hasGroupPermission(
       req,
       message.conversationId.toString(),
       userId,
+      "pinMessages",
     );
     if (!allowed) {
       res.status(403).json({ error: "Bạn không có quyền ghim tin nhắn" });
@@ -146,10 +149,11 @@ export async function unpinMessage(
     }
 
     // 2. Kiểm tra quyền bỏ ghim
-    const allowed = await hasPinPermission(
+    const allowed = await hasGroupPermission(
       req,
       message.conversationId.toString(),
       userId,
+      "pinMessages",
     );
     if (!allowed) {
       res.status(403).json({ error: "Bạn không có quyền bỏ ghim tin nhắn" });
@@ -512,6 +516,20 @@ export async function sendMessage(
       return;
     }
 
+    // 0. Kiểm tra quyền nhắn tin
+    const allowed = await hasGroupPermission(
+      req,
+      String(conversationId),
+      userId,
+      "sendMessage",
+    );
+    if (!allowed) {
+      res.status(403).json({
+        error: "Chỉ trưởng/phó nhóm mới có thể gửi tin nhắn trong nhóm này",
+      });
+      return;
+    }
+
     // 1. Lưu vào Database
     const messageDoc = await messageDataService.createMessage({
       conversationId,
@@ -571,6 +589,20 @@ export async function uploadFile(
 
     if (!conversationId || !file) {
       res.status(400).json({ error: "Missing conversationId or file" });
+      return;
+    }
+
+    // 0. Kiểm tra quyền nhắn tin
+    const allowed = await hasGroupPermission(
+      req,
+      String(conversationId),
+      userId,
+      "sendMessage",
+    );
+    if (!allowed) {
+      res.status(403).json({
+        error: "Chỉ trưởng/phó nhóm mới có thể gửi tin nhắn trong nhóm này",
+      });
       return;
     }
 
@@ -810,6 +842,20 @@ export async function uploadImages(
       files.length === 0
     ) {
       res.status(400).json({ error: "Missing conversationId or images" });
+      return;
+    }
+
+    // 0. Kiểm tra quyền nhắn tin
+    const allowed = await hasGroupPermission(
+      req,
+      String(conversationId),
+      userId,
+      "sendMessage",
+    );
+    if (!allowed) {
+      res.status(403).json({
+        error: "Chỉ trưởng/phó nhóm mới có thể gửi tin nhắn trong nhóm này",
+      });
       return;
     }
 

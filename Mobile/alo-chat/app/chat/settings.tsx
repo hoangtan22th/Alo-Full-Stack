@@ -465,9 +465,9 @@ export default function GroupSettingsScreen() {
         {/* Existing Admin Actions */}
         {isAdmin && (
           <View className="mt-10 px-5">
-            <Text className="text-[12px] font-bold text-red-400 uppercase tracking-[1.5px] mb-4 ml-2">
+            {/* <Text className="text-[12px] font-bold text-red-400 uppercase tracking-[1.5px] mb-4 ml-2">
               Vùng nguy hiểm
-            </Text>
+            </Text> */}
             <View className="bg-white rounded-[24px] border border-red-50 shadow-sm overflow-hidden">
               {/* <TouchableOpacity
                 className="flex-row items-center p-4"
