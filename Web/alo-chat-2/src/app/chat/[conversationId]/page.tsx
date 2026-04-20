@@ -6,6 +6,8 @@ import { messageService, MessageDTO } from "@/services/messageService";
 import { groupService } from "@/services/groupService";
 import { socketService } from "@/services/socketService";
 import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
+import ChatSummaryButton from "@/components/ui/chatbot/ChatSummaryButton";
+
 import JSZip from "jszip";
 import {
   PlusIcon,
@@ -878,6 +880,7 @@ export default function ChatPage() {
                 </div>
               </div>
 
+
               <div className="flex items-center gap-4 text-gray-400">
                 <button className="hover:text-black transition">
                   <PhoneIcon className="w-5 h-5" />
@@ -885,6 +888,7 @@ export default function ChatPage() {
                 <button className="hover:text-black transition">
                   <VideoCameraIcon className="w-5 h-5" />
                 </button>
+
                 <button className="hover:text-black transition">
                   <MagnifyingGlassIcon className="w-5 h-5" />
                 </button>
@@ -1010,6 +1014,15 @@ export default function ChatPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Floating Chat Summary Button */}
+            {conversationId !== "alo-bot" && (
+              <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex justify-center w-full">
+                <div className="pointer-events-auto">
+                  <ChatSummaryButton conversationId={conversationId} userId={myId} />
                 </div>
               </div>
             )}
