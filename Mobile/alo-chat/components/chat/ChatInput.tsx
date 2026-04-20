@@ -37,6 +37,7 @@ interface ChatInputProps {
   isKeyboardVisible: boolean;
   replyingTo?: MessageDTO | null;
   onCancelReply?: () => void;
+  canSendMessage?: boolean;
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
@@ -51,6 +52,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       isKeyboardVisible,
       replyingTo,
       onCancelReply,
+      canSendMessage = true,
     },
     ref,
   ) => {
@@ -81,33 +83,36 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       {showExtensionMenu && (
         <View className="absolute bottom-28 left-4 bg-white rounded-2xl shadow-xl w-48 border border-gray-100 overflow-hidden py-1 z-50">
           <TouchableOpacity
-            className="flex-row items-center px-4 py-3 border-b border-gray-50"
+            className={`flex-row items-center px-4 py-3 border-b border-gray-50 ${!canSendMessage ? "opacity-40" : ""}`}
+            disabled={!canSendMessage}
             onPress={() => {
               setShowExtensionMenu(false);
               onSendImage();
             }}
           >
-            <PhotoIcon size={22} color="#10b981" />
+            <PhotoIcon size={22} color={canSendMessage ? "#10b981" : "#9ca3af"} />
             <Text className="ml-3 font-medium text-gray-700">Gửi ảnh</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            className="flex-row items-center px-4 py-3 border-b border-gray-50"
+            className={`flex-row items-center px-4 py-3 border-b border-gray-50 ${!canSendMessage ? "opacity-40" : ""}`}
+            disabled={!canSendMessage}
             onPress={() => {
               setShowExtensionMenu(false);
               onSendFile();
             }}
           >
-            <DocumentIcon size={22} color="#3b82f6" />
+            <DocumentIcon size={22} color={canSendMessage ? "#3b82f6" : "#9ca3af"} />
             <Text className="ml-3 font-medium text-gray-700">Gửi tệp/File</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            className="flex-row items-center px-4 py-3 border-b border-gray-50"
+            className={`flex-row items-center px-4 py-3 border-b border-gray-50 ${!canSendMessage ? "opacity-40" : ""}`}
+            disabled={!canSendMessage}
             onPress={() => {
               setShowExtensionMenu(false);
               /* Logic gửi icon sau */
             }}
           >
-            <FaceSmileIcon size={22} color="#f59e0b" />
+            <FaceSmileIcon size={22} color={canSendMessage ? "#f59e0b" : "#9ca3af"} />
             <Text className="ml-3 font-medium text-gray-700">Gửi icon</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -176,17 +181,19 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
         <View className="flex-1 flex-row items-end bg-white rounded-[25px] pl-4 pr-1.5 py-1.5 shadow-sm border border-gray-200 min-h-[50px]">
           <TextInput
             ref={textInputRef}
-            className="flex-1 text-[15px] text-gray-800 max-h-24 pt-2 pb-2 mt-0.5 mb-0.5"
-            placeholder="Nhập tin nhắn..."
+            className={`flex-1 text-[15px] text-gray-800 max-h-24 pt-2 pb-2 mt-0.5 mb-0.5 ${!canSendMessage ? "text-gray-400" : ""}`}
+            placeholder={canSendMessage ? "Nhập tin nhắn..." : "Chỉ trưởng/phó nhóm mới được nhắn tin"}
             placeholderTextColor="#9ca3af"
             multiline
             value={inputText}
             onChangeText={onInputChange}
+            editable={canSendMessage}
           />
           <TouchableOpacity
-            onPress={() => (inputText.trim() ? onSendMessage() : null)}
+            onPress={() => (inputText.trim() && canSendMessage ? onSendMessage() : null)}
+            disabled={!canSendMessage && !inputText.trim()}
             className={`w-[36px] h-[36px] rounded-full items-center justify-center ml-2 ${
-              inputText.trim() ? "bg-black" : "bg-gray-100"
+              inputText.trim() && canSendMessage ? "bg-black" : "bg-gray-100"
             }`}
           >
             {inputText.trim() ? (

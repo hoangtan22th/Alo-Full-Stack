@@ -14,10 +14,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import api from "../services/api";
 import { contactService } from "../services/contactService";
 import { groupService } from "../services/groupService";
+import { useAuth } from "../contexts/AuthContext";
 
 export default function UniversalQrScannerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const currentUserId = user?.id || user?._id || user?.userId || null;
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -97,46 +100,113 @@ export default function UniversalQrScannerScreen() {
     if (groupMatch) {
       const groupId = groupMatch[1];
       setLoading(true);
-      setLoadingMessage("Đang yêu cầu tham gia...");
+      setLoadingMessage("Đang kiểm tra nhóm...");
       try {
-        const res = await groupService.requestJoinGroup(groupId);
+        // 1. Fetch group details to check for membership questions
+        const groupRes = await groupService.getGroupById(groupId);
+        const groupData = groupRes?.data?.data || groupRes?.data || groupRes;
 
-        let resData = res;
-        if (res?.data) resData = res.data;
+        if (!groupData) {
+          throw new Error("Không tìm thấy thông tin nhóm");
+        }
 
-        if (resData?.joined) {
-          const groupInfo = resData?.data;
-          const groupName = groupInfo?.name || "Nhóm";
-          const groupAvatar = groupInfo?.groupAvatar || "";
-          const mCount = groupInfo?.members?.length || 1;
+        const requestJoin = async (answer?: string) => {
+          setLoading(true);
+          setLoadingMessage("Đang yêu cầu tham gia...");
+          try {
+            const res = await groupService.requestJoinGroup(groupId, answer);
+            let resData = res?.data || res;
 
-          const navigateToChat = () => {
-            router.replace({
-              pathname: `/chat/${groupId}` as any,
-              params: {
-                name: groupName,
-                avatar: groupAvatar,
-                membersCount: String(mCount),
-                isGroup: "true",
-              },
-            });
-          };
+            if (resData?.joined) {
+              const groupInfo = resData?.data || groupData;
+              const groupName = groupInfo?.name || "Nhóm";
+              const groupAvatar = groupInfo?.groupAvatar || "";
+              const mCount = groupInfo?.members?.length || 1;
 
-          if (resData?.alreadyMember) {
-            navigateToChat();
-          } else {
-            Alert.alert("Thành công", "Đã tham gia nhóm thành công!", [
-              { text: "Vào nhóm", onPress: navigateToChat },
-            ]);
+              const navigateToChat = () => {
+                router.replace({
+                  pathname: `/chat/${groupId}` as any,
+                  params: {
+                    name: groupName,
+                    avatar: groupAvatar,
+                    membersCount: String(mCount),
+                    isGroup: "true",
+                  },
+                });
+              };
+
+              if (resData?.alreadyMember) {
+                navigateToChat();
+              } else {
+                Alert.alert("Thành công", "Đã tham gia nhóm thành công!", [
+                  { text: "Vào nhóm", onPress: navigateToChat },
+                ]);
+              }
+            } else {
+              Alert.alert(
+                "Yêu cầu đã gửi",
+                "Nhóm yêu cầu phê duyệt để tham gia. Vui lòng chờ Quản trị viên duyệt nhóm.",
+                [{ text: "Đóng", onPress: () => router.back() }],
+              );
+            }
+          } catch (error: any) {
+             const errorMsg =
+              error.response?.data?.error ||
+              error.response?.data?.message ||
+              "Không thể tham gia nhóm. Vui lòng thử lại sau.";
+             Alert.alert("Thông báo", errorMsg);
+          } finally {
+            setLoading(false);
           }
-        } else {
+        };
+
+        // 1.5. Check if already requested or already a member
+        const isAlreadyRequested = groupData?.joinRequests?.some((req: any) => req.userId === currentUserId);
+        const isAlreadyMember = groupData?.members?.some((m: any) => m.userId === currentUserId);
+
+        if (isAlreadyMember) {
+          setLoading(false);
+          router.replace({
+            pathname: `/chat/${groupId}` as any,
+            params: {
+              name: groupData.name || "Nhóm",
+              avatar: groupData.groupAvatar || "",
+              membersCount: String(groupData.members?.length || 1),
+              isGroup: "true",
+            },
+          });
+          return;
+        }
+
+        if (isAlreadyRequested) {
+          setLoading(false);
           Alert.alert(
             "Yêu cầu đã gửi",
-            "Nhóm yêu cầu phê duyệt để tham gia. Vui lòng chờ Quản trị viên duyệt nhóm.",
+            "Bạn đã gửi yêu cầu tham gia nhóm này rồi. Vui lòng chờ Quản trị viên phê duyệt.",
             [{ text: "Đóng", onPress: () => router.back() }],
           );
+          return;
+        }
+
+        // 2. Handle question if it exists
+        if (groupData?.isQuestionEnabled && groupData?.membershipQuestion) {
+          setLoading(false);
+          setScanned(false);
+          scannedRef.current = false;
+          router.replace({
+            pathname: "/chat/answer-question",
+            params: {
+              id: groupId,
+              question: groupData.membershipQuestion,
+              name: groupData.name || "Nhóm",
+              avatar: groupData.groupAvatar || "",
+            },
+          });
+        } else {
+          await requestJoin();
         }
       } catch (error: any) {
+        // ... (existing catch logic)
         // console.error(error);
         const errorMsg =
           error.response?.data?.error ||

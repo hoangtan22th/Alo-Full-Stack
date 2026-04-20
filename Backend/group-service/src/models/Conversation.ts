@@ -20,13 +20,24 @@ export interface IConversation extends Document {
   members: IMember[];
   mutedBy: string[];
   hiddenBy: string[];
-  joinRequests: { userId: string; requestedAt: Date }[];
+  joinRequests: { userId: string; requestedAt: Date; answer?: string }[];
   isBanned: boolean;
   isApprovalRequired: boolean;
   isLinkEnabled: boolean; // Add isLinkEnabled field
   isHistoryVisible: boolean; // Add isHistoryVisible field
+  isQuestionEnabled: boolean;
+  membershipQuestion: string;
   clearedAt: Map<string, Date>; // userId -> timestamp
   unreadCount: Map<string, number>; // userId -> count
+  isHighlightEnabled: boolean;
+  permissions: {
+    editGroupInfo: "EVERYONE" | "ADMIN";
+    createNotes: "EVERYONE" | "ADMIN";
+    createPolls: "EVERYONE" | "ADMIN";
+    pinMessages: "EVERYONE" | "ADMIN";
+    sendMessage: "EVERYONE" | "ADMIN";
+    createReminders: "EVERYONE" | "ADMIN";
+  };
   // Các trường do timestamps tự sinh ra:
   createdAt: Date;
   updatedAt: Date;
@@ -61,8 +72,11 @@ const conversationSchema = new Schema<IConversation>(
       {
         userId: { type: String, required: true },
         requestedAt: { type: Date, default: Date.now },
+        answer: { type: String, default: "" },
       },
     ],
+    membershipQuestion: { type: String, default: "" },
+    isQuestionEnabled: { type: Boolean, default: false },
     isApprovalRequired: { type: Boolean, default: false },
     isLinkEnabled: { type: Boolean, default: false }, // Add isLinkEnabled schema logic
     isHistoryVisible: { type: Boolean, default: true }, // Add isHistoryVisible schema logic
@@ -76,6 +90,39 @@ const conversationSchema = new Schema<IConversation>(
       type: Map,
       of: Date,
       default: {},
+    },
+    isHighlightEnabled: { type: Boolean, default: false },
+    permissions: {
+      editGroupInfo: {
+        type: String,
+        enum: ["EVERYONE", "ADMIN"],
+        default: "EVERYONE",
+      },
+      createNotes: {
+        type: String,
+        enum: ["EVERYONE", "ADMIN"],
+        default: "EVERYONE",
+      },
+      createPolls: {
+        type: String,
+        enum: ["EVERYONE", "ADMIN"],
+        default: "EVERYONE",
+      },
+      pinMessages: {
+        type: String,
+        enum: ["EVERYONE", "ADMIN"],
+        default: "EVERYONE",
+      },
+      sendMessage: {
+        type: String,
+        enum: ["EVERYONE", "ADMIN"],
+        default: "EVERYONE",
+      },
+      createReminders: {
+        type: String,
+        enum: ["EVERYONE", "ADMIN"],
+        default: "EVERYONE",
+      },
     },
   },
   {

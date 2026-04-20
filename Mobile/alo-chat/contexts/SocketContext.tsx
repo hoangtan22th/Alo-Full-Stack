@@ -172,6 +172,32 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             },
           );
 
+          // Nhắc hẹn đến hạn (Riêng tư)
+          newSocket.on("REMINDER_DUE", (data: { title: string, conversationId: string }) => {
+            console.log("📥 [Mobile Socket] Received REMINDER_DUE:", data);
+            DeviceEventEmitter.emit("show_in_app_notification", {
+              title: "Nhắc hẹn",
+              message: `Đã đến giờ: ${data.title}`,
+              data: { groupId: data.conversationId },
+              type: "REMINDER",
+            });
+          });
+
+          // Lắng nghe tin nhắn hệ thống để bắt Nhắc hẹn nhóm
+          newSocket.on("message-received", (data: any) => {
+            const message = data.message || data;
+            // Chỉ hiện notify nếu là tin nhắn hệ thống loại nhắc hẹn và có metadata
+            if (message.type === "system" && message.metadata?.isReminder) {
+              console.log("📥 [Mobile Socket] Received Group REMINDER:", message);
+              DeviceEventEmitter.emit("show_in_app_notification", {
+                title: "Nhắc hẹn nhóm",
+                message: message.metadata.title || message.content,
+                data: { groupId: message.conversationId },
+                type: "REMINDER",
+              });
+            }
+          });
+
           // Lắng nghe trạng thái Online/Offline chung của các User khác
           newSocket.on(
             "USER_ONLINE",
