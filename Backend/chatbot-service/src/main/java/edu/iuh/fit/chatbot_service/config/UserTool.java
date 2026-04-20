@@ -2,6 +2,7 @@ package edu.iuh.fit.chatbot_service.config;
 
 import edu.iuh.fit.chatbot_service.client.UserClient;
 import edu.iuh.fit.chatbot_service.dto.UserDto;
+import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import edu.iuh.fit.common_service.dto.response.PageResponse;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -23,8 +24,9 @@ public class UserTool {
         int pageNum = (page != null && page >= 0) ? page : 0;
         int pageSize = (size != null && size > 0) ? size : 10;
         try {
-            PageResponse<UserDto> pageResp = userClient.searchUsers(fullName, email, phoneNumber, pageNum, pageSize);
-            if (pageResp.getContent().isEmpty()) return "Không tìm thấy người dùng nào phù hợp.";
+            ApiResponse<PageResponse<UserDto>> resp = userClient.searchUsers(fullName, email, phoneNumber, pageNum, pageSize);
+            if (resp == null || resp.getData() == null || resp.getData().getContent().isEmpty()) return "Không tìm thấy người dùng nào phù hợp.";
+            PageResponse<UserDto> pageResp = resp.getData();
             StringBuilder sb = new StringBuilder("🔍 Kết quả tìm kiếm (trang " + pageNum + ", tổng " + pageResp.getTotalElements() + "):\n");
             for (UserDto u : pageResp.getContent()) {
                 sb.append("- ").append(u.getFullName()).append(" (").append(u.getEmail()).append(")\n");
@@ -37,14 +39,14 @@ public class UserTool {
     @Tool(description = "Lấy tên đầy đủ của người dùng hiện tại.")
     public String getUserInfo(@ToolParam(description = "Mã ID người dùng", required = true) String userId) {
         try {
-            // Theo cú pháp hàm searchUsers ở trên, response trả về thẳng UserDto
-            UserDto user = userClient.getUserById(userId);
+            ApiResponse<UserDto> resp = userClient.getUserById(userId);
 
-            if (user != null) {
+            if (resp != null && resp.getData() != null) {
+                UserDto user = resp.getData();
                 return (user.getFullName() != null && !user.getFullName().isBlank())
-                        ? user.getFullName() : "Người dùng";
+                        ? user.getFullName() : "người dùng";
             }
-            return "Người dùng";
+            return "người dùng";
         } catch (Exception e) {
             System.err.println(">>> [LỖI USER TOOL]: " + e.getMessage());
             return "Người dùng";
