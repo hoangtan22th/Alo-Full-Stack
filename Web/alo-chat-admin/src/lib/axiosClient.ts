@@ -83,10 +83,18 @@ axiosClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
+        const bodyValue: Record<string, string> = {};
+        if (typeof window !== "undefined") {
+          const rt = localStorage.getItem("admin_refresh_token");
+          if (rt) {
+            bodyValue["refreshToken"] = rt;
+          }
+        }
+
         // Send request to Gateway to get new access token using HttpOnly Cookie
         const res = await axios.post(
           `${GATEWAY_URL}/api/v1/auth/refresh`,
-          {},
+          bodyValue,
           {
             withCredentials: true,
           },
@@ -97,6 +105,11 @@ axiosClient.interceptors.response.use(
           res.data?.data?.accessToken ||
           res.data?.data?.token ||
           res.data?.accessToken;
+
+        const newRefreshToken = res.data?.data?.refreshToken;
+        if (typeof window !== "undefined" && newRefreshToken) {
+          localStorage.setItem("admin_refresh_token", newRefreshToken);
+        }
 
         if (newAccessToken) {
           // Update cookie
@@ -129,6 +142,7 @@ axiosClient.interceptors.response.use(
           typeof window !== "undefined" &&
           window.location.pathname !== "/login"
         ) {
+          localStorage.removeItem("admin_refresh_token");
           document.cookie = "admin_token=; Max-Age=0; path=/";
           window.location.href = "/login";
         }
