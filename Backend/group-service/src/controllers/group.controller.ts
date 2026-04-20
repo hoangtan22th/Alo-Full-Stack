@@ -737,6 +737,8 @@ export const requestJoinGroup = async (
       rabbitMQProducer
         .publishNewJoinRequest(groupId, requesterName, admins, group.name)
         .catch(console.error);
+      
+      rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
     } catch (notifErr) {
       console.error("[RequestJoinGroup] Notification Error:", notifErr);
     }
@@ -902,6 +904,8 @@ export const rejectJoinRequest = async (
     rabbitMQProducer
       .publishJoinRequestRejected(userId, group.name || "Nhóm")
       .catch(console.error);
+
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
 
     res.status(200).json({ message: "Đã từ chối yêu cầu", data: group });
   } catch (error: any) {
