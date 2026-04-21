@@ -147,7 +147,6 @@ export default function ChatPage() {
       isTypingRef.current = true;
       socketService.emitTyping({
         target: conversationId,
-        conversationId: conversationId,
         isGroup: !!conversationInfo?.isGroup,
       });
     } else if (
@@ -159,7 +158,6 @@ export default function ChatPage() {
       isTypingRef.current = false;
       socketService.emitStopTyping({
         target: conversationId,
-        conversationId: conversationId,
         isGroup: !!conversationInfo?.isGroup,
       });
     }
@@ -171,7 +169,6 @@ export default function ChatPage() {
           isTypingRef.current = false;
           socketService.emitStopTyping({
             target: conversationId,
-            conversationId: conversationId,
             isGroup: !!conversationInfo?.isGroup,
           });
         }
