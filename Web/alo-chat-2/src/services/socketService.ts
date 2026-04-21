@@ -234,7 +234,7 @@ class SocketService {
   }
 
   // --- Call Signaling ---
-  initiateCall(data: { targetRoom: string; caller: any; isVideo: boolean }) {
+  initiateCall(data: { targetRoom: string; caller: any; isVideo: boolean; inviteeIds?: string[] }) {
     if (this.socket?.connected) {
       this.socket.emit("CALL_INITIATED", data);
     }
@@ -244,7 +244,7 @@ class SocketService {
     this.addListener("INCOMING_CALL", callback);
   }
 
-  cancelCall(data: { targetRoom: string }) {
+  cancelCall(data: { targetRoom: string; inviteeIds?: string[] }) {
     if (this.socket?.connected) {
       this.socket.emit("CANCEL_CALL", data);
     }

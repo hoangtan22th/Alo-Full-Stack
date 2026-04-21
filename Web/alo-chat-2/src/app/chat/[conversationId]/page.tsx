@@ -10,6 +10,7 @@ import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import ChatSummaryButton from "@/components/ui/chatbot/ChatSummaryButton";
 import { CallSystemMessage } from "@/components/ui/call/CallSystemMessage";
 import { useCall } from "@/components/layout/CallProvider";
+import GroupCallSelector from "@/components/ui/call/GroupCallSelector";
 
 import JSZip from "jszip";
 import {
@@ -40,8 +41,10 @@ import {
   PencilIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  CheckIcon,
   PhotoIcon,
 } from "@heroicons/react/24/outline";
+import { motion } from "framer-motion";
 import BotChatArea from "@/components/ui/BotChatArea";
 import StickerPicker from "@/components/ui/StickerPicker";
 import ForwardMessageModal from "@/components/ui/ForwardMessageModal";
@@ -78,6 +81,16 @@ const getMediaUrl = (url: string | undefined): string => {
   return `${backendHost}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
+const BOT_ID = "alo-bot";
+const BOT_INFO = {
+  id: BOT_ID,
+  name: "Trợ lý Alo Chat",
+  avatar: "/alochat.png",
+  isGroup: false,
+  message: "Sẵn sàng hỗ trợ bạn 24/7...",
+  online: true,
+};
+
 /* ─────────────────────────────────────────
    Page Component
 ───────────────────────────────────────── */
@@ -101,6 +114,8 @@ export default function ChatPage() {
   // State cho tin nhắn ghim
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
   const [showPinnedModal, setShowPinnedModal] = useState(false);
+  const [showCallMemberSelector, setShowCallMemberSelector] = useState<{isVideo: boolean} | null>(null);
+  const [selectedCallMembers, setSelectedCallMembers] = useState<string[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
@@ -236,6 +251,18 @@ export default function ChatPage() {
   const fetchUserInfo = async (userId: string) => {
     if (userCache[userId] || !userId || fetchingUsersRef.current.has(userId))
       return;
+
+    if (userId === BOT_ID) {
+      setUserCache((prev) => ({
+        ...prev,
+        [BOT_ID]: {
+          name: BOT_INFO.name,
+          avatar: BOT_INFO.avatar,
+        },
+      }));
+      return;
+    }
+
     fetchingUsersRef.current.add(userId);
     try {
       const res: any = await axiosClient.get(`/users/${userId}`);
@@ -321,7 +348,7 @@ export default function ChatPage() {
 
   /* ─── Fetch messages for current conversation ─── */
   const fetchMessages = useCallback(async () => {
-    if (!conversationId || conversationId === "alo-bot") return;
+    if (!conversationId || conversationId === BOT_ID) return;
     setLoadingMessages(true);
     setHasMore(true);
     try {
@@ -351,7 +378,7 @@ export default function ChatPage() {
       !hasMore ||
       loadingMoreHistory ||
       loadingMessages ||
-      conversationId === "alo-bot"
+      conversationId === BOT_ID
     )
       return;
 
@@ -400,7 +427,7 @@ export default function ChatPage() {
   ]);
 
   const fetchMediaHistory = useCallback(async () => {
-    if (!conversationId || conversationId === "alo-bot") return;
+    if (!conversationId || conversationId === BOT_ID) return;
     try {
       // Tải 200 tin nhắn gần nhất để trích xuất media cho InfoPanel
       const msgs = await messageService.getMessageHistory(
@@ -420,7 +447,7 @@ export default function ChatPage() {
 
   /* ─── Fetch conversation info ─── */
   const fetchConversationInfo = useCallback(async () => {
-    if (!conversationId) return;
+    if (!conversationId || conversationId === BOT_ID) return;
     try {
       const data: any = await groupService.getGroupById(conversationId);
       const g = data?.data || data;
@@ -658,11 +685,31 @@ export default function ChatPage() {
   }, [conversationId, currentUser, fetchConversationInfo]);
 
   const handleStartCall = useCallback(
-    (isVideo: boolean) => {
-      startCall(conversationId, isVideo, !!conversationInfo?.isGroup);
+    (isVideo: boolean, forcedInviteeIds?: string[]) => {
+      if (conversationInfo?.isGroup && !forcedInviteeIds) {
+        setShowCallMemberSelector({ isVideo });
+        setSelectedCallMembers([]);
+        return;
+      }
+
+      startCall(
+        conversationId, 
+        isVideo, 
+        !!conversationInfo?.isGroup,
+        conversationInfo?.displayName,
+        conversationInfo?.displayAvatar,
+        forcedInviteeIds,
+        conversationInfo?.members
+      );
     },
     [conversationId, conversationInfo, startCall],
   );
+
+  const confirmGroupCall = (selectedIds: string[]) => {
+    const isVideo = showCallMemberSelector?.isVideo || false;
+    setShowCallMemberSelector(null);
+    handleStartCall(isVideo, selectedIds);
+  };
 
   // Handle call query param
   useEffect(() => {
@@ -1348,17 +1395,6 @@ export default function ChatPage() {
     return groups;
   }, [messages, myId]);
 
-  // chatbot
-
-  const BOT_ID = "alo-bot";
-  const BOT_INFO = {
-    id: BOT_ID,
-    name: "Trợ lý Alo Chat",
-    avatar: "/alochat.png",
-    isGroup: false,
-    message: "Sẵn sàng hỗ trợ bạn 24/7...",
-    online: true,
-  };
   /* ─────────────────────────────────────────
      RENDER
   ───────────────────────────────────────── */
@@ -1574,6 +1610,17 @@ export default function ChatPage() {
                 </div>
               </div>
             )}
+
+            {/* Modal chọn thành viên gọi nhóm */}
+            <GroupCallSelector 
+              isOpen={!!showCallMemberSelector}
+              onClose={() => setShowCallMemberSelector(null)}
+              onConfirm={confirmGroupCall}
+              members={conversationInfo?.members || []}
+              myId={myId || ""}
+              userCache={userCache}
+              isVideo={showCallMemberSelector?.isVideo || false}
+            />
 
             {/* Floating Chat Summary Button */}
             {conversationId !== "alo-bot" && (

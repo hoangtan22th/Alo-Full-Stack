@@ -109,26 +109,42 @@ export function initSocketConnection(io: Server) {
     });
 
     // 5.2 Handle Call Signaling
-    socket.on("CALL_INITIATED", (data: { targetRoom: string; caller: any; isVideo: boolean }) => {
+    socket.on("CALL_INITIATED", (data: { targetRoom: string; caller: any; isVideo: boolean; inviteeIds?: string[]; isGroup?: boolean }) => {
       console.log(`[Socket.IO] Call initiated by ${userId} to room_${data.targetRoom}`);
-      socket.to(`room_${data.targetRoom}`).emit("INCOMING_CALL", {
+      const payload = {
         roomId: data.targetRoom,
         caller: data.caller,
         isVideo: data.isVideo,
-      });
+        isGroup: data.isGroup || false
+      };
+
+      if (data.inviteeIds && data.inviteeIds.length > 0) {
+        data.inviteeIds.forEach(id => {
+          socket.to(`user_${id}`).emit("INCOMING_CALL", payload);
+        });
+      } else {
+        socket.to(`room_${data.targetRoom}`).emit("INCOMING_CALL", payload);
+      }
     });
 
-    socket.on("CANCEL_CALL", (data: { targetRoom: string }) => {
+    socket.on("CANCEL_CALL", (data: { targetRoom: string; inviteeIds?: string[] }) => {
       console.log(`[Socket.IO] Call canceled by ${userId} for room_${data.targetRoom}`);
-      socket.to(`room_${data.targetRoom}`).emit("CALL_CANCELED", {
-        roomId: data.targetRoom,
-      });
+      if (data.inviteeIds && data.inviteeIds.length > 0) {
+        data.inviteeIds.forEach(id => {
+          socket.to(`user_${id}`).emit("CALL_CANCELED", { roomId: data.targetRoom });
+        });
+      } else {
+        socket.to(`room_${data.targetRoom}`).emit("CALL_CANCELED", {
+          roomId: data.targetRoom,
+        });
+      }
     });
     
     socket.on("CALL_DECLINED", (data: { targetRoom: string }) => {
       console.log(`[Socket.IO] Call declined by ${userId} for room_${data.targetRoom}`);
       socket.to(`room_${data.targetRoom}`).emit("CALL_DECLINED", {
         roomId: data.targetRoom,
+        userId: userId // Tell others who declined
       });
     });
 
@@ -136,6 +152,7 @@ export function initSocketConnection(io: Server) {
       console.log(`[Socket.IO] Call busy from ${userId} for room_${data.targetRoom}`);
       socket.to(`room_${data.targetRoom}`).emit("CALL_BUSY", {
         roomId: data.targetRoom,
+        userId: userId
       });
     });
 
