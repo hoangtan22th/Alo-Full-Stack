@@ -1040,8 +1040,12 @@ export default function ChatPage() {
     if (!confirm("Bạn có chắc chắn muốn xóa lịch sử trò chuyện này?")) return;
     try {
       await groupService.clearConversation(conversationId);
+      // Nếu là người lạ, reset folder về 'stranger' để lần sau nhắn lại sẽ báo tin nhắn người lạ
+      if (isStranger) {
+        await groupService.updateConversationFolder(conversationId, "stranger");
+      }
       setMessages([]);
-      alert("Đã xóa lịch sử trò chuyện.");
+      toast.success("Đã xóa lịch sử trò chuyện.");
     } catch (err) {
       console.error("Lỗi xóa lịch sử:", err);
       alert("Không thể xóa lịch sử trò chuyện.");
@@ -1210,6 +1214,11 @@ export default function ChatPage() {
             }
           : undefined,
       });
+
+      // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
+      if (isStranger) {
+        groupService.updateConversationFolder(conversationId, "priority").catch(console.error);
+      }
     } catch (err) {
       console.error("Lỗi gửi tin nhắn:", err);
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
@@ -1384,6 +1393,11 @@ export default function ChatPage() {
           setMessages((prev) => prev.filter((m) => m._id !== tempId));
         }
       }
+
+      // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
+      if (isStranger) {
+        groupService.updateConversationFolder(conversationId, "priority").catch(console.error);
+      }
     } finally {
       setUploadingFile(false);
     }
@@ -1461,6 +1475,11 @@ export default function ChatPage() {
             }
           : undefined,
       });
+
+      // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
+      if (isStranger) {
+        groupService.updateConversationFolder(conversationId, "priority").catch(console.error);
+      }
     } catch (err) {
       console.error("Lỗi gửi sticker:", err);
       setMessages((prev) => prev.filter((m) => m._id !== tempId));

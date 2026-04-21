@@ -200,8 +200,7 @@ export default function ConversationSidebar() {
   const [showManageLabelsModal, setShowManageLabelsModal] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Record<string, boolean>>({});
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
-  const [friendIds, setFriendIds] = useState<Set<string>>(new Set());
-  const { typingUsers } = useChatStore();
+  const { typingUsers, friendIds, setFriendIds } = useChatStore();
   const menuRef = useRef<HTMLDivElement>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const conversationIdRef = useRef(conversationId);
@@ -545,6 +544,15 @@ export default function ConversationSidebar() {
     const bPinned = pinnedIds.has(b.id);
     if (aPinned && !bPinned) return -1;
     if (!aPinned && bPinned) return 1;
+
+    // Nếu ở tab Khác, ưu tiên đưa tin nhắn người lạ lên đầu
+    if (activeTab === "Khác") {
+      const aIsStranger = !a.isGroup && a.id !== BOT_ID && a.otherMemberUserId && !friendIds.has(a.otherMemberUserId);
+      const bIsStranger = !b.isGroup && b.id !== BOT_ID && b.otherMemberUserId && !friendIds.has(b.otherMemberUserId);
+      if (aIsStranger && !bIsStranger) return -1;
+      if (!aIsStranger && bIsStranger) return 1;
+    }
+
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   });
 
@@ -554,8 +562,18 @@ export default function ConversationSidebar() {
     if (!matchesSearch) return false;
 
     // Filter by Tab (Priority / Other)
-    const folder = chat.folder || "priority";
-    const tabMatch = activeTab === "Ưu tiên" ? folder === "priority" : folder === "other";
+    const folder = chat.folder;
+    const isStrangerConvo = !chat.isGroup && chat.id !== BOT_ID && chat.otherMemberUserId && !friendIds.has(chat.otherMemberUserId);
+    
+    let tabMatch = false;
+    if (activeTab === "Ưu tiên") {
+      // Ưu tiên: Folder là priority HOẶC (Chưa có folder VÀ không phải người lạ)
+      tabMatch = folder === "priority" || (!folder && !isStrangerConvo);
+    } else if (activeTab === "Khác") {
+      // Khác: Folder là other HOẶC Folder là stranger HOẶC (Chưa có folder VÀ là người lạ)
+      tabMatch = folder === "other" || folder === "stranger" || (!folder && isStrangerConvo);
+    }
+    
     if (!tabMatch) return false;
 
     // Filter by Label / Category
@@ -564,8 +582,7 @@ export default function ConversationSidebar() {
         return !labelAssignments[chat.id];
       }
       if (selectedLabelId === "stranger") {
-        if (chat.isGroup || chat.id === BOT_ID) return false;
-        return chat.otherMemberUserId && !friendIds.has(chat.otherMemberUserId);
+        return isStrangerConvo;
       }
       const chatLabelId = labelAssignments[chat.id]?._id || labelAssignments[chat.id]?.id;
       return chatLabelId === selectedLabelId;

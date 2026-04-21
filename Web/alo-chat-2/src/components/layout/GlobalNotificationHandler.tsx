@@ -4,13 +4,27 @@ import { socketService } from "@/services/socketService";
 import { useChatStore } from "@/store/useChatStore";
 import { useAuthStore } from "@/store/useAuthStore";
 import { toast } from "sonner";
+import { contactService } from "@/services/contactService";
+import { groupService } from "@/services/groupService";
 import { useRouter, usePathname } from "next/navigation";
 
 export default function GlobalNotificationHandler() {
-  const { setTyping, typingUsers } = useChatStore();
+  const { setTyping, typingUsers, friendIds, setFriendIds } = useChatStore();
   const { user: currentUser } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
+
+  // Fetch friend list if not already available in store
+  useEffect(() => {
+    if (currentUser && friendIds.size === 0) {
+      contactService.getFriendsList().then(friends => {
+        const fIds = new Set(friends.map(f => 
+          f.requesterId === currentUser.id ? f.recipientId : f.requesterId
+        ));
+        setFriendIds(fIds);
+      }).catch(console.error);
+    }
+  }, [currentUser, friendIds.size, setFriendIds]);
 
   const receiveAudio = useRef<HTMLAudioElement | null>(null);
   const typingAudio = useRef<HTMLAudioElement | null>(null);
@@ -71,15 +85,32 @@ export default function GlobalNotificationHandler() {
       console.log(`🔍 [GlobalNotification] Comparing: ActiveRoom=${currentConvoId}, IncomingMsgRoom=${msgConvoId}`);
 
       if (currentConvoId !== msgConvoId) {
-        console.log("🔔 [GlobalNotification] Conditions met. Showing toast...");
-        toast.info(`Tin nhắn từ ${msg.senderName || "Người dùng"}`, {
-          description: msg.content || (msg.type === "image" ? "[Hình ảnh]" : "Đã gửi một tệp tin"),
-          duration: 4000,
-          action: {
-            label: "Xem ngay",
-            onClick: () => router.push(`/chat/${msgConvoId}`),
-          },
-        });
+        const isStranger = !msg.isGroup && !friendIds.has(String(msg.senderId)) && String(msg.senderId) !== "alo-bot";
+        
+        console.log("🔔 [GlobalNotification] Conditions met. Showing toast...", { isStranger });
+        
+        if (isStranger) {
+          // Auto-categorize as stranger to hide from main list
+          groupService.updateConversationFolder(msgConvoId, "stranger").catch(console.error);
+          
+          toast.warning(`Có người lạ gửi cho bạn 1 tin nhắn`, {
+            description: `Từ ${msg.senderName || "Người dùng"}`,
+            duration: 5000,
+            action: {
+              label: "Xem ngay",
+              onClick: () => router.push(`/chat/${msgConvoId}`),
+            },
+          });
+        } else {
+          toast.info(`Tin nhắn từ ${msg.senderName || "Người dùng"}`, {
+            description: msg.content || (msg.type === "image" ? "[Hình ảnh]" : "Đã gửi một tệp tin"),
+            duration: 4000,
+            action: {
+              label: "Xem ngay",
+              onClick: () => router.push(`/chat/${msgConvoId}`),
+            },
+          });
+        }
       } else {
         console.log("🤫 [GlobalNotification] User is in this room, skipping toast.");
       }
