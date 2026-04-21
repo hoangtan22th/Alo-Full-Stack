@@ -272,4 +272,35 @@ public class FriendshipServiceImpl implements FriendshipService {
 
         friendshipRepository.delete(friendship);
     }
+
+    @Override
+    public edu.iuh.fit.contact_service.dto.response.RelationStatusResponseDTO getRelationStatus(String currentUserId, String targetUserId) {
+        if (currentUserId.equals(targetUserId)) {
+            return edu.iuh.fit.contact_service.dto.response.RelationStatusResponseDTO.builder()
+                    .relationStatus("SELF")
+                    .build();
+        }
+
+        Optional<Friendship> friendshipOpt = friendshipRepository.findByUserIds(currentUserId, targetUserId);
+
+        if (friendshipOpt.isPresent()) {
+            Friendship f = friendshipOpt.get();
+            String status;
+            if (f.getStatus() == FriendshipStatus.ACCEPTED) {
+                status = "ACCEPTED";
+            } else if (f.getRequesterId().equals(currentUserId)) {
+                status = "YOU_SENT_REQUEST";
+            } else {
+                status = "THEY_SENT_REQUEST";
+            }
+            return edu.iuh.fit.contact_service.dto.response.RelationStatusResponseDTO.builder()
+                    .relationStatus(status)
+                    .friendshipId(f.getId())
+                    .build();
+        }
+
+        return edu.iuh.fit.contact_service.dto.response.RelationStatusResponseDTO.builder()
+                .relationStatus("NOT_FRIEND")
+                .build();
+    }
 }

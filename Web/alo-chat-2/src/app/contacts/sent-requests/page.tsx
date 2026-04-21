@@ -120,7 +120,7 @@ export default function FriendSentRequestPage() {
         isOpen={!!profileModalUserId}
         onClose={() => setProfileModalUserId(null)}
         userId={profileModalUserId}
-        relationStatus="I_SENT_REQUEST" // ✅ Truyền I_SENT_REQUEST để Modal hiện nút Huỷ
+        relationStatus="YOU_SENT_REQUEST"
         onActionSuccess={fetchSentRequests}
       />
     </div>
