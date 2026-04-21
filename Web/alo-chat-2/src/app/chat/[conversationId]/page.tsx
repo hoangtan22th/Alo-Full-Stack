@@ -971,16 +971,36 @@ export default function ChatPage() {
   };
 
   const handleLeaveGroup = async () => {
+    if (!conversationId || !conversationInfo) return;
+
+    const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+    const myMemberInfo = conversationInfo.members?.find((m: any) => 
+      String(m.userId) === String(myId) || String(m._id) === String(myId)
+    );
+    const isLeader = myMemberInfo?.role?.toLowerCase() === "leader";
+    const memberCount = conversationInfo.members?.length || 0;
+
+    // Trường hợp 1: Là trưởng nhóm và chỉ còn 1 mình -> Giải tán
+    if (isLeader && memberCount === 1) {
+      handleDisbandGroup();
+      return;
+    }
+
+    // Trường hợp 2: Là trưởng nhóm nhưng còn người khác -> Chặn
+    if (isLeader && memberCount > 1) {
+      alert("Bạn là trưởng nhóm. Hãy chuyển quyền trưởng nhóm hoặc giải tán nhóm trước khi rời.");
+      return;
+    }
+
     if (!confirm("Bạn có chắc chắn muốn rời khỏi nhóm này?")) return;
     try {
-      const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
       if (!myId) return;
       await groupService.removeMember(conversationId, myId);
-      alert("Đã rời nhóm.");
+      toast.success("Đã rời nhóm thành công");
       router.push("/chat");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Lỗi rời nhóm:", err);
-      alert("Không thể rời nhóm.");
+      alert(err.response?.data?.message || "Không thể rời nhóm.");
     }
   };
 

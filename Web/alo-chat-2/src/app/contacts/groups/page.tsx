@@ -432,7 +432,25 @@ export default function GroupListPage() {
   }, [selectedGroup, currentUserId]);
 
   const handleLeaveGroup = async () => {
-    if (!selectedGroupId) return;
+    if (!selectedGroupId || !selectedGroup) return;
+
+    const myMemberInfo = selectedGroup.members.find(m => m.userId === currentUserId);
+    const isLeader = myMemberInfo?.role === "LEADER";
+    const memberCount = selectedGroup.members.length;
+
+    // Trường hợp 1: Là trưởng nhóm và chỉ còn 1 mình
+    if (isLeader && memberCount === 1) {
+      handleDeleteGroup();
+      return;
+    }
+
+    // Trường hợp 2: Là trưởng nhóm nhưng vẫn còn thành viên khác
+    if (isLeader && memberCount > 1) {
+      toast.error("Bạn là trưởng nhóm. Hãy chuyển quyền trưởng nhóm hoặc giải tán nhóm trước khi rời.");
+      return;
+    }
+
+    // Trường hợp 3: Thành viên bình thường hoặc phó nhóm rời nhóm
     setConfirmModal({
       isOpen: true,
       title: "Xác nhận rời nhóm",
@@ -445,7 +463,7 @@ export default function GroupListPage() {
             toast.error(res.error);
             return;
           }
-          toast.success("Đã rời nhóm");
+          toast.success("Đã rời nhóm thành công");
           setSelectedGroupId(null);
           setSelectedGroup(null);
           loadGroups();
@@ -458,6 +476,50 @@ export default function GroupListPage() {
   };
 
   const handleLeaveGroupFromMenu = async (groupId: string) => {
+    const group = groups.find(g => g._id === groupId);
+    if (!group) return;
+
+    const myMemberInfo = group.members.find(m => m.userId === currentUserId);
+    const isLeader = myMemberInfo?.role === "LEADER";
+    const memberCount = group.members.length;
+    
+    // Trường hợp 1: Là trưởng nhóm và chỉ còn 1 mình -> Giải tán
+    if (isLeader && memberCount === 1) {
+      setSelectedGroupId(groupId);
+      setConfirmModal({
+        isOpen: true,
+        title: "Xác nhận giải tán nhóm",
+        message: "Nhóm chỉ còn bạn, rời nhóm sẽ đồng thời giải tán nhóm. Bạn có chắc chắn?",
+        onConfirm: async () => {
+          setLeaveLoading(true);
+          try {
+            const res: any = await deleteGroup(groupId);
+            if (res.error) {
+              toast.error(res.error);
+              return;
+            }
+            toast.success("Đã giải tán nhóm thành công");
+            if (selectedGroupId === groupId) {
+              setSelectedGroupId(null);
+              setSelectedGroup(null);
+            }
+            loadGroups();
+          } finally {
+            setLeaveLoading(false);
+            setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+          }
+        },
+      });
+      return;
+    }
+
+    // Trường hợp 2: Là trưởng nhóm nhưng còn người khác
+    if (isLeader && memberCount > 1) {
+      toast.error("Bạn là trưởng nhóm. Hãy chuyển quyền trưởng nhóm hoặc giải tán nhóm trước khi rời.");
+      return;
+    }
+
+    // Trường hợp 3: Thành viên bình thường hoặc phó nhóm rời nhóm
     setConfirmModal({
       isOpen: true,
       title: "Xác nhận rời nhóm",
@@ -470,7 +532,7 @@ export default function GroupListPage() {
             toast.error(res.error);
             return;
           }
-          toast.success("Đã rời nhóm");
+          toast.success("Đã rời nhóm thành công");
           if (selectedGroupId === groupId) {
             setSelectedGroupId(null);
             setSelectedGroup(null);
