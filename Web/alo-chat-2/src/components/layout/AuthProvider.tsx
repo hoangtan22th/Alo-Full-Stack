@@ -103,12 +103,20 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
     if (!mounted || (!isAuthenticated && !token) || listenersAttached.current) return;
 
-    socketService.onFriendRequestReceived(handleFriendRequestReceived);
-    socketService.onFriendRequestAccepted(handleFriendRequestAccepted);
-    socketService.onFriendListUpdated(handleFriendListUpdated);
-    socketService.onReminderDue(handleReminderDue);
-    socketService.onMessageReceived(handleMessageReceived);
+    const unsubs = [
+      socketService.onFriendRequestReceived(handleFriendRequestReceived),
+      socketService.onFriendRequestAccepted(handleFriendRequestAccepted),
+      socketService.onFriendListUpdated(handleFriendListUpdated),
+      socketService.onReminderDue(handleReminderDue),
+      socketService.onMessageReceived(handleMessageReceived),
+    ];
+    
     listenersAttached.current = true;
+
+    return () => {
+      unsubs.forEach(unsub => unsub());
+      listenersAttached.current = false;
+    };
   }, [mounted, isAuthenticated, handleFriendRequestReceived, handleFriendRequestAccepted, handleFriendListUpdated, handleReminderDue, handleMessageReceived]);
 
   // Luôn render children để tránh lệch Hydration giữa Server và Client
