@@ -49,9 +49,9 @@ class SocketService {
       console.error("⚠️ [Socket] Error:", error.message);
     });
 
-    this.socket.on("FORCE_LOGOUT", () => {
+    this.socket.on("FORCE_LOGOUT", (data) => {
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("force_logout"));
+        window.dispatchEvent(new CustomEvent("force_logout", { detail: data }));
       }
     });
   }
@@ -249,7 +249,12 @@ class SocketService {
   }
 
   // --- Call Signaling ---
-  initiateCall(data: { targetRoom: string; caller: any; isVideo: boolean; inviteeIds?: string[] }) {
+  initiateCall(data: {
+    targetRoom: string;
+    caller: any;
+    isVideo: boolean;
+    inviteeIds?: string[];
+  }) {
     if (this.socket?.connected) {
       this.socket.emit("CALL_INITIATED", data);
     }
@@ -302,7 +307,9 @@ class SocketService {
     return this.subscribe("USER_STATUS_RESULT", callback);
   }
 
-  onReminderDue(callback: (data: { title: string; conversationId: string }) => void) {
+  onReminderDue(
+    callback: (data: { title: string; conversationId: string }) => void,
+  ) {
     return this.subscribe("REMINDER_DUE", callback);
   }
 }
