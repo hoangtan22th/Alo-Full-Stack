@@ -407,6 +407,68 @@ export class MessageDataService {
       throw error;
     }
   }
+
+  /**
+   * Thu hồi nhiều tin nhắn cùng lúc (bulk revoke)
+   * Chỉ thu hồi những tin của chính user đó và trong vòng 24h
+   */
+  async bulkRevokeMessages(
+    messageIds: string[],
+    userId: string,
+  ): Promise<IMessage[]> {
+    try {
+      const objectIds = messageIds.map((id) => new Types.ObjectId(id));
+      const limitDate = new Date(Date.now() - 86400000);
+
+      // Tìm các tin nhắn hợp lệ để thu hồi
+      const validMessages = await Message.find({
+        _id: { $in: objectIds },
+        senderId: userId,
+        isRevoked: false,
+        createdAt: { $gt: limitDate },
+      });
+
+      if (validMessages.length === 0) return [];
+
+      const validIds = validMessages.map((m) => m._id);
+
+      await Message.updateMany(
+        { _id: { $in: validIds } },
+        {
+          $set: { isRevoked: true, revokedAt: new Date() },
+        },
+      );
+
+      return validMessages;
+    } catch (error) {
+      console.error("[MessageDataService] Failed to bulk revoke messages:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Xóa nhiều tin nhắn phía tôi cùng lúc (bulk delete for me)
+   */
+  async bulkDeleteMessagesForMe(
+    messageIds: string[],
+    userId: string,
+  ): Promise<void> {
+    try {
+      const objectIds = messageIds.map((id) => new Types.ObjectId(id));
+      await Message.updateMany(
+        { _id: { $in: objectIds } },
+        {
+          $addToSet: { deletedByUsers: userId },
+        },
+      );
+    } catch (error) {
+      console.error(
+        "[MessageDataService] Failed to bulk delete messages for me:",
+        error,
+      );
+      throw error;
+    }
+  }
 }
 
 export default new MessageDataService();

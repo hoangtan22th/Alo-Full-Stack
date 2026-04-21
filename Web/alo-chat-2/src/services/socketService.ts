@@ -258,6 +258,7 @@ class SocketService {
     caller: any;
     isVideo: boolean;
     inviteeIds?: string[];
+    isGroup?: boolean;
   }) {
     if (this.socket?.connected) {
       this.socket.emit("CALL_INITIATED", data);
