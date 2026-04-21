@@ -8,12 +8,16 @@ import {
   ArrowRightIcon,
   ClockIcon,
   TrashIcon,
+  ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
 import FriendProfileModal from "./FriendProfileModal";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useRouter } from "next/navigation";
+import { groupService } from "@/services/groupService";
 
 const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
+  const router = useRouter();
   const { user: currentUser } = useAuthStore();
   const currentUserId =
     currentUser?.id || currentUser?._id || currentUser?.userId;
@@ -248,7 +252,27 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
                       BẠN BÈ
                     </span>
                   ) : (
-                    <ArrowRightIcon className="w-4 h-4 text-white/50" />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const conversation = await groupService.createDirectConversation(foundUser.userId);
+                            const convoId = conversation?._id || conversation?.id || conversation?.data?._id || conversation?.data?.id;
+                            if (convoId) {
+                              onClose();
+                              router.push(`/chat/${convoId}`);
+                            }
+                          } catch (err) {
+                            toast.error("Lỗi khi tạo hội thoại");
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-white/10 text-white text-[10px] font-black rounded-lg hover:bg-white/20 transition flex items-center gap-1.5"
+                      >
+                        <ChatBubbleLeftRightIcon className="w-3.5 h-3.5" />
+                        Nhắn tin
+                      </button>
+                      <ArrowRightIcon className="w-4 h-4 text-white/50" />
+                    </div>
                   )}
                 </div>
               </div>
