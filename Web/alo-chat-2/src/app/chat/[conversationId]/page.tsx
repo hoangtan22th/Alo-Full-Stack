@@ -2624,7 +2624,7 @@ export default function ChatPage() {
                                                 {/* Header Link */}
                                                 <div className="px-3 py-1.5 border-b border-gray-50 flex items-center gap-1.5 overflow-hidden">
                                                   <div className="w-1 h-1 rounded-full bg-gray-300" />
-                                                  <span className="text-[10px] text-blue-500 font-medium truncate opacity-80">
+                                                  <span className="text-[10px] text-gray-400 font-medium truncate opacity-80">
                                                     {window.location.origin}/g/{linkGroupId}
                                                   </span>
                                                 </div>
@@ -3673,117 +3673,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* === Modal tham gia nhóm cần phê duyệt / câu hỏi === */}
-      {joinGroupModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md p-8 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="p-3 bg-blue-50 rounded-2xl">
-                <svg
-                  className="w-6 h-6 text-blue-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={2}
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <h2 className="text-xl font-black text-gray-900">
-                  Yêu cầu tham gia nhóm
-                </h2>
-                <p className="text-[12px] text-gray-400 font-bold mt-0.5 uppercase tracking-widest">
-                  Cần phê duyệt từ nhóm trưởng
-                </p>
-              </div>
-            </div>
-
-            {joinGroupModal.question ? (
-              <>
-                <div className="mb-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                  <p className="text-[11px] font-black text-blue-500 uppercase tracking-widest mb-2">
-                    Câu hỏi từ nhóm trưởng
-                  </p>
-                  <p className="text-sm font-bold text-gray-800 leading-relaxed">
-                    {joinGroupModal.question}
-                  </p>
-                </div>
-                <div className="mb-6">
-                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2">
-                    Câu trả lời của bạn *
-                  </label>
-                  <textarea
-                    value={joinGroupAnswer}
-                    onChange={(e) => setJoinGroupAnswer(e.target.value)}
-                    placeholder="Nhập câu trả lời của bạn..."
-                    rows={3}
-                    className="w-full px-4 py-3 text-sm font-medium border border-gray-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 resize-none transition"
-                  />
-                </div>
-              </>
-            ) : (
-              <div className="mb-6 p-4 bg-gray-50 rounded-2xl">
-                <p className="text-sm text-gray-600 font-medium leading-relaxed">
-                  Yêu cầu tham gia của bạn sẽ được gửi đến nhóm trưởng để xét
-                  duyệt. Vui lòng chờ phê duyệt.
-                </p>
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setJoinGroupModal(null);
-                  setJoinGroupAnswer("");
-                }}
-                className="flex-1 py-3 rounded-xl font-black text-gray-500 bg-gray-50 hover:bg-gray-100 transition-colors"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={async () => {
-                  if (joinGroupModal.question && !joinGroupAnswer.trim()) {
-                    toast.error("Vui lòng trả lời câu hỏi của nhóm trưởng");
-                    return;
-                  }
-                  setJoiningGroup(true);
-                  try {
-                    const res = await groupService.requestJoinGroup(
-                      joinGroupModal.groupId,
-                      joinGroupAnswer.trim() || undefined,
-                    );
-                    setJoinGroupModal(null);
-                    setJoinGroupAnswer("");
-                    if (res.joined) {
-                      toast.success("Đã tham gia nhóm thành công!");
-                      router.push(`/chat/${joinGroupModal.groupId}`);
-                    } else {
-                      toast.success(
-                        "Đã gửi yêu cầu tham gia! Vui lòng chờ nhóm trưởng phê duyệt.",
-                      );
-                    }
-                  } catch (err: any) {
-                    toast.error(
-                      err.response?.data?.error || "Gửi yêu cầu thất bại",
-                    );
-                  } finally {
-                    setJoiningGroup(false);
-                  }
-                }}
-                disabled={joiningGroup}
-                className="flex-1 py-3 rounded-xl font-black bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {joiningGroup ? "Đang gửi..." : "Gửi yêu cầu"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* Group Info Modal (Zalo Style) */}
       {groupInfoModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
