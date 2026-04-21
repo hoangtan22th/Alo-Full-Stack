@@ -31,7 +31,7 @@ public class ReportAdminResponse {
     
     private String description;
     private List<String> imageUrls;
-    private List<Long> messageIds;
+    private List<String> messageIds;
     
     private String adminNotes;
     private String resolvedBy;

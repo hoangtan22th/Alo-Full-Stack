@@ -2,7 +2,6 @@ package edu.iuh.fit.report_service.dto.request;
 
 import edu.iuh.fit.report_service.entity.ReportReason;
 import edu.iuh.fit.report_service.entity.TargetType;
-import edu.iuh.fit.report_service.validation.ValidEvidence;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -16,7 +15,6 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@ValidEvidence
 public class ReportCreationRequest {
 
     @NotBlank(message = "Reporter ID cannot be null")
@@ -35,5 +33,5 @@ public class ReportCreationRequest {
 
     private List<String> imageUrls;
 
-    private List<Long> messageIds;
+    private List<String> messageIds;
 }

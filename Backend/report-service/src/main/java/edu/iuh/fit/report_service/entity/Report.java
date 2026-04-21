@@ -45,7 +45,7 @@ public class Report {
     private List<String> imageUrls;
 
     @Field("message_ids")
-    private List<Long> messageIds;
+    private List<String> messageIds;
 
     @Indexed
     @Builder.Default

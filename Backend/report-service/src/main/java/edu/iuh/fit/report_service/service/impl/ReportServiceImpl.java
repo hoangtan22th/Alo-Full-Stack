@@ -36,6 +36,27 @@ public class ReportServiceImpl implements ReportService {
     public ReportResponse createReport(ReportCreationRequest request) {
         log.info("Creating new report from reporter {} targeting {}", request.getReporterId(), request.getTargetId());
 
+        boolean hasImages = request.getImageUrls() != null && !request.getImageUrls().isEmpty();
+        boolean hasMessages = request.getMessageIds() != null && !request.getMessageIds().isEmpty();
+
+        if (request.getTargetType() == TargetType.GROUP) {
+            if (hasImages || hasMessages) {
+                throw new IllegalArgumentException("GROUP reports cannot contain image URLs or message IDs. Group reports are strictly about the group's existence/metadata.");
+            }
+        } else if (request.getTargetType() == TargetType.USER) {
+            if (request.getMessageIds() != null) {
+                int messageCount = request.getMessageIds().size();
+                if (messageCount < 3 || messageCount > 40) {
+                    throw new IllegalArgumentException("USER reports must contain exactly between 3 and 40 message IDs if evidence is provided. Current count: " + messageCount);
+                }
+            }
+        }
+
+        boolean hasDescription = request.getDescription() != null && !request.getDescription().trim().isEmpty();
+        if (!hasDescription && !hasImages && !hasMessages && request.getTargetType() == TargetType.USER) {
+             throw new IllegalArgumentException("At least one piece of evidence (description, images, or messages) is required for reporting a USER.");
+        }
+
         Report report = Report.builder()
                 .reporterId(request.getReporterId())
                 .targetId(request.getTargetId())
@@ -153,7 +174,7 @@ public class ReportServiceImpl implements ReportService {
                 return response.getData();
             }
         } catch (Exception e) {
-            log.error("Failed to fetch user {}, assigning fallback", userId, e);
+            log.warn("Failed to fetch user {}, assigning fallback. Reason: {}", userId, e.getMessage());
         }
         return UserResponse.builder().id(userId).name("Unknown User").build();
     }
