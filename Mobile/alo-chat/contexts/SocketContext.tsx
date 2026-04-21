@@ -147,6 +147,22 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             });
           });
 
+          // Nhận lời mời vào nhóm mới
+          newSocket.on("NEW_INVITATION", (data: { groupId: string, groupName: string, groupAvatar: string, invitedBy: string }) => {
+            console.log("📥 [Mobile Socket] Received NEW_INVITATION:", data);
+            DeviceEventEmitter.emit("show_in_app_notification", {
+              title: "Lời mời vào nhóm",
+              message: `Bạn được mời tham gia nhóm ${data.groupName}`,
+              avatar: data.groupAvatar,
+              data: { groupId: data.groupId },
+              type: "INVITATION",
+            });
+            // Bắn event để màn hình invitations refresh
+            DeviceEventEmitter.emit("refresh_invitations");
+            // Bắn event để tab group (index.tsx) refresh badge
+            DeviceEventEmitter.emit("refresh_group_badges");
+          });
+
           // Bị mời khỏi nhóm / Giải tán nhóm
           newSocket.on(
             "CONVERSATION_REMOVED",

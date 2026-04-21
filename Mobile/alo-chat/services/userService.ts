@@ -28,4 +28,20 @@ export const userService = {
       return null;
     }
   },
+
+  searchByPhone: async (phone: string): Promise<UserProfileDTO[]> => {
+    try {
+      const res = await api.get<any, any>(`/users/search`, {
+        params: { phoneNumber: phone },
+      });
+      // Backend returns ApiResponse { data: PageResponse { content: UserDto[] } }
+      const data = res?.data?.data ? res.data.data : res?.data ? res.data : res;
+      if (data?.content) return data.content;
+      if (Array.isArray(data)) return data;
+      return [];
+    } catch (error) {
+      console.error("Lỗi khi tìm kiếm user theo số điện thoại:", error);
+      return [];
+    }
+  },
 };

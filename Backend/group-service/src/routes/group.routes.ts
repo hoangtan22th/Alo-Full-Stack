@@ -82,6 +82,10 @@ router.put(
   "/api/v1/groups/:groupId/members/:userId/role",
   groupController.updateRole,
 );
+router.delete(
+  "/api/v1/groups/:groupId/members/:userId/unblock",
+  groupController.unblockMember,
+);
 router.delete("/api/v1/groups/:groupId", groupController.deleteGroup);
 
 // Invitations
@@ -109,6 +113,10 @@ router.get(
 router.post(
   "/api/v1/groups/:groupId/join-requests",
   groupController.requestJoinGroup,
+);
+router.delete(
+  "/api/v1/groups/:groupId/join-requests/me",
+  groupController.cancelJoinRequest,
 );
 router.get(
   "/api/v1/groups/:groupId/join-requests",
