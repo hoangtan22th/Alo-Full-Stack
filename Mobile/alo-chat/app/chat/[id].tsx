@@ -807,6 +807,19 @@ export default function GlobalChatScreen() {
             onBack={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))}
             onSearchToggle={() => setIsSearchMode(true)}
             onInfo={() => {
+              router.push({
+                pathname: "/chat/info",
+                params: {
+                  id: resolvedConversationId || id,
+                  name: realtimeGroupName,
+                  avatar: realtimeAvatar,
+                  membersCount: realtimeMembersCount,
+                  isGroup: isGroupChat ? "true" : "false",
+                  targetUserId,
+                },
+              });
+            }}
+            onHeaderClick={() => {
               if (isGroupChat) {
                 router.push({
                   pathname: "/chat/info",
