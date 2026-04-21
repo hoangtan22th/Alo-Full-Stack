@@ -22,6 +22,14 @@ export default function PollModal({ conversationId, canCreate = true, onClose }:
   // Create Poll State
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState(["", ""]);
+  
+  // Advanced Settings State
+  const [allowMultipleAnswers, setAllowMultipleAnswers] = useState(false);
+  const [allowAddOptions, setAllowAddOptions] = useState(true);
+  const [hideResultsUntilVoted, setHideResultsUntilVoted] = useState(false);
+  const [hideVoters, setHideVoters] = useState(false);
+  const [pinToTop, setPinToTop] = useState(false);
+  const [expiresAtStr, setExpiresAtStr] = useState("");
 
   useEffect(() => {
     fetchPolls();
@@ -70,12 +78,13 @@ export default function PollModal({ conversationId, canCreate = true, onClose }:
         question,
         options: validOptions,
         settings: {
-          allowMultipleAnswers: false,
-          allowAddOptions: true,
-          hideResultsUntilVoted: false,
-          hideVoters: false,
-          pinToTop: false
-        }
+          allowMultipleAnswers,
+          allowAddOptions,
+          hideResultsUntilVoted,
+          hideVoters,
+          pinToTop
+        },
+        expiresAt: expiresAtStr ? new Date(expiresAtStr).toISOString() : null
       };
       const newPoll = await pollService.createPoll(payload);
       if (newPoll) {
@@ -140,6 +149,58 @@ export default function PollModal({ conversationId, canCreate = true, onClose }:
                     <PlusIcon className="w-4 h-4" />
                     Thêm lựa chọn
                   </button>
+                </div>
+              </div>
+
+              {/* Tùy chọn nâng cao */}
+              <div>
+                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3 block">Cài đặt nâng cao</label>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative flex items-center justify-center">
+                      <input type="checkbox" checked={allowMultipleAnswers} onChange={e => setAllowMultipleAnswers(e.target.checked)} className="peer sr-only" />
+                      <div className="w-5 h-5 border-2 border-gray-300 rounded-md peer-checked:bg-blue-600 peer-checked:border-blue-600 transition" />
+                      <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    <span className="text-[13px] font-semibold text-gray-700 group-hover:text-gray-900 transition">Cho phép chọn nhiều đáp án</span>
+                  </label>
+                  
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative flex items-center justify-center">
+                      <input type="checkbox" checked={allowAddOptions} onChange={e => setAllowAddOptions(e.target.checked)} className="peer sr-only" />
+                      <div className="w-5 h-5 border-2 border-gray-300 rounded-md peer-checked:bg-blue-600 peer-checked:border-blue-600 transition" />
+                      <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    <span className="text-[13px] font-semibold text-gray-700 group-hover:text-gray-900 transition">Cho phép thành viên thêm lựa chọn</span>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative flex items-center justify-center">
+                      <input type="checkbox" checked={hideVoters} onChange={e => setHideVoters(e.target.checked)} className="peer sr-only" />
+                      <div className="w-5 h-5 border-2 border-gray-300 rounded-md peer-checked:bg-blue-600 peer-checked:border-blue-600 transition" />
+                      <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    <span className="text-[13px] font-semibold text-gray-700 group-hover:text-gray-900 transition">Ẩn danh người bình chọn</span>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative flex items-center justify-center">
+                      <input type="checkbox" checked={hideResultsUntilVoted} onChange={e => setHideResultsUntilVoted(e.target.checked)} className="peer sr-only" />
+                      <div className="w-5 h-5 border-2 border-gray-300 rounded-md peer-checked:bg-blue-600 peer-checked:border-blue-600 transition" />
+                      <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    <span className="text-[13px] font-semibold text-gray-700 group-hover:text-gray-900 transition">Ẩn kết quả trước khi bình chọn</span>
+                  </label>
+
+                  <div className="pt-2">
+                    <label className="text-[13px] font-semibold text-gray-700 mb-1.5 block">Hết hạn (Tùy chọn)</label>
+                    <input 
+                      type="datetime-local" 
+                      value={expiresAtStr}
+                      onChange={e => setExpiresAtStr(e.target.value)}
+                      className="w-full bg-gray-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 transition"
+                    />
+                  </div>
                 </div>
               </div>
 
