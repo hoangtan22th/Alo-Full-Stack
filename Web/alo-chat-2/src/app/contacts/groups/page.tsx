@@ -1,6 +1,6 @@
 "use client";
 // src/pages/groups/GroupListPage.tsx
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   AdjustmentsHorizontalIcon,
   BellSlashIcon,
@@ -25,6 +25,8 @@ import { useRouter } from "next/navigation";
 import QRCode from "react-qr-code";
 import { useAuthStore } from "@/store/useAuthStore";
 import CreateGroupModal from "@/components/ui/group/CreateGroupModal";
+import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
+import { messageService, MessageDTO } from "@/services/messageService";
 
 // ===========================
 // API FUNCTIONS (KHÔNG DÙNG ZUSTAND)
@@ -266,6 +268,7 @@ export default function GroupListPage() {
   const [rightPanelMode, setRightPanelMode] = useState<"detail" | "members">(
     "detail",
   );
+  const [groupMessages, setGroupMessages] = useState<MessageDTO[]>([]);
   const [userCache, setUserCache] = useState<Record<string, Friend>>({});
   const [showQrModal, setShowQrModal] = useState(false);
   const [joinLink, setJoinLink] = useState("");
@@ -275,6 +278,18 @@ export default function GroupListPage() {
     message: string;
     onConfirm: () => void;
   }>({ isOpen: false, title: "", message: "", onConfirm: () => {} });
+
+  // Normalization for ChatInfoPanel
+  const normalizedGroup = useMemo(() => {
+    if (!selectedGroup) return null;
+    return {
+      ...selectedGroup,
+      id: selectedGroup._id,
+      displayName: selectedGroup.name,
+      displayAvatar: selectedGroup.groupAvatar,
+      isGroup: true,
+    };
+  }, [selectedGroup]);
 
   // Load current user
   const { user: authUser } = useAuthStore();
@@ -348,17 +363,29 @@ export default function GroupListPage() {
     }
   }, [selectedGroup]);
 
+  // Load chi tiết nhóm và messages khi chọn
   useEffect(() => {
-    if (!selectedGroupId) return;
+    const loadDetail = async () => {
+      if (!selectedGroupId) {
+        setSelectedGroup(null);
+        setGroupMessages([]);
+        return;
+      }
 
-    setRightPanelMode("detail");
-    setActiveMemberMenuId(null);
-    setDetailLoading(true);
-    getGroupById(selectedGroupId)
-      .then((res) => {
-        if (res.data) setSelectedGroup(res.data as any);
-      })
-      .finally(() => setDetailLoading(false));
+      setDetailLoading(true);
+      const res = await getGroupById(selectedGroupId);
+      if (res.data) {
+        setSelectedGroup(res.data as any);
+      }
+
+      // Load messages để hiện Media/Files
+      const msgs = await messageService.getMessageHistory(selectedGroupId, 100);
+      setGroupMessages(msgs);
+
+      setDetailLoading(false);
+    };
+
+    loadDetail();
   }, [selectedGroupId]);
 
   useEffect(() => {
@@ -669,7 +696,7 @@ export default function GroupListPage() {
                       >
                         <ChatBubbleOvalLeftIcon className="w-5 h-5" />
                       </button>
-                      <button
+                      {/* <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveMenuId(
@@ -683,7 +710,7 @@ export default function GroupListPage() {
                         }`}
                       >
                         <EllipsisHorizontalIcon className="w-6 h-6" />
-                      </button>
+                      </button> */}
 
                       {activeMenuId === group._id && (
                         <>
@@ -730,471 +757,55 @@ export default function GroupListPage() {
         </div>
       </div>
 
-      {/* RIGHT PANEL - GROUP DETAIL */}
-      <div className="hidden lg:flex w-85 flex-col shrink-0 bg-[#F8F9FA] z-10">
-        <div className="flex-1 overflow-y-auto p-6 scrollbar-hide pb-10">
-          {detailLoading ? (
-            <div className="flex items-center justify-center h-40">
-              <div className="w-8 h-8 border-2 border-black border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : !selectedGroup ? (
-            <div className="flex items-center justify-center h-40 text-gray-400 text-sm font-medium text-center px-4">
-              Chọn một nhóm để xem chi tiết
-            </div>
-          ) : rightPanelMode === "members" ? (
-            <>
-              {/* MEMBERS TAB */}
-              <div className="flex items-center gap-3 mb-6">
-                <button
-                  onClick={() => setRightPanelMode("detail")}
-                  className="p-2 hover:bg-gray-200 rounded-full transition text-gray-600"
-                >
-                  <ChevronLeftIcon className="w-5 h-5" />
-                </button>
-                <h2 className="text-lg font-black text-gray-900">
-                  Thành viên ({selectedGroup.members.length})
-                </h2>
-              </div>
-
-              <div className="bg-white rounded-3xl p-4 shadow-sm space-y-2 relative">
-                {[...selectedGroup.members]
-                  .sort((a, b) => {
-                    const roleWeights: Record<string, number> = {
-                      LEADER: 1,
-                      DEPUTY: 2,
-                      MEMBER: 3,
-                    };
-                    const weightA = roleWeights[a.role] || 4;
-                    const weightB = roleWeights[b.role] || 4;
-                    if (weightA !== weightB) return weightA - weightB;
-
-                    const nameA =
-                      userCache[a.userId]?.fullName ||
-                      (a.userId === currentUserId ? "Bạn" : "User");
-                    const nameB =
-                      userCache[b.userId]?.fullName ||
-                      (b.userId === currentUserId ? "Bạn" : "User");
-                    return nameA.localeCompare(nameB, "vi");
-                  })
-                  .map((m) => {
-                    const isMe = m.userId === currentUserId;
-                    const cachedInfo = userCache[m.userId];
-                    const userName = isMe ? "Bạn" : (cachedInfo?.fullName || m.userId.slice(-8));
-                    // Luôn dùng tên thật cho avatar initials
-                    const avatarName = cachedInfo?.fullName || (isMe && authUser?.fullName) || userName;
-
-                    const userAvatar = isMe 
-                        ? (userCache[currentUserId]?.avatar || authUser?.avatar)
-                        : cachedInfo?.avatar;
-
-                    // Quyền cho menu: LEADER chỉnh được phó/member; DEPUTY chỉnh được member; KHÔNG chỉnh bản thân
-                    const canEdit =
-                      m.userId !== currentUserId &&
-                      (myRole === "LEADER" ||
-                        (myRole === "DEPUTY" && m.role === "MEMBER"));
-
-                    return (
-                      <div
-                        key={m.userId}
-                        className="flex items-center gap-3 group relative p-2 hover:bg-gray-50 rounded-xl transition"
-                      >
-                        <div className="relative shrink-0">
-                          <img
-                            src={
-                              userAvatar ||
-                              `https://ui-avatars.com/api/?name=${encodeURIComponent(avatarName)}&background=E5E7EB&color=374151&rounded=true`
-                            }
-                            alt=""
-                            className="w-10 h-10 rounded-full object-cover border border-gray-100 bg-gray-50"
-                            onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(avatarName)}&background=E5E7EB&color=374151&rounded=true`;
-                            }}
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[14px] font-bold text-gray-800 truncate">
-                              {userName}
-                            </span>
-                          </div>
-                          {m.role !== "MEMBER" && (
-                            <span className="text-[11px] font-bold text-blue-600 mt-0.5 block">
-                              {m.role === "LEADER" ? "Trưởng nhóm" : "Phó nhóm"}
-                            </span>
-                          )}
-                        </div>
-
-                        {canEdit && (
-                          <div className="relative shrink-0 transition-opacity">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveMemberMenuId(
-                                  activeMemberMenuId === m.userId
-                                    ? null
-                                    : m.userId,
-                                );
-                              }}
-                              className={`p-1.5 rounded-full transition ${activeMemberMenuId === m.userId ? "bg-gray-200 text-gray-800" : "text-gray-400 hover:text-gray-800 hover:bg-gray-200 opacity-0 group-hover:opacity-100"}`}
-                            >
-                              <EllipsisHorizontalIcon className="w-5 h-5" />
-                            </button>
-
-                            {activeMemberMenuId === m.userId && (
-                              <>
-                                <div
-                                  className="fixed inset-0 z-40"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveMemberMenuId(null);
-                                  }}
-                                />
-                                <div
-                                  className="absolute right-0 top-10 mt-1 w-52 bg-white border border-gray-100 rounded-xl shadow-xl z-50 py-1 overflow-hidden"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {myRole === "LEADER" &&
-                                    m.role === "MEMBER" && (
-                                      <button
-                                        onClick={() =>
-                                          handleUpdateRole(
-                                            m.userId,
-                                            "DEPUTY",
-                                            userName,
-                                          )
-                                        }
-                                        className="w-full text-left px-4 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50"
-                                      >
-                                        Trao quyền Phó nhóm
-                                      </button>
-                                    )}
-                                  {myRole === "LEADER" &&
-                                    m.role === "DEPUTY" && (
-                                      <button
-                                        onClick={() =>
-                                          handleUpdateRole(
-                                            m.userId,
-                                            "MEMBER",
-                                            userName,
-                                          )
-                                        }
-                                        className="w-full text-left px-4 py-2.5 text-[13px] font-bold text-orange-600 hover:bg-orange-50"
-                                      >
-                                        Thu hồi quyền Phó nhóm
-                                      </button>
-                                    )}
-                                  {myRole === "LEADER" && (
-                                    <button
-                                      onClick={() =>
-                                        handleUpdateRole(
-                                          m.userId,
-                                          "LEADER",
-                                          userName,
-                                        )
-                                      }
-                                      className="w-full text-left px-4 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50"
-                                    >
-                                      Trao quyền Trưởng nhóm
-                                    </button>
-                                  )}
-
-                                  <button
-                                    onClick={() =>
-                                      handleRemoveMember(m.userId, userName)
-                                    }
-                                    className="w-full text-left px-4 py-2.5 text-[13px] font-bold text-red-600 hover:bg-red-50"
-                                  >
-                                    Xóa khỏi nhóm
-                                  </button>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-              </div>
-            </>
-          ) : (
-            <>
-              {/* DETAIL TAB */}
-              <div className="flex flex-col items-center mt-6 mb-8 text-center">
-                <div className="w-24 h-24 rounded-3xl overflow-hidden mb-4 shadow-md bg-white p-1">
-                  {selectedGroup.groupAvatar ? (
-                    <img
-                      src={selectedGroup.groupAvatar}
-                      alt="avatar"
-                      className="w-full h-full object-cover rounded-[20px]"
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedGroup.name)}&background=F3F4F6&color=9CA3AF`;
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full rounded-[20px] bg-gray-100 flex items-center justify-center text-3xl font-black text-gray-400">
-                      {selectedGroup.name.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                </div>
-                <h2 className="text-xl font-black text-gray-900 tracking-tight">
-                  {selectedGroup.name}
-                </h2>
-                <p className="text-xs font-medium text-gray-500 mt-1.5 flex items-center gap-1.5 flex-wrap justify-center">
-                  {selectedGroup.members.length} thành viên
-                  {myRole && (
-                    <span className="bg-black text-white px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">
-                      {myRole === "LEADER"
-                        ? "Trưởng"
-                        : myRole === "DEPUTY"
-                          ? "Phó"
-                          : "TV"}
-                    </span>
-                  )}
-                </p>
-              </div>
-
-              <div className="flex justify-center gap-3 mb-8">
-                {[
-                  { icon: BellSlashIcon, label: "Mute" },
-                  { icon: MapPinIcon, label: "Pin" },
-                  { icon: MagnifyingGlassIcon, label: "Search" },
-                ].map(({ icon: Icon, label }) => (
-                  <button
-                    key={label}
-                    className="flex flex-col items-center justify-center w-16 h-16 rounded-[20px] bg-gray-200/50 hover:bg-gray-200 transition"
-                  >
-                    <Icon className="w-5 h-5 text-gray-700 mb-1" />
-                    <span className="text-[10px] font-bold text-gray-700">
-                      {label}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Settings - LEADER/DEPUTY only */}
-              {(myRole === "LEADER" || myRole === "DEPUTY") && (
-                <div className="mb-8 bg-white rounded-3xl p-5 shadow-sm space-y-4">
-                  <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
-                    Cài đặt nhóm
-                  </h3>
-                  {[
-                    {
-                      label: "Yêu cầu phê duyệt",
-                      value: selectedGroup.isApprovalRequired,
-                      toggle: async () => {
-                        const res: any = await updateApprovalSetting(
-                          selectedGroup._id,
-                          !selectedGroup.isApprovalRequired,
-                        );
-                        if (res.data) setSelectedGroup(res.data as any);
-                        else toast.error(res.error || "Lỗi");
-                      },
-                    },
-                    {
-                      label: "Tham gia bằng link",
-                      value: selectedGroup.isLinkEnabled,
-                      toggle: async () => {
-                        const res: any = await updateLinkSetting(
-                          selectedGroup._id,
-                          !selectedGroup.isLinkEnabled,
-                        );
-                        if (res.data) setSelectedGroup(res.data as any);
-                        else toast.error(res.error || "Lỗi");
-                      },
-                    },
-                  ].map(({ label, value, toggle }) => (
-                    <div
-                      key={label}
-                      className="flex items-center justify-between"
-                    >
-                      <span className="text-[13px] font-medium text-gray-700">
-                        {label}
-                      </span>
-                      <button
-                        onClick={toggle}
-                        className={`w-11 h-6 rounded-full transition-colors relative shrink-0 ${
-                          value ? "bg-black" : "bg-gray-300"
-                        }`}
-                      >
-                        <span
-                          className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform"
-                          style={{
-                            left: 2,
-                            transform: value
-                              ? "translateX(20px)"
-                              : "translateX(0)",
-                          }}
-                        />
-                      </button>
-                    </div>
-                  ))}
-
-                  {/* Join Question Section */}
-                  <div className={`mt-2 pt-4 border-t border-gray-50 space-y-3 transition-opacity ${!selectedGroup.isApprovalRequired ? "opacity-40 pointer-events-none" : ""}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col">
-                        <span className="text-[13px] font-medium text-gray-700">Câu hỏi tham gia</span>
-                        {!selectedGroup.isApprovalRequired && (
-                          <span className="text-[10px] text-orange-500 font-bold">Chỉ khả dụng khi bật Phê duyệt</span>
-                        )}
-                      </div>
-                      <button
-                        onClick={async () => {
-                          const res: any = await updateGroupSettings(selectedGroup._id, {
-                            isQuestionEnabled: !selectedGroup.isQuestionEnabled
-                          });
-                          if (res.data) setSelectedGroup(res.data as any);
-                          else toast.error(res.error || "Lỗi");
-                        }}
-                        className={`w-11 h-6 rounded-full transition-colors relative shrink-0 ${
-                          selectedGroup.isQuestionEnabled ? "bg-black" : "bg-gray-300"
-                        }`}
-                      >
-                        <span
-                          className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform"
-                          style={{
-                            left: 2,
-                            transform: selectedGroup.isQuestionEnabled
-                              ? "translateX(20px)"
-                              : "translateX(0)",
-                          }}
-                        />
-                      </button>
-                    </div>
-
-                    {selectedGroup.isQuestionEnabled && (
-                      <div className="space-y-2">
-                        <textarea
-                          placeholder="Nhập câu hỏi để thành viên trả lời khi xin vào nhóm..."
-                          className="w-full bg-gray-50 border border-gray-100 rounded-xl p-3 text-[13px] font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-black/5 transition-all"
-                          rows={2}
-                          defaultValue={selectedGroup.membershipQuestion || ""}
-                          onBlur={async (e) => {
-                            const val = e.target.value.trim();
-                            if (val === selectedGroup.membershipQuestion) return;
-                            const res: any = await updateGroupSettings(selectedGroup._id, {
-                              membershipQuestion: val
-                            });
-                            if (res.data) setSelectedGroup(res.data as any);
-                            else toast.error(res.error || "Lỗi cập nhật câu hỏi");
-                          }}
-                        />
-                        <p className="text-[10px] text-gray-400 font-medium italic">
-                          Tự động lưu khi bạn nhập xong và nhấn ra ngoài.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {selectedGroup.isLinkEnabled && (
-                    <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between gap-2">
-                      <div className="flex-1 truncate text-[13px] text-gray-500 font-medium select-all">
-                        {joinLink}
-                      </div>
-                      <div className="flex shrink-0 gap-1">
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(joinLink);
-                            toast.success("Đã sao chép link tham gia!");
-                          }}
-                          className="p-1.5 hover:bg-gray-200 rounded-lg text-gray-600 transition"
-                          title="Sao chép link"
-                        >
-                          <DocumentDuplicateIcon className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => setShowQrModal(true)}
-                          className="p-1.5 hover:bg-gray-200 rounded-lg text-gray-600 transition"
-                          title="Mã QR"
-                        >
-                          <QrCodeIcon className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Members Preview */}
-              <div className="mb-8">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-[14px] font-bold text-gray-900">
-                    Thành viên ({selectedGroup.members.length})
-                  </h3>
-                  <button
-                    onClick={() => setRightPanelMode("members")}
-                    className="text-[12px] font-bold text-blue-600 hover:text-blue-700 transition"
-                  >
-                    Xem tất cả
-                  </button>
-                </div>
-                {/* Member avatars list */}
-                <div className="flex flex-wrap gap-2">
-                  {selectedGroup.members.slice(0, 8).map((m) => {
-                    const isMe = m.userId === currentUserId;
-                    const info = userCache[m.userId];
-                    const name = isMe ? "Bạn" : (info?.fullName || "User");
-                    const avatarName = info?.fullName || (isMe && authUser?.fullName) || name;
-                    const avatar = isMe ? (userCache[currentUserId]?.avatar || authUser?.avatar) : info?.avatar;
-
-                    return (
-                      <div key={m.userId} className="relative group/member">
-                        <img
-                          src={
-                            avatar ||
-                            `https://ui-avatars.com/api/?name=${encodeURIComponent(avatarName)}&background=E5E7EB&color=374151&rounded=true`
-                          }
-                          alt={name}
-                          title={name}
-                          className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm"
-                        />
-                        {m.role === "LEADER" && (
-                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full flex items-center justify-center border-2 border-white">
-                            <StarIcon className="w-2.5 h-2.5 text-white" />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {selectedGroup.members.length > 8 && (
-                    <div 
-                      onClick={() => setRightPanelMode("members")}
-                      className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-[11px] font-bold text-gray-500 cursor-pointer hover:bg-gray-200 transition"
-                    >
-                      +{selectedGroup.members.length - 8}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <button
-                onClick={handleLeaveGroup}
-                disabled={leaveLoading || myRole === "LEADER"}
-                className="w-full border-2 border-red-50 hover:bg-red-50 text-red-500 py-4 rounded-3xl font-bold text-[14px] transition flex justify-center items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <ArrowRightOnRectangleIcon className="w-5 h-5" />
-                {myRole === "LEADER"
-                  ? "Chuyển quyền trước khi rời"
-                  : leaveLoading
-                    ? "Đang xử lý..."
-                    : "Rời khỏi nhóm"}
-              </button>
-
-              {myRole === "LEADER" && (
-                <button
-                  onClick={handleDeleteGroup}
-                  disabled={leaveLoading}
-                  className="w-full border-2 border-red-100 hover:bg-red-500 hover:text-white text-red-600 mt-3 py-4 rounded-3xl font-bold text-[14px] transition flex justify-center items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <TrashIcon className="w-5 h-5" />
-                  {leaveLoading ? "Đang xử lý..." : "Giải tán nhóm"}
-                </button>
-              )}
-            </>
+      {/* RIGHT PANEL - Replaced with ChatInfoPanel for consistency */}
+      <div className="hidden lg:block">
+        <ChatInfoPanel
+          show={!!selectedGroup}
+          conversationId={selectedGroup?._id || ""}
+          conversationInfo={normalizedGroup}
+          messages={groupMessages}
+          currentUser={authUser}
+          userCache={Object.entries(userCache).reduce(
+            (acc, [id, f]) => ({
+              ...acc,
+              [id]: { name: f.fullName, avatar: f.avatar },
+            }),
+            {},
           )}
-        </div>
+          onClose={() => setSelectedGroupId(null)}
+          onClearHistory={() =>
+            toast.info("Tính năng này chỉ khả dụng trong phòng chat")
+          }
+          onLeaveGroup={handleLeaveGroup}
+          onDisbandGroup={handleDeleteGroup}
+          onRemoveMember={(userId) =>
+            handleRemoveMember(
+              userId,
+              userCache[userId]?.fullName || "Thành viên",
+            )
+          }
+          onUpdateRole={(userId, role) =>
+            handleUpdateRole(
+              userId,
+              role as any,
+              userCache[userId]?.fullName || "Thành viên",
+            )
+          }
+          onAssignLeader={(userId) =>
+            handleUpdateRole(
+              userId,
+              "LEADER",
+              userCache[userId]?.fullName || "Thành viên",
+            )
+          }
+          onRefreshData={async () => {
+            if (selectedGroupId) {
+              const res = await getGroupById(selectedGroupId);
+              if (res.data) setSelectedGroup(res.data as any);
+            }
+            loadGroups();
+          }}
+        />
       </div>
 
       {showCreateModal && (

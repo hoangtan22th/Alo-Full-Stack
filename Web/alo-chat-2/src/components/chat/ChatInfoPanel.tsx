@@ -35,6 +35,7 @@ import NoteModal from "../ui/group/NoteModal";
 import ReminderModal from "../ui/group/ReminderModal";
 import JoinLinkModal from "../ui/group/JoinLinkModal";
 import MemberManagementModal from "../ui/group/MemberManagementModal";
+import GroupSettingsModal from "../ui/group/GroupSettingsModal";
 import { groupService } from "@/services/groupService";
 import { toast } from "sonner";
 import { getMediaUrl } from "../../utils/media";
@@ -84,6 +85,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   const [showJoinLinkModal, setShowJoinLinkModal] = useState(false);
   const [showMemberManagementModal, setShowMemberManagementModal] =
     useState(false);
+  const [showGroupSettingsModal, setShowGroupSettingsModal] = useState(false);
   const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
 
   // Group Info Editing State
@@ -450,7 +452,11 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
               </h3>
               <div className="space-y-1">
                 {isManager && (
-                  <SettingItem icon={<Cog6ToothIcon />} label="Cài đặt nhóm" />
+                  <SettingItem 
+                    icon={<Cog6ToothIcon />} 
+                    label="Cài đặt nhóm" 
+                    onClick={() => setShowGroupSettingsModal(true)}
+                  />
                 )}
                 <SettingItem
                   icon={<LinkIcon />}
@@ -558,6 +564,19 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
             setShowMemberManagementModal(false);
             setShowAddMemberModal(true);
           }}
+        />
+      )}
+
+      {showGroupSettingsModal && (
+        <GroupSettingsModal
+          groupId={conversationId}
+          groupName={conversationInfo?.displayName || "Nhóm"}
+          isApprovalRequired={conversationInfo?.isApprovalRequired || false}
+          isLinkEnabled={conversationInfo?.isLinkEnabled || false}
+          isQuestionEnabled={conversationInfo?.isQuestionEnabled}
+          membershipQuestion={conversationInfo?.membershipQuestion}
+          onClose={() => setShowGroupSettingsModal(false)}
+          onRefreshData={onRefreshData}
         />
       )}
     </div>
