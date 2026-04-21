@@ -36,6 +36,8 @@ interface Props {
 export default function LiveKitCallRoom(props: Props) {
   const { roomId, userName, isVideoCall, onLeaveRoom } = props;
   const [token, setToken] = useState("");
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -65,7 +67,10 @@ export default function LiveKitCallRoom(props: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm font-sans text-white overflow-hidden flex items-center justify-center p-4 md:p-10">
+    <div className={isMinimized 
+      ? "fixed bottom-8 right-8 z-[9999] pointer-events-auto" 
+      : "fixed inset-0 z-[9999] bg-black/40 backdrop-blur-sm font-sans text-white overflow-hidden flex items-center justify-center p-0 md:p-10"
+    }>
       <LiveKitRoom
         video={isVideoCall}
         audio={true}
@@ -73,16 +78,39 @@ export default function LiveKitCallRoom(props: Props) {
         serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
         onDisconnected={() => onLeaveRoom()}
         connect={true}
-        className="h-full w-full max-w-6xl max-h-[850px] relative rounded-[3rem] overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.5)] border border-white/10 bg-[#0a0a0a]"
+        className={isMinimized 
+          ? "w-80 h-48 rounded-3xl overflow-hidden shadow-2xl border border-white/20 bg-[#0a0a0a] relative"
+          : isFullscreen
+            ? "fixed inset-0 w-screen h-screen rounded-none border-none bg-[#0a0a0a]"
+            : "h-full w-full max-w-6xl max-h-[850px] relative rounded-[3rem] overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.5)] border border-white/10 bg-[#0a0a0a]"
+        }
       >
-        <CallContent {...props} />
+        <CallContent 
+          {...props} 
+          isMinimized={isMinimized} 
+          setIsMinimized={setIsMinimized} 
+          isFullscreen={isFullscreen} 
+          setIsFullscreen={setIsFullscreen} 
+        />
         <RoomAudioRenderer />
       </LiveKitRoom>
     </div>
   );
 }
 
-function CallContent({ roomId, onLeaveRoom, onUserJoin, targetName, targetAvatar, isVideoCall, conversationMembers, isGroup }: Props) {
+interface InternalProps extends Props {
+  isMinimized: boolean;
+  setIsMinimized: (v: boolean) => void;
+  isFullscreen: boolean;
+  setIsFullscreen: (v: boolean) => void;
+}
+
+function CallContent(internalProps: InternalProps) {
+  const { 
+    roomId, onLeaveRoom, onUserJoin, targetName, targetAvatar, 
+    isVideoCall, conversationMembers, isGroup, myAvatar,
+    isMinimized, setIsMinimized, isFullscreen, setIsFullscreen
+  } = internalProps;
   const { user: currentUser } = useAuthStore();
   const room = useRoomContext();
   const participants = useParticipants();
@@ -216,114 +244,166 @@ function CallContent({ roomId, onLeaveRoom, onUserJoin, targetName, targetAvatar
   return (
     <div className="relative h-full w-full flex flex-col">
       {/* Background Avatar Blur */}
-      {targetAvatar && (
+      {(targetAvatar || myAvatar) && (
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
           <img 
-            src={targetAvatar} 
-            className="w-full h-full object-cover blur-[100px] scale-110 opacity-30" 
+            src={targetAvatar || myAvatar} 
+            className="w-full h-full object-cover blur-[80px] scale-110 opacity-60 transition-all duration-700" 
             alt="" 
           />
-          <div className="absolute inset-0 bg-black/40" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/40 to-black/80" />
         </div>
       )}
 
       {/* Header */}
-      <div className="absolute top-8 left-8 z-20 flex items-center gap-4">
-        <div className="flex items-center gap-3 px-4 py-2 bg-white/5 backdrop-blur-2xl rounded-2xl border border-white/10">
-          <div className={`w-2 h-2 rounded-full ${participants.length > 1 ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
-          <div className="flex flex-col">
-            <span className="text-[10px] font-black tracking-widest uppercase opacity-40 leading-none">
-              {participants.length > 1 ? 'Secured Session' : 'Waiting for others'}
-            </span>
-            {hasJoinedTriggered && (
-              <span className="text-xs font-mono font-bold mt-1">{formatDuration(duration)}</span>
-            )}
+      {!isMinimized && (
+        <div className="absolute top-8 left-8 z-20 flex items-center gap-4">
+          <div className="flex items-center gap-3 px-4 py-2 bg-white/5 backdrop-blur-2xl rounded-2xl border border-white/10">
+            <div className={`w-2 h-2 rounded-full ${participants.length > 1 ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black tracking-widest uppercase opacity-40 leading-none">
+                {participants.length > 1 ? 'Secured Session' : 'Waiting for others'}
+              </span>
+              {hasJoinedTriggered && (
+                <span className="text-xs font-mono font-bold mt-1">{formatDuration(duration)}</span>
+              )}
+            </div>
           </div>
         </div>
+      )}
+
+      {/* Window Controls */}
+      <div className={`absolute top-8 right-8 z-30 flex items-center gap-2 ${isMinimized ? 'top-3 right-3 scale-75' : ''}`}>
+        {!isMinimized && (
+          <>
+            <button 
+              onClick={() => setIsMinimized(true)}
+              className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-xl flex items-center justify-center transition-all border border-white/10"
+              title="Minimize"
+            >
+              <Minimize2 size={18} />
+            </button>
+            <button 
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-xl flex items-center justify-center transition-all border border-white/10"
+              title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+            >
+              {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+            </button>
+          </>
+        )}
+        {isMinimized && (
+          <button 
+            onClick={() => setIsMinimized(false)}
+            className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 backdrop-blur-xl flex items-center justify-center transition-all border border-white/10"
+          >
+            <Maximize2 size={18} />
+          </button>
+        )}
+        <button 
+          onClick={() => {
+            const finalDuration = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
+            onLeaveRoom(finalDuration);
+          }}
+          className="w-10 h-10 rounded-xl bg-white/5 hover:bg-red-500 hover:text-white backdrop-blur-xl flex items-center justify-center transition-all border border-white/10"
+          title="End Call"
+        >
+          <X size={20} />
+        </button>
       </div>
 
       {/* Main Grid */}
-      <div className="flex-1 relative flex items-center justify-center p-8 md:p-12">
+      <div className={`flex-1 relative flex items-center justify-center ${isMinimized ? 'p-2' : 'p-8 md:p-12'}`}>
         <AnimatePresence mode="wait">
           {remoteTracks.length > 0 ? (
             <motion.div 
               key="grid"
               initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-              className={`w-full h-full grid gap-6 ${
+              className={`w-full h-full grid gap-4 ${isMinimized ? 'gap-2' : 'gap-6'} ${
                 remoteTracks.length === 1 ? 'grid-cols-1' : 
                 remoteTracks.length <= 4 ? 'grid-cols-2' : 'grid-cols-3'
               }`}
             >
               {remoteTracks.map((track) => (
-                <div key={track.participant.sid} className="relative rounded-[2.5rem] overflow-hidden bg-white/5 border border-white/10 group shadow-2xl">
+                <div key={track.participant.sid} className={`relative overflow-hidden bg-white/5 border border-white/10 group shadow-2xl ${isMinimized ? 'rounded-2xl' : 'rounded-[2.5rem]'}`}>
                   <VideoTrack trackRef={track} className="w-full h-full object-cover" />
-                  <div className="absolute bottom-6 left-6 flex items-center gap-2">
-                    <div className="px-4 py-2 bg-black/40 backdrop-blur-xl rounded-2xl text-[11px] font-bold border border-white/10">
-                      {track.participant.name || track.participant.identity}
+                  {!isMinimized && (
+                    <div className="absolute bottom-6 left-6 flex items-center gap-2">
+                      <div className="px-4 py-2 bg-black/40 backdrop-blur-xl rounded-2xl text-[11px] font-bold border border-white/10">
+                        {track.participant.name || track.participant.identity}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               ))}
             </motion.div>
           ) : (
             <motion.div key="waiting" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center">
-              <div className="relative mb-10">
-                <div className="absolute inset-0 bg-white/10 rounded-full animate-ping scale-150 duration-[4s]" />
+              <div className={`relative ${isMinimized ? 'mb-2' : 'mb-10'}`}>
+                {!isMinimized && <div className="absolute inset-0 bg-white/10 rounded-full animate-ping scale-150 duration-[4s]" />}
                 {targetAvatar ? (
-                  <img src={targetAvatar} className="w-40 h-40 rounded-full border-4 border-white/10 object-cover relative z-10 shadow-2xl" alt="" />
+                  <img src={targetAvatar} className={`${isMinimized ? 'w-16 h-16' : 'w-40 h-40'} rounded-full border-4 border-white/10 object-cover relative z-10 shadow-2xl`} alt="" />
                 ) : (
-                  <div className="w-40 h-40 rounded-full bg-white/5 border-4 border-white/10 flex items-center justify-center text-5xl font-light relative z-10 uppercase">
+                  <div className={`${isMinimized ? 'w-16 h-16 text-xl' : 'w-40 h-40 text-5xl'} rounded-full bg-white/5 border-4 border-white/10 flex items-center justify-center font-light relative z-10 uppercase`}>
                     {targetName?.charAt(0) || "?"}
                   </div>
                 )}
               </div>
-              <h2 className="text-3xl font-black tracking-tight">{targetName || "Calling..."}</h2>
-              <p className="text-[10px] opacity-30 mt-4 tracking-[0.3em] font-bold uppercase">Establishing Connection</p>
+              {!isMinimized && (
+                <>
+                  <h2 className="text-3xl font-black tracking-tight">{targetName || "Calling..."}</h2>
+                  <p className="text-[10px] opacity-30 mt-4 tracking-[0.3em] font-bold uppercase">Establishing Connection</p>
+                </>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
       {/* Local Preview */}
-      <div className="absolute top-8 right-8 w-40 md:w-64 aspect-video rounded-3xl overflow-hidden border border-white/10 shadow-2xl z-20 bg-black/40 backdrop-blur-xl group">
-        {localTrack && !isCameraOff ? (
-          <VideoTrack trackRef={localTrack} className="w-full h-full object-cover mirror" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-white/5">
-            <div className="flex flex-col items-center gap-2">
-              <VideoOff size={24} className="opacity-20" />
-              <span className="text-[8px] font-black uppercase opacity-20 tracking-widest">Camera Off</span>
+      {!isMinimized && (
+        <div className="absolute top-8 right-32 w-40 md:w-64 aspect-video rounded-3xl overflow-hidden border border-white/10 shadow-2xl z-20 bg-black/40 backdrop-blur-xl group">
+          {localTrack && !isCameraOff ? (
+            <VideoTrack trackRef={localTrack} className="w-full h-full object-cover mirror" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-white/5">
+              <div className="flex flex-col items-center gap-2">
+                <VideoOff size={24} className="opacity-20" />
+                <span className="text-[8px] font-black uppercase opacity-20 tracking-widest">Camera Off</span>
+              </div>
             </div>
+          )}
+          <div className="absolute top-3 left-3 px-3 py-1 bg-black/50 backdrop-blur-md rounded-xl text-[9px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity border border-white/10">
+            You
           </div>
-        )}
-        <div className="absolute top-3 left-3 px-3 py-1 bg-black/50 backdrop-blur-md rounded-xl text-[9px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity border border-white/10">
-          You
         </div>
-      </div>
+      )}
 
       {/* Controls */}
-      <div className="h-40 flex items-center justify-center px-8 relative z-20">
-        <div className="flex items-center gap-4 px-8 py-5 bg-white/5 border border-white/10 backdrop-blur-3xl rounded-[3rem] shadow-2xl">
-          <ControlButton active={!isMuted} onClick={toggleMic} icon={isMuted ? MicOff : Mic} />
-          <ControlButton active={!isCameraOff} onClick={toggleCamera} icon={isCameraOff ? VideoOff : Video} />
-          
-          {isGroup && (
-            <ControlButton active={showInviteModal} onClick={() => setShowInviteModal(true)} icon={UserPlus} />
-          )}
-          
-          <div className="w-[1px] h-10 bg-white/10 mx-3" />
-          
-          <button 
-            onClick={() => {
-              const finalDuration = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
-              onLeaveRoom(finalDuration);
-            }} 
-            className="w-16 h-16 rounded-[2rem] bg-red-500 hover:bg-red-600 flex items-center justify-center transition-all active:scale-90 shadow-2xl shadow-red-500/20"
-          >
-            <PhoneOff size={28} fill="currentColor" />
-          </button>
+      {!isMinimized && (
+        <div className="h-40 flex items-center justify-center px-8 relative z-20">
+          <div className="flex items-center gap-4 px-8 py-5 bg-white/5 border border-white/10 backdrop-blur-3xl rounded-[3rem] shadow-2xl">
+            <ControlButton active={!isMuted} onClick={toggleMic} icon={isMuted ? MicOff : Mic} />
+            <ControlButton active={!isCameraOff} onClick={toggleCamera} icon={isCameraOff ? VideoOff : Video} />
+            
+            {isGroup && (
+              <ControlButton active={showInviteModal} onClick={() => setShowInviteModal(true)} icon={UserPlus} />
+            )}
+            
+            <div className="w-[1px] h-10 bg-white/10 mx-3" />
+            
+            <button 
+              onClick={() => {
+                const finalDuration = startTimeRef.current ? Math.floor((Date.now() - startTimeRef.current) / 1000) : 0;
+                onLeaveRoom(finalDuration);
+              }} 
+              className="w-16 h-16 rounded-[2rem] bg-red-500 hover:bg-red-600 flex items-center justify-center transition-all active:scale-90 shadow-2xl shadow-red-500/20"
+            >
+              <PhoneOff size={28} fill="currentColor" />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Video Request Popup & Invite Modal - Keeping them standard but within room */}
       {/* ... (Same Modals as before but visually tweaked for room) ... */}
