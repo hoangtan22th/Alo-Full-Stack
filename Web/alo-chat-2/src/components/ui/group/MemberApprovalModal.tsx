@@ -193,10 +193,10 @@ export default function MemberApprovalModal({ groupId, onClose }: MemberApproval
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {/* Settings Section */}
           <div className="p-8 space-y-8">
-            <div className="flex items-center justify-between p-6 bg-blue-50/50 rounded-3xl border border-blue-100/50">
+            <div className="flex items-center justify-between p-6 bg-gray-50/50 rounded-3xl border border-gray-100/50">
               <div className="flex-1 pr-6">
                 <div className="flex items-center gap-2 mb-1">
-                    <ShieldCheckIcon className="w-5 h-5 text-blue-600" />
+                    <ShieldCheckIcon className="w-5 h-5 text-black" />
                     <h3 className="text-[16px] font-bold text-gray-900">Yêu cầu phê duyệt</h3>
                 </div>
                 <p className="text-[13px] text-gray-500 leading-relaxed font-medium">
@@ -210,7 +210,7 @@ export default function MemberApprovalModal({ groupId, onClose }: MemberApproval
                   checked={isApprovalRequired}
                   onChange={(e) => handleToggleApproval(e.target.checked)}
                 />
-                <div className="w-14 h-8 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600 shadow-inner"></div>
+                <div className="w-14 h-8 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-black shadow-inner"></div>
               </label>
             </div>
 
@@ -241,7 +241,7 @@ export default function MemberApprovalModal({ groupId, onClose }: MemberApproval
                 <div className="mt-6 space-y-3 animate-in slide-in-from-top-2 duration-300">
                   <textarea
                     placeholder="Ví dụ: Tại sao bạn muốn tham gia nhóm này?"
-                    className="w-full bg-white border border-gray-200 rounded-2xl p-4 text-[14px] font-medium text-gray-900 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none resize-none"
+                    className="w-full bg-white border border-gray-200 rounded-2xl p-4 text-[14px] font-medium text-gray-900 focus:ring-4 focus:ring-black/10 focus:border-black transition-all outline-none resize-none"
                     rows={3}
                     value={membershipQuestion}
                     onChange={(e) => setMembershipQuestion(e.target.value)}
@@ -271,7 +271,7 @@ export default function MemberApprovalModal({ groupId, onClose }: MemberApproval
 
             {loading ? (
               <div className="flex flex-col items-center py-12">
-                <div className="w-10 h-10 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mb-4" />
+                <div className="w-10 h-10 border-4 border-gray-100 border-t-black rounded-full animate-spin mb-4" />
                 <p className="text-sm font-bold text-gray-400 animate-pulse">Đang tải dữ liệu...</p>
               </div>
             ) : pendingUsers.length === 0 ? (
@@ -285,7 +285,7 @@ export default function MemberApprovalModal({ groupId, onClose }: MemberApproval
                 {pendingUsers.map((user) => (
                   <div
                     key={user.id}
-                    className="group bg-white rounded-3xl border border-gray-100 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:border-blue-200 hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300 gap-4"
+                    className="group bg-white rounded-3xl border border-gray-100 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:border-gray-300 hover:shadow-xl hover:shadow-black/5 transition-all duration-300 gap-4"
                   >
                     <div className="flex items-center flex-1 min-w-0">
                       <div className="relative">
@@ -296,8 +296,8 @@ export default function MemberApprovalModal({ groupId, onClose }: MemberApproval
                             className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-sm ring-1 ring-gray-100"
                           />
                         ) : (
-                          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center border-2 border-white shadow-inner ring-1 ring-gray-100">
-                            <span className="text-blue-600 font-black text-xl">
+                          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center border-2 border-white shadow-inner ring-1 ring-gray-100">
+                            <span className="text-black font-black text-xl">
                               {user.name?.charAt(0)?.toUpperCase()}
                             </span>
                           </div>
@@ -306,15 +306,15 @@ export default function MemberApprovalModal({ groupId, onClose }: MemberApproval
                       <div className="ml-4 flex-1 min-w-0">
                         <h4 className="text-[16px] font-black text-gray-900 truncate tracking-tight">{user.name}</h4>
                         <p className="text-[12px] font-bold text-gray-400 mt-0.5 flex items-center gap-1.5 uppercase tracking-widest">
-                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                            <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />
                             Đang chờ phê duyệt
                         </p>
                         
                         {user.answer && (
-                          <div className="mt-3 bg-blue-50 p-4 rounded-2xl border border-blue-100/50 relative overflow-hidden group/answer">
-                            <ChatBubbleBottomCenterTextIcon className="absolute -right-2 -bottom-2 w-12 h-12 text-blue-500/10 -rotate-12 transition-transform group-hover/answer:scale-125" />
-                            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1.5">Câu trả lời</p>
-                            <p className="text-[14px] text-blue-900 font-medium italic leading-relaxed">
+                          <div className="mt-3 bg-gray-50 p-4 rounded-2xl border border-gray-100/50 relative overflow-hidden group/answer">
+                            <ChatBubbleBottomCenterTextIcon className="absolute -right-2 -bottom-2 w-12 h-12 text-black/5 -rotate-12 transition-transform group-hover/answer:scale-125" />
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Câu trả lời</p>
+                            <p className="text-[14px] text-gray-900 font-medium italic leading-relaxed">
                               "{user.answer}"
                             </p>
                           </div>
@@ -332,7 +332,7 @@ export default function MemberApprovalModal({ groupId, onClose }: MemberApproval
                       </button>
                       <button
                         onClick={() => handleApprove(user.id)}
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-blue-600 text-white hover:bg-blue-700 transition-all font-black text-[13px] shadow-lg shadow-blue-500/20 active:translate-y-0.5"
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-black text-white hover:bg-gray-800 transition-all font-black text-[13px] shadow-lg shadow-black/20 active:translate-y-0.5"
                       >
                         <CheckIcon className="w-4 h-4" />
                         <span>DUYỆT</span>
