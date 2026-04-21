@@ -9,6 +9,7 @@ import {
   DocumentDuplicateIcon,
 } from "@heroicons/react/24/outline";
 import { groupService } from "@/services/groupService";
+import { messageService } from "@/services/messageService";
 import { toast } from "sonner";
 import { getMediaUrl } from "@/utils/media";
 import QRCode from "react-qr-code";
@@ -19,6 +20,7 @@ interface JoinLinkModalProps {
   groupName: string;
   groupAvatar?: string;
   isHistoryVisible?: boolean;
+  currentUserName?: string;
   isManager: boolean;
   onClose: () => void;
 }
@@ -29,6 +31,7 @@ export default function JoinLinkModal({
   groupName, 
   groupAvatar,
   isHistoryVisible: initialHistory,
+  currentUserName,
   isManager, 
   onClose 
 }: JoinLinkModalProps) {
@@ -38,6 +41,18 @@ export default function JoinLinkModal({
   const [updating, setUpdating] = useState(false);
 
   const shareUrl = `https://alo.chat/g/${groupId}`;
+
+  const sendSystemMsg = async (content: string) => {
+    try {
+      await messageService.sendMessage({
+        conversationId: groupId,
+        type: "system",
+        content: `${currentUserName || "Quản trị viên"} ${content}`,
+      });
+    } catch (error) {
+      console.error("Lỗi gửi tin nhắn hệ thống:", error);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -66,6 +81,7 @@ export default function JoinLinkModal({
       await groupService.updateLinkSetting(groupId, newVal);
       setIsLinkEnabled(newVal);
       toast.success(`Đã ${newVal ? 'bật' : 'tắt'} link tham gia nhóm`);
+      sendSystemMsg(`đã ${newVal ? 'bật' : 'tắt'} link tham gia nhóm`);
     } catch (err) {
       toast.error("Lỗi khi cập nhật cài đặt link");
     } finally {
@@ -79,6 +95,7 @@ export default function JoinLinkModal({
       await groupService.updateHistorySetting(groupId, val);
       setIsHistoryVisible(val);
       toast.success(`Đã ${val ? "bật" : "tắt"} lịch sử tin nhắn`);
+      sendSystemMsg(`đã ${val ? "cho phép" : "không cho phép"} thành viên mới xem lại tin nhắn cũ`);
     } catch (err: any) {
       toast.error(err.message || "Lỗi cập nhật cấu hình lịch sử");
     } finally {

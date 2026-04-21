@@ -549,6 +549,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           groupName={conversationInfo?.displayName || "Nhóm"}
           groupAvatar={conversationInfo?.displayAvatar}
           isHistoryVisible={conversationInfo?.isHistoryVisible}
+          currentUserName={currentUser?.fullName}
           isManager={isManager}
           onClose={() => setShowJoinLinkModal(false)}
         />
@@ -583,6 +584,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           isQuestionEnabled={conversationInfo?.isQuestionEnabled}
           membershipQuestion={conversationInfo?.membershipQuestion}
           members={conversationInfo?.members || []}
+          currentUserName={currentUser?.fullName}
           currentUserRole={currentUserRole}
           onClose={() => setShowGroupSettingsModal(false)}
           onRefreshData={onRefreshData}

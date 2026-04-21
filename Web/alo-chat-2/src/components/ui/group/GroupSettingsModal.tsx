@@ -23,6 +23,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { groupService } from "@/services/groupService";
 import { socketService } from "@/services/socketService";
+import { messageService } from "@/services/messageService";
 import { toast } from "sonner";
 import { getMediaUrl } from "../../../utils/media";
 import QRCode from "react-qr-code";
@@ -49,6 +50,7 @@ interface GroupSettingsModalProps {
   membershipQuestion?: string;
   members?: any[];
   currentUserRole?: string;
+  currentUserName?: string;
   onClose: () => void;
   onRefreshData?: () => void;
   onDisbandGroup?: () => void;
@@ -67,6 +69,7 @@ export default function GroupSettingsModal({
   membershipQuestion: initialQuestion,
   members = [],
   currentUserRole = "member",
+  currentUserName,
   onClose,
   onRefreshData,
   onDisbandGroup,
@@ -94,6 +97,18 @@ export default function GroupSettingsModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = currentUserRole === "leader";
+
+  const sendSystemMsg = async (content: string) => {
+    try {
+      await messageService.sendMessage({
+        conversationId: groupId,
+        type: "system",
+        content: `${currentUserName || "Quản trị viên"} ${content}`,
+      });
+    } catch (error) {
+      console.error("Lỗi gửi tin nhắn hệ thống:", error);
+    }
+  };
 
   // Sync state with props if they change
   useEffect(() => {
@@ -138,8 +153,10 @@ export default function GroupSettingsModal({
         await groupService.updateGroupSettings(groupId, { isQuestionEnabled: false });
         setIsQuestionEnabled(false);
         toast.success(`Đã tắt phê duyệt & câu hỏi tham gia`);
+        sendSystemMsg("đã tắt yêu cầu phê duyệt và câu hỏi tham gia");
       } else {
         toast.success(`Đã ${newVal ? "bật" : "tắt"} yêu cầu phê duyệt`);
+        sendSystemMsg(`đã ${newVal ? "bật" : "tắt"} yêu cầu phê duyệt thành viên`);
       }
       
       if (onRefreshData) onRefreshData();
@@ -157,6 +174,7 @@ export default function GroupSettingsModal({
       await groupService.updateLinkSetting(groupId, newVal);
       setIsLinkEnabled(newVal);
       toast.success(`Đã ${newVal ? "bật" : "tắt"} link tham gia`);
+      sendSystemMsg(`đã ${newVal ? "bật" : "tắt"} link tham gia nhóm`);
       if (onRefreshData) onRefreshData();
     } catch (err: any) {
       toast.error(err.message || "Lỗi cập nhật cấu hình link");
@@ -171,6 +189,7 @@ export default function GroupSettingsModal({
       await groupService.updateHistorySetting(groupId, val);
       setIsHistoryVisible(val);
       toast.success(`Đã ${val ? "bật" : "tắt"} lịch sử tin nhắn`);
+      sendSystemMsg(`đã ${val ? "cho phép" : "không cho phép"} thành viên mới xem lại tin nhắn cũ`);
       if (onRefreshData) onRefreshData();
     } catch (err: any) {
       toast.error(err.message || "Lỗi cập nhật cấu hình lịch sử");
@@ -185,6 +204,7 @@ export default function GroupSettingsModal({
       await groupService.updateGroupSettings(groupId, { isHighlightEnabled: val });
       setIsHighlightEnabled(val);
       toast.success(`Đã ${val ? "bật" : "tắt"} làm nổi bật Admin`);
+      sendSystemMsg(`đã ${val ? "bật" : "tắt"} chế độ làm nổi bật Admin`);
       if (onRefreshData) onRefreshData();
     } catch (err: any) {
       toast.error(err.message || "Lỗi cập nhật cấu hình nổi bật");
@@ -199,7 +219,16 @@ export default function GroupSettingsModal({
       const newPerms = { ...permissions, [field]: value };
       await groupService.updateGroupSettings(groupId, { permissions: newPerms });
       setPermissions(newPerms);
+      const fieldNames: Record<string, string> = {
+        editGroupInfo: "Đổi thông tin nhóm",
+        createNotes: "Tạo ghi chú",
+        createPolls: "Tạo bình chọn",
+        pinMessages: "Ghim tin nhắn",
+        sendMessage: "Gửi tin nhắn",
+        createReminders: "Tạo nhắc hẹn"
+      };
       toast.success("Đã cập nhật quyền hạn");
+      sendSystemMsg(`đã cập nhật quyền "${fieldNames[field] || field}" thành ${value === "EVERYONE" ? "Tất cả thành viên" : "Chỉ Admin"}`);
       if (onRefreshData) onRefreshData();
     } catch (err: any) {
       toast.error(err.message || "Lỗi cập nhật quyền hạn");
@@ -215,6 +244,7 @@ export default function GroupSettingsModal({
       await groupService.updateGroupSettings(groupId, { isQuestionEnabled: newVal });
       setIsQuestionEnabled(newVal);
       toast.success(`Đã ${newVal ? "bật" : "tắt"} câu hỏi tham gia`);
+      sendSystemMsg(`đã ${newVal ? "bật" : "tắt"} câu hỏi tham gia nhóm`);
       if (onRefreshData) onRefreshData();
     } catch (err: any) {
       toast.error(err.message || "Lỗi cập nhật câu hỏi");
@@ -229,6 +259,7 @@ export default function GroupSettingsModal({
       setUpdating(true);
       await groupService.updateGroupSettings(groupId, { membershipQuestion: membershipQuestion.trim() });
       toast.success("Đã lưu câu hỏi tham gia");
+      sendSystemMsg("đã cập nhật nội dung câu hỏi tham gia nhóm");
       if (onRefreshData) onRefreshData();
     } catch (err: any) {
       toast.error(err.message || "Lỗi lưu câu hỏi");
@@ -243,6 +274,7 @@ export default function GroupSettingsModal({
       groupService.updateGroup(groupId, newName.trim())
         .then(() => {
           toast.success("Đã đổi tên nhóm");
+          sendSystemMsg(`đã đổi tên nhóm thành "${newName.trim()}"`);
           if (onRefreshData) onRefreshData();
         })
         .catch(() => toast.error("Không thể đổi tên nhóm"));
@@ -255,6 +287,7 @@ export default function GroupSettingsModal({
     try {
       await groupService.updateGroup(groupId, undefined, file);
       toast.success("Đã cập nhật ảnh đại diện");
+      sendSystemMsg("đã cập nhật ảnh đại diện nhóm");
       if (onRefreshData) onRefreshData();
     } catch (err) {
       toast.error("Lỗi cập nhật ảnh đại diện");
@@ -267,7 +300,10 @@ export default function GroupSettingsModal({
     try {
       setUpdating(true);
       await groupService.assignLeader(groupId, selectedNewLeaderId);
+      const newLeader = members.find(m => m.userId === selectedNewLeaderId);
+      const newLeaderName = newLeader?.fullName || newLeader?.user?.fullName || "Thành viên mới";
       toast.success("Đã chuyển quyền trưởng nhóm");
+      sendSystemMsg(`đã chuyển quyền trưởng nhóm cho ${newLeaderName}`);
       setShowTransferLeader(false);
       onClose();
       if (onRefreshData) onRefreshData();
