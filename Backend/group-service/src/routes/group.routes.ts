@@ -60,12 +60,17 @@ router.put(
 
 // Các route có :groupId (PHẢI ĐẶT SAU CÁC ROUTE TĨNH)
 router.get("/api/v1/groups/:groupId", groupController.getGroupById);
+router.get("/api/v1/groups/:groupId/link-info", groupController.getGroupInfoForLink);
 router.put(
   "/api/v1/groups/:groupId",
   upload.single("avatarFile"),
   groupController.updateGroup,
 );
 router.post("/api/v1/groups/:groupId/clear", groupController.clearConversation);
+router.put(
+  "/api/v1/groups/:groupId/folder",
+  groupController.updateConversationFolder,
+);
 
 // Quản lý thành viên trong nhóm
 router.post("/api/v1/groups/:groupId/members", groupController.addMember);
@@ -79,7 +84,28 @@ router.put(
 );
 router.delete("/api/v1/groups/:groupId", groupController.deleteGroup);
 
-// Join requests
+// Invitations
+router.get("/api/v1/groups/invitations/me", groupController.getMyInvitations);
+router.post(
+  "/api/v1/groups/:groupId/invitations",
+  groupController.inviteToGroup,
+);
+router.post(
+  "/api/v1/groups/:groupId/invitations/accept",
+  groupController.acceptInvitation,
+);
+router.post(
+  "/api/v1/groups/:groupId/invitations/decline",
+  groupController.declineInvitation,
+);
+router.get(
+  "/api/v1/groups/join-requests/me",
+  groupController.getMySentJoinRequests,
+);
+router.get(
+  "/api/v1/groups/invitations/sent",
+  groupController.getMySentInvitations,
+);
 router.post(
   "/api/v1/groups/:groupId/join-requests",
   groupController.requestJoinGroup,

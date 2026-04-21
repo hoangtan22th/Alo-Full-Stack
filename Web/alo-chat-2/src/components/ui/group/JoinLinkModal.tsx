@@ -7,6 +7,7 @@ import {
   ShareIcon,
   ArrowDownTrayIcon,
   DocumentDuplicateIcon,
+  PaperAirplaneIcon,
 } from "@heroicons/react/24/outline";
 import { groupService } from "@/services/groupService";
 import { messageService } from "@/services/messageService";
@@ -108,6 +109,22 @@ export default function JoinLinkModal({
     toast.success("Đã sao chép link tham gia nhóm");
   };
 
+  const handleShareToChat = async () => {
+    try {
+      setUpdating(true);
+      await messageService.sendMessage({
+        conversationId: groupId,
+        type: "text",
+        content: `Mời bạn tham gia nhóm qua link: ${shareUrl}`,
+      });
+      toast.success("Đã chia sẻ link vào nhóm");
+    } catch (err) {
+      toast.error("Không thể chia sẻ link");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const handleSaveQR = () => {
     const svg = document.getElementById("info-qr-code");
     if (svg) {
@@ -157,7 +174,7 @@ export default function JoinLinkModal({
 
              {loading ? (
                 <div className="flex-1 flex items-center justify-center">
-                   <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                   <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin" />
                 </div>
              ) : !isLinkEnabled ? (
                 <div className="w-full bg-gray-50 rounded-3xl p-6 border border-gray-100 flex flex-col items-center text-center">
@@ -167,7 +184,7 @@ export default function JoinLinkModal({
                    {isManager && (
                       <button 
                          onClick={handleToggleLink}
-                         className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all active:scale-[0.98]"
+                         className="w-full py-3 bg-black text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition-all active:scale-[0.98]"
                       >
                          Bật tính năng link
                       </button>
@@ -192,12 +209,12 @@ export default function JoinLinkModal({
                    </div>
 
                    {/* Action Buttons */}
-                   <div className="flex gap-4 w-full mb-10 shrink-0">
+                   <div className="grid grid-cols-2 gap-4 w-full mb-10 shrink-0">
                       <button 
                         onClick={handleCopyLink}
-                        className="flex-1 flex flex-col items-center gap-2 group"
+                        className="flex flex-col items-center gap-2 group"
                       >
-                         <div className="w-14 h-14 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                         <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center text-black group-hover:bg-black group-hover:text-white transition-all shadow-sm">
                             <DocumentDuplicateIcon className="w-6 h-6" />
                          </div>
                          <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Sao chép</span>
@@ -211,9 +228,9 @@ export default function JoinLinkModal({
                               handleCopyLink();
                            }
                         }}
-                        className="flex-1 flex flex-col items-center gap-2 group"
+                        className="flex flex-col items-center gap-2 group"
                       >
-                         <div className="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center text-green-600 group-hover:bg-green-600 group-hover:text-white transition-all shadow-sm">
+                         <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center text-black group-hover:bg-black group-hover:text-white transition-all shadow-sm">
                             <ShareIcon className="w-6 h-6" />
                          </div>
                          <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Chia sẻ</span>
@@ -221,12 +238,23 @@ export default function JoinLinkModal({
 
                       <button 
                         onClick={handleSaveQR}
-                        className="flex-1 flex flex-col items-center gap-2 group"
+                        className="flex flex-col items-center gap-2 group"
                       >
-                         <div className="w-14 h-14 bg-orange-50 rounded-full flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-all shadow-sm">
+                         <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center text-black group-hover:bg-black group-hover:text-white transition-all shadow-sm">
                             <ArrowDownTrayIcon className="w-6 h-6" />
                          </div>
                          <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Lưu QR</span>
+                      </button>
+
+                      <button 
+                        onClick={handleShareToChat}
+                        disabled={updating}
+                        className="flex flex-col items-center gap-2 group"
+                      >
+                         <div className="w-14 h-14 bg-purple-50 rounded-full flex items-center justify-center text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-all shadow-sm">
+                            <PaperAirplaneIcon className="w-6 h-6" />
+                         </div>
+                         <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Gửi chat</span>
                       </button>
                    </div>
 
@@ -241,7 +269,7 @@ export default function JoinLinkModal({
                             <button
                               onClick={() => toggleHistory(!isHistoryVisible)}
                               disabled={updating}
-                              className={`w-11 h-6 rounded-full transition-all relative shrink-0 ${isHistoryVisible ? 'bg-green-500' : 'bg-gray-200'} ${updating ? 'opacity-50' : ''}`}
+                              className={`w-11 h-6 rounded-full transition-all relative shrink-0 ${isHistoryVisible ? 'bg-black' : 'bg-gray-200'} ${updating ? 'opacity-50' : ''}`}
                             >
                               <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm ${isHistoryVisible ? 'left-6' : 'left-1'}`} />
                             </button>

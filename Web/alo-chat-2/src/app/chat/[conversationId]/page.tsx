@@ -54,6 +54,8 @@ import ForwardMessageModal from "@/components/ui/ForwardMessageModal";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useChatStore } from "@/store/useChatStore";
 import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
+import PollMessagePreview from "@/components/chat/PollMessagePreview";
+import PollDetailsModal from "@/components/ui/group/PollDetailsModal";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -86,6 +88,7 @@ const getMediaUrl = (url: string | undefined): string => {
 };
 
 const BOT_ID = "alo-bot";
+const GROUP_LINK_REGEX = /(?:https?:\/\/)?alo\.chat\/g\/([a-f\d]{24})/i;
 const EMPTY_ARRAY: any[] = [];
 const BOT_INFO = {
   id: BOT_ID,
@@ -119,12 +122,21 @@ export default function ChatPage() {
   // State cho tin nhắn ghim
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
   const [showPinnedModal, setShowPinnedModal] = useState(false);
+  const [activePollId, setActivePollId] = useState<string | null>(null);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaveOptions, setLeaveOptions] = useState({
+    isSilent: false,
+    preventReinvite: false,
+  });
   const [isStranger, setIsStranger] = useState(false);
   const [relationStatus, setRelationStatus] = useState<string>("NOT_FRIEND");
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
   const [shouldShowSummary, setShouldShowSummary] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [summaryDismissed, setSummaryDismissed] = useState<Record<string, boolean>>({});
+  const [summaryDismissed, setSummaryDismissed] = useState<
+    Record<string, boolean>
+  >({});
   const [showCallMemberSelector, setShowCallMemberSelector] = useState<{
     isVideo: boolean;
   } | null>(null);
@@ -136,12 +148,55 @@ export default function ChatPage() {
   const [mediaMessages, setMediaMessages] = useState<MessageDTO[]>([]);
   const [messageText, setMessageText] = useState("");
   const [conversationInfo, setConversationInfo] = useState<any>(null);
+
+  // Group Link Info Cache
+  const [groupLinkCache, setGroupLinkCache] = useState<Record<string, any>>({});
+
+  const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+  const myRole = useMemo(() => {
+    if (!conversationInfo || !myId) return "MEMBER";
+    const member = conversationInfo.members?.find(
+      (m: any) =>
+        String(m.userId) === String(myId) || String(m._id) === String(myId),
+    );
+    return member?.role?.toUpperCase() || "MEMBER";
+  }, [conversationInfo, myId]);
+  // Modal tham gia nhóm có câu hỏi
+  const [joinGroupModal, setJoinGroupModal] = useState<{
+    groupId: string;
+    question: string;
+    needApproval: boolean;
+  } | null>(null);
+  const [groupInfoModal, setGroupInfoModal] = useState<any>(null);
+  const [joinGroupAnswer, setJoinGroupAnswer] = useState("");
+  const [joiningGroup, setJoiningGroup] = useState(false);
+
   // Optimized selector with stable empty array to avoid infinite loop
   const typingForThisConvo = useChatStore(
     (state) => state.typingUsers[conversationId] || EMPTY_ARRAY,
   );
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isTypingRef = useRef(false);
+
+  const fetchGroupLinkInfo = useCallback(
+    async (groupId: string) => {
+      if (!groupId || groupLinkCache[groupId]) return;
+      try {
+        const res = await groupService.getGroupInfoForLink(groupId);
+        if (res) {
+          // axios interceptor might have already unwrapped res.data
+          const groupInfo = res.data || res;
+          setGroupLinkCache((prev) => ({ ...prev, [groupId]: groupInfo }));
+        }
+      } catch (err: any) {
+        console.error("Lỗi lấy thông tin nhóm từ link:", err);
+        if (err.response?.status === 404) {
+          setGroupLinkCache((prev) => ({ ...prev, [groupId]: { notFound: true } }));
+        }
+      }
+    },
+    [groupLinkCache],
+  );
 
   useEffect(() => {
     const hasText = messageText.trim().length > 0;
@@ -212,7 +267,6 @@ export default function ChatPage() {
   const [isMounted, setIsMounted] = useState(false);
   const fetchingUsersRef = useRef<Set<string>>(new Set());
 
-  const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const [activeAlbumIndex, setActiveAlbumIndex] = useState<{
     messageId: string;
     index: number;
@@ -525,17 +579,21 @@ export default function ChatPage() {
       let displayName = g.name;
       let displayAvatar = g.groupAvatar;
 
-      const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
-      
-      // Kiểm tra kỹ xem có phải là chat 1-1 hay không
-      const isDirect = !g.isGroup || g.type === "DIRECT" || (g.members?.length === 2 && !g.isGroup);
+      const currentUserId =
+        currentUser?.id || currentUser?._id || currentUser?.userId;
 
-      console.log("[DEBUG] Conversation Info:", { 
-        id: conversationId, 
-        isGroup: g.isGroup, 
-        type: g.type, 
+      // Kiểm tra kỹ xem có phải là chat 1-1 hay không
+      const isDirect =
+        !g.isGroup ||
+        g.type === "DIRECT" ||
+        (g.members?.length === 2 && !g.isGroup);
+
+      console.log("[DEBUG] Conversation Info:", {
+        id: conversationId,
+        isGroup: g.isGroup,
+        type: g.type,
         memberCount: g.members?.length,
-        isDirect 
+        isDirect,
       });
 
       if (isDirect && currentUserId && g.members) {
@@ -544,7 +602,10 @@ export default function ChatPage() {
           const mId = m.userId || m._id || m;
           return mId && String(mId) !== String(currentUserId);
         });
-        const otherId = otherMember?.userId || otherMember?._id || (typeof otherMember === "string" ? otherMember : null);
+        const otherId =
+          otherMember?.userId ||
+          otherMember?._id ||
+          (typeof otherMember === "string" ? otherMember : null);
 
         console.log("[DEBUG] Found Other Member:", { otherMember, otherId });
 
@@ -555,29 +616,49 @@ export default function ChatPage() {
             const [userRes, friendsRes, relRes]: any = await Promise.all([
               axiosClient.get(`/users/${otherId}`),
               contactService.getFriendsList(),
-              axiosClient.get(`/contacts/relation-status`, { params: { targetUserId: otherId } })
+              axiosClient.get(`/contacts/relation-status`, {
+                params: { targetUserId: otherId },
+              }),
             ]);
-            
+
             const u = userRes?.data?.data || userRes?.data || userRes;
             const statusData = relRes?.data || relRes;
             const currentStatus = statusData?.relationStatus || "NOT_FRIEND";
             setRelationStatus(currentStatus);
             if (u) {
               // Chỉ cập nhật tên nếu đây thực sự là chat 1-1
-              displayName = u.fullName || u.displayName || u.username || u.name || "Người dùng";
+              displayName =
+                u.fullName ||
+                u.displayName ||
+                u.username ||
+                u.name ||
+                "Người dùng";
               displayAvatar = u.avatar || displayAvatar;
             }
 
             const friends = friendsRes || [];
-            const isFriend = friends.some((f: any) => 
-              String(f.requesterId) === String(otherId) || 
-              String(f.recipientId) === String(otherId)
+            const isFriend = friends.some(
+              (f: any) =>
+                String(f.requesterId) === String(otherId) ||
+                String(f.recipientId) === String(otherId),
             );
-            
-            console.log("[DEBUG] Relationship check:", { otherId, isFriend, currentStatus });
-            setIsStranger(!isFriend && currentStatus !== "I_SENT_REQUEST" && currentStatus !== "YOU_SENT_REQUEST" && currentStatus !== "THEY_SENT_REQUEST");
+
+            console.log("[DEBUG] Relationship check:", {
+              otherId,
+              isFriend,
+              currentStatus,
+            });
+            setIsStranger(
+              !isFriend &&
+                currentStatus !== "I_SENT_REQUEST" &&
+                currentStatus !== "YOU_SENT_REQUEST" &&
+                currentStatus !== "THEY_SENT_REQUEST",
+            );
           } catch (error) {
-            console.error("Lỗi lấy thông tin người dùng hoặc danh sách bạn bè:", error);
+            console.error(
+              "Lỗi lấy thông tin người dùng hoặc danh sách bạn bè:",
+              error,
+            );
             setIsStranger(false);
           }
         }
@@ -1040,8 +1121,12 @@ export default function ChatPage() {
     if (!confirm("Bạn có chắc chắn muốn xóa lịch sử trò chuyện này?")) return;
     try {
       await groupService.clearConversation(conversationId);
+      // Nếu là người lạ, reset folder về 'stranger' để lần sau nhắn lại sẽ báo tin nhắn người lạ
+      if (isStranger) {
+        await groupService.updateConversationFolder(conversationId, "stranger");
+      }
       setMessages([]);
-      alert("Đã xóa lịch sử trò chuyện.");
+      toast.success("Đã xóa lịch sử trò chuyện.");
     } catch (err) {
       console.error("Lỗi xóa lịch sử:", err);
       alert("Không thể xóa lịch sử trò chuyện.");
@@ -1073,15 +1158,24 @@ export default function ChatPage() {
       return;
     }
 
-    if (!confirm("Bạn có chắc chắn muốn rời khỏi nhóm này?")) return;
+    setShowLeaveModal(true);
+  };
+
+  const confirmLeaveGroup = async () => {
+    const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
     try {
       if (!myId) return;
-      await groupService.removeMember(conversationId, myId);
+      await groupService.removeMember(conversationId, myId, {
+        isSilent: leaveOptions.isSilent,
+        preventReinvite: leaveOptions.preventReinvite,
+      });
       toast.success("Đã rời nhóm thành công");
       router.push("/chat");
     } catch (err: any) {
       console.error("Lỗi rời nhóm:", err);
       alert(err.response?.data?.message || "Không thể rời nhóm.");
+    } finally {
+      setShowLeaveModal(false);
     }
   };
 
@@ -1103,10 +1197,16 @@ export default function ChatPage() {
   };
 
   const handleRemoveMember = async (userId: string) => {
-    if (!confirm("Xác nhận mời thành viên này ra khỏi nhóm?")) return;
+    const isBanned = confirm(
+      "Xác nhận mời thành viên này ra khỏi nhóm? \n\nBạn có muốn chặn người này tham gia lại nhóm không?",
+    );
     try {
-      await groupService.removeMember(conversationId, userId);
-      toast.success("Đã mời thành viên ra khỏi nhóm");
+      await groupService.removeMember(conversationId, userId, { isBanned });
+      toast.success(
+        isBanned
+          ? "Đã mời ra và chặn thành viên"
+          : "Đã mời thành viên ra khỏi nhóm",
+      );
       handleRefreshData();
     } catch (err) {
       console.error("Lỗi xóa thành viên:", err);
@@ -1210,6 +1310,13 @@ export default function ChatPage() {
             }
           : undefined,
       });
+
+      // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
+      if (isStranger) {
+        groupService
+          .updateConversationFolder(conversationId, "priority")
+          .catch(console.error);
+      }
     } catch (err) {
       console.error("Lỗi gửi tin nhắn:", err);
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
@@ -1384,6 +1491,13 @@ export default function ChatPage() {
           setMessages((prev) => prev.filter((m) => m._id !== tempId));
         }
       }
+
+      // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
+      if (isStranger) {
+        groupService
+          .updateConversationFolder(conversationId, "priority")
+          .catch(console.error);
+      }
     } finally {
       setUploadingFile(false);
     }
@@ -1461,6 +1575,13 @@ export default function ChatPage() {
             }
           : undefined,
       });
+
+      // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
+      if (isStranger) {
+        groupService
+          .updateConversationFolder(conversationId, "priority")
+          .catch(console.error);
+      }
     } catch (err) {
       console.error("Lỗi gửi sticker:", err);
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
@@ -1489,15 +1610,19 @@ export default function ChatPage() {
 
       const isSystem = (msg.type as any) === "system";
       const lastIsSystem = (lastMsg?.type as any) === "system";
+      const isPoll = msg.type === "poll";
+      const lastIsPoll = lastMsg?.type === "poll";
 
       // Nhóm theo SENDER ID để tránh gộp nhiều người khác vào 1 khối trong group chat
-      // Không gộp nếu là tin nhắn hệ thống hoặc tin nhắn trước đó là hệ thống
+      // Không gộp nếu là tin nhắn hệ thống hoặc tin nhắn trước đó là hệ thống, không gộp bình chọn
       if (
         last &&
         last.senderId === msg.senderId &&
         gap < FIVE_MIN &&
         !isSystem &&
-        !lastIsSystem
+        !lastIsSystem &&
+        !isPoll &&
+        !lastIsPoll
       ) {
         last.messages.push(msg);
       } else {
@@ -1512,11 +1637,16 @@ export default function ChatPage() {
   ───────────────────────────────────────── */
 
   const adminIds = useMemo(() => {
-    if (!conversationInfo?.isGroup || !conversationInfo?.members) return new Set<string>();
+    if (!conversationInfo?.isGroup || !conversationInfo?.members)
+      return new Set<string>();
     return new Set<string>(
       conversationInfo.members
-        .filter((m: any) => m.role?.toUpperCase() === "LEADER" || m.role?.toUpperCase() === "DEPUTY")
-        .map((m: any) => String(m.userId || m._id))
+        .filter(
+          (m: any) =>
+            m.role?.toUpperCase() === "LEADER" ||
+            m.role?.toUpperCase() === "DEPUTY",
+        )
+        .map((m: any) => String(m.userId || m._id)),
     );
   }, [conversationInfo]);
 
@@ -1538,7 +1668,7 @@ export default function ChatPage() {
           <div className="flex-1 flex flex-col min-w-0 h-full bg-white relative">
             {/* Chat Header */}
             <div className="h-19 px-6 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md z-10">
-              <div 
+              <div
                 className={`flex items-center gap-3 ${!conversationInfo?.isGroup ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
                 onClick={() => {
                   if (!conversationInfo?.isGroup) setShowProfileModal(true);
@@ -1639,18 +1769,26 @@ export default function ChatPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button 
+                  <button
                     onClick={() => {
-                      if (relationStatus === "NOT_FRIEND") setShowProfileModal(true);
+                      if (relationStatus === "NOT_FRIEND")
+                        setShowProfileModal(true);
                     }}
-                    disabled={relationStatus === "I_SENT_REQUEST" || relationStatus === "YOU_SENT_REQUEST"}
+                    disabled={
+                      relationStatus === "I_SENT_REQUEST" ||
+                      relationStatus === "YOU_SENT_REQUEST"
+                    }
                     className={`px-3 py-1.5 text-white text-[11px] font-black rounded-lg transition active:scale-95 shadow-sm ${
-                      (relationStatus === "I_SENT_REQUEST" || relationStatus === "YOU_SENT_REQUEST") 
-                      ? "bg-gray-400 cursor-not-allowed" 
-                      : "bg-red-600 hover:bg-red-700"
+                      relationStatus === "I_SENT_REQUEST" ||
+                      relationStatus === "YOU_SENT_REQUEST"
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-red-600 hover:bg-red-700"
                     }`}
                   >
-                    { (relationStatus === "I_SENT_REQUEST" || relationStatus === "YOU_SENT_REQUEST") ? "Đã gửi yêu cầu" : "Kết bạn" }
+                    {relationStatus === "I_SENT_REQUEST" ||
+                    relationStatus === "YOU_SENT_REQUEST"
+                      ? "Đã gửi yêu cầu"
+                      : "Kết bạn"}
                   </button>
                   <button className="px-3 py-1.5 bg-white text-gray-700 text-[11px] font-black rounded-lg border border-gray-100 hover:bg-gray-50 transition active:scale-95 shadow-sm">
                     Chặn
@@ -1779,6 +1917,14 @@ export default function ChatPage() {
               </div>
             )}
 
+            {/* Modal chi tiết bình chọn */}
+            {activePollId && (
+              <PollDetailsModal 
+                pollId={activePollId} 
+                onClose={() => setActivePollId(null)} 
+              />
+            )}
+
             {/* Modal chọn thành viên gọi nhóm */}
             <GroupCallSelector
               isOpen={!!showCallMemberSelector}
@@ -1849,17 +1995,40 @@ export default function ChatPage() {
                           className="flex justify-center my-4 w-full px-10"
                         >
                           <div className="flex flex-col items-center gap-1.5 max-w-full">
-                            {gMsgs.map((msg) => (
-                              <div
-                                key={msg._id}
-                                className="bg-gray-100 px-4 py-1.5 rounded-full shadow-sm border border-gray-200/50 max-w-full"
-                              >
-                                <span className="text-[12px] text-gray-500 font-bold text-center block">
-                                  {msg.content}
-                                </span>
-                              </div>
-                            ))}
+                            {gMsgs
+                              .filter(
+                                (m) =>
+                                  !(
+                                    m.metadata?.isSilentLeave &&
+                                    myRole === "MEMBER"
+                                  ),
+                              )
+                              .map((msg) => (
+                                <div
+                                  key={msg._id}
+                                  className="bg-gray-100 px-4 py-1.5 rounded-full shadow-sm border border-gray-200/50 max-w-full"
+                                >
+                                  <span className="text-[12px] text-gray-500 font-bold text-center block">
+                                    {msg.content}
+                                  </span>
+                                </div>
+                              ))}
                           </div>
+                        </div>
+                      );
+                    }
+
+                    if (lastMsg.type === "poll") {
+                      return (
+                        <div
+                          key={`group-${groupIdx}`}
+                          className="flex justify-center my-6 w-full px-4"
+                        >
+                          <PollMessagePreview 
+                            pollId={lastMsg.metadata?.pollId as string} 
+                            isSender={false} 
+                            onOpenDetails={(id) => setActivePollId(id)} 
+                          />
                         </div>
                       );
                     }
@@ -1951,11 +2120,21 @@ export default function ChatPage() {
                                       }
                                     />
                                   ) : (
-                                    <div className="flex justify-center w-full my-4 px-10">
-                                      <div className="bg-gray-100/50 backdrop-blur-sm text-gray-500 text-[11px] font-bold py-1.5 px-4 rounded-full border border-gray-200/50 shadow-sm text-center uppercase tracking-tight">
-                                        {msg.content}
-                                      </div>
-                                    </div>
+                                    (() => {
+                                      const isVisible = !(
+                                        msg.metadata?.isSilentLeave &&
+                                        myRole === "MEMBER"
+                                      );
+                                      if (!isVisible) return null;
+
+                                      return (
+                                        <div className="flex justify-center w-full my-4 px-10">
+                                          <div className="bg-gray-100/50 backdrop-blur-sm text-gray-500 text-[11px] font-bold py-1.5 px-4 rounded-full border border-gray-200/50 shadow-sm text-center uppercase tracking-tight">
+                                            {msg.content}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()
                                   )
                                 ) : (
                                   <div
@@ -1964,11 +2143,12 @@ export default function ChatPage() {
                                         ? "bg-blue-50/80 shadow-blue-900/5 items-end"
                                         : "bg-white shadow-gray-900/5 items-start"
                                     } ${
-                                      conversationInfo?.isHighlightEnabled && adminIds.has(String(msg.senderId))
+                                      conversationInfo?.isHighlightEnabled &&
+                                      adminIds.has(String(msg.senderId))
                                         ? "border-amber-300 ring-2 ring-amber-200/50"
                                         : isMine
-                                        ? "border-blue-100"
-                                        : "border-gray-100"
+                                          ? "border-blue-100"
+                                          : "border-gray-100"
                                     } ${bubbleRadius}`}
                                   >
                                     {/* Reply Quote Box */}
@@ -2447,11 +2627,97 @@ export default function ChatPage() {
                                         </button>
                                       </div>
                                     ) : (
-                                      <div
-                                        className={`px-2 py-1 text-[15px] font-medium leading-relaxed text-gray-900 break-words whitespace-pre-wrap ${isMine ? "text-right" : "text-left"}`}
-                                      >
-                                        {msg.content}
-                                      </div>
+                                      (() => {
+                                        const groupMatch =
+                                          msg.content?.match(GROUP_LINK_REGEX);
+                                        if (groupMatch) {
+                                          const linkGroupId = groupMatch[1];
+                                          const groupInfo =
+                                            groupLinkCache[linkGroupId];
+
+                                          // Fetch if not cached
+                                          if (!groupInfo) {
+                                            fetchGroupLinkInfo(linkGroupId);
+                                          }
+
+                                          const handleLinkClick = () => {
+                                            if (groupInfo?.notFound) return;
+                                            setGroupInfoModal({
+                                              ...groupInfo,
+                                              groupId: linkGroupId,
+                                            });
+                                          };
+
+                                          return (
+                                            <div className="mt-2 mb-1 group cursor-pointer" onClick={handleLinkClick}>
+                                              <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all w-72 max-w-full border-b-[3px] border-b-gray-200">
+                                                {/* Header Link */}
+                                                <div className="px-3 py-1.5 border-b border-gray-50 flex items-center gap-1.5 overflow-hidden">
+                                                  <div className="w-1 h-1 rounded-full bg-gray-300" />
+                                                  <span className="text-[10px] text-gray-400 font-medium truncate opacity-80">
+                                                    {window.location.origin}/g/{linkGroupId}
+                                                  </span>
+                                                </div>
+
+                                                {/* Banner Section */}
+                                                <div className="relative h-32 bg-gradient-to-br from-gray-900 to-black p-4 flex flex-col justify-end">
+                                                  {/* Abstract background patterns */}
+                                                  <div className="absolute inset-0 opacity-10 pointer-events-none overflow-hidden">
+                                                    <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full border-[10px] border-white" />
+                                                    <div className="absolute left-1/4 top-1/2 w-32 h-32 rounded-full border-[1px] border-white" />
+                                                  </div>
+
+                                                  <div className="relative flex items-center gap-3">
+                                                    <div className="relative">
+                                                      <img
+                                                        src={groupInfo?.groupAvatar ? getMediaUrl(groupInfo.groupAvatar) : "/avt-mac-dinh.jpg"}
+                                                        className="w-14 h-14 rounded-2xl object-cover border-2 border-white/20 shadow-lg"
+                                                      />
+                                                      {groupInfo?.notFound && (
+                                                        <div className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center">
+                                                          <span className="text-[8px] text-white font-black">404</span>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                      <p className="text-[10px] text-white/60 font-black uppercase tracking-[2px] mb-0.5">Nhóm</p>
+                                                      <h4 className="text-base font-black text-white truncate leading-tight">
+                                                        {groupInfo?.notFound ? "Liên kết không tồn tại" : (groupInfo?.name || "Đang tải...")}
+                                                      </h4>
+                                                    </div>
+                                                  </div>
+                                                </div>
+
+                                                {/* Footer Info */}
+                                                <div className="p-3 bg-white">
+                                                  <h5 className="text-[13px] font-black text-gray-900 truncate mb-1">
+                                                    {groupInfo?.notFound ? "Liên kết đã hết hạn" : (groupInfo?.name || "Đang tải nhóm...")}
+                                                  </h5>
+                                                  <p className="text-[11px] text-gray-500 font-medium mb-2">
+                                                    {groupInfo?.notFound 
+                                                      ? "Không tìm thấy thông tin nhóm này"
+                                                      : "Bấm vào đây để xem thông tin và tham gia nhóm"}
+                                                  </p>
+                                                  <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+                                                    <span className="text-[10px] font-black text-gray-300 tracking-wider">ALO.ME</span>
+                                                    <span className="text-[10px] text-gray-400 font-bold">
+                                                      {formatTime(msg.createdAt)}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+
+                                        return (
+                                          <div
+                                            className={`px-2 py-1 text-[15px] font-medium leading-relaxed text-gray-900 break-words whitespace-pre-wrap ${isMine ? "text-right" : "text-left"}`}
+                                          >
+                                            {msg.content}
+                                          </div>
+                                        );
+                                      })()
                                     )}
 
                                     {/* end: system call bypasses bubble wrapper */}
@@ -3343,6 +3609,282 @@ export default function ChatPage() {
           relationStatus={relationStatus}
           onActionSuccess={() => fetchConversationInfo()}
         />
+      )}
+      {/* Leave Group Modal */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-black text-gray-900 mb-2">
+              Rời khỏi nhóm?
+            </h3>
+            <p className="text-gray-500 text-sm mb-6">
+              Bạn sẽ không còn nhận được tin nhắn từ nhóm này nữa.
+            </p>
+
+            <div className="space-y-4 mb-8">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative flex items-center">
+                  <input
+                    type="checkbox"
+                    className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-gray-300 transition-all checked:border-blue-500 checked:bg-blue-500 hover:border-blue-400"
+                    checked={leaveOptions.isSilent}
+                    onChange={(e) =>
+                      setLeaveOptions((prev) => ({
+                        ...prev,
+                        isSilent: e.target.checked,
+                      }))
+                    }
+                  />
+                  <svg
+                    className="absolute h-3.5 w-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none left-0.75"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </div>
+                <span className="text-[14px] font-bold text-gray-700 group-hover:text-black transition-colors">
+                  Rời nhóm trong im lặng
+                </span>
+              </label>
+
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative flex items-center">
+                  <input
+                    type="checkbox"
+                    className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-gray-300 transition-all checked:border-red-500 checked:bg-red-500 hover:border-red-400"
+                    checked={leaveOptions.preventReinvite}
+                    onChange={(e) =>
+                      setLeaveOptions((prev) => ({
+                        ...prev,
+                        preventReinvite: e.target.checked,
+                      }))
+                    }
+                  />
+                  <svg
+                    className="absolute h-3.5 w-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none left-0.75"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </div>
+                <span className="text-[14px] font-bold text-gray-700 group-hover:text-black transition-colors">
+                  Chặn mời vào lại nhóm
+                </span>
+              </label>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                className="flex-1 py-3 rounded-xl font-black text-gray-500 hover:bg-gray-100 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={confirmLeaveGroup}
+                className="flex-1 py-3 rounded-xl font-black bg-red-500 text-white hover:bg-red-600 transition-colors shadow-lg shadow-red-200"
+              >
+                Rời nhóm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Group Info Modal (Zalo Style) */}
+      {groupInfoModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[32px] w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100">
+            {/* Modal Header */}
+            <div className="px-6 py-5 flex items-center justify-between border-b border-gray-50">
+              <h3 className="text-base font-black text-gray-900 tracking-tight">Thông tin nhóm</h3>
+              <button 
+                onClick={() => setGroupInfoModal(null)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-8 flex flex-col items-center text-center">
+              {/* Stacked Avatars */}
+              <div className="relative mb-6 flex justify-center">
+                <div className="relative w-24 h-24">
+                  <img 
+                    src={groupInfoModal.groupAvatar ? getMediaUrl(groupInfoModal.groupAvatar) : "/avt-mac-dinh.jpg"} 
+                    className="w-24 h-24 rounded-[32px] object-cover ring-4 ring-white shadow-xl relative z-10"
+                  />
+                  <div className="absolute -right-2 -bottom-2 w-16 h-16 rounded-[24px] bg-gray-100 ring-4 ring-white shadow-lg overflow-hidden opacity-40">
+                    <img 
+                      src={groupInfoModal.groupAvatar ? getMediaUrl(groupInfoModal.groupAvatar) : "/avt-mac-dinh.jpg"} 
+                      className="w-full h-full object-cover grayscale"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <h2 className="text-xl font-black text-gray-900 mb-2 px-4 leading-tight">
+                {groupInfoModal.name}
+              </h2>
+              
+              <div className="flex items-center gap-2 text-sm text-gray-500 font-bold mb-8">
+                <span>{groupInfoModal.members?.length || 0} thành viên</span>
+                <span className="w-1 h-1 rounded-full bg-gray-300" />
+                <span>Tạo bởi <span className="text-black">{groupInfoModal.members?.find((m: any) => m.role === 'LEADER')?.name || 'Quản trị viên'}</span></span>
+              </div>
+
+              <div className="w-full h-[1px] bg-gray-50 mb-8" />
+
+              <p className="text-sm text-gray-600 font-medium leading-relaxed mb-8 px-2">
+                Bạn đang ở phòng chờ. Hãy tham gia chat để cùng trò chuyện với mọi người trong nhóm.
+              </p>
+
+              {/* Small Member Avatars List */}
+              <div className="flex -space-x-3 mb-4">
+                {groupInfoModal.members?.slice(0, 5).map((member: any, idx: number) => (
+                  <div key={idx} className="w-10 h-10 rounded-2xl ring-4 ring-white overflow-hidden bg-gray-100 shadow-sm">
+                    <img 
+                      src={member.avatar ? getMediaUrl(member.avatar) : "/avt-mac-dinh.jpg"} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ))}
+                {groupInfoModal.members?.length > 5 && (
+                  <div className="w-10 h-10 rounded-2xl ring-4 ring-white bg-gray-900 flex items-center justify-center text-[10px] text-white font-black z-10">
+                    +{groupInfoModal.members.length - 5}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 bg-gray-50/50 flex gap-3">
+              <button
+                onClick={() => setGroupInfoModal(null)}
+                className="flex-1 py-4 rounded-[20px] font-black text-gray-900 bg-gray-100 hover:bg-gray-200 transition-all border border-gray-200 shadow-sm active:scale-95"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={async () => {
+                  const info = groupInfoModal;
+                  const gid = groupInfoModal.groupId;
+                  setGroupInfoModal(null);
+
+                  if (info?.isApprovalRequired) {
+                    setJoinGroupAnswer("");
+                    setJoinGroupModal({
+                      groupId: gid,
+                      question: info?.isQuestionEnabled ? info?.membershipQuestion || "" : "",
+                      needApproval: true,
+                    });
+                  } else {
+                    setJoiningGroup(true);
+                    try {
+                      const res = await groupService.requestJoinGroup(gid);
+                      if (res.joined) {
+                        toast.success("Đã tham gia nhóm thành công!");
+                        router.push(`/chat/${gid}`);
+                      } else {
+                        toast.success("Đã gửi yêu cầu tham gia");
+                      }
+                    } catch (err: any) {
+                      toast.error(err.response?.data?.error || "Lỗi khi tham gia");
+                    } finally {
+                      setJoiningGroup(false);
+                    }
+                  }
+                }}
+                className="flex-1 py-4 rounded-[20px] font-black bg-black text-white hover:bg-gray-800 transition-all shadow-xl shadow-black/10 active:scale-95"
+              >
+                Tham gia
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Join Request Modal (Approval/Question) */}
+      {joinGroupModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-[32px] w-full max-w-sm p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="mb-8">
+              <h3 className="text-xl font-black text-gray-900 mb-3">Yêu cầu tham gia</h3>
+              <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                {joinGroupModal.question 
+                  ? "Nhóm này yêu cầu bạn trả lời câu hỏi trước khi tham gia." 
+                  : "Yêu cầu của bạn sẽ được gửi đến quản trị viên để xét duyệt."}
+              </p>
+            </div>
+
+            {joinGroupModal.question && (
+              <div className="mb-8">
+                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                  Câu hỏi: {joinGroupModal.question}
+                </label>
+                <textarea
+                  value={joinGroupAnswer}
+                  onChange={(e) => setJoinGroupAnswer(e.target.value)}
+                  placeholder="Nhập câu trả lời của bạn..."
+                  className="w-full p-5 bg-gray-50 border-2 border-gray-100 rounded-2xl text-sm focus:ring-0 focus:border-black transition-all resize-none h-32"
+                />
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setJoinGroupModal(null); setJoinGroupAnswer(""); }}
+                className="flex-1 py-4 rounded-[20px] font-black text-gray-500 bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={async () => {
+                  if (joinGroupModal.question && !joinGroupAnswer.trim()) {
+                    toast.error("Vui lòng trả lời câu hỏi");
+                    return;
+                  }
+                  setJoiningGroup(true);
+                  try {
+                    const res = await groupService.requestJoinGroup(
+                      joinGroupModal.groupId,
+                      joinGroupAnswer.trim() || undefined
+                    );
+                    setJoinGroupModal(null);
+                    setJoinGroupAnswer("");
+                    if (res.joined) {
+                      toast.success("Đã tham gia nhóm!");
+                      router.push(`/chat/${joinGroupModal.groupId}`);
+                    } else {
+                      toast.success("Đã gửi yêu cầu tham gia!");
+                    }
+                  } catch (err: any) {
+                    toast.error(err.response?.data?.error || "Gửi thất bại");
+                  } finally {
+                    setJoiningGroup(false);
+                  }
+                }}
+                disabled={joiningGroup}
+                className="flex-1 py-4 rounded-[20px] font-black bg-black text-white hover:bg-gray-800 transition-all disabled:opacity-50"
+              >
+                {joiningGroup ? "Đang gửi..." : "Gửi yêu cầu"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

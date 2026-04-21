@@ -10,10 +10,11 @@ import { toast } from "sonner";
 
 interface PollModalProps {
   conversationId: string;
+  canCreate?: boolean;
   onClose: () => void;
 }
 
-export default function PollModal({ conversationId, onClose }: PollModalProps) {
+export default function PollModal({ conversationId, canCreate = true, onClose }: PollModalProps) {
   const [polls, setPolls] = useState<PollDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -21,6 +22,14 @@ export default function PollModal({ conversationId, onClose }: PollModalProps) {
   // Create Poll State
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState(["", ""]);
+  
+  // Advanced Settings State
+  const [allowMultipleAnswers, setAllowMultipleAnswers] = useState(false);
+  const [allowAddOptions, setAllowAddOptions] = useState(true);
+  const [hideResultsUntilVoted, setHideResultsUntilVoted] = useState(false);
+  const [hideVoters, setHideVoters] = useState(false);
+  const [pinToTop, setPinToTop] = useState(false);
+  const [expiresAtStr, setExpiresAtStr] = useState("");
 
   useEffect(() => {
     fetchPolls();
@@ -69,12 +78,13 @@ export default function PollModal({ conversationId, onClose }: PollModalProps) {
         question,
         options: validOptions,
         settings: {
-          allowMultipleAnswers: false,
-          allowAddOptions: true,
-          hideResultsUntilVoted: false,
-          hideVoters: false,
-          pinToTop: false
-        }
+          allowMultipleAnswers,
+          allowAddOptions,
+          hideResultsUntilVoted,
+          hideVoters,
+          pinToTop
+        },
+        expiresAt: expiresAtStr ? new Date(expiresAtStr).toISOString() : null
       };
       const newPoll = await pollService.createPoll(payload);
       if (newPoll) {
@@ -115,7 +125,7 @@ export default function PollModal({ conversationId, onClose }: PollModalProps) {
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
                   placeholder="Bạn muốn hỏi gì?"
-                  className="w-full bg-gray-50 border-none rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 transition resize-none"
+                  className="w-full bg-gray-50 border-none rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-black/10 transition resize-none"
                   rows={3}
                 />
               </div>
@@ -129,16 +139,68 @@ export default function PollModal({ conversationId, onClose }: PollModalProps) {
                       value={opt}
                       onChange={(e) => handleOptionChange(idx, e.target.value)}
                       placeholder={`Lựa chọn ${idx + 1}`}
-                      className="w-full bg-gray-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 transition"
+                      className="w-full bg-gray-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-black/10 transition"
                     />
                   ))}
                   <button 
                     onClick={handleAddOption}
-                    className="flex items-center gap-2 text-blue-600 text-[13px] font-bold mt-2 hover:translate-x-1 transition"
+                    className="text-black font-black uppercase tracking-tighter hover:translate-x-1 transition text-[11px] flex items-center gap-2 mt-2 bg-gray-100 px-3 py-1.5 rounded-lg w-fit"
                   >
                     <PlusIcon className="w-4 h-4" />
                     Thêm lựa chọn
                   </button>
+                </div>
+              </div>
+
+              {/* Tùy chọn nâng cao */}
+              <div>
+                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3 block">Cài đặt nâng cao</label>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative flex items-center justify-center">
+                      <input type="checkbox" checked={allowMultipleAnswers} onChange={e => setAllowMultipleAnswers(e.target.checked)} className="peer sr-only" />
+                      <div className="w-5 h-5 border-2 border-gray-300 rounded-md peer-checked:bg-blue-600 peer-checked:border-blue-600 transition" />
+                      <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    <span className="text-[13px] font-semibold text-gray-700 group-hover:text-gray-900 transition">Cho phép chọn nhiều đáp án</span>
+                  </label>
+                  
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative flex items-center justify-center">
+                      <input type="checkbox" checked={allowAddOptions} onChange={e => setAllowAddOptions(e.target.checked)} className="peer sr-only" />
+                      <div className="w-5 h-5 border-2 border-gray-300 rounded-md peer-checked:bg-blue-600 peer-checked:border-blue-600 transition" />
+                      <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    <span className="text-[13px] font-semibold text-gray-700 group-hover:text-gray-900 transition">Cho phép thành viên thêm lựa chọn</span>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative flex items-center justify-center">
+                      <input type="checkbox" checked={hideVoters} onChange={e => setHideVoters(e.target.checked)} className="peer sr-only" />
+                      <div className="w-5 h-5 border-2 border-gray-300 rounded-md peer-checked:bg-blue-600 peer-checked:border-blue-600 transition" />
+                      <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    <span className="text-[13px] font-semibold text-gray-700 group-hover:text-gray-900 transition">Ẩn danh người bình chọn</span>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <div className="relative flex items-center justify-center">
+                      <input type="checkbox" checked={hideResultsUntilVoted} onChange={e => setHideResultsUntilVoted(e.target.checked)} className="peer sr-only" />
+                      <div className="w-5 h-5 border-2 border-gray-300 rounded-md peer-checked:bg-blue-600 peer-checked:border-blue-600 transition" />
+                      <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 transition pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                    <span className="text-[13px] font-semibold text-gray-700 group-hover:text-gray-900 transition">Ẩn kết quả trước khi bình chọn</span>
+                  </label>
+
+                  <div className="pt-2">
+                    <label className="text-[13px] font-semibold text-gray-700 mb-1.5 block">Hết hạn (Tùy chọn)</label>
+                    <input 
+                      type="datetime-local" 
+                      value={expiresAtStr}
+                      onChange={e => setExpiresAtStr(e.target.value)}
+                      className="w-full bg-gray-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 transition"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -151,7 +213,7 @@ export default function PollModal({ conversationId, onClose }: PollModalProps) {
                 </button>
                 <button 
                   onClick={handleCreatePoll}
-                  className="flex-1 py-3 rounded-xl font-bold text-[13px] bg-blue-600 text-white shadow-lg hover:shadow-blue-500/20 hover:-translate-y-0.5 active:translate-y-0 transition"
+                  className="flex-1 py-3 rounded-xl font-bold text-[13px] bg-black text-white shadow-lg hover:shadow-black/20 hover:-translate-y-0.5 active:translate-y-0 transition"
                 >
                   TẠO BÌNH CHỌN
                 </button>
@@ -159,25 +221,27 @@ export default function PollModal({ conversationId, onClose }: PollModalProps) {
             </div>
           ) : (
             <>
-              <button 
-                onClick={() => setShowCreate(true)}
-                className="w-full mb-6 py-4 flex items-center justify-center gap-3 bg-blue-50 text-blue-600 rounded-2xl border-2 border-dashed border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition group"
-              >
-                <PlusIcon className="w-5 h-5 group-hover:scale-110 transition" />
-                <span className="text-[14px] font-black uppercase tracking-tight">Tạo cuộc bình chọn mới</span>
-              </button>
+              {canCreate && (
+                <button 
+                  onClick={() => setShowCreate(true)}
+                  className="w-full mb-6 py-4 flex items-center justify-center gap-3 bg-gray-50 text-black rounded-2xl border-2 border-dashed border-gray-200 hover:bg-gray-100 hover:border-black transition group"
+                >
+                  <PlusIcon className="w-5 h-5 group-hover:scale-110 transition" />
+                  <span className="text-[14px] font-black uppercase tracking-tight">Tạo cuộc bình chọn mới</span>
+                </button>
+              )}
 
               <div className="space-y-4">
                 {loading ? (
                   <div className="flex flex-col items-center py-10">
-                    <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mb-3" />
+                    <div className="w-8 h-8 border-4 border-gray-200 border-t-black rounded-full animate-spin mb-3" />
                   </div>
                 ) : polls.length > 0 ? (
                   polls.map((poll) => (
-                    <div key={poll._id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-blue-200 transition cursor-pointer group">
+                    <div key={poll._id} className="hover:border-black/20 transition cursor-pointer group relative bg-gray-50 p-4 rounded-2xl border border-gray-100">
                       <div className="flex items-start justify-between mb-2">
-                        <h3 className="text-[14px] font-bold text-gray-900 group-hover:text-blue-600 transition">{poll.question}</h3>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase ${poll.status === 'OPEN' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
+                        <h3 className="group-hover:text-black transition text-[14px] font-black text-gray-900 pr-4">{poll.question}</h3>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase ${poll.status === 'OPEN' ? 'bg-black text-white' : 'bg-gray-100 text-gray-400'}`}>
                           {poll.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}
                         </span>
                       </div>

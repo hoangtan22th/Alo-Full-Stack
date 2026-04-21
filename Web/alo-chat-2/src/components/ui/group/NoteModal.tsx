@@ -13,10 +13,11 @@ import { useAuthStore } from "@/store/useAuthStore";
 
 interface NoteModalProps {
   conversationId: string;
+  canCreate?: boolean;
   onClose: () => void;
 }
 
-export default function NoteModal({ conversationId, onClose }: NoteModalProps) {
+export default function NoteModal({ conversationId, canCreate = true, onClose }: NoteModalProps) {
   const [notes, setNotes] = useState<NoteDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -143,7 +144,7 @@ export default function NoteModal({ conversationId, onClose }: NoteModalProps) {
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   placeholder="Nhập nội dung ghi chú..."
-                  className="w-full bg-gray-50 border-none rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 transition resize-none"
+                  className="w-full bg-gray-50 border-none rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-black/10 transition resize-none"
                   rows={5}
                 />
               </div>
@@ -156,7 +157,7 @@ export default function NoteModal({ conversationId, onClose }: NoteModalProps) {
                       value={newLink}
                       onChange={(e) => setNewLink(e.target.value)}
                       placeholder="Dán liên kết vào đây..."
-                      className="flex-1 bg-gray-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 transition"
+                      className="flex-1 bg-gray-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-black/10 transition"
                       onKeyDown={(e) => e.key === 'Enter' && handleAddLink()}
                     />
                     <button 
@@ -168,7 +169,7 @@ export default function NoteModal({ conversationId, onClose }: NoteModalProps) {
                   </div>
                   <div className="flex flex-wrap gap-2 pt-1">
                     {links.map((link, idx) => (
-                      <div key={idx} className="flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[11px] font-bold group">
+                      <div key={idx} className="bg-gray-100 text-black rounded-full text-[11px] font-black group px-3 py-1 flex items-center gap-1">
                         <span className="truncate max-w-[200px]">{link}</span>
                         <button onClick={() => handleRemoveLink(idx)} className="hover:text-red-500">
                           <XMarkIcon className="w-3 h-3" />
@@ -188,7 +189,7 @@ export default function NoteModal({ conversationId, onClose }: NoteModalProps) {
                 </button>
                 <button 
                   onClick={handleSaveNote}
-                  className="flex-1 py-3 rounded-xl font-bold text-[13px] bg-blue-600 text-white shadow-lg hover:shadow-blue-500/20 hover:-translate-y-0.5 active:translate-y-0 transition"
+                  className="flex-1 py-3 rounded-xl font-bold text-[13px] bg-black text-white shadow-lg hover:shadow-black/20 hover:-translate-y-0.5 active:translate-y-0 transition"
                 >
                   {editingNote ? "CẬP NHẬT GHI CHÚ" : "LƯU GHI CHÚ"}
                 </button>
@@ -196,27 +197,29 @@ export default function NoteModal({ conversationId, onClose }: NoteModalProps) {
             </div>
           ) : (
             <>
-              <button 
-                onClick={() => setShowCreate(true)}
-                className="w-full mb-6 py-4 flex items-center justify-center gap-3 bg-blue-50 text-blue-600 rounded-2xl border-2 border-dashed border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition group"
-              >
-                <PlusIcon className="w-5 h-5 group-hover:scale-110 transition" />
-                <span className="text-[14px] font-black uppercase tracking-tight">Thêm ghi chú mới</span>
-              </button>
+              {canCreate && (
+                <button 
+                  onClick={() => setShowCreate(true)}
+                  className="w-full mb-6 py-4 flex items-center justify-center gap-3 bg-gray-50 text-black rounded-2xl border-2 border-dashed border-gray-200 hover:bg-gray-100 hover:border-black transition group"
+                >
+                  <PlusIcon className="w-5 h-5 group-hover:scale-110 transition" />
+                  <span className="text-[14px] font-black uppercase tracking-tight">Thêm ghi chú mới</span>
+                </button>
+              )}
 
               <div className="space-y-4">
                 {loading ? (
                   <div className="flex flex-col items-center py-10">
-                    <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mb-3" />
+                    <div className="w-8 h-8 border-4 border-gray-200 border-t-black rounded-full animate-spin mb-3" />
                   </div>
                 ) : notes.length > 0 ? (
                   notes.map((note) => (
-                    <div key={note._id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-blue-200 transition group relative">
+                    <div key={note._id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-black/20 transition group relative">
                       <div className="flex items-start justify-between mb-2">
                         <p className="text-[14px] font-medium text-gray-800 leading-relaxed pr-8 whitespace-pre-wrap">{note.content}</p>
                         <div className="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition">
                           {(note.creatorId === currentUserId) && (
-                            <button onClick={() => handleEditNote(note)} className="p-1.5 bg-white shadow-sm rounded-lg text-blue-500 hover:bg-blue-50 transition">
+                            <button onClick={() => handleEditNote(note)} className="p-1.5 bg-white shadow-sm rounded-lg text-black hover:bg-gray-100 transition">
                               <PencilIcon className="w-3.5 h-3.5" />
                             </button>
                           )}
@@ -234,7 +237,7 @@ export default function NoteModal({ conversationId, onClose }: NoteModalProps) {
                               href={link} 
                               target="_blank" 
                               rel="noopener noreferrer"
-                              className="text-[11px] font-bold text-blue-600 hover:underline"
+                              className="text-black font-black hover:underline uppercase tracking-tighter text-[10px] bg-gray-100 px-2 py-0.5 rounded-md inline-block mt-1"
                             >
                               🔗 {link.length > 30 ? link.substring(0, 30) + "..." : link}
                             </a>
