@@ -1113,3 +1113,85 @@ export async function searchMessages(
     next(error);
   }
 }
+
+/**
+ * Thu hồi nhiều tin nhắn cùng lúc (Bulk Revoke)
+ */
+export async function bulkRevokeMessages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageIds } = req.body;
+    const userId = getUserIdFromHeader(req);
+
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      res.status(400).json({ error: "messageIds must be a non-empty array" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    // messageDataService.bulkRevokeMessages sẽ lọc các tin nhắn hợp lệ (của user & < 24h)
+    const revokedMessages = await messageDataService.bulkRevokeMessages(
+      messageIds,
+      userId,
+    );
+
+    // Phát sự kiện realtime cho từng tin nhắn đã thu hồi thành công
+    const publishPromises = revokedMessages.map((msg) =>
+      rabbitMQProducer.publishMessageRevokedEvent({
+        messageId: msg._id.toString(),
+        conversationId: msg.conversationId.toString(),
+      }),
+    );
+    await Promise.all(publishPromises);
+
+    res.json({
+      status: "success",
+      count: revokedMessages.length,
+      revokedIds: revokedMessages.map((m) => m._id),
+    });
+  } catch (error) {
+    console.error("[MessageController] Bulk REVOKE error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Xóa nhiều tin nhắn chỉ ở phía tôi (Bulk Delete For Me)
+ */
+export async function bulkDeleteMessagesForMe(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageIds } = req.body;
+    const userId = getUserIdFromHeader(req);
+
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      res.status(400).json({ error: "messageIds must be a non-empty array" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    await messageDataService.bulkDeleteMessagesForMe(messageIds, userId);
+
+    res.json({
+      status: "success",
+      count: messageIds.length,
+    });
+  } catch (error) {
+    console.error("[MessageController] Bulk DELETE for me error:", error);
+    next(error);
+  }
+}

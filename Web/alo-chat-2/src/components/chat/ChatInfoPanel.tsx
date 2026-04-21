@@ -160,7 +160,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   const mediaList = useMemo(() => {
     const list: any[] = [];
     messages.forEach((m) => {
-      if (m.type === "image") {
+      if (m.type === "image" && !m.metadata?.isSticker) {
         if (m.metadata?.imageGroup) {
           list.push(
             ...m.metadata.imageGroup
