@@ -66,6 +66,7 @@ async function postSystemMessage(
   requesterId: string,
   content: string,
   authHeader?: string | string[],
+  metadata: Record<string, any> = {},
 ): Promise<void> {
   try {
     const gatewayUrl = process.env.GATEWAY_URL || "http://127.0.0.1:8888";
@@ -86,6 +87,7 @@ async function postSystemMessage(
         conversationId: groupId,
         type: "system",
         content,
+        metadata,
       }),
     });
   } catch (error) {
@@ -430,23 +432,23 @@ export const removeMember = async (
       )
       .catch(console.error);
 
-    // Bắn tin nhắn hệ thống (Nếu không phải rời trong im lặng)
-    if (!isSilent) {
-      const targetName = await getUserFullName(
-        userId,
-        req.headers.authorization,
-      );
-      const messageContent =
-        reason === "LEAVE"
-          ? `${targetName} đã rời khỏi nhóm`
-          : `${targetName} đã bị mời ra khỏi nhóm`;
-      await postSystemMessage(
-        groupId,
-        requesterId,
-        messageContent,
-        req.headers.authorization,
-      );
-    }
+    // Bắn tin nhắn hệ thống
+    const targetName = await getUserFullName(
+      userId,
+      req.headers.authorization,
+    );
+    const messageContent =
+      reason === "LEAVE"
+        ? `${targetName} đã rời khỏi nhóm`
+        : `${targetName} đã bị mời ra khỏi nhóm`;
+
+    await postSystemMessage(
+      groupId,
+      requesterId,
+      messageContent,
+      req.headers.authorization,
+      isSilent ? { isSilentLeave: true } : {},
+    );
 
     rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
     res.status(200).json({ message: "Thao tác thành công", data: group });
