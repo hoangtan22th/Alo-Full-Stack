@@ -82,6 +82,11 @@ export default function ChatInfoScreen() {
   const [isEditNameModalVisible, setIsEditNameModalVisible] = useState(false);
   const [tempGroupName, setTempGroupName] = useState("");
 
+  // States cho modal rời nhóm
+  const [isLeaveModalVisible, setIsLeaveModalVisible] = useState(false);
+  const [isSilentLeave, setIsSilentLeave] = useState(false);
+  const [blockReinvite, setBlockReinvite] = useState(false);
+
   const fetchGroupDetails = async () => {
     try {
       if (!isGroup || !id) return;
@@ -292,26 +297,27 @@ export default function ChatInfoScreen() {
       return;
     }
 
-    Alert.alert("Rời nhóm", "Bạn có chắc chắn muốn rời khỏi nhóm này?", [
-      { text: "Hủy", style: "cancel" },
-      {
-        text: "Rời nhóm",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            if (!currentUserId) return;
-            await groupService.removeMember(id as string, currentUserId);
-            Alert.alert("Thành công", "Đã rời nhóm.");
-            router.replace("/(tabs)");
-          } catch (error) {
-            Alert.alert(
-              "Lỗi",
-              typeof error === "string" ? error : "Không thể rời nhóm",
-            );
-          }
-        },
-      },
-    ]);
+    setIsSilentLeave(false);
+    setBlockReinvite(false);
+    setIsLeaveModalVisible(true);
+  };
+
+  const confirmLeaveGroup = async () => {
+    try {
+      if (!currentUserId || !id) return;
+      await groupService.removeMember(id as string, currentUserId, {
+        isSilent: isSilentLeave,
+        preventReinvite: blockReinvite,
+      });
+      setIsLeaveModalVisible(false);
+      Alert.alert("Thành công", "Đã rời nhóm.");
+      router.replace("/(tabs)");
+    } catch (error) {
+      Alert.alert(
+        "Lỗi",
+        typeof error === "string" ? error : "Không thể rời nhóm",
+      );
+    }
   };
 
   const handleClearHistory = () => {
@@ -861,6 +867,61 @@ export default function ChatInfoScreen() {
         </View>
       </Modal>
 
+      {/* Modal Rời nhóm */}
+      <Modal visible={isLeaveModalVisible} transparent animationType="fade">
+        <View className="flex-1 bg-black/50 items-center justify-center px-6">
+          <View className="bg-white w-full rounded-[24px] p-6">
+            <Text className="text-xl font-bold text-gray-900 mb-2">Rời nhóm</Text>
+            <Text className="text-gray-500 mb-6 font-medium">
+              Bạn có chắc chắn muốn rời khỏi nhóm <Text className="font-bold text-gray-900">{groupName}</Text>?
+            </Text>
+
+            <View className="space-y-4 mb-8">
+              <TouchableOpacity
+                onPress={() => setIsSilentLeave(!isSilentLeave)}
+                className="flex-row items-center"
+              >
+                <View className={`w-6 h-6 rounded border items-center justify-center mr-3 ${isSilentLeave ? "bg-blue-500 border-blue-500" : "border-gray-300"}`}>
+                  {isSilentLeave && <View className="w-2.5 h-2.5 bg-white rounded-sm" />}
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[15px] font-semibold text-gray-800">Rời nhóm trong im lặng</Text>
+                  <Text className="text-[12px] text-gray-500">Các thành viên khác sẽ không thấy thông báo hệ thống</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setBlockReinvite(!blockReinvite)}
+                className="flex-row items-center mt-3"
+              >
+                <View className={`w-6 h-6 rounded border items-center justify-center mr-3 ${blockReinvite ? "bg-blue-500 border-blue-500" : "border-gray-300"}`}>
+                  {blockReinvite && <View className="w-2.5 h-2.5 bg-white rounded-sm" />}
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[15px] font-semibold text-gray-800">Chặn thêm lại vào nhóm</Text>
+                  <Text className="text-[12px] text-gray-500">Bạn sẽ không nhận được lời mời vào lại nhóm này nữa</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                onPress={() => setIsLeaveModalVisible(false)}
+                className="flex-1 bg-gray-100 py-3.5 rounded-2xl items-center"
+              >
+                <Text className="font-bold text-gray-700">Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={confirmLeaveGroup}
+                className="flex-1 bg-red-500 py-3.5 rounded-2xl items-center shadow-sm"
+              >
+                <Text className="font-bold text-white">Rời nhóm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Modal Đổi tên nhóm (Fix Alert.prompt trên Android) */}
       <Modal
         visible={isEditNameModalVisible}
@@ -870,11 +931,6 @@ export default function ChatInfoScreen() {
       >
         <View className="flex-1 justify-center bg-black/40 px-6">
           <View className="bg-white rounded-[24px] p-6 shadow-xl">
-            <Text className="text-lg font-bold text-gray-900 mb-2">Đổi tên nhóm</Text>
-            <Text className="text-[13px] text-gray-500 mb-4">
-              Nhập tên nhóm mới để mọi người dễ dàng nhận diện.
-            </Text>
-            
             <TextInput
               className="bg-gray-100 rounded-xl px-4 py-3 text-base text-gray-900 mb-6 border border-gray-200"
               placeholder="Nhập tên nhóm..."
