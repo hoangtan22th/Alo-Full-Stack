@@ -81,6 +81,16 @@ const getMediaUrl = (url: string | undefined): string => {
   return `${backendHost}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
+const BOT_ID = "alo-bot";
+const BOT_INFO = {
+  id: BOT_ID,
+  name: "Trợ lý Alo Chat",
+  avatar: "/alochat.png",
+  isGroup: false,
+  message: "Sẵn sàng hỗ trợ bạn 24/7...",
+  online: true,
+};
+
 /* ─────────────────────────────────────────
    Page Component
 ───────────────────────────────────────── */
@@ -241,6 +251,18 @@ export default function ChatPage() {
   const fetchUserInfo = async (userId: string) => {
     if (userCache[userId] || !userId || fetchingUsersRef.current.has(userId))
       return;
+
+    if (userId === BOT_ID) {
+      setUserCache((prev) => ({
+        ...prev,
+        [BOT_ID]: {
+          name: BOT_INFO.name,
+          avatar: BOT_INFO.avatar,
+        },
+      }));
+      return;
+    }
+
     fetchingUsersRef.current.add(userId);
     try {
       const res: any = await axiosClient.get(`/users/${userId}`);
@@ -326,7 +348,7 @@ export default function ChatPage() {
 
   /* ─── Fetch messages for current conversation ─── */
   const fetchMessages = useCallback(async () => {
-    if (!conversationId || conversationId === "alo-bot") return;
+    if (!conversationId || conversationId === BOT_ID) return;
     setLoadingMessages(true);
     setHasMore(true);
     try {
@@ -356,7 +378,7 @@ export default function ChatPage() {
       !hasMore ||
       loadingMoreHistory ||
       loadingMessages ||
-      conversationId === "alo-bot"
+      conversationId === BOT_ID
     )
       return;
 
@@ -405,7 +427,7 @@ export default function ChatPage() {
   ]);
 
   const fetchMediaHistory = useCallback(async () => {
-    if (!conversationId || conversationId === "alo-bot") return;
+    if (!conversationId || conversationId === BOT_ID) return;
     try {
       // Tải 200 tin nhắn gần nhất để trích xuất media cho InfoPanel
       const msgs = await messageService.getMessageHistory(
@@ -425,7 +447,7 @@ export default function ChatPage() {
 
   /* ─── Fetch conversation info ─── */
   const fetchConversationInfo = useCallback(async () => {
-    if (!conversationId) return;
+    if (!conversationId || conversationId === BOT_ID) return;
     try {
       const data: any = await groupService.getGroupById(conversationId);
       const g = data?.data || data;
@@ -1332,17 +1354,6 @@ export default function ChatPage() {
     return groups;
   }, [messages, myId]);
 
-  // chatbot
-
-  const BOT_ID = "alo-bot";
-  const BOT_INFO = {
-    id: BOT_ID,
-    name: "Trợ lý Alo Chat",
-    avatar: "/alochat.png",
-    isGroup: false,
-    message: "Sẵn sàng hỗ trợ bạn 24/7...",
-    online: true,
-  };
   /* ─────────────────────────────────────────
      RENDER
   ───────────────────────────────────────── */
