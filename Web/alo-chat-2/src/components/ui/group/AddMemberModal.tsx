@@ -182,12 +182,12 @@ export default function AddMemberModal({
               value={phoneSearch}
               onChange={(e) => setPhoneSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handlePhoneSearch()}
-              className="flex-1 bg-blue-50/50 border-none rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-100 transition"
+              className="flex-1 bg-gray-50 border-none rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-black/10 transition"
             />
             <button 
               onClick={handlePhoneSearch}
               disabled={searchingPhone}
-              className="px-4 py-2 bg-blue-500 text-white rounded-xl font-bold text-sm hover:bg-blue-600 transition disabled:bg-gray-200"
+              className="px-4 py-2 bg-black text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition disabled:bg-gray-200"
             >
               {searchingPhone ? "..." : "Tìm"}
             </button>
@@ -197,14 +197,14 @@ export default function AddMemberModal({
         <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
           {/* Searched User Result */}
           {searchedUser && (
-            <div className="mb-6 p-4 bg-blue-50 rounded-2xl border border-blue-100 animate-in slide-in-from-top-2">
-              <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3">Kết quả tìm kiếm</p>
+            <div className="mb-6 p-4 bg-gray-50 rounded-2xl border border-gray-200 animate-in slide-in-from-top-2">
+              <p className="text-[10px] font-black text-black uppercase tracking-widest mb-3">Kết quả tìm kiếm</p>
               <div
                 onClick={() => toggleSelect(searchedUser.userId, searchedUser)}
                 className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition ${
                   selectedUserIds.includes(searchedUser.userId) 
-                    ? "bg-blue-500 text-white shadow-lg" 
-                    : "bg-white hover:bg-blue-100 text-gray-700 shadow-sm"
+                    ? "bg-black text-white shadow-lg" 
+                    : "bg-white hover:bg-gray-100 text-gray-700 shadow-sm"
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -215,7 +215,7 @@ export default function AddMemberModal({
                     />
                     {selectedUserIds.includes(searchedUser.userId) && (
                       <div className="absolute -bottom-1 -right-1 bg-white rounded-full">
-                        <CheckCircleIcon className="w-4 h-4 text-blue-500" />
+                        <CheckCircleIcon className="w-4 h-4 text-black" />
                       </div>
                     )}
                   </div>
