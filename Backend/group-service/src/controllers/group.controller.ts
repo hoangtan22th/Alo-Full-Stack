@@ -1438,3 +1438,44 @@ export const getGroupStatsAdmin = async (
     res.status(500).json({ error: error.message });
   }
 };
+
+// 12. Cập nhật danh mục (Ưu tiên / Khác)
+export const updateConversationFolder = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const groupId = String(req.params.groupId || "");
+    const { folder } = req.body; // 'priority' or 'other'
+    const currentUserId = String(req.headers["x-user-id"] || "");
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy hội thoại" });
+      return;
+    }
+
+    // Đảm bảo folders map tồn tại
+    if (!group.folders) {
+      group.folders = new Map();
+    }
+
+    if (!folder || folder === "priority") {
+      group.folders.delete(currentUserId);
+    } else {
+      group.folders.set(currentUserId, folder);
+    }
+
+    await group.save();
+
+    // Thông báo cập nhật qua socket/RabbitMQ
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
+
+    res.status(200).json({
+      message: "Cập nhật danh mục thành công",
+      data: group,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};

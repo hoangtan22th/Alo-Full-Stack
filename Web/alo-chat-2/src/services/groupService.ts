@@ -324,6 +324,16 @@ export const groupService = {
     }
   },
 
+  updateConversationFolder: async (groupId: string, folder: "priority" | "other") => {
+    try {
+      const data = await api.put<any, any>(`/groups/${groupId}/folder`, { folder });
+      return data;
+    } catch (error) {
+      console.error("Lỗi cập nhật danh mục:", error);
+      throw error;
+    }
+  },
+
   updateGroupSettings: async (
     groupId: string,
     settings: {

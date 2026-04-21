@@ -66,6 +66,10 @@ router.put(
   groupController.updateGroup,
 );
 router.post("/api/v1/groups/:groupId/clear", groupController.clearConversation);
+router.put(
+  "/api/v1/groups/:groupId/folder",
+  groupController.updateConversationFolder,
+);
 
 // Quản lý thành viên trong nhóm
 router.post("/api/v1/groups/:groupId/members", groupController.addMember);

@@ -25,6 +25,7 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import CreateGroupModal from "@/components/ui/group/CreateGroupModal";
+import { toast } from "sonner";
 
 // --- Sub-component: ManageLabelsModal ---
 function ManageLabelsModal({ 
@@ -197,6 +198,7 @@ export default function ConversationSidebar() {
   const [menuView, setMenuView] = useState<"main" | "labels">("main");
   const [showManageLabelsModal, setShowManageLabelsModal] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Record<string, boolean>>({});
+  const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const { typingUsers } = useChatStore();
   const menuRef = useRef<HTMLDivElement>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
@@ -310,6 +312,7 @@ export default function ConversationSidebar() {
               unreadCount: (currentUserId && g.unreadCount?.[currentUserId]) || 0,
               updatedAt: g.updatedAt,
               otherMemberUserId: otherMember?.userId,
+              folder: g.folders?.[currentUserId] || "priority",
             };
           }),
         );
@@ -505,6 +508,21 @@ export default function ConversationSidebar() {
     }
   };
 
+  const handleMoveFolder = async (e: React.MouseEvent, id: string, folder: "priority" | "other") => {
+    e.stopPropagation();
+    try {
+      await groupService.updateConversationFolder(id, folder);
+      setConversations(prev => prev.map(c => 
+        (c.id || c._id) === id ? { ...c, folder } : c
+      ));
+      setOpenMenuId(null);
+      toast.success(folder === "other" ? "Đã chuyển vào tab Khác" : "Đã chuyển vào tab Ưu tiên");
+    } catch (err) {
+      console.error("Lỗi chuyển danh mục:", err);
+      toast.error("Không thể chuyển danh mục");
+    }
+  };
+
   const toggleMenu = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (openMenuId === id) {
@@ -524,9 +542,27 @@ export default function ConversationSidebar() {
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   });
 
-  const filteredConversations = sortedConversations.filter((chat) =>
-    chat.name?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredConversations = sortedConversations.filter((chat) => {
+    // Filter by Search Query
+    const matchesSearch = chat.name?.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+
+    // Filter by Tab (Priority / Other)
+    const folder = chat.folder || "priority";
+    const tabMatch = activeTab === "Ưu tiên" ? folder === "priority" : folder === "other";
+    if (!tabMatch) return false;
+
+    // Filter by Label
+    if (selectedLabelId) {
+      if (selectedLabelId === "none") {
+        return !labelAssignments[chat.id];
+      }
+      const chatLabelId = labelAssignments[chat.id]?._id || labelAssignments[chat.id]?.id;
+      return chatLabelId === selectedLabelId;
+    }
+
+    return true;
+  });
 
   return (
     <>
@@ -605,9 +641,39 @@ export default function ConversationSidebar() {
                 </button>
               ))}
             </div>
-            <button className="text-gray-400 hover:text-black">
-              <Bars3BottomRightIcon className="w-4 h-4" />
-            </button>
+            <div className="relative group/filter">
+              <button className={`p-1.5 rounded-lg transition-colors ${selectedLabelId ? "bg-blue-50 text-blue-500" : "text-gray-400 hover:text-black"}`}>
+                <Bars3BottomRightIcon className="w-4 h-4" />
+              </button>
+              
+              {/* Label Filter Dropdown */}
+              <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-100 rounded-xl shadow-xl hidden group-hover/filter:block z-[90] p-1 animate-in fade-in zoom-in-95 duration-150">
+                <p className="px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 mb-1">Lọc theo nhãn</p>
+                <button 
+                  onClick={() => setSelectedLabelId(null)}
+                  className={`flex items-center gap-2 w-full px-3 py-2 text-[12px] font-bold rounded-lg transition-colors ${!selectedLabelId ? "bg-gray-50 text-black" : "text-gray-500 hover:bg-gray-50"}`}
+                >
+                  Tất cả
+                </button>
+                <button 
+                  onClick={() => setSelectedLabelId("none")}
+                  className={`flex items-center gap-2 w-full px-3 py-2 text-[12px] font-bold rounded-lg transition-colors ${selectedLabelId === "none" ? "bg-gray-50 text-black" : "text-gray-500 hover:bg-gray-50"}`}
+                >
+                  <div className="w-2 h-2 rounded-full bg-gray-200" />
+                  Không có nhãn
+                </button>
+                {labels.map(l => (
+                  <button 
+                    key={l._id || l.id}
+                    onClick={() => setSelectedLabelId(l._id || l.id)}
+                    className={`flex items-center gap-2 w-full px-3 py-2 text-[12px] font-bold rounded-lg transition-colors ${selectedLabelId === (l._id || l.id) ? "bg-gray-50 text-black" : "text-gray-700 hover:bg-gray-50"}`}
+                  >
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: l.color }} />
+                    {l.name}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -715,6 +781,23 @@ export default function ConversationSidebar() {
                             Phân loại
                           </div>
                           <ChevronRightIcon className="w-4 h-4 text-gray-300" />
+                        </button>
+
+                        <button 
+                          onClick={(e) => handleMoveFolder(e, chat.id, chat.folder === "other" ? "priority" : "other")}
+                          className="flex items-center gap-3 w-full px-3 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group/item"
+                        >
+                          {chat.folder === "other" ? (
+                            <>
+                              <ChatBubbleLeftRightIcon className="w-5 h-5 text-gray-400 group-hover/item:text-black" />
+                              Chuyển sang Ưu tiên
+                            </>
+                          ) : (
+                            <>
+                              <ChatBubbleLeftRightIcon className="w-5 h-5 text-gray-400 group-hover/item:text-black" />
+                              Chuyển sang Khác
+                            </>
+                          )}
                         </button>
 
                         <button 

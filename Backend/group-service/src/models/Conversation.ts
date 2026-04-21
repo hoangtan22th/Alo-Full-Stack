@@ -29,6 +29,7 @@ export interface IConversation extends Document {
   membershipQuestion: string;
   clearedAt: Map<string, Date>; // userId -> timestamp
   unreadCount: Map<string, number>; // userId -> count
+  folders: Map<string, string>; // userId -> folderName ('priority' | 'other')
   isHighlightEnabled: boolean;
   permissions: {
     editGroupInfo: "EVERYONE" | "ADMIN";
@@ -89,6 +90,11 @@ const conversationSchema = new Schema<IConversation>(
     clearedAt: {
       type: Map,
       of: Date,
+      default: {},
+    },
+    folders: {
+      type: Map,
+      of: String,
       default: {},
     },
     isHighlightEnabled: { type: Boolean, default: false },
