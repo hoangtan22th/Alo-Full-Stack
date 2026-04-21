@@ -85,7 +85,10 @@ router.delete("/api/v1/groups/:groupId", groupController.deleteGroup);
 
 // Invitations
 router.get("/api/v1/groups/invitations/me", groupController.getMyInvitations);
-router.post("/api/v1/groups/:groupId/invitations", groupController.inviteToGroup);
+router.post(
+  "/api/v1/groups/:groupId/invitations",
+  groupController.inviteToGroup,
+);
 router.post(
   "/api/v1/groups/:groupId/invitations/accept",
   groupController.acceptInvitation,

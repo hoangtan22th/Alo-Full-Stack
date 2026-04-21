@@ -150,9 +150,12 @@ export const groupService = {
 
   requestJoinGroup: async (groupId: string, answer?: string) => {
     try {
-      const data = await api.post<any, any>(`/groups/${groupId}/join-requests`, {
-        answer,
-      });
+      const data = await api.post<any, any>(
+        `/groups/${groupId}/join-requests`,
+        {
+          answer,
+        },
+      );
       return data;
     } catch (error) {
       console.error("Lỗi yêu cầu tham gia nhóm:", error);
