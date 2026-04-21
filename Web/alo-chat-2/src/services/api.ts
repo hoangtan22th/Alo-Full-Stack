@@ -157,9 +157,14 @@ api.interceptors.response.use(
         );
 
         processQueue(refreshError, null);
-        // Thay vì ép chuyển trang gây giật cục, báo hiệu cho layout xử lý hiển thị thông báo
         if (typeof window !== "undefined") {
-          window.dispatchEvent(new Event("force_logout"));
+          window.dispatchEvent(
+            new CustomEvent("force_logout", {
+              detail: {
+                message: "Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.",
+              },
+            }),
+          );
         }
 
         return Promise.reject(refreshError);

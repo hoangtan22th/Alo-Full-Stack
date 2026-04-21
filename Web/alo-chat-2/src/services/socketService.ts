@@ -49,9 +49,9 @@ class SocketService {
       console.error("⚠️ [Socket] Error:", error.message);
     });
 
-    this.socket.on("FORCE_LOGOUT", () => {
+    this.socket.on("FORCE_LOGOUT", (data) => {
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("force_logout"));
+        window.dispatchEvent(new CustomEvent("force_logout", { detail: data }));
       }
     });
   }
@@ -100,7 +100,10 @@ class SocketService {
     }
   }
 
-  private removeListener(event: string, callback: (data: any) => void) {
+  /**
+   * Safe method to remove a specific listener callback for an event.
+   */
+  public removeListener(event: string, callback: (data: any) => void) {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
       callbacks.delete(callback);
@@ -112,6 +115,14 @@ class SocketService {
         }
       }
     }
+  }
+
+  /**
+   * Generic subscription helper. Returns an unregister function.
+   */
+  private subscribe(event: string, callback: (data: any) => void): () => void {
+    this.addListener(event, callback);
+    return () => this.removeListener(event, callback);
   }
 
   // Phương thức tương thích ngược với code cũ sử dụng .off(event)
@@ -126,15 +137,15 @@ class SocketService {
 
   // --- Social Events ---
   onFriendRequestReceived(callback: (data: any) => void) {
-    this.addListener("NEW_FRIEND_REQUEST", callback);
+    return this.subscribe("NEW_FRIEND_REQUEST", callback);
   }
 
   onFriendRequestAccepted(callback: (data: any) => void) {
-    this.addListener("FRIEND_REQUEST_ACCEPTED", callback);
+    return this.subscribe("FRIEND_REQUEST_ACCEPTED", callback);
   }
 
   onFriendListUpdated(callback: (data: any) => void) {
-    this.addListener("FRIEND_LIST_UPDATED", callback);
+    return this.subscribe("FRIEND_LIST_UPDATED", callback);
   }
 
   emitFriendRequestSent(data: {
@@ -158,27 +169,27 @@ class SocketService {
 
   // --- Conversation Management ---
   onPinUpdated(callback: (data: any) => void) {
-    this.addListener("CONVERSATION_PIN_UPDATED", callback);
+    return this.subscribe("CONVERSATION_PIN_UPDATED", callback);
   }
 
   onLabelUpdated(callback: (data: any) => void) {
-    this.addListener("CONVERSATION_LABEL_UPDATED", callback);
+    return this.subscribe("CONVERSATION_LABEL_UPDATED", callback);
   }
 
   onConversationCreated(callback: (data: any) => void) {
-    this.addListener("CONVERSATION_CREATED", callback);
+    return this.subscribe("CONVERSATION_CREATED", callback);
   }
 
   onConversationRemoved(callback: (data: any) => void) {
-    this.addListener("CONVERSATION_REMOVED", callback);
+    return this.subscribe("CONVERSATION_REMOVED", callback);
   }
 
   onConversationUpdated(callback: (data: any) => void) {
-    this.addListener("CONVERSATION_UPDATED", callback);
+    return this.subscribe("CONVERSATION_UPDATED", callback);
   }
 
   onGroupUpdated(callback: (data: any) => void) {
-    this.addListener("GROUP_UPDATED", callback);
+    return this.subscribe("GROUP_UPDATED", callback);
   }
 
   // --- Messaging ---
@@ -189,36 +200,36 @@ class SocketService {
   }
 
   onMessageReceived(callback: (message: any) => void) {
-    this.addListener("message-received", callback);
+    return this.subscribe("message-received", callback);
   }
 
   onMessagesRead(callback: (data: any) => void) {
-    this.addListener("messages-read", callback);
+    return this.subscribe("messages-read", callback);
   }
 
   onMessageReactionUpdated(callback: (data: any) => void) {
-    this.addListener("message-reaction-updated", callback);
+    return this.subscribe("message-reaction-updated", callback);
   }
 
   onMessageRevoked(callback: (data: any) => void) {
-    this.addListener("message-revoked", callback);
+    return this.subscribe("message-revoked", callback);
   }
 
   onMessagePinned(callback: (data: any) => void) {
-    this.addListener("message-pinned", callback);
+    return this.subscribe("message-pinned", callback);
   }
 
   onMessageUpdated(callback: (data: any) => void) {
-    this.addListener("message-updated", callback);
+    return this.subscribe("message-updated", callback);
   }
 
   // --- Typing ---
   onTyping(callback: (data: any) => void) {
-    this.addListener("TYPING", callback);
+    return this.subscribe("TYPING", callback);
   }
 
   onStopTyping(callback: (data: any) => void) {
-    this.addListener("STOP_TYPING", callback);
+    return this.subscribe("STOP_TYPING", callback);
   }
 
   emitTyping(data: { target: string; isGroup: boolean }) {
@@ -234,14 +245,19 @@ class SocketService {
   }
 
   // --- Call Signaling ---
-  initiateCall(data: { targetRoom: string; caller: any; isVideo: boolean; inviteeIds?: string[] }) {
+  initiateCall(data: {
+    targetRoom: string;
+    caller: any;
+    isVideo: boolean;
+    inviteeIds?: string[];
+  }) {
     if (this.socket?.connected) {
       this.socket.emit("CALL_INITIATED", data);
     }
   }
 
   onIncomingCall(callback: (data: any) => void) {
-    this.addListener("INCOMING_CALL", callback);
+    return this.subscribe("INCOMING_CALL", callback);
   }
 
   cancelCall(data: { targetRoom: string; inviteeIds?: string[] }) {
@@ -251,7 +267,7 @@ class SocketService {
   }
 
   onCallCanceled(callback: (data: any) => void) {
-    this.addListener("CALL_CANCELED", callback);
+    return this.subscribe("CALL_CANCELED", callback);
   }
 
   declinedCall(data: { targetRoom: string }) {
@@ -261,7 +277,7 @@ class SocketService {
   }
 
   onCallDeclined(callback: (data: any) => void) {
-    this.addListener("CALL_DECLINED", callback);
+    return this.subscribe("CALL_DECLINED", callback);
   }
 
   emitCallBusy(data: { targetRoom: string }) {
@@ -271,20 +287,26 @@ class SocketService {
   }
 
   onCallBusy(callback: (data: any) => void) {
-    this.addListener("CALL_BUSY", callback);
+    return this.subscribe("CALL_BUSY", callback);
   }
 
   // --- User Status ---
   onUserOnline(callback: (data: any) => void) {
-    this.addListener("USER_ONLINE", callback);
+    return this.subscribe("USER_ONLINE", callback);
   }
 
   onUserOffline(callback: (data: any) => void) {
-    this.addListener("USER_OFFLINE", callback);
+    return this.subscribe("USER_OFFLINE", callback);
   }
 
   onUserStatusResult(callback: (data: any) => void) {
-    this.addListener("USER_STATUS_RESULT", callback);
+    return this.subscribe("USER_STATUS_RESULT", callback);
+  }
+
+  onReminderDue(
+    callback: (data: { title: string; conversationId: string }) => void,
+  ) {
+    return this.subscribe("REMINDER_DUE", callback);
   }
 }
 

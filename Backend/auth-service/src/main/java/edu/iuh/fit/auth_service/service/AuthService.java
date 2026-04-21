@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+
     private final AccountRepository accountRepository;
     private final UserSessionRepository sessionRepository;
     private final PasswordEncoder passwordEncoder;
@@ -101,12 +102,12 @@ public class AuthService {
 
         // Send RabbitMQ event to User Service so it can build UserProfile
         rabbitMQPublisher.publishUserRegisteredEvent(
-                user.getId(), 
-                user.getEmail(), 
-                request.fullName(), 
-                user.getPhoneNumber(), 
-                "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_user_images/user_avt.png", 
-                "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg", 
+                user.getId(),
+                user.getEmail(),
+                request.fullName(),
+                user.getPhoneNumber(),
+                "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_user_images/user_avt.png",
+                "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg",
                 2);
     }
 
@@ -128,14 +129,14 @@ public class AuthService {
 
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             Long attempts = stringRedisTemplate.opsForValue().increment(attemptsKey);
-            
+
             // Also store failed attempts in DB
             user.setFailedLoginAttempts((user.getFailedLoginAttempts() != null ? user.getFailedLoginAttempts() : 0) + 1);
-            
+
             if (attempts != null && attempts >= MAX_FAILED_ATTEMPTS) {
                 stringRedisTemplate.opsForValue().set(lockKey, "LOCKED", LOCK_TIME_DURATION, TimeUnit.MINUTES);
                 stringRedisTemplate.delete(attemptsKey);
-                
+
                 user.setStatus(AccountStatus.SUSPENDED);
                 user.setLockoutEnd(LocalDateTime.now().plusMinutes(LOCK_TIME_DURATION));
                 accountRepository.save(user);
@@ -143,7 +144,7 @@ public class AuthService {
                 throw new UnauthorizedException("Bạn đã nhập sai 5 lần. Tài khoản bị khóa 15 phút bảo vệ.");
             }
             if (attempts != null && attempts == 1) {
-                 stringRedisTemplate.expire(attemptsKey, 1, TimeUnit.HOURS);
+                stringRedisTemplate.expire(attemptsKey, 1, TimeUnit.HOURS);
             }
             accountRepository.save(user);
             throw new UnauthorizedException("Sai mật khẩu. Bạn còn " + (Math.max(0, MAX_FAILED_ATTEMPTS - (attempts != null ? attempts : 1))) + " lần thử.");
@@ -167,7 +168,7 @@ public class AuthService {
         invalidateOldSessions(user.getId(), sessionId, deviceId);
 
         String ipAddress = getClientIpString(httpRequest);
-        
+
         UserSession session = UserSession.builder()
                 .id(sessionId)
                 .account(user)
@@ -237,7 +238,7 @@ public class AuthService {
         invalidateOldSessions(user.getId(), sessionId, deviceId);
 
         String ipAddress = getClientIpString(httpRequest);
-        
+
         UserSession session = UserSession.builder()
                 .id(sessionId)
                 .account(user)
@@ -431,7 +432,7 @@ public class AuthService {
                         .roles(roles)
                         .build();
                 user = accountRepository.save(user);
-                
+
                 rabbitMQPublisher.publishUserRegisteredEvent(user.getId(), email, name, null, pictureUrl, "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg", 2);
             } else {
                 if (user.getAuthProvider() == null || user.getAuthProvider() == Account.AuthProvider.LOCAL) {
@@ -474,7 +475,7 @@ public class AuthService {
     public void invalidateOldSessions(String accountId, String keepSessionId, String deviceId) {
         boolean isWebLogin = deviceId != null && deviceId.toLowerCase().contains("web");
         List<UserSession> oldSessions = sessionRepository.findByAccountId(accountId);
-        
+
         List<UserSession> sessionsToKill = oldSessions.stream()
                 .filter(s -> !s.getId().equals(keepSessionId)) // Bảo hiểm không kick session hiện hành
                 .filter(s -> {
@@ -489,10 +490,10 @@ public class AuthService {
             String blacklistKey = "BLACKLIST_SESSION:" + s.getId();
             stringRedisTemplate.opsForValue().set(blacklistKey, "true", 15, TimeUnit.MINUTES);
         }
-        
+
         if (!sessionsToKill.isEmpty()) {
             sessionRepository.deleteAll(sessionsToKill);
-            rabbitMQPublisher.publishForceLogoutEvent(accountId, killedSessionIds);
+            rabbitMQPublisher.publishForceLogoutEvent(accountId, killedSessionIds, "Tài khoản của bạn đã được đăng nhập ở một thiết bị khác");
         }
     }
 
@@ -501,7 +502,7 @@ public class AuthService {
         if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
             ipAddress = request.getRemoteAddr();
         }
-        
+
         // In case of multiple IPs, take the first one
         if (ipAddress != null && ipAddress.indexOf(',') > 0) {
             ipAddress = ipAddress.substring(0, ipAddress.indexOf(',')).trim();

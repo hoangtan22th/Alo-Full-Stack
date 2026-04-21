@@ -7,6 +7,7 @@ import { groupService } from "@/services/groupService";
 import { socketService } from "@/services/socketService";
 import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useChatStore } from "@/store/useChatStore";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -190,7 +191,7 @@ export default function ConversationSidebar() {
   const [menuView, setMenuView] = useState<"main" | "labels">("main");
   const [showManageLabelsModal, setShowManageLabelsModal] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Record<string, boolean>>({});
-  const [typingStatus, setTypingStatus] = useState<Record<string, string>>({}); // convId -> "Someone is typing..."
+  const { typingUsers } = useChatStore();
   const menuRef = useRef<HTMLDivElement>(null);
   const conversationIdRef = useRef(conversationId);
   const userFetchCache = useRef<Record<string, any>>({});
@@ -315,138 +316,98 @@ export default function ConversationSidebar() {
   useEffect(() => {
     fetchData();
 
-    socketService.onPinUpdated((data: { conversationId: string; isPinned: boolean }) => {
-      setPinnedIds(prev => {
-        const next = new Set(prev);
-        if (data.isPinned) next.add(data.conversationId);
-        else next.delete(data.conversationId);
-        return next;
-      });
-    });
-
-    socketService.onLabelUpdated((data: { conversationId: string; label: any }) => {
-      setLabelAssignments(prev => {
-        const next = { ...prev };
-        if (data.label) next[data.conversationId] = data.label;
-        else delete next[data.conversationId];
-        return next;
-      });
-    });
-
-    socketService.onConversationCreated((newConvo: any) => {
-      setConversations(prev => {
-        const exists = prev.some(c => (c._id || c.id) === (newConvo._id || newConvo.id));
-        if (exists) return prev;
-        return [newConvo, ...prev];
-      });
-    });
-
-    socketService.onConversationRemoved((data: { conversationId: string }) => {
-      setConversations(prev => prev.filter(c => (c._id || c.id) !== data.conversationId));
-      if (conversationIdRef.current === data.conversationId) {
-        router.push('/chat');
-      }
-    });
-
-    socketService.onConversationUpdated((data: any) => {
-      console.log("📡 [Socket] Conversation updated:", data.conversationId);
-      // Refresh list để lấy tin nhắn mới và re-order
-      fetchGroups();
-    });
-
-    socketService.onMessageReceived((msg: any) => {
-      const convoId = msg.conversationId || msg.roomId;
-      if (!convoId) return;
-
-      setConversations((prev) => {
-        const index = prev.findIndex((c) => (c.id || c._id) === convoId);
-        if (index === -1) {
-          // Nếu conversation chưa có trong list, fetch lại list
-          fetchGroups();
-          return prev;
-        }
-
-        const next = [...prev];
-        const convo = { ...next[index] };
-        
-        // Update last message & unread count
-        convo.message = msg.type === "file" ? `[File] ${msg.metadata?.fileName || msg.content}` : msg.content;
-        convo.updatedAt = msg.createdAt || new Date().toISOString();
-        convo.time = new Date(convo.updatedAt).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
+    const unsubs = [
+      socketService.onPinUpdated((data: { conversationId: string; isPinned: boolean }) => {
+        setPinnedIds(prev => {
+          const next = new Set(prev);
+          if (data.isPinned) next.add(data.conversationId);
+          else next.delete(data.conversationId);
+          return next;
         });
-
-        // Chỉ tăng unread nếu không phải mình gửi và không đang mở chat đó
-        const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
-        if (msg.senderId !== currentUserId && conversationIdRef.current !== convoId) {
-          convo.unreadCount = (convo.unreadCount || 0) + 1;
+      }),
+      socketService.onLabelUpdated((data: { conversationId: string; label: any }) => {
+        setLabelAssignments(prev => {
+          const next = { ...prev };
+          if (data.label) next[data.conversationId] = data.label;
+          else delete next[data.conversationId];
+          return next;
+        });
+      }),
+      socketService.onConversationCreated((newConvo: any) => {
+        setConversations(prev => {
+          const exists = prev.some(c => (c._id || c.id) === (newConvo._id || newConvo.id));
+          if (exists) return prev;
+          return [newConvo, ...prev];
+        });
+      }),
+      socketService.onConversationRemoved((data: { conversationId: string }) => {
+        setConversations(prev => prev.filter(c => (c._id || c.id) !== data.conversationId));
+        if (conversationIdRef.current === data.conversationId) {
+          router.push('/chat');
         }
+      }),
+      socketService.onConversationUpdated((data: any) => {
+        console.log("📡 [Socket] Conversation updated:", data.conversationId);
+        fetchGroups();
+      }),
+      socketService.onMessageReceived((msg: any) => {
+        const convoId = msg.conversationId || msg.roomId;
+        if (!convoId) return;
 
-        next.splice(index, 1);
-        return [convo, ...next];
-      });
-    });
+        setConversations((prev) => {
+          const index = prev.findIndex((c) => (c.id || c._id) === convoId);
+          if (index === -1) {
+            fetchGroups();
+            return prev;
+          }
 
-    socketService.onMessagesRead((data: { conversationId: string; userId: string }) => {
-      const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
-      if (data.userId === currentUserId) {
-        setConversations((prev) => 
-          prev.map((c) => 
-            (c.id || c._id) === data.conversationId 
-              ? { ...c, unreadCount: 0 } 
-              : c
-          )
-        );
-      }
-    });
+          const next = [...prev];
+          const convo = { ...next[index] };
+          
+          convo.message = msg.type === "file" ? `[File] ${msg.metadata?.fileName || msg.content}` : msg.content;
+          convo.updatedAt = msg.createdAt || new Date().toISOString();
+          convo.time = new Date(convo.updatedAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
 
-    socketService.onTyping((data: { conversationId: string; userId: string; fullName?: string }) => {
-      const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
-      if (data.userId === currentUserId) return;
+          const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
+          if (msg.senderId !== currentUserId && conversationIdRef.current !== convoId) {
+            convo.unreadCount = (convo.unreadCount || 0) + 1;
+          }
 
-      setTypingStatus((prev) => ({
-        ...prev,
-        [data.conversationId]: `${data.fullName || "Ai đó"} đang soạn tin...`,
-      }));
-    });
-
-    socketService.onStopTyping((data: { conversationId: string; userId: string }) => {
-      setTypingStatus((prev) => {
-        const next = { ...prev };
-        delete next[data.conversationId];
-        return next;
-      });
-    });
-
-    socketService.onUserOnline((data: { userId: string }) => {
-      setOnlineUsers((prev) => ({ ...prev, [data.userId]: true }));
-    });
-
-    socketService.onUserOffline((data: { userId: string }) => {
-      setOnlineUsers((prev) => ({ ...prev, [data.userId]: false }));
-    });
-
-    socketService.onUserStatusResult((data: { userId: string; status: string }) => {
-      setOnlineUsers((prev) => ({
-        ...prev,
-        [data.userId]: data.status === "online",
-      }));
-    });
+          next.splice(index, 1);
+          return [convo, ...next];
+        });
+      }),
+      socketService.onMessagesRead((data: { conversationId: string; userId: string }) => {
+        const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
+        if (data.userId === currentUserId) {
+          setConversations((prev) => 
+            prev.map((c) => 
+              (c.id || c._id) === data.conversationId 
+                ? { ...c, unreadCount: 0 } 
+                : c
+            )
+          );
+        }
+      }),
+      socketService.onUserOnline((data: { userId: string }) => {
+        setOnlineUsers((prev) => ({ ...prev, [data.userId]: true }));
+      }),
+      socketService.onUserOffline((data: { userId: string }) => {
+        setOnlineUsers((prev) => ({ ...prev, [data.userId]: false }));
+      }),
+      socketService.onUserStatusResult((data: { userId: string; status: string }) => {
+        setOnlineUsers((prev) => ({
+          ...prev,
+          [data.userId]: data.status === "online",
+        }));
+      }),
+    ];
 
     return () => {
-      socketService.off("CONVERSATION_PIN_UPDATED");
-      socketService.off("CONVERSATION_LABEL_UPDATED");
-      socketService.off("CONVERSATION_CREATED");
-      socketService.off("CONVERSATION_REMOVED");
-      socketService.off("CONVERSATION_UPDATED");
-      socketService.off("message-received");
-      socketService.off("messages-read");
-      socketService.off("TYPING");
-      socketService.off("STOP_TYPING");
-      socketService.off("USER_ONLINE");
-      socketService.off("USER_OFFLINE");
-      socketService.off("USER_STATUS_RESULT");
+      unsubs.forEach(unsub => unsub());
     };
   }, [fetchData, router, currentUser]);
 
@@ -649,8 +610,8 @@ export default function ConversationSidebar() {
                     <span className="text-[10px] font-bold text-gray-400 shrink-0">{chat.time}</span>
                   </div>
                   <div className="flex justify-between items-center h-5">
-                    <p className={`text-[13px] truncate font-medium flex-1 ${typingStatus[chat.id] ? "text-green-500 italic" : "text-gray-500"}`}>
-                      {typingStatus[chat.id] || chat.message}
+                    <p className={`text-[13px] truncate font-medium flex-1 ${typingUsers[chat.id]?.length > 0 ? "text-green-500 italic" : "text-gray-500"}`}>
+                      {typingUsers[chat.id]?.length > 0 ? "Đang soạn tin..." : chat.message}
                     </p>
                     <button
                       onClick={(e) => toggleMenu(e, chat.id)}
@@ -701,37 +662,32 @@ export default function ConversationSidebar() {
                           <button onClick={() => setMenuView("main")} className="p-1 px-2 hover:bg-gray-50 rounded-lg text-gray-400">
                             <ChevronLeftIcon className="w-4 h-4" />
                           </button>
-                          <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest pl-1">Chọn nhãn</span>
+                          <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Phân loại</span>
                         </div>
-                        <div className="max-h-56 overflow-y-auto p-1 scrollbar-hide">
-                          {labels.map((label) => (
-                            <button
-                              key={label._id || label.id}
-                              onClick={(e) => handleAssignLabel(e, chat.id, label._id || label.id)}
-                              className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-[13px] hover:bg-gray-50 rounded-xl transition-colors group/label"
+                        <div className="p-1 flex flex-col gap-0.5">
+                          <button 
+                            onClick={(e) => handleAssignLabel(e, chat.id, null)}
+                            className="flex items-center gap-2 w-full px-3 py-2 text-[12px] font-bold text-gray-500 hover:bg-gray-50 rounded-lg transition-colors"
+                          >
+                            <div className="w-2 h-2 rounded-full bg-gray-200" />
+                            Không có nhãn
+                          </button>
+                          {labels.map(l => (
+                            <button 
+                              key={l._id || l.id}
+                              onClick={(e) => handleAssignLabel(e, chat.id, l._id || l.id)}
+                              className="flex items-center gap-2 w-full px-3 py-2 text-[12px] font-bold text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
                             >
-                              <div className="flex items-center gap-3">
-                                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: label.color }} />
-                                <span className={`${labelAssignments[chat.id]?._id === (label._id || label.id) ? "font-black text-black" : "text-gray-600 font-bold"}`}>
-                                  {label.name}
-                                </span>
-                              </div>
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: l.color }} />
+                              {l.name}
                             </button>
                           ))}
-                        </div>
-                        <div className="border-t border-gray-50 mt-1 p-1">
-                          <button
-                            onClick={(e) => handleAssignLabel(e, chat.id, null)}
-                            className="w-full text-left px-3 py-2 text-[12px] font-bold text-gray-400 hover:bg-red-50 hover:text-red-500 rounded-xl transition-colors"
+                          <button 
+                            onClick={() => { setShowManageLabelsModal(true); setOpenMenuId(null); }}
+                            className="mt-1 flex items-center justify-center gap-2 w-full px-3 py-2 text-[11px] font-black text-blue-500 hover:bg-blue-50 rounded-lg transition-colors border border-dashed border-blue-100"
                           >
-                            Gỡ nhãn hiện tại
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setShowManageLabelsModal(true); setOpenMenuId(null); }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-[12px] font-black text-blue-600 hover:bg-blue-50 rounded-xl transition-colors mt-0.5"
-                          >
-                            <PlusIcon className="w-3.5 h-3.5" />
-                            Phân loại trò chuyện
+                            <PlusIcon className="w-3 h-3" />
+                            QUẢN LÝ THẺ
                           </button>
                         </div>
                       </div>
@@ -744,19 +700,17 @@ export default function ConversationSidebar() {
         </div>
       </div>
 
-      <NewDirectChatModal
-        isOpen={showNewChatModal}
-        onClose={() => {
-          setShowNewChatModal(false);
-          fetchGroups();
-        }}
-      />
-
       <ManageLabelsModal 
-        isOpen={showManageLabelsModal}
+        isOpen={showManageLabelsModal} 
         onClose={() => setShowManageLabelsModal(false)}
         labels={labels}
         onRefresh={fetchLabelsInfo}
+      />
+
+      <NewDirectChatModal 
+        isOpen={showNewChatModal} 
+        onClose={() => setShowNewChatModal(false)} 
+        onChatCreated={fetchGroups}
       />
     </>
   );
