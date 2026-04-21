@@ -451,7 +451,9 @@ export default function GlobalChatScreen() {
 
     const handleGroupUpdated = (data: any) => {
       const updatedGroup = data.group ? data.group : data;
-      if (updatedGroup._id === resolvedConversationId) {
+      const updatedId = updatedGroup._id || updatedGroup.id || updatedGroup.conversationId;
+      
+      if (String(updatedId) === String(resolvedConversationId)) {
         setGroupDetails(updatedGroup);
         if (updatedGroup.members) {
           const admins = new Set<string>(

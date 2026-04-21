@@ -964,6 +964,7 @@ export const updateApprovalSetting = async (
 
     group.isApprovalRequired = isApprovalRequired;
     await group.save();
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
 
     res
       .status(200)
@@ -1006,6 +1007,7 @@ export const updateLinkSetting = async (
 
     group.isLinkEnabled = isLinkEnabled;
     await group.save();
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
 
     res
       .status(200)

@@ -112,6 +112,15 @@ export default function MemberApprovalModal({ groupId, onClose }: MemberApproval
     try {
       setIsApprovalRequired(newValue);
       await groupService.updateApprovalSetting(groupId, newValue);
+      
+      // Nếu tắt phê duyệt, tự động tắt luôn câu hỏi tham gia
+      if (!newValue && isQuestionEnabled) {
+        setIsQuestionEnabled(false);
+        await groupService.updateGroupSettings(groupId, {
+          isQuestionEnabled: false,
+        });
+      }
+      
       toast.success(newValue ? "Đã bật chế độ phê duyệt" : "Đã tắt chế độ phê duyệt");
     } catch (error) {
       toast.error("Cập nhật thất bại");
@@ -120,6 +129,7 @@ export default function MemberApprovalModal({ groupId, onClose }: MemberApproval
   };
 
   const handleToggleQuestion = async (newValue: boolean) => {
+    if (!isApprovalRequired) return;
     try {
       setIsQuestionEnabled(newValue);
       await groupService.updateGroupSettings(groupId, {
@@ -204,25 +214,26 @@ export default function MemberApprovalModal({ groupId, onClose }: MemberApproval
               </label>
             </div>
 
-            <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100">
+            <div className={`p-6 rounded-3xl border transition-all duration-300 ${isApprovalRequired ? 'bg-gray-50 border-gray-100' : 'bg-gray-50/30 border-gray-50 opacity-60'}`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex-1 pr-6">
                     <div className="flex items-center gap-2 mb-1">
-                        <IdentificationIcon className="w-5 h-5 text-gray-700" />
-                        <h3 className="text-[16px] font-bold text-gray-900">Câu hỏi tham gia</h3>
+                        <IdentificationIcon className={`w-5 h-5 ${isApprovalRequired ? 'text-gray-700' : 'text-gray-300'}`} />
+                        <h3 className={`text-[16px] font-bold ${isApprovalRequired ? 'text-gray-900' : 'text-gray-300'}`}>Câu hỏi tham gia</h3>
                     </div>
-                  <p className="text-[13px] text-gray-500 font-medium">
+                  <p className={`text-[13px] font-medium ${isApprovalRequired ? 'text-gray-500' : 'text-gray-300'}`}>
                     Yêu cầu người tham gia trả lời một câu hỏi trước khi họ gửi yêu cầu tham gia nhóm.
                   </p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
+                <label className={`relative inline-flex items-center ${isApprovalRequired ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
                   <input
                     type="checkbox"
                     className="sr-only peer"
                     checked={isQuestionEnabled}
                     onChange={(e) => handleToggleQuestion(e.target.checked)}
+                    disabled={!isApprovalRequired}
                   />
-                  <div className="w-14 h-8 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gray-800"></div>
+                  <div className={`w-14 h-8 rounded-full peer peer-focus:outline-none after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all shadow-inner ${isApprovalRequired ? 'bg-gray-200 peer-checked:bg-gray-800 peer-checked:after:translate-x-full' : 'bg-gray-100'}`}></div>
                 </label>
               </div>
 

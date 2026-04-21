@@ -138,14 +138,12 @@ export default function ChatPage() {
       isTypingRef.current = true;
       socketService.emitTyping({ 
         target: conversationId, 
-        conversationId: conversationId, 
         isGroup: !!conversationInfo?.isGroup 
       });
     } else if (!hasText && isTypingRef.current && conversationId && conversationId !== BOT_ID) {
       isTypingRef.current = false;
       socketService.emitStopTyping({ 
         target: conversationId, 
-        conversationId: conversationId, 
         isGroup: !!conversationInfo?.isGroup 
       });
     }
@@ -157,7 +155,6 @@ export default function ChatPage() {
           isTypingRef.current = false;
           socketService.emitStopTyping({ 
             target: conversationId, 
-            conversationId: conversationId,
             isGroup: !!conversationInfo?.isGroup 
           });
         }
