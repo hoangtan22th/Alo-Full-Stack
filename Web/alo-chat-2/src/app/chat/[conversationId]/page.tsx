@@ -1647,6 +1647,8 @@ export default function ChatPage() {
                     conversationId={conversationId}
                     userId={myId || ""}
                     messages={messages}
+                    conversationName={conversationInfo?.name}
+                    userCache={userCache}
                   />
                 </div>
               </div>

@@ -9,10 +9,12 @@ import { MessageDTO } from "@/services/messageService";
 interface Props {
   conversationId: string;
   userId: string;
-  messages: MessageDTO[]; // Thêm danh sách tin nhắn từ UI
+  messages: MessageDTO[];
+  conversationName?: string;
+  userCache?: Record<string, { name: string; avatar: string }>;
 }
 
-export default function ChatSummaryButton({ conversationId, userId, messages }: Props) {
+export default function ChatSummaryButton({ conversationId, userId, messages, conversationName, userCache }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState("");
@@ -33,13 +35,26 @@ export default function ChatSummaryButton({ conversationId, userId, messages }: 
     setSummary("");
 
     // 1. Tạo context từ những tin nhắn "thực sự nhìn thấy"
-    // Lọc bỏ tin nhắn thu hồi và tin nhắn hệ thống không cần thiết
     const visibleMessages = messages.filter(msg => !msg.isRevoked && msg.type !== 'system');
     
     // 2. Chuyển đổi thành chuỗi văn bản để AI dễ đọc
-    const chatContext = visibleMessages
+    let chatContext = `Tên hội thoại: ${conversationName || "Trò chuyện"}\n`;
+    chatContext += `Danh sách tin nhắn:\n`;
+
+    chatContext += visibleMessages
       .map(msg => {
-        const sender = msg.senderName || (msg.senderId === userId ? "Tôi" : "Bạn");
+        let sender = msg.senderName;
+        
+        // Nếu không có senderName, thử lấy từ cache
+        if (!sender && userCache && userCache[msg.senderId]) {
+          sender = userCache[msg.senderId].name;
+        }
+
+        // Fallback cuối cùng
+        if (!sender) {
+          sender = msg.senderId === userId ? "Tôi" : "Người dùng " + msg.senderId.slice(-4);
+        }
+
         let content = msg.content;
         
         // Nếu là file hoặc ảnh thì tóm tắt loại nội dung

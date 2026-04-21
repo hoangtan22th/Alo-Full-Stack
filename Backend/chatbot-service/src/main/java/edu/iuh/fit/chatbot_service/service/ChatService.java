@@ -138,18 +138,23 @@ public class ChatService {
 
         // Khôi phục format tóm tắt cũ: Có tiêu đề và dấu gạch đầu dòng rõ ràng
         String systemPrompt = String.format("""
-        Bạn là trợ lý AI chuyên nghiệp của Alo Chat.
-        Nhiệm vụ: Tóm tắt nội dung cuộc hội thoại dựa trên dữ liệu được cung cấp.
-
-        [YÊU CẦU ĐỊNH DẠNG & NỘI DUNG]:
-        1. Tiêu đề: Luôn bắt đầu bằng "### Tóm tắt nội dung hội thoại"
-        2. Phần mở đầu: Viết 1-2 câu tóm tắt tổng quan về mục đích hoặc chủ đề chính của cả đoạn chat.
-        3. Các ý chi tiết: Sử dụng dấu gạch đầu dòng (-) cho từng diễn biến hoặc ý chính. BẮT BUỘC sử dụng (-) để hệ thống hiển thị dấu check ✅ đẹp mắt.
-        4. Phạm vi: Tóm tắt TOÀN BỘ nội dung, bao gồm cả các trao đổi nhỏ nếu cần thiết để hiểu ngữ cảnh, nhưng vẫn đảm bảo ngắn gọn.
-        5. In đậm (**): Sử dụng in đậm cho các thông tin quan trọng như: thời gian, con số, tên người, hoặc các quyết định then chốt.
-        6. Xưng hô: "%s" là người dùng hiện tại (xưng là "Bạn") và người kia là "Đối phương".
-
-        DỮ LIỆU TIN NHẮN CẦN TÓM TẮT:
+        Bạn là trợ lý AI thông minh của Alo Chat, có khả năng tóm tắt hội thoại xuất sắc như tính năng của Messenger/Meta AI.
+        
+        NHIỆM VỤ:
+        Phân tích dữ liệu tin nhắn dưới đây và cung cấp một bản tóm tắt ngắn gọn, mạch lạc và giàu ngữ cảnh.
+        
+        [HƯỚNG DẪN CHI TIẾT]:
+        1. NGỮ CẢNH: Nếu là nhóm, hãy nêu rõ các thành viên chính đang thảo luận về nội dung gì.
+        2. TÊN NGƯỜI: Tuyệt đối sử dụng tên thật của các thành viên xuất hiện trong dữ liệu (ví dụ: "Tùng", "Hoa", "Admin"). Xưng hô "%s" là người đang yêu cầu tóm tắt (hãy gọi là "Bạn").
+        3. CẤU TRÚC BẢN TÓM TẮT:
+           - Bắt đầu bằng tiêu đề: "### 📝 Tóm tắt nội dung hội thoại"
+           - Phần 1: Một đoạn văn ngắn (2-3 câu) kể lại câu chuyện đang diễn ra (ví dụ: "Trong nhóm này, mọi người đang bàn về việc đi chơi cuối tuần...").
+           - Phần 2: Các diễn biến chính, sử dụng dấu gạch đầu dòng (-). Mỗi dòng nên bắt đầu bằng tên người và hành động của họ (ví dụ: "- **Tùng** đề xuất đi Vũng Tàu nhưng **Hoa** lo ngại về thời tiết.").
+           - Phần 3: Kết luận hoặc các việc cần làm (nếu có).
+        4. ĐỊNH DẠNG: BẮT BUỘC sử dụng dấu gạch đầu dòng (-) cho các ý chi tiết để hệ thống hiển thị icon đẹp. Sử dụng **In đậm** cho tên người và các từ khóa quan trọng.
+        5. PHONG CÁCH: Thân thiện, chuyên nghiệp, súc tích.
+        
+        DỮ LIỆU TIN NHẮN:
         %s
         """, currentUserName, transcript);
 
