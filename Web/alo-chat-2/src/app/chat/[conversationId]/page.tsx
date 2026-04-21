@@ -1463,6 +1463,15 @@ export default function ChatPage() {
      RENDER
   ───────────────────────────────────────── */
 
+  const adminIds = useMemo(() => {
+    if (!conversationInfo?.isGroup || !conversationInfo?.members) return new Set<string>();
+    return new Set<string>(
+      conversationInfo.members
+        .filter((m: any) => m.role?.toUpperCase() === "LEADER" || m.role?.toUpperCase() === "DEPUTY")
+        .map((m: any) => String(m.userId || m._id))
+    );
+  }, [conversationInfo]);
+
   const avatarMap = useMemo(
     () =>
       Object.fromEntries(
@@ -1857,8 +1866,14 @@ export default function ChatPage() {
                                   <div
                                     className={`relative max-w-full flex flex-col p-1.5 px-2 border shadow-sm ${
                                       isMine
-                                        ? "bg-blue-50/80 border-blue-100 shadow-blue-900/5 items-end"
-                                        : "bg-white border-gray-100 shadow-gray-900/5 items-start"
+                                        ? "bg-blue-50/80 shadow-blue-900/5 items-end"
+                                        : "bg-white shadow-gray-900/5 items-start"
+                                    } ${
+                                      conversationInfo?.isHighlightEnabled && adminIds.has(String(msg.senderId))
+                                        ? "border-amber-300 ring-2 ring-amber-200/50"
+                                        : isMine
+                                        ? "border-blue-100"
+                                        : "border-gray-100"
                                     } ${bubbleRadius}`}
                                   >
                                     {/* Reply Quote Box */}
