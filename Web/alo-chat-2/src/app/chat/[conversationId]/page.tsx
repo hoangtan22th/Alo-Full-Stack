@@ -148,6 +148,15 @@ export default function ChatPage() {
 
   // Group Link Info Cache
   const [groupLinkCache, setGroupLinkCache] = useState<Record<string, any>>({});
+  
+  const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+  const myRole = useMemo(() => {
+    if (!conversationInfo || !myId) return "MEMBER";
+    const member = conversationInfo.members?.find(
+      (m: any) => String(m.userId) === String(myId) || String(m._id) === String(myId)
+    );
+    return member?.role?.toUpperCase() || "MEMBER";
+  }, [conversationInfo, myId]);
   // Modal tham gia nhóm có câu hỏi
   const [joinGroupModal, setJoinGroupModal] = useState<{ groupId: string; question: string; needApproval: boolean } | null>(null);
   const [joinGroupAnswer, setJoinGroupAnswer] = useState("");
@@ -246,7 +255,6 @@ export default function ChatPage() {
   const [isMounted, setIsMounted] = useState(false);
   const fetchingUsersRef = useRef<Set<string>>(new Set());
 
-  const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const [activeAlbumIndex, setActiveAlbumIndex] = useState<{
     messageId: string;
     index: number;
@@ -1963,7 +1971,7 @@ export default function ChatPage() {
                           className="flex justify-center my-4 w-full px-10"
                         >
                           <div className="flex flex-col items-center gap-1.5 max-w-full">
-                            {gMsgs.map((msg) => (
+                            {gMsgs.filter(m => !(m.metadata?.isSilentLeave && myRole === "MEMBER")).map((msg) => (
                               <div
                                 key={msg._id}
                                 className="bg-gray-100 px-4 py-1.5 rounded-full shadow-sm border border-gray-200/50 max-w-full"
@@ -2065,11 +2073,18 @@ export default function ChatPage() {
                                       }
                                     />
                                   ) : (
-                                    <div className="flex justify-center w-full my-4 px-10">
-                                      <div className="bg-gray-100/50 backdrop-blur-sm text-gray-500 text-[11px] font-bold py-1.5 px-4 rounded-full border border-gray-200/50 shadow-sm text-center uppercase tracking-tight">
-                                        {msg.content}
-                                      </div>
-                                    </div>
+                                    (() => {
+                                      const isVisible = !(msg.metadata?.isSilentLeave && myRole === "MEMBER");
+                                      if (!isVisible) return null;
+                                      
+                                      return (
+                                        <div className="flex justify-center w-full my-4 px-10">
+                                          <div className="bg-gray-100/50 backdrop-blur-sm text-gray-500 text-[11px] font-bold py-1.5 px-4 rounded-full border border-gray-200/50 shadow-sm text-center uppercase tracking-tight">
+                                            {msg.content}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()
                                   )
                                 ) : (
                                   <div
