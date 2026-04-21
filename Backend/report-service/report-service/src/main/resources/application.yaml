@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: report-service
+  rabbitmq:
+      host: ${RABBITMQ_HOST}
+      port: ${RABBITMQ_PORT}
+      username: ${RABBITMQ_USER}
+      password: ${RABBITMQ_PASSWORD}
+  mongodb:
+    uri: ${MONGODB_URI}
 
 eureka:
   client:
