@@ -49,6 +49,7 @@ import BotChatArea from "@/components/ui/BotChatArea";
 import StickerPicker from "@/components/ui/StickerPicker";
 import ForwardMessageModal from "@/components/ui/ForwardMessageModal";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useChatStore } from "@/store/useChatStore";
 import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
 
 /* ─────────────────────────────────────────
@@ -82,6 +83,7 @@ const getMediaUrl = (url: string | undefined): string => {
 };
 
 const BOT_ID = "alo-bot";
+const EMPTY_ARRAY: any[] = [];
 const BOT_INFO = {
   id: BOT_ID,
   name: "Trợ lý Alo Chat",
@@ -122,9 +124,48 @@ export default function ChatPage() {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [mediaMessages, setMediaMessages] = useState<MessageDTO[]>([]);
   const [messageText, setMessageText] = useState("");
+  const [conversationInfo, setConversationInfo] = useState<any>(null);
+  // Optimized selector with stable empty array to avoid infinite loop
+  const typingForThisConvo = useChatStore((state) => state.typingUsers[conversationId] || EMPTY_ARRAY);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isTypingRef = useRef(false);
+
+  useEffect(() => {
+    const hasText = messageText.trim().length > 0;
+    
+    // Only emit if state changed to reduce socket spam/lag
+    if (hasText && !isTypingRef.current && conversationId && conversationId !== BOT_ID) {
+      isTypingRef.current = true;
+      socketService.emitTyping({ 
+        target: conversationId, 
+        conversationId: conversationId, 
+        isGroup: !!conversationInfo?.isGroup 
+      });
+    } else if (!hasText && isTypingRef.current && conversationId && conversationId !== BOT_ID) {
+      isTypingRef.current = false;
+      socketService.emitStopTyping({ 
+        target: conversationId, 
+        conversationId: conversationId, 
+        isGroup: !!conversationInfo?.isGroup 
+      });
+    }
+
+    if (hasText) {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        if (isTypingRef.current) {
+          isTypingRef.current = false;
+          socketService.emitStopTyping({ 
+            target: conversationId, 
+            conversationId: conversationId,
+            isGroup: !!conversationInfo?.isGroup 
+          });
+        }
+      }, 3000);
+    }
+  }, [messageText, conversationId, conversationInfo?.isGroup]);
   const [sending, setSending] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
-  const [conversationInfo, setConversationInfo] = useState<any>(null);
   // Hover tooltip & context menu & reactions
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [activeReactionMenu, setActiveReactionMenu] = useState<string | null>(
@@ -498,28 +539,22 @@ export default function ChatPage() {
     // Join room mới
     socketService.joinRoom(conversationId);
 
-    // Lắng nghe tin nhắn mới
-    socketService.off("message-received"); // remove listener cũ trước khi gắn mới
-    socketService.onMessageReceived((newMsg: any) => {
+    const onNewMsg = (newMsg: any) => {
       const activeConvoId = conversationIdRef.current;
       if (String(newMsg.conversationId) === String(activeConvoId)) {
         setMessages((prev) => {
-          // Tránh duplicate: nếu tin đã có trong list (do optimistic UI) thì replace
           const existsIdx = prev.findIndex(
             (m) => m._id === newMsg._id || m._id.startsWith("temp_"),
           );
           if (existsIdx !== -1 && prev[existsIdx]._id.startsWith("temp_")) {
-            // Replace optimistic message bằng message thật từ socket
             const updated = [...prev];
             updated[existsIdx] = newMsg;
             return updated;
           }
-          // Duplicate bảo vệ — nếu đã có _id này thì bỏ qua
           if (prev.some((m) => m._id === newMsg._id)) return prev;
           return [...prev, newMsg];
         });
 
-        // Cập nhật media/files cho InfoPanel
         if (newMsg.type === "image" || newMsg.type === "file") {
           setMediaMessages((prev) => {
             if (prev.some((m) => m._id === newMsg._id)) return prev;
@@ -527,35 +562,28 @@ export default function ChatPage() {
           });
         }
 
-        // Nếu tin từ người khác → đánh dấu đã đọc
         const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
         if (myId && String(newMsg.senderId) !== String(myId)) {
           messageService.markAsRead(activeConvoId).catch(console.error);
         }
       }
-    });
+    };
 
-    // Lắng nghe đối phương đã đọc
-    socketService.off("messages-read");
-    socketService.onMessagesRead((data) => {
+    const onMsgsRead = (data: any) => {
       if (String(data.conversationId) === String(conversationIdRef.current)) {
         setMessages((prev) => prev.map((m) => ({ ...m, isRead: true })));
       }
-    });
+    };
 
-    // Lắng nghe thay đổi cảm xúc
-    socketService.off("message-reaction-updated");
-    socketService.onMessageReactionUpdated((data) => {
+    const onReactionUpdated = (data: any) => {
       setMessages((prev) =>
         prev.map((m) =>
           m._id === data.messageId ? { ...m, reactions: data.reactions } : m,
         ),
       );
-    });
+    };
 
-    // Lắng nghe thu hồi tin nhắn
-    socketService.off("message-revoked");
-    socketService.onMessageRevoked((data) => {
+    const onMsgRevoked = (data: any) => {
       setMessages((prev) =>
         prev.map((m) =>
           m._id === data.messageId
@@ -567,12 +595,9 @@ export default function ChatPage() {
             : m,
         ),
       );
-    });
+    };
 
-    // Lắng nghe ghim/bỏ ghim tin nhắn real-time
-    socketService.off("message-pinned");
-    socketService.onMessagePinned((data: any) => {
-      // data: { messageId, isPinned, conversationId }
+    const onMsgPinned = (data: any) => {
       if (String(data.conversationId) === String(conversationIdRef.current)) {
         setMessages((prev) =>
           prev.map((m) =>
@@ -580,50 +605,38 @@ export default function ChatPage() {
           ),
         );
       }
-    });
+    };
 
-    // Lắng nghe cập nhật tin nhắn (VD: thu hồi 1 ảnh trong album)
-    socketService.off("message-updated");
-    socketService.onMessageUpdated((newMsg: any) => {
+    const onMsgUpdated = (newMsg: any) => {
       if (String(newMsg.conversationId) === String(conversationIdRef.current)) {
         setMessages((prev) =>
           prev.map((m) => (m._id === newMsg._id ? newMsg : m)),
         );
       }
-    });
+    };
 
-    // --- REALTIME INFO PANEL & CONVERSATION SYNC ---
-    // Lắng nghe cập nhật thông tin nhóm/cuộc trò chuyện
-    socketService.off("GROUP_UPDATED");
-    socketService.onGroupUpdated((data: any) => {
+    const onGroupUpdated = (data: any) => {
       const activeConvoId = conversationIdRef.current;
       const updatedConvoId = data._id || data.conversationId || data.id;
       if (String(updatedConvoId) === String(activeConvoId)) {
-        console.log("🔄 [Realtime] Group updated, refreshing info...");
         fetchConversationInfo();
       }
-    });
+    };
 
-    socketService.off("CONVERSATION_UPDATED");
-    socketService.onConversationUpdated((data: any) => {
+    const onConvoUpdated = (data: any) => {
       const activeConvoId = conversationIdRef.current;
       const updatedConvoId = data._id || data.conversationId || data.id;
       if (String(updatedConvoId) === String(activeConvoId)) {
-        console.log("🔄 [Realtime] Conversation updated, refreshing info...");
         fetchConversationInfo();
       }
-    });
+    };
 
-    // Lắng nghe giải tán nhóm hoặc bị mời ra khỏi nhóm
-    socketService.off("CONVERSATION_REMOVED");
-    socketService.onConversationRemoved((data: any) => {
+    const onConvoRemoved = (data: any) => {
       const activeConvoId = conversationIdRef.current;
       if (String(data.conversationId) === String(activeConvoId)) {
         const reason = data.reason || "removed";
         const groupName = data.groupName || "cuộc trò chuyện";
-
-        if (reason === "leave") return; // Tự rời thì đã handle ở button click
-
+        if (reason === "leave") return;
         toast.info(
           reason === "delete"
             ? `Nhóm "${groupName}" đã được giải tán`
@@ -631,18 +644,28 @@ export default function ChatPage() {
         );
         router.replace("/chat");
       }
-    });
+    };
+
+    socketService.onMessageReceived(onNewMsg);
+    socketService.onMessagesRead(onMsgsRead);
+    socketService.onMessageReactionUpdated(onReactionUpdated);
+    socketService.onMessageRevoked(onMsgRevoked);
+    socketService.onMessagePinned(onMsgPinned);
+    socketService.onMessageUpdated(onMsgUpdated);
+    socketService.onGroupUpdated(onGroupUpdated);
+    socketService.onConversationUpdated(onConvoUpdated);
+    socketService.onConversationRemoved(onConvoRemoved);
 
     return () => {
-      socketService.off("message-received");
-      socketService.off("messages-read");
-      socketService.off("message-reaction-updated");
-      socketService.off("message-revoked");
-      socketService.off("message-pinned");
-      socketService.off("message-updated");
-      socketService.off("GROUP_UPDATED");
-      socketService.off("CONVERSATION_UPDATED");
-      socketService.off("CONVERSATION_REMOVED");
+      socketService.removeListener("message-received", onNewMsg);
+      socketService.removeListener("messages-read", onMsgsRead);
+      socketService.removeListener("message-reaction-updated", onReactionUpdated);
+      socketService.removeListener("message-revoked", onMsgRevoked);
+      socketService.removeListener("message-pinned", onMsgPinned);
+      socketService.removeListener("message-updated", onMsgUpdated);
+      socketService.removeListener("GROUP_UPDATED", onGroupUpdated);
+      socketService.removeListener("CONVERSATION_UPDATED", onConvoUpdated);
+      socketService.removeListener("CONVERSATION_REMOVED", onConvoRemoved);
     };
   }, [conversationId, currentUser]);
 
@@ -1706,7 +1729,7 @@ export default function ChatPage() {
                     return (
                       <div
                         key={`group-${groupIdx}`}
-                        className={`flex flex-col gap-0.5 ${isMine ? "items-end" : "items-start"} mb-3`}
+                        className={`flex flex-col gap-0.5 w-full ${isMine ? "items-end" : "items-start"} mb-3`}
                       >
                         {gMsgs.map((msg, msgIdx) => {
                           const isLast = msgIdx === gMsgs.length - 1;
@@ -1768,7 +1791,7 @@ export default function ChatPage() {
                               </div>
                               {/* Bubble */}
                               <div
-                                className={`relative max-w-[75%] flex flex-col ${isMine ? "items-end" : "items-start"}`}
+                                className="relative max-w-[75%] flex flex-col items-start"
                               >
                                 {/* System messages (General & Call) */}
                                 {(msg.type as any) === "system" ? (
@@ -2633,6 +2656,16 @@ export default function ChatPage() {
                       </div>
                     );
                   })}
+                  {typingForThisConvo.length > 0 && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-100 rounded-2xl w-fit ml-12 mb-6 shadow-sm animate-in fade-in slide-in-from-left-2 duration-300">
+                      <div className="flex gap-1">
+                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" />
+                      </div>
+                      <span className="text-[12px] font-bold text-gray-500 italic">Đang soạn tin...</span>
+                    </div>
+                  )}
                   <div ref={messagesEndRef} />
                 </div>
               )

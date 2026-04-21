@@ -100,7 +100,7 @@ class SocketService {
     }
   }
 
-  private removeListener(event: string, callback: (data: any) => void) {
+  removeListener(event: string, callback: (data: any) => void) {
     const callbacks = this.listeners.get(event);
     if (callbacks) {
       callbacks.delete(callback);
