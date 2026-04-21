@@ -144,6 +144,7 @@ public class FriendshipController {
         contactService.revokeRequest(requesterId, recipientId);
         return ResponseEntity.ok(ApiResponse.success("Đã thu hồi lời mời kết bạn thành công"));
     }
+
     @DeleteMapping("/friend/{friendId}")
     public ResponseEntity<ApiResponse<String>> removeFriend(
             @PathVariable String friendId,

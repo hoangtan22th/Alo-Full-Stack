@@ -271,5 +271,37 @@ public class FriendshipServiceImpl implements FriendshipService {
         }
 
         friendshipRepository.delete(friendship);
+    }}
+
+    Friendship friendship = friendshipRepository.findByUserIds(requesterId, recipientId)
+            .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lời mời kết bạn nào!"));
+
+    // Kiểm tra bảo mật: Chỉ cho phép người GỬI (Requester) được thu hồi
+    if(!friendship.getRequesterId().equals(requesterId))
+    {
+        throw new ForbiddenException("Ông không phải người gửi lời mời này, không được thu hồi!");
+    }
+
+    // Nếu lời mời đã được chấp nhận (ACCEPTED) thì không cho thu hồi kiểu này (phải
+    // dùng chức năng Hủy kết bạn)
+    if(friendship.getStatus()!=FriendshipStatus.PENDING)
+    {
+        throw new AppException(400, "Lời mời đã được xử lý, không thể thu hồi");
+    }
+
+    friendshipRepository.delete(friendship);
+    }
+
+    @Override
+    @Transactional
+    public void removeFriend(String userId, String friendId) {
+        Friendship friendship = friendshipRepository.findByUserIds(userId, friendId)
+                .orElseThrow(() -> new ResourceNotFoundException("Mối quan hệ bạn bè không tồn tại!"));
+
+        if (friendship.getStatus() != FriendshipStatus.ACCEPTED) {
+            throw new AppException(400, "Hai người hiện chưa là bạn bè, không thể thực hiện thao tác xóa!");
+        }
+
+        friendshipRepository.delete(friendship);
     }
 }

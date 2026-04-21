@@ -4,9 +4,11 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import axiosClient from "@/services/api";
 import { messageService, MessageDTO } from "@/services/messageService";
 import { groupService } from "@/services/groupService";
+import { contactService } from "@/services/contactService";
 import { socketService } from "@/services/socketService";
 import { toast } from "sonner";
 import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
+import FriendProfileModal from "@/components/ui/FriendProfileModal";
 import ChatSummaryButton from "@/components/ui/chatbot/ChatSummaryButton";
 import { CallSystemMessage } from "@/components/ui/call/CallSystemMessage";
 import { useCall } from "@/components/layout/CallProvider";
@@ -31,6 +33,7 @@ import {
   FolderIcon,
   NoSymbolIcon,
   ExclamationCircleIcon,
+  ExclamationTriangleIcon,
   ArrowPathIcon,
   ClipboardDocumentIcon,
   MapPinIcon,
@@ -116,6 +119,10 @@ export default function ChatPage() {
   // State cho tin nhắn ghim
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
   const [showPinnedModal, setShowPinnedModal] = useState(false);
+  const [isStranger, setIsStranger] = useState(false);
+  const [shouldShowSummary, setShouldShowSummary] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [summaryDismissed, setSummaryDismissed] = useState<Record<string, boolean>>({});
   const [showCallMemberSelector, setShowCallMemberSelector] = useState<{
     isVideo: boolean;
   } | null>(null);
@@ -519,27 +526,47 @@ export default function ChatPage() {
       let displayName = g.name;
       let displayAvatar = g.groupAvatar;
 
-      const currentUserId =
-        currentUser?.id || currentUser?._id || currentUser?.userId;
-      if (!g.isGroup && currentUserId && g.members) {
-        const other = g.members.find((m: any) => m.userId !== currentUserId);
-        if (other) {
+      const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
+      
+      // Kiểm tra kỹ xem có phải là chat 1-1 hay không
+      const isDirect = !g.isGroup || g.type === "DIRECT" || (g.members?.length === 2 && !g.isGroup);
+
+      if (isDirect && currentUserId && g.members) {
+        // Tìm người kia (có thể là object hoặc chỉ là ID)
+        const otherMember = g.members.find((m: any) => (m.userId || m) !== currentUserId);
+        const otherId = otherMember?.userId || otherMember;
+
+        if (otherId) {
           try {
-            const res: any = await axiosClient.get(`/users/${other.userId}`);
-            const u = res?.data?.data || res?.data || res;
+            console.log("[DEBUG] Fetching info for other user:", otherId);
+            const [userRes, friendsRes]: any = await Promise.all([
+              axiosClient.get(`/users/${otherId}`),
+              contactService.getFriendsList()
+            ]);
+            
+            const u = userRes?.data?.data || userRes?.data || userRes;
             if (u) {
-              displayName =
-                u.fullName ||
-                (u as any).displayName ||
-                (u as any).username ||
-                (u as any).name ||
-                "Người dùng";
+              // Chỉ cập nhật tên nếu đây thực sự là chat 1-1
+              displayName = u.fullName || u.displayName || u.username || u.name || "Người dùng";
               displayAvatar = u.avatar || displayAvatar;
             }
+
+            const friends = friendsRes || [];
+            const isFriend = friends.some((f: any) => 
+              String(f.requesterId) === String(otherId) || 
+              String(f.recipientId) === String(otherId)
+            );
+            
+            console.log("[DEBUG] Relationship check:", { otherId, isFriend });
+            setIsStranger(!isFriend);
           } catch (error) {
-            console.error("Lỗi lấy thông tin other user trong 1-1 chat", error);
+            console.error("Lỗi lấy thông tin người dùng hoặc danh sách bạn bè:", error);
+            setIsStranger(false);
           }
         }
+      } else {
+        // Nếu là nhóm, reset trạng thái người lạ
+        setIsStranger(false);
       }
 
       setConversationInfo({ ...g, displayName, displayAvatar });
@@ -1461,7 +1488,12 @@ export default function ChatPage() {
           <div className="flex-1 flex flex-col min-w-0 h-full bg-white relative">
             {/* Chat Header */}
             <div className="h-19 px-6 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md z-10">
-              <div className="flex items-center gap-3">
+              <div 
+                className={`flex items-center gap-3 ${!conversationInfo?.isGroup ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+                onClick={() => {
+                  if (!conversationInfo?.isGroup) setShowProfileModal(true);
+                }}
+              >
                 {/* Avatar */}
                 <div className="relative shrink-0">
                   {conversationInfo?.displayAvatar ? (
@@ -1499,11 +1531,18 @@ export default function ChatPage() {
 
                 {/* Tên & trạng thái */}
                 <div>
-                  <h2 className="text-[16px] font-black tracking-tight">
-                    {conversationInfo?.displayName ||
-                      conversationInfo?.name ||
-                      "Đang tải..."}
-                  </h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-[16px] font-black tracking-tight">
+                      {conversationInfo?.displayName ||
+                        conversationInfo?.name ||
+                        "Đang tải..."}
+                    </h2>
+                    {isStranger && (
+                      <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-[10px] font-black uppercase rounded-md tracking-wider">
+                        Người lạ
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[12px] font-bold text-gray-400 mt-0.5">
                     {conversationInfo?.isGroup
                       ? `${conversationInfo?.members?.length ?? ""} thành viên`
@@ -1537,6 +1576,42 @@ export default function ChatPage() {
                 </button>
               </div>
             </div>
+
+            {/* Stranger Warning Banner */}
+            {isStranger && (
+              <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-100 rounded-2xl flex items-center justify-between animate-in slide-in-from-top-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-500 shrink-0">
+                    <ExclamationTriangleIcon className="w-4 h-4" />
+                  </div>
+                  <p className="text-[13px] font-bold text-red-800">
+                    Hãy cẩn thận khi nhắn tin với người lạ.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => {
+                      const otherMember = conversationInfo?.members?.find((m: any) => (m.userId || m) !== myId);
+                      const otherId = otherMember?.userId || otherMember;
+                      if (otherId) {
+                        axiosClient.post("/contacts/request", { recipientId: otherId })
+                          .then(() => toast.success("Đã gửi lời mời kết bạn!"))
+                          .catch(() => toast.error("Lỗi khi gửi lời mời"));
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-red-600 text-white text-[11px] font-black rounded-lg hover:bg-red-700 transition active:scale-95 shadow-sm"
+                  >
+                    Kết bạn
+                  </button>
+                  <button className="px-3 py-1.5 bg-white text-gray-700 text-[11px] font-black rounded-lg border border-gray-100 hover:bg-gray-50 transition active:scale-95 shadow-sm">
+                    Chặn
+                  </button>
+                  <button className="px-3 py-1.5 bg-white text-gray-700 text-[11px] font-black rounded-lg border border-gray-100 hover:bg-red-50 hover:text-red-600 transition active:scale-95 shadow-sm">
+                    Báo xấu
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Pinned Messages (nếu có) */}
             {pinnedMessages.length === 1 && (
@@ -3201,6 +3276,20 @@ export default function ChatPage() {
           onClose={() => setForwardingMessage(null)}
           message={forwardingMessage}
           currentUser={currentUser}
+        />
+      )}
+
+      {/* Friend Profile Modal */}
+      {showProfileModal && (
+        <FriendProfileModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+          userId={(() => {
+            const other = conversationInfo?.members?.find((m: any) => (m.userId || m) !== myId);
+            return other?.userId || other;
+          })()}
+          relationStatus={isStranger ? "NOT_FRIEND" : "ACCEPTED"}
+          onActionSuccess={() => fetchConversationInfo()}
         />
       )}
     </>

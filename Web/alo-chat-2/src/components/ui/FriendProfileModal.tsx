@@ -23,23 +23,58 @@ export default function FriendProfileModal({
   isOpen,
   onClose,
   userId,
+  friendshipId,
   relationStatus = "NOT_FRIEND",
   onActionSuccess,
 }: any) {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [currentRelation, setCurrentRelation] = useState<any>({
+    status: relationStatus,
+    friendshipId: friendshipId,
+  });
   const router = useRouter();
+  const { user: currentUser } = useAuthStore();
 
   useEffect(() => {
-    if (isOpen && userId) {
+    if (isOpen && userId && userId !== "undefined" && userId !== "null") {
       fetchUserData();
+      fetchRelationStatus();
       document.body.style.overflow = "hidden";
       return () => {
         document.body.style.overflow = "unset";
       };
     }
   }, [isOpen, userId]);
+
+  // Sync internal state when props change
+  useEffect(() => {
+    setCurrentRelation({
+      status: relationStatus,
+      friendshipId: friendshipId,
+    });
+  }, [relationStatus, friendshipId]);
+
+  const fetchRelationStatus = async () => {
+    if (!userId || userId === "undefined" || userId === "null") return;
+    try {
+      const res: any = await axiosClient.get(`/contacts/relation-status`, {
+        params: { targetUserId: userId }
+      });
+      const data = res?.data || res;
+      setCurrentRelation({
+        status: data.relationStatus,
+        friendshipId: data.friendshipId,
+      });
+    } catch (error: any) {
+      if (error?.response?.status === 404) {
+        console.warn("⚠️ Endpoint /relation-status chưa khả dụng.");
+      } else {
+        console.error("Lỗi tải trạng thái quan hệ:", error);
+      }
+    }
+  };
 
   const fetchUserData = async () => {
     setLoading(true);
@@ -58,19 +93,22 @@ export default function FriendProfileModal({
     setActionLoading(true);
     try {
       await axiosClient.post("/contacts/request", { recipientId: userId });
-      
+
       // [REALTIME] Emit socket event trực tiếp
       const me: any = await axiosClient.get("/auth/me");
       const myData = me?.data || me;
       socketService.emitFriendRequestSent({
         recipientId: userId,
-        requesterName: myData.fullName,
-        requesterAvatar: myData.avatar
+        requesterName: currentUser?.fullName || "Một người bạn",
+        requesterAvatar: myData.avatar,
       });
 
+      // Optimistic update
+      setCurrentRelation((prev: any) => ({ ...prev, status: "I_SENT_REQUEST" }));
+
       toast.success("Đã gửi lời mời kết bạn!");
-      onActionSuccess?.();
-      onClose();
+      await fetchRelationStatus(); // Cập nhật lại trạng thái tại chỗ
+      onActionSuccess?.("I_SENT_REQUEST");
     } catch (err) {
       toast.error("Lỗi khi gửi lời mời");
     } finally {
@@ -82,9 +120,13 @@ export default function FriendProfileModal({
     setActionLoading(true);
     try {
       await axiosClient.delete(`/contacts/request/revoke/${userId}`);
+      
+      // Optimistic update
+      setCurrentRelation((prev: any) => ({ ...prev, status: "NOT_FRIEND", friendshipId: null }));
+
       toast.success("Đã thu hồi lời mời");
-      onActionSuccess?.();
-      onClose();
+      await fetchRelationStatus();
+      onActionSuccess?.("NOT_FRIEND");
     } catch (err) {
       toast.error("Không thể thu hồi");
     } finally {
@@ -95,32 +137,35 @@ export default function FriendProfileModal({
   const handleAccept = async () => {
     setActionLoading(true);
     try {
-      // 1. Chấp nhận kết bạn trên DB
-      await axiosClient.put(`/contacts/${userId}/accept`);
-      
-      // 2. [REALTIME] Emit socket event cho người gửi lời mời
-      const me: any = await axiosClient.get("/auth/me");
-      const myData = me?.data || me;
+      const targetId = currentRelation.friendshipId || friendshipId;
+      if (!targetId) {
+        toast.error("Đang cập nhật dữ liệu, vui lòng thử lại sau giây lát");
+        await fetchRelationStatus();
+        return;
+      }
+      await axiosClient.put(`/contacts/${targetId}/accept`);
+
       socketService.emitFriendRequestAccepted({
         recipientId: userId,
-        accepterName: myData.fullName
+        accepterName: currentUser?.fullName || "Một người bạn",
       });
 
       toast.success("Đã trở thành bạn bè!");
+      onActionSuccess?.("ACCEPTED");
 
-      // 3. Tự động tạo cuộc hội thoại và gửi tin nhắn chúc mừng
       const conversation = await groupService.createDirectConversation(userId);
-      const convoId = conversation?._id || conversation?.id || conversation?.data?._id || conversation?.data?.id;
+      const convoId =
+        conversation?._id ||
+        conversation?.id ||
+        conversation?.data?._id ||
+        conversation?.data?.id;
 
       if (convoId) {
-        // Gửi tin nhắn hệ thống
         await axiosClient.post("/messages", {
           conversationId: convoId,
           type: "system",
           content: "🎉 Hai bạn đã trở thành bạn bè. Hãy bắt đầu trò chuyện!",
         });
-
-        // 4. Nhảy vào khung chat
         onClose();
         router.push(`/chat/${convoId}`);
       } else {
@@ -130,6 +175,26 @@ export default function FriendProfileModal({
     } catch (err) {
       console.error("Lỗi khi chấp nhận kết bạn:", err);
       toast.error("Lỗi khi chấp nhận kết bạn");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDecline = async () => {
+    setActionLoading(true);
+    try {
+      const targetId = currentRelation.friendshipId || friendshipId;
+      if (!targetId) {
+        toast.error("Đang cập nhật dữ liệu, vui lòng thử lại sau giây lát");
+        await fetchRelationStatus();
+        return;
+      }
+      await axiosClient.delete(`/contacts/${targetId}/decline`);
+      toast.success("Đã từ chối lời mời");
+      onActionSuccess?.("NOT_FRIEND");
+      onClose();
+    } catch (err) {
+      toast.error("Lỗi khi từ chối lời mời");
     } finally {
       setActionLoading(false);
     }
@@ -210,6 +275,7 @@ export default function FriendProfileModal({
     icon: Icon,
     label,
     color = "text-gray-800",
+    danger,
     onClick,
     disabled,
   }: any) => (
@@ -219,8 +285,8 @@ export default function FriendProfileModal({
       className={`w-full flex items-center justify-between py-3 px-1 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 ${disabled ? "opacity-50" : ""}`}
     >
       <div className="flex items-center gap-3">
-        <Icon className={`w-4 h-4 ${color}`} />
-        <span className={`text-[13px] font-bold ${color}`}>{label}</span>
+        <Icon className={`w-4 h-4 ${danger ? "text-red-500" : color}`} />
+        <span className={`text-[13px] font-bold ${danger ? "text-red-500" : color}`}>{label}</span>
       </div>
       <ChevronRightIcon className="w-3 h-3 text-gray-300" />
     </button>
@@ -273,16 +339,20 @@ export default function FriendProfileModal({
 
             {/* ✅ KHU VỰC NÚT BẤM CHÍNH ĐÃ FIX LOGIC */}
             <div className="mt-4 space-y-2">
-              {relationStatus === "ACCEPTED" ? (
+              {currentRelation.status === "SELF" ? (
+                <div className="w-full bg-blue-50 text-blue-600 py-3 rounded-xl font-bold text-xs border border-blue-100 flex justify-center items-center gap-2">
+                  Đây là tài khoản của bạn
+                </div>
+              ) : currentRelation.status === "ACCEPTED" ? (
                 <div className="flex gap-2">
-                  <button 
+                  <button
                     onClick={() => handleCall(false)}
                     disabled={actionLoading}
                     className="flex-1 bg-gray-100 text-gray-900 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-200 transition"
                   >
                     Gọi điện
                   </button>
-                  <button 
+                  <button
                     onClick={handleMessage}
                     disabled={actionLoading}
                     className="flex-1 bg-black text-white py-2.5 rounded-xl font-bold text-xs hover:bg-neutral-800 transition"
@@ -290,38 +360,48 @@ export default function FriendProfileModal({
                     Nhắn tin
                   </button>
                 </div>
-              ) : relationStatus === "I_SENT_REQUEST" ? (
-                // ✅ HIỆN NÚT HUỶ KHI ÔNG GỬI ĐI
+              ) : currentRelation.status === "I_SENT_REQUEST" || currentRelation.status === "YOU_SENT_REQUEST" ? (
                 <button
                   onClick={handleRevoke}
                   disabled={actionLoading}
-                  className="w-full bg-red-50 text-red-600 py-2.5 rounded-xl font-bold text-xs border border-red-100 flex justify-center items-center gap-2"
+                  className="w-full bg-red-50 text-red-600 py-3 rounded-xl font-bold text-xs border border-red-100 flex justify-center items-center gap-2 hover:bg-red-100 transition shadow-sm"
                 >
                   <ArrowPathIcon
                     className={`w-4 h-4 ${actionLoading ? "animate-spin" : ""}`}
                   />{" "}
-                  Thu hồi lời mời
+                  Thu hồi lời mời kết bạn
                 </button>
-              ) : relationStatus === "THEY_SENT_REQUEST" ? (
+              ) : currentRelation.status === "THEY_SENT_REQUEST" ? (
                 // ✅ HIỆN CHẤP NHẬN/TỪ CHỐI KHI HỌ GỬI TỚI
                 <div className="flex gap-2">
                   <button
                     onClick={handleAccept}
-                    className="flex-1 bg-black text-white py-2.5 rounded-xl font-bold text-xs"
+                    disabled={actionLoading}
+                    className="flex-1 bg-black text-white py-2.5 rounded-xl font-bold text-xs hover:bg-neutral-800 transition disabled:opacity-50 flex items-center justify-center gap-2"
                   >
+                    {actionLoading && <ArrowPathIcon className="w-4 h-4 animate-spin" />}
                     Chấp nhận
                   </button>
-                  <button className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl font-bold text-xs">
+                  <button
+                    onClick={handleDecline}
+                    disabled={actionLoading}
+                    className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-200 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {actionLoading && <ArrowPathIcon className="w-4 h-4 animate-spin" />}
                     Từ chối
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={handleAddFriend}
-                  className="w-full bg-black text-white py-2.5 rounded-xl font-bold text-xs flex justify-center items-center gap-2"
-                >
-                  <UserPlusIcon className="w-4 h-4" /> Kết bạn ngay
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAddFriend}
+                    disabled={actionLoading}
+                    className="flex-1 bg-black text-white py-2.5 rounded-xl font-bold text-xs flex justify-center items-center gap-2 hover:bg-neutral-800 transition"
+                  >
+                    {actionLoading ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <UserPlusIcon className="w-4 h-4" />} 
+                    Kết bạn
+                  </button>
+                </div>
               )}
             </div>
 
@@ -335,12 +415,14 @@ export default function FriendProfileModal({
               <InfoRow
                 label="Giới tính"
                 value={
-                  ({
-                    MALE: "Nam",
-                    FEMALE: "Nữ",
-                    OTHER: "Khác",
-                    PREFER_NOT_TO_SAY: "Khác",
-                  } as Record<string, string>)[userData?.gender] || "Bảo mật"
+                  (
+                    {
+                      MALE: "Nam",
+                      FEMALE: "Nữ",
+                      OTHER: "Khác",
+                      PREFER_NOT_TO_SAY: "Khác",
+                    } as Record<string, string>
+                  )[userData?.gender] || "Bảo mật"
                 }
               />
               <InfoRow label="Ngày sinh" value="••/••/••••" />
@@ -361,12 +443,11 @@ export default function FriendProfileModal({
               <ActionItem icon={ShareIcon} label="Chia sẻ danh thiếp" />
               <ActionItem icon={NoSymbolIcon} label="Chặn người này" />
               <ActionItem icon={ExclamationTriangleIcon} label="Báo xấu" />
-
-              {relationStatus === "ACCEPTED" && (
+              {currentRelation.status === "ACCEPTED" && (
                 <ActionItem
                   icon={TrashIcon}
                   label="Xóa khỏi danh sách bạn bè"
-                  color="text-red-500"
+                  danger
                   onClick={handleRemoveFriend}
                   disabled={actionLoading}
                 />
