@@ -13,10 +13,11 @@ import { useAuthStore } from "@/store/useAuthStore";
 
 interface NoteModalProps {
   conversationId: string;
+  canCreate?: boolean;
   onClose: () => void;
 }
 
-export default function NoteModal({ conversationId, onClose }: NoteModalProps) {
+export default function NoteModal({ conversationId, canCreate = true, onClose }: NoteModalProps) {
   const [notes, setNotes] = useState<NoteDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -196,13 +197,15 @@ export default function NoteModal({ conversationId, onClose }: NoteModalProps) {
             </div>
           ) : (
             <>
-              <button 
-                onClick={() => setShowCreate(true)}
-                className="w-full mb-6 py-4 flex items-center justify-center gap-3 bg-blue-50 text-blue-600 rounded-2xl border-2 border-dashed border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition group"
-              >
-                <PlusIcon className="w-5 h-5 group-hover:scale-110 transition" />
-                <span className="text-[14px] font-black uppercase tracking-tight">Thêm ghi chú mới</span>
-              </button>
+              {canCreate && (
+                <button 
+                  onClick={() => setShowCreate(true)}
+                  className="w-full mb-6 py-4 flex items-center justify-center gap-3 bg-blue-50 text-blue-600 rounded-2xl border-2 border-dashed border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition group"
+                >
+                  <PlusIcon className="w-5 h-5 group-hover:scale-110 transition" />
+                  <span className="text-[14px] font-black uppercase tracking-tight">Thêm ghi chú mới</span>
+                </button>
+              )}
 
               <div className="space-y-4">
                 {loading ? (
