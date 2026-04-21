@@ -169,25 +169,30 @@ export const createGroup = async (
     }
 
     // Lấy danh sách bạn bè của người tạo nhóm
-    console.log(`[CreateGroup] Check danh sách userIds truyền vào:`, userIds);
-    // Bổ sung truyền header Authorization JWT qua Request Fetch nội bộ
+    // Nếu tạo nhóm từ bình chọn (fromPoll), bỏ qua kiểm tra bạn bè vì voters đều là thành viên cùng nhóm chat
+    const fromPoll = req.body.fromPoll === true || req.body.fromPoll === "true";
     const authHeader = req.headers.authorization;
-    const friendIds = await getFriendIds(creatorId, authHeader);
+    console.log(`[CreateGroup] Check danh sách userIds truyền vào:`, userIds, fromPoll ? "(fromPoll - skip friend check)" : "");
+    
+    if (!fromPoll) {
+      // Bổ sung truyền header Authorization JWT qua Request Fetch nội bộ
+      const friendIds = await getFriendIds(creatorId, authHeader);
 
-    // So sánh dạng string thuần tuý do Node & Java có thể chênh lệch Object ID
-    const normalizedFriendIds = friendIds.map((f) => f.toString());
-    const nonFriends = userIds.filter(
-      (id) => !normalizedFriendIds.includes(id.toString()),
-    );
-
-    if (nonFriends.length > 0) {
-      console.log(
-        `[CreateGroup] Từ chối! Phát hiện users chưa kết bạn: ${nonFriends.join(", ")}`,
+      // So sánh dạng string thuần tuý do Node & Java có thể chênh lệch Object ID
+      const normalizedFriendIds = friendIds.map((f) => f.toString());
+      const nonFriends = userIds.filter(
+        (id) => !normalizedFriendIds.includes(id.toString()),
       );
-      res.status(403).json({
-        error: "Chỉ được phép mời người đã kết bạn vào nhóm",
-      });
-      return;
+
+      if (nonFriends.length > 0) {
+        console.log(
+          `[CreateGroup] Từ chối! Phát hiện users chưa kết bạn: ${nonFriends.join(", ")}`,
+        );
+        res.status(403).json({
+          error: "Chỉ được phép mời người đã kết bạn vào nhóm",
+        });
+        return;
+      }
     }
     // Handle Image Upload (Nếu có)
     if (req.file) {

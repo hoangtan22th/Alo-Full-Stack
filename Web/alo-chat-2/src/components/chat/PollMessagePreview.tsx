@@ -5,6 +5,7 @@ import { CheckIcon } from "@heroicons/react/24/solid";
 import { pollService, PollDTO, PollResultDTO } from "@/services/pollService";
 import { useAuthStore } from "@/store/useAuthStore";
 import { socketService } from "@/services/socketService";
+import api from "@/services/api";
 
 interface PollMessagePreviewProps {
   pollId: string;
@@ -17,6 +18,7 @@ export default function PollMessagePreview({ pollId, isSender, onOpenDetails }: 
   const [results, setResults] = useState<PollResultDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [creatorName, setCreatorName] = useState<string>("");
 
   const { user } = useAuthStore();
   const currentUserId = user?.id || user?._id || user?.userId;
@@ -29,7 +31,15 @@ export default function PollMessagePreview({ pollId, isSender, onOpenDetails }: 
         pollService.getPollDetails(pollId),
         pollService.getPollResults(pollId)
       ]);
-      if (pollData) setPoll(pollData);
+      if (pollData) {
+        setPoll(pollData);
+        // Fetch creator name
+        try {
+          const userRes: any = await api.get(`/users/${pollData.creatorId}`);
+          const profile = userRes?.data || userRes;
+          setCreatorName(profile?.fullName || profile?.username || "Người dùng");
+        } catch { setCreatorName("Người dùng"); }
+      }
       if (resultsData) setResults(resultsData);
 
       if (resultsData && currentUserId) {
@@ -132,7 +142,10 @@ export default function PollMessagePreview({ pollId, isSender, onOpenDetails }: 
           <ChartBarIcon className="w-6 h-6" />
         </div>
         <div className="flex-1">
-          <h4 className="text-[16px] sm:text-[17px] font-bold leading-snug mb-1.5 text-gray-900">{poll.question}</h4>
+          <h4 className="text-[16px] sm:text-[17px] font-bold leading-snug mb-1 text-gray-900">{poll.question}</h4>
+          {creatorName && (
+            <span className="text-[11px] font-medium text-gray-400 mb-1 block">Tạo bởi: {creatorName}</span>
+          )}
           {isPollEnded && (
             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-600">Đã kết thúc</span>
           )}
