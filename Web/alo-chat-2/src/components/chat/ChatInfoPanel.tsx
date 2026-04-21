@@ -524,6 +524,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
       {showPollModal && (
         <PollModal
           conversationId={conversationId}
+          canCreate={canCreatePoll}
           onClose={() => setShowPollModal(false)}
         />
       )}
@@ -531,6 +532,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
       {showNoteModal && (
         <NoteModal
           conversationId={conversationId}
+          canCreate={canCreateNote}
           onClose={() => setShowNoteModal(false)}
         />
       )}
@@ -538,6 +540,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
       {showReminderModal && (
         <ReminderModal
           conversationId={conversationId}
+          canCreate={canCreateReminder}
           onClose={() => setShowReminderModal(false)}
         />
       )}
