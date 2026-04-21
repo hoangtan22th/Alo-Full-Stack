@@ -227,6 +227,10 @@ class SocketService {
     return this.subscribe("message-updated", callback);
   }
 
+  onPollUpdated(callback: (data: any) => void) {
+    return this.subscribe("POLL_UPDATED", callback);
+  }
+
   // --- Typing ---
   onTyping(callback: (data: any) => void) {
     return this.subscribe("TYPING", callback);

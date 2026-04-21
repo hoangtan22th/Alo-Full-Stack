@@ -79,6 +79,16 @@ export const groupService = {
     }
   },
 
+  getGroupInfoForLink: async (groupId: string) => {
+    try {
+      const data = await api.get<any, any>(`/groups/${groupId}/link-info`);
+      return data;
+    } catch (error) {
+      console.error("Lỗi lấy thông tin nhóm cho link:", error);
+      throw error;
+    }
+  },
+
   addMember: async (groupId: string, newUserId: string) => {
     try {
       const data = await api.post<any, any>(`/groups/${groupId}/members`, {
@@ -91,10 +101,19 @@ export const groupService = {
     }
   },
 
-  removeMember: async (groupId: string, userId: string) => {
+  removeMember: async (
+    groupId: string,
+    userId: string,
+    options?: {
+      isSilent?: boolean;
+      isBanned?: boolean;
+      preventReinvite?: boolean;
+    },
+  ) => {
     try {
       const data = await api.delete<any, any>(
         `/groups/${groupId}/members/${userId}`,
+        { data: options }, // axios delete with body needs { data: ... }
       );
       return data;
     } catch (error) {
@@ -139,9 +158,14 @@ export const groupService = {
     }
   },
 
-  requestJoinGroup: async (groupId: string) => {
+  requestJoinGroup: async (groupId: string, answer?: string) => {
     try {
-      const data = await api.post<any, any>(`/groups/${groupId}/join-requests`);
+      const data = await api.post<any, any>(
+        `/groups/${groupId}/join-requests`,
+        {
+          answer,
+        },
+      );
       return data;
     } catch (error) {
       console.error("Lỗi yêu cầu tham gia nhóm:", error);
@@ -277,7 +301,7 @@ export const groupService = {
     try {
       return await api.post<any, any>(
         `/groups/conversations/${conversationId}/label`,
-        { labelId }
+        { labelId },
       );
     } catch (error) {
       console.error("Lỗi gán nhãn cho hội thoại:", error);
@@ -298,7 +322,9 @@ export const groupService = {
   // --- Ghim cuộc hội thoại ---
   togglePinConversation: async (conversationId: string) => {
     try {
-      return await api.post<any, any>(`/groups/conversations/${conversationId}/pin`);
+      return await api.post<any, any>(
+        `/groups/conversations/${conversationId}/pin`,
+      );
     } catch (error) {
       console.error("Lỗi ghim/bỏ ghim hội thoại:", error);
       throw error;
@@ -320,6 +346,77 @@ export const groupService = {
       return data;
     } catch (error) {
       console.error("Lỗi xoá lịch sử trò chuyện:", error);
+      throw error;
+    }
+  },
+
+  updateConversationFolder: async (
+    groupId: string,
+    folder: "priority" | "other" | "stranger",
+  ) => {
+    try {
+      const data = await api.put<any, any>(`/groups/${groupId}/folder`, {
+        folder,
+      });
+      return data;
+    } catch (error) {
+      console.error("Lỗi cập nhật danh mục:", error);
+      throw error;
+    }
+  },
+
+  inviteToGroup: async (groupId: string, targetUserId: string) => {
+    try {
+      return await api.post<any, any>(`/groups/${groupId}/invitations`, {
+        targetUserId,
+      });
+    } catch (error) {
+      console.error("Lỗi mời vào nhóm:", error);
+      throw error;
+    }
+  },
+
+  getMyInvitations: async () => {
+    try {
+      return await api.get<any, any>(`/groups/invitations/me`);
+    } catch (error) {
+      console.error("Lỗi lấy danh sách lời mời:", error);
+      throw error;
+    }
+  },
+
+  acceptInvitation: async (groupId: string) => {
+    try {
+      return await api.post<any, any>(`/groups/${groupId}/invitations/accept`);
+    } catch (error) {
+      console.error("Lỗi chấp nhận lời mời:", error);
+      throw error;
+    }
+  },
+
+  declineInvitation: async (groupId: string) => {
+    try {
+      return await api.post<any, any>(`/groups/${groupId}/invitations/decline`);
+    } catch (error) {
+      console.error("Lỗi từ chối lời mời:", error);
+      throw error;
+    }
+  },
+
+  getMySentInvitations: async () => {
+    try {
+      return await api.get<any, any>(`/groups/invitations/sent`);
+    } catch (error) {
+      console.error("Lỗi lấy danh sách lời mời đã gửi:", error);
+      throw error;
+    }
+  },
+
+  getMySentJoinRequests: async () => {
+    try {
+      return await api.get<any, any>(`/groups/join-requests/me`);
+    } catch (error) {
+      console.error("Lỗi lấy danh sách yêu cầu tham gia:", error);
       throw error;
     }
   },

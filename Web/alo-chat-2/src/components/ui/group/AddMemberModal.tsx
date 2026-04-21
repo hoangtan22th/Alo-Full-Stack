@@ -8,6 +8,7 @@ import {
 } from "@heroicons/react/24/outline";
 import axiosClient from "@/services/api";
 import { groupService } from "@/services/groupService";
+import { contactService } from "@/services/contactService";
 import { toast } from "sonner";
 
 interface AddMemberModalProps {
@@ -27,6 +28,11 @@ export default function AddMemberModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // Phone search state
+  const [phoneSearch, setPhoneSearch] = useState("");
+  const [searchedUser, setSearchedUser] = useState<any>(null);
+  const [searchingPhone, setSearchingPhone] = useState(false);
 
   // Load danh sách bạn bè, lọc bỏ những người đã có trong nhóm
   useEffect(() => {
@@ -62,10 +68,43 @@ export default function AddMemberModal({
     loadFriends();
   }, [currentMembers]);
 
-  const toggleSelect = (id: string) => {
+  const toggleSelect = (id: string, userObj?: any) => {
     setSelectedUserIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
+    // If we're selecting the searched user, add them to the friends list temporarily so we can display them in selected preview
+    if (userObj && !friends.find(f => f.displayId === id)) {
+      setFriends(prev => [...prev, {
+        displayId: userObj.userId,
+        displayName: userObj.fullName,
+        displayAvatar: userObj.avatarUrl,
+        isStranger: userObj.relationStatus === "NOT_FRIEND" || userObj.relationStatus === "STRANGER"
+      }]);
+    }
+  };
+
+  const handlePhoneSearch = async () => {
+    if (!phoneSearch.trim()) return;
+    setSearchingPhone(true);
+    setSearchedUser(null);
+    try {
+      const user = await contactService.searchUserByPhone(phoneSearch);
+      if (user) {
+        // Check if already in group
+        const isMember = currentMembers.some(m => String(m.userId) === String(user.userId));
+        if (isMember) {
+          toast.info("Người dùng này đã là thành viên của nhóm");
+        } else {
+          setSearchedUser(user);
+        }
+      } else {
+        toast.error("Không tìm thấy người dùng với số điện thoại này");
+      }
+    } catch (error) {
+      toast.error("Lỗi khi tìm kiếm");
+    } finally {
+      setSearchingPhone(false);
+    }
   };
 
   const handleAdd = async () => {
@@ -73,12 +112,26 @@ export default function AddMemberModal({
 
     try {
       setLoading(true);
-      // Backend hiện tại chỉ hỗ trợ thêm từng người một, thực hiện vòng lặp
-      await Promise.all(
-        selectedUserIds.map(userId => groupService.addMember(groupId, userId))
+      
+      const results = await Promise.all(
+        selectedUserIds.map(async userId => {
+          const user = friends.find(f => f.displayId === userId);
+          if (user?.isStranger) {
+            return groupService.inviteToGroup(groupId, userId);
+          } else {
+            return groupService.addMember(groupId, userId);
+          }
+        })
       );
       
-      toast.success(`Đã thêm ${selectedUserIds.length} thành viên vào nhóm!`);
+      const inviteCount = friends.filter(f => selectedUserIds.includes(f.displayId) && f.isStranger).length;
+      const addCount = selectedUserIds.length - inviteCount;
+
+      let msg = "";
+      if (addCount > 0) msg += `Đã thêm ${addCount} thành viên. `;
+      if (inviteCount > 0) msg += `Đã gửi lời mời tới ${inviteCount} người.`;
+      
+      toast.success(msg || "Thao tác thành công!");
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -110,7 +163,7 @@ export default function AddMemberModal({
         </div>
 
         {/* Search */}
-        <div className="px-6 py-4 border-b border-gray-50">
+        <div className="px-6 py-4 border-b border-gray-50 flex flex-col gap-3">
           <div className="relative">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input 
@@ -121,9 +174,62 @@ export default function AddMemberModal({
               className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-black/5 transition"
             />
           </div>
+
+          <div className="flex gap-2">
+            <input 
+              type="text"
+              placeholder="Tìm theo SĐT để mời..."
+              value={phoneSearch}
+              onChange={(e) => setPhoneSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handlePhoneSearch()}
+              className="flex-1 bg-gray-50 border-none rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-black/10 transition"
+            />
+            <button 
+              onClick={handlePhoneSearch}
+              disabled={searchingPhone}
+              className="px-4 py-2 bg-black text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition disabled:bg-gray-200"
+            >
+              {searchingPhone ? "..." : "Tìm"}
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+          {/* Searched User Result */}
+          {searchedUser && (
+            <div className="mb-6 p-4 bg-gray-50 rounded-2xl border border-gray-200 animate-in slide-in-from-top-2">
+              <p className="text-[10px] font-black text-black uppercase tracking-widest mb-3">Kết quả tìm kiếm</p>
+              <div
+                onClick={() => toggleSelect(searchedUser.userId, searchedUser)}
+                className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition ${
+                  selectedUserIds.includes(searchedUser.userId) 
+                    ? "bg-black text-white shadow-lg" 
+                    : "bg-white hover:bg-gray-100 text-gray-700 shadow-sm"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <img
+                      src={searchedUser.avatarUrl || "/avt-mac-dinh.jpg"}
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                    {selectedUserIds.includes(searchedUser.userId) && (
+                      <div className="absolute -bottom-1 -right-1 bg-white rounded-full">
+                        <CheckCircleIcon className="w-4 h-4 text-black" />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">{searchedUser.fullName}</p>
+                    <p className="text-[10px] opacity-70">{searchedUser.phone}</p>
+                  </div>
+                </div>
+                {searchedUser.relationStatus === "NOT_FRIEND" && (
+                  <span className="text-[10px] font-black uppercase bg-yellow-400 text-black px-2 py-0.5 rounded-md">Người lạ</span>
+                )}
+              </div>
+            </div>
+          )}
           {/* Selected Preview (Horizontal Scroll if many) */}
           {selectedUserIds.length > 0 && (
             <div className="mb-6 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
@@ -155,7 +261,7 @@ export default function AddMemberModal({
             {filteredFriendsList.length > 0 ? (
               filteredFriendsList.map((f) => (
                 <div
-                  key={f.id}
+                  key={f.displayId}
                   onClick={() => toggleSelect(f.displayId)}
                   className={`flex items-center justify-between p-3 rounded-2xl cursor-pointer transition ${
                     selectedUserIds.includes(f.displayId) 
