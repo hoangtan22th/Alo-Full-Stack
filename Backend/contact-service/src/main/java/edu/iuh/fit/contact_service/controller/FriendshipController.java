@@ -153,4 +153,11 @@ public class FriendshipController {
         contactService.removeFriend(userId, friendId);
         return ResponseEntity.ok(ApiResponse.success("Đã xóa bạn bè thành công"));
     }
+
+    @GetMapping("/relation-status")
+    public ResponseEntity<ApiResponse<edu.iuh.fit.contact_service.dto.response.RelationStatusResponseDTO>> getRelationStatus(
+            @RequestParam String targetUserId,
+            @RequestHeader("X-User-Id") String currentUserId) {
+        return ResponseEntity.ok(ApiResponse.success(contactService.getRelationStatus(currentUserId, targetUserId)));
+    }
 }

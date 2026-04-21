@@ -120,6 +120,8 @@ export default function ChatPage() {
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
   const [showPinnedModal, setShowPinnedModal] = useState(false);
   const [isStranger, setIsStranger] = useState(false);
+  const [relationStatus, setRelationStatus] = useState<string>("NOT_FRIEND");
+  const [otherUserId, setOtherUserId] = useState<string | null>(null);
   const [shouldShowSummary, setShouldShowSummary] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [summaryDismissed, setSummaryDismissed] = useState<Record<string, boolean>>({});
@@ -528,20 +530,38 @@ export default function ChatPage() {
       // Kiểm tra kỹ xem có phải là chat 1-1 hay không
       const isDirect = !g.isGroup || g.type === "DIRECT" || (g.members?.length === 2 && !g.isGroup);
 
+      console.log("[DEBUG] Conversation Info:", { 
+        id: conversationId, 
+        isGroup: g.isGroup, 
+        type: g.type, 
+        memberCount: g.members?.length,
+        isDirect 
+      });
+
       if (isDirect && currentUserId && g.members) {
         // Tìm người kia (có thể là object hoặc chỉ là ID)
-        const otherMember = g.members.find((m: any) => (m.userId || m) !== currentUserId);
-        const otherId = otherMember?.userId || otherMember;
+        const otherMember = g.members.find((m: any) => {
+          const mId = m.userId || m._id || m;
+          return mId && String(mId) !== String(currentUserId);
+        });
+        const otherId = otherMember?.userId || otherMember?._id || (typeof otherMember === "string" ? otherMember : null);
+
+        console.log("[DEBUG] Found Other Member:", { otherMember, otherId });
 
         if (otherId) {
+          setOtherUserId(otherId);
           try {
             console.log("[DEBUG] Fetching info for other user:", otherId);
-            const [userRes, friendsRes]: any = await Promise.all([
+            const [userRes, friendsRes, relRes]: any = await Promise.all([
               axiosClient.get(`/users/${otherId}`),
-              contactService.getFriendsList()
+              contactService.getFriendsList(),
+              axiosClient.get(`/contacts/relation-status`, { params: { targetUserId: otherId } })
             ]);
             
             const u = userRes?.data?.data || userRes?.data || userRes;
+            const statusData = relRes?.data || relRes;
+            const currentStatus = statusData?.relationStatus || "NOT_FRIEND";
+            setRelationStatus(currentStatus);
             if (u) {
               // Chỉ cập nhật tên nếu đây thực sự là chat 1-1
               displayName = u.fullName || u.displayName || u.username || u.name || "Người dùng";
@@ -554,8 +574,8 @@ export default function ChatPage() {
               String(f.recipientId) === String(otherId)
             );
             
-            console.log("[DEBUG] Relationship check:", { otherId, isFriend });
-            setIsStranger(!isFriend);
+            console.log("[DEBUG] Relationship check:", { otherId, isFriend, currentStatus });
+            setIsStranger(!isFriend && currentStatus !== "I_SENT_REQUEST" && currentStatus !== "YOU_SENT_REQUEST" && currentStatus !== "THEY_SENT_REQUEST");
           } catch (error) {
             console.error("Lỗi lấy thông tin người dùng hoặc danh sách bạn bè:", error);
             setIsStranger(false);
@@ -564,6 +584,7 @@ export default function ChatPage() {
       } else {
         // Nếu là nhóm, reset trạng thái người lạ
         setIsStranger(false);
+        setOtherUserId(null);
       }
 
       setConversationInfo({ ...g, displayName, displayAvatar });
@@ -1620,17 +1641,16 @@ export default function ChatPage() {
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={() => {
-                      const otherMember = conversationInfo?.members?.find((m: any) => (m.userId || m) !== myId);
-                      const otherId = otherMember?.userId || otherMember;
-                      if (otherId) {
-                        axiosClient.post("/contacts/request", { recipientId: otherId })
-                          .then(() => toast.success("Đã gửi lời mời kết bạn!"))
-                          .catch(() => toast.error("Lỗi khi gửi lời mời"));
-                      }
+                      if (relationStatus === "NOT_FRIEND") setShowProfileModal(true);
                     }}
-                    className="px-3 py-1.5 bg-red-600 text-white text-[11px] font-black rounded-lg hover:bg-red-700 transition active:scale-95 shadow-sm"
+                    disabled={relationStatus === "I_SENT_REQUEST" || relationStatus === "YOU_SENT_REQUEST"}
+                    className={`px-3 py-1.5 text-white text-[11px] font-black rounded-lg transition active:scale-95 shadow-sm ${
+                      (relationStatus === "I_SENT_REQUEST" || relationStatus === "YOU_SENT_REQUEST") 
+                      ? "bg-gray-400 cursor-not-allowed" 
+                      : "bg-red-600 hover:bg-red-700"
+                    }`}
                   >
-                    Kết bạn
+                    { (relationStatus === "I_SENT_REQUEST" || relationStatus === "YOU_SENT_REQUEST") ? "Đã gửi yêu cầu" : "Kết bạn" }
                   </button>
                   <button className="px-3 py-1.5 bg-white text-gray-700 text-[11px] font-black rounded-lg border border-gray-100 hover:bg-gray-50 transition active:scale-95 shadow-sm">
                     Chặn
@@ -3319,11 +3339,8 @@ export default function ChatPage() {
         <FriendProfileModal
           isOpen={showProfileModal}
           onClose={() => setShowProfileModal(false)}
-          userId={(() => {
-            const other = conversationInfo?.members?.find((m: any) => (m.userId || m) !== myId);
-            return other?.userId || other;
-          })()}
-          relationStatus={isStranger ? "NOT_FRIEND" : "ACCEPTED"}
+          userId={otherUserId}
+          relationStatus={relationStatus}
           onActionSuccess={() => fetchConversationInfo()}
         />
       )}

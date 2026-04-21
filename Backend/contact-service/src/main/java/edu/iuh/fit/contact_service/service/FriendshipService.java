@@ -24,4 +24,6 @@ public interface FriendshipService {
     void revokeRequest(String requesterId, String recipientId);
 
     void removeFriend(String userId, String friendId);
+    
+    edu.iuh.fit.contact_service.dto.response.RelationStatusResponseDTO getRelationStatus(String currentUserId, String targetUserId);
 }

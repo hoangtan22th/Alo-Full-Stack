@@ -271,37 +271,36 @@ public class FriendshipServiceImpl implements FriendshipService {
         }
 
         friendshipRepository.delete(friendship);
-    }}
-
-    Friendship friendship = friendshipRepository.findByUserIds(requesterId, recipientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy lời mời kết bạn nào!"));
-
-    // Kiểm tra bảo mật: Chỉ cho phép người GỬI (Requester) được thu hồi
-    if(!friendship.getRequesterId().equals(requesterId))
-    {
-        throw new ForbiddenException("Ông không phải người gửi lời mời này, không được thu hồi!");
-    }
-
-    // Nếu lời mời đã được chấp nhận (ACCEPTED) thì không cho thu hồi kiểu này (phải
-    // dùng chức năng Hủy kết bạn)
-    if(friendship.getStatus()!=FriendshipStatus.PENDING)
-    {
-        throw new AppException(400, "Lời mời đã được xử lý, không thể thu hồi");
-    }
-
-    friendshipRepository.delete(friendship);
     }
 
     @Override
-    @Transactional
-    public void removeFriend(String userId, String friendId) {
-        Friendship friendship = friendshipRepository.findByUserIds(userId, friendId)
-                .orElseThrow(() -> new ResourceNotFoundException("Mối quan hệ bạn bè không tồn tại!"));
-
-        if (friendship.getStatus() != FriendshipStatus.ACCEPTED) {
-            throw new AppException(400, "Hai người hiện chưa là bạn bè, không thể thực hiện thao tác xóa!");
+    public edu.iuh.fit.contact_service.dto.response.RelationStatusResponseDTO getRelationStatus(String currentUserId, String targetUserId) {
+        if (currentUserId.equals(targetUserId)) {
+            return edu.iuh.fit.contact_service.dto.response.RelationStatusResponseDTO.builder()
+                    .relationStatus("SELF")
+                    .build();
         }
 
-        friendshipRepository.delete(friendship);
+        Optional<Friendship> friendshipOpt = friendshipRepository.findByUserIds(currentUserId, targetUserId);
+
+        if (friendshipOpt.isPresent()) {
+            Friendship f = friendshipOpt.get();
+            String status;
+            if (f.getStatus() == FriendshipStatus.ACCEPTED) {
+                status = "ACCEPTED";
+            } else if (f.getRequesterId().equals(currentUserId)) {
+                status = "YOU_SENT_REQUEST";
+            } else {
+                status = "THEY_SENT_REQUEST";
+            }
+            return edu.iuh.fit.contact_service.dto.response.RelationStatusResponseDTO.builder()
+                    .relationStatus(status)
+                    .friendshipId(f.getId())
+                    .build();
+        }
+
+        return edu.iuh.fit.contact_service.dto.response.RelationStatusResponseDTO.builder()
+                .relationStatus("NOT_FRIEND")
+                .build();
     }
 }

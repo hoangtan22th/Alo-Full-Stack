@@ -30,6 +30,8 @@ export default function FriendProfileModal({
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
+  const [greetingMessage, setGreetingMessage] = useState("Xin chào, mình kết bạn nhé!");
   const [currentRelation, setCurrentRelation] = useState<any>({
     status: relationStatus,
     friendshipId: friendshipId,
@@ -44,6 +46,8 @@ export default function FriendProfileModal({
       document.body.style.overflow = "hidden";
       return () => {
         document.body.style.overflow = "unset";
+        setIsAdding(false);
+        setGreetingMessage("Xin chào, mình kết bạn nhé!");
       };
     }
   }, [isOpen, userId]);
@@ -92,9 +96,11 @@ export default function FriendProfileModal({
   const handleAddFriend = async () => {
     setActionLoading(true);
     try {
-      await axiosClient.post("/contacts/request", { recipientId: userId });
+      await axiosClient.post("/contacts/request", {
+        recipientId: userId,
+        greetingMessage: greetingMessage,
+      });
 
-      // [REALTIME] Emit socket event trực tiếp
       const me: any = await axiosClient.get("/auth/me");
       const myData = me?.data || me;
       socketService.emitFriendRequestSent({
@@ -107,6 +113,7 @@ export default function FriendProfileModal({
       setCurrentRelation((prev: any) => ({ ...prev, status: "I_SENT_REQUEST" }));
 
       toast.success("Đã gửi lời mời kết bạn!");
+      setIsAdding(false);
       await fetchRelationStatus(); // Cập nhật lại trạng thái tại chỗ
       onActionSuccess?.("I_SENT_REQUEST");
     } catch (err) {
@@ -127,6 +134,7 @@ export default function FriendProfileModal({
       toast.success("Đã thu hồi lời mời");
       await fetchRelationStatus();
       onActionSuccess?.("NOT_FRIEND");
+      onClose();
     } catch (err) {
       toast.error("Không thể thu hồi");
     } finally {
@@ -392,15 +400,45 @@ export default function FriendProfileModal({
                   </button>
                 </div>
               ) : (
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleAddFriend}
-                    disabled={actionLoading}
-                    className="flex-1 bg-black text-white py-2.5 rounded-xl font-bold text-xs flex justify-center items-center gap-2 hover:bg-neutral-800 transition"
-                  >
-                    {actionLoading ? <ArrowPathIcon className="w-4 h-4 animate-spin" /> : <UserPlusIcon className="w-4 h-4" />} 
-                    Kết bạn
-                  </button>
+                <div className="space-y-3">
+                  {isAdding && (
+                    <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100 animate-in fade-in slide-in-from-top-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block px-1">
+                        Lời nhắn kết bạn
+                      </label>
+                      <textarea
+                        value={greetingMessage}
+                        onChange={(e) => setGreetingMessage(e.target.value)}
+                        className="w-full bg-white border border-gray-100 rounded-xl p-3 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-black/5 resize-none h-20"
+                        placeholder="Nhập lời nhắn..."
+                      />
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    {isAdding && (
+                      <button
+                        onClick={() => setIsAdding(false)}
+                        className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-200 transition"
+                      >
+                        Hủy
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (!isAdding) setIsAdding(true);
+                        else handleAddFriend();
+                      }}
+                      disabled={actionLoading}
+                      className="flex-1 bg-black text-white py-2.5 rounded-xl font-bold text-xs flex justify-center items-center gap-2 hover:bg-neutral-800 transition"
+                    >
+                      {actionLoading ? (
+                        <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <UserPlusIcon className="w-4 h-4" />
+                      )}
+                      {isAdding ? "Gửi lời mời" : "Kết bạn"}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
