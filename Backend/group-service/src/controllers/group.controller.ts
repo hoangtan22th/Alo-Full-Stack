@@ -433,10 +433,7 @@ export const removeMember = async (
       .catch(console.error);
 
     // Bắn tin nhắn hệ thống
-    const targetName = await getUserFullName(
-      userId,
-      req.headers.authorization,
-    );
+    const targetName = await getUserFullName(userId, req.headers.authorization);
     const messageContent =
       reason === "LEAVE"
         ? `${targetName} đã rời khỏi nhóm`
@@ -676,7 +673,7 @@ export const getGroupById = async (
       res.status(400).json({ error: `Mã nhóm không hợp lệ: ${groupId}` });
       return;
     }
-    
+
     // Try both methods for robustness
     let group = await Conversation.findById(groupId);
     if (!group) {
@@ -764,6 +761,13 @@ export const requestJoinGroup = async (
           ? group.createdAt || new Date()
           : new Date(),
       });
+
+      // Xoá khỏi danh sách đã rời/bị kick nếu quay lại thành công
+      if (group.removedMembers) {
+        group.removedMembers = group.removedMembers.filter(
+          (m) => m.userId.toString() !== requesterId,
+        );
+      }
 
       // Xoá join requests nếu lỡ có trễ (ví dụ họ đã từng gửi trước khi nhóm tắt phê duyệt)
       if (group.joinRequests) {
@@ -920,6 +924,13 @@ export const approveJoinRequest = async (
           ? group.createdAt || new Date()
           : new Date(),
       });
+    }
+
+    // Xoá khỏi danh sách đã rời/bị kick nếu quay lại thành công
+    if (group.removedMembers) {
+      group.removedMembers = group.removedMembers.filter(
+        (m) => m.userId.toString() !== String(userId),
+      );
     }
 
     await group.save();

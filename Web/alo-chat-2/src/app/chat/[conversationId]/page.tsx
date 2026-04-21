@@ -148,17 +148,22 @@ export default function ChatPage() {
 
   // Group Link Info Cache
   const [groupLinkCache, setGroupLinkCache] = useState<Record<string, any>>({});
-  
+
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const myRole = useMemo(() => {
     if (!conversationInfo || !myId) return "MEMBER";
     const member = conversationInfo.members?.find(
-      (m: any) => String(m.userId) === String(myId) || String(m._id) === String(myId)
+      (m: any) =>
+        String(m.userId) === String(myId) || String(m._id) === String(myId),
     );
     return member?.role?.toUpperCase() || "MEMBER";
   }, [conversationInfo, myId]);
   // Modal tham gia nhóm có câu hỏi
-  const [joinGroupModal, setJoinGroupModal] = useState<{ groupId: string; question: string; needApproval: boolean } | null>(null);
+  const [joinGroupModal, setJoinGroupModal] = useState<{
+    groupId: string;
+    question: string;
+    needApproval: boolean;
+  } | null>(null);
   const [joinGroupAnswer, setJoinGroupAnswer] = useState("");
   const [joiningGroup, setJoiningGroup] = useState(false);
 
@@ -1971,16 +1976,24 @@ export default function ChatPage() {
                           className="flex justify-center my-4 w-full px-10"
                         >
                           <div className="flex flex-col items-center gap-1.5 max-w-full">
-                            {gMsgs.filter(m => !(m.metadata?.isSilentLeave && myRole === "MEMBER")).map((msg) => (
-                              <div
-                                key={msg._id}
-                                className="bg-gray-100 px-4 py-1.5 rounded-full shadow-sm border border-gray-200/50 max-w-full"
-                              >
-                                <span className="text-[12px] text-gray-500 font-bold text-center block">
-                                  {msg.content}
-                                </span>
-                              </div>
-                            ))}
+                            {gMsgs
+                              .filter(
+                                (m) =>
+                                  !(
+                                    m.metadata?.isSilentLeave &&
+                                    myRole === "MEMBER"
+                                  ),
+                              )
+                              .map((msg) => (
+                                <div
+                                  key={msg._id}
+                                  className="bg-gray-100 px-4 py-1.5 rounded-full shadow-sm border border-gray-200/50 max-w-full"
+                                >
+                                  <span className="text-[12px] text-gray-500 font-bold text-center block">
+                                    {msg.content}
+                                  </span>
+                                </div>
+                              ))}
                           </div>
                         </div>
                       );
@@ -2074,9 +2087,12 @@ export default function ChatPage() {
                                     />
                                   ) : (
                                     (() => {
-                                      const isVisible = !(msg.metadata?.isSilentLeave && myRole === "MEMBER");
+                                      const isVisible = !(
+                                        msg.metadata?.isSilentLeave &&
+                                        myRole === "MEMBER"
+                                      );
                                       if (!isVisible) return null;
-                                      
+
                                       return (
                                         <div className="flex justify-center w-full my-4 px-10">
                                           <div className="bg-gray-100/50 backdrop-blur-sm text-gray-500 text-[11px] font-bold py-1.5 px-4 rounded-full border border-gray-200/50 shadow-sm text-center uppercase tracking-tight">
@@ -2617,32 +2633,53 @@ export default function ChatPage() {
                                                 <button
                                                   onClick={async () => {
                                                     const info = groupInfo;
-                                                    if (info?.isApprovalRequired) {
+                                                    if (
+                                                      info?.isApprovalRequired
+                                                    ) {
                                                       // Cần phê duyệt: kiểm tra có câu hỏi không
                                                       setJoinGroupAnswer("");
                                                       setJoinGroupModal({
                                                         groupId: linkGroupId,
-                                                        question: info?.isQuestionEnabled ? (info?.membershipQuestion || "") : "",
+                                                        question:
+                                                          info?.isQuestionEnabled
+                                                            ? info?.membershipQuestion ||
+                                                              ""
+                                                            : "",
                                                         needApproval: true,
                                                       });
                                                     } else {
                                                       // Tham gia trực tiếp
                                                       try {
-                                                        const res = await groupService.requestJoinGroup(linkGroupId);
+                                                        const res =
+                                                          await groupService.requestJoinGroup(
+                                                            linkGroupId,
+                                                          );
                                                         if (res.joined) {
-                                                          toast.success("Đã tham gia nhóm thành công!");
-                                                          router.push(`/chat/${linkGroupId}`);
+                                                          toast.success(
+                                                            "Đã tham gia nhóm thành công!",
+                                                          );
+                                                          router.push(
+                                                            `/chat/${linkGroupId}`,
+                                                          );
                                                         } else {
-                                                          toast.success("Đã gửi yêu cầu tham gia");
+                                                          toast.success(
+                                                            "Đã gửi yêu cầu tham gia",
+                                                          );
                                                         }
                                                       } catch (err: any) {
-                                                        toast.error(err.response?.data?.error || "Lỗi khi tham gia");
+                                                        toast.error(
+                                                          err.response?.data
+                                                            ?.error ||
+                                                            "Lỗi khi tham gia",
+                                                        );
                                                       }
                                                     }
                                                   }}
                                                   className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-[11px] font-black hover:bg-blue-700 transition shadow-lg shadow-blue-100"
                                                 >
-                                                  {groupInfo?.isApprovalRequired ? "Gửi yêu cầu tham gia" : "THAM GIA NHÓM"}
+                                                  {groupInfo?.isApprovalRequired
+                                                    ? "Gửi yêu cầu tham gia"
+                                                    : "THAM GIA NHÓM"}
                                                 </button>
                                               </div>
                                               <div className="mt-2 text-[13px] font-medium leading-relaxed text-gray-400 break-all opacity-50">
@@ -3651,24 +3688,44 @@ export default function ChatPage() {
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md p-8 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center gap-4 mb-6">
               <div className="p-3 bg-blue-50 rounded-2xl">
-                <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                <svg
+                  className="w-6 h-6 text-blue-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"
+                  />
                 </svg>
               </div>
               <div>
-                <h2 className="text-xl font-black text-gray-900">Yêu cầu tham gia nhóm</h2>
-                <p className="text-[12px] text-gray-400 font-bold mt-0.5 uppercase tracking-widest">Cần phê duyệt từ nhóm trưởng</p>
+                <h2 className="text-xl font-black text-gray-900">
+                  Yêu cầu tham gia nhóm
+                </h2>
+                <p className="text-[12px] text-gray-400 font-bold mt-0.5 uppercase tracking-widest">
+                  Cần phê duyệt từ nhóm trưởng
+                </p>
               </div>
             </div>
 
             {joinGroupModal.question ? (
               <>
                 <div className="mb-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                  <p className="text-[11px] font-black text-blue-500 uppercase tracking-widest mb-2">Câu hỏi từ nhóm trưởng</p>
-                  <p className="text-sm font-bold text-gray-800 leading-relaxed">{joinGroupModal.question}</p>
+                  <p className="text-[11px] font-black text-blue-500 uppercase tracking-widest mb-2">
+                    Câu hỏi từ nhóm trưởng
+                  </p>
+                  <p className="text-sm font-bold text-gray-800 leading-relaxed">
+                    {joinGroupModal.question}
+                  </p>
                 </div>
                 <div className="mb-6">
-                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2">Câu trả lời của bạn *</label>
+                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2">
+                    Câu trả lời của bạn *
+                  </label>
                   <textarea
                     value={joinGroupAnswer}
                     onChange={(e) => setJoinGroupAnswer(e.target.value)}
@@ -3681,14 +3738,18 @@ export default function ChatPage() {
             ) : (
               <div className="mb-6 p-4 bg-gray-50 rounded-2xl">
                 <p className="text-sm text-gray-600 font-medium leading-relaxed">
-                  Yêu cầu tham gia của bạn sẽ được gửi đến nhóm trưởng để xét duyệt. Vui lòng chờ phê duyệt.
+                  Yêu cầu tham gia của bạn sẽ được gửi đến nhóm trưởng để xét
+                  duyệt. Vui lòng chờ phê duyệt.
                 </p>
               </div>
             )}
 
             <div className="flex gap-3">
               <button
-                onClick={() => { setJoinGroupModal(null); setJoinGroupAnswer(""); }}
+                onClick={() => {
+                  setJoinGroupModal(null);
+                  setJoinGroupAnswer("");
+                }}
                 className="flex-1 py-3 rounded-xl font-black text-gray-500 bg-gray-50 hover:bg-gray-100 transition-colors"
               >
                 Hủy
@@ -3703,7 +3764,7 @@ export default function ChatPage() {
                   try {
                     const res = await groupService.requestJoinGroup(
                       joinGroupModal.groupId,
-                      joinGroupAnswer.trim() || undefined
+                      joinGroupAnswer.trim() || undefined,
                     );
                     setJoinGroupModal(null);
                     setJoinGroupAnswer("");
@@ -3711,10 +3772,14 @@ export default function ChatPage() {
                       toast.success("Đã tham gia nhóm thành công!");
                       router.push(`/chat/${joinGroupModal.groupId}`);
                     } else {
-                      toast.success("Đã gửi yêu cầu tham gia! Vui lòng chờ nhóm trưởng phê duyệt.");
+                      toast.success(
+                        "Đã gửi yêu cầu tham gia! Vui lòng chờ nhóm trưởng phê duyệt.",
+                      );
                     }
                   } catch (err: any) {
-                    toast.error(err.response?.data?.error || "Gửi yêu cầu thất bại");
+                    toast.error(
+                      err.response?.data?.error || "Gửi yêu cầu thất bại",
+                    );
                   } finally {
                     setJoiningGroup(false);
                   }
