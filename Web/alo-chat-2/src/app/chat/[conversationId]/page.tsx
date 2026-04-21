@@ -184,8 +184,11 @@ export default function ChatPage() {
           const groupInfo = res.data || res;
           setGroupLinkCache((prev) => ({ ...prev, [groupId]: groupInfo }));
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Lỗi lấy thông tin nhóm từ link:", err);
+        if (err.response?.status === 404) {
+          setGroupLinkCache((prev) => ({ ...prev, [groupId]: { notFound: true } }));
+        }
       }
     },
     [groupLinkCache],
@@ -2622,8 +2625,10 @@ export default function ChatPage() {
                                                   />
                                                   <div className="flex-1 min-w-0">
                                                     <h4 className="text-sm font-black text-gray-900 truncate">
-                                                      {groupInfo?.name ||
-                                                        "Đang tải..."}
+                                                      {groupInfo?.notFound
+                                                        ? "Liên kết không tồn tại"
+                                                        : groupInfo?.name ||
+                                                          "Đang tải..."}
                                                     </h4>
                                                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
                                                       Nhóm trò chuyện
@@ -2675,11 +2680,18 @@ export default function ChatPage() {
                                                       }
                                                     }
                                                   }}
-                                                  className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-[11px] font-black hover:bg-blue-700 transition shadow-lg shadow-blue-100"
+                                                  className={`w-full py-2.5 bg-blue-600 text-white rounded-xl text-[11px] font-black hover:bg-blue-700 transition shadow-lg shadow-blue-100 ${
+                                                    groupInfo?.notFound
+                                                      ? "opacity-50 cursor-not-allowed grayscale"
+                                                      : ""
+                                                  }`}
+                                                  disabled={groupInfo?.notFound}
                                                 >
-                                                  {groupInfo?.isApprovalRequired
-                                                    ? "Gửi yêu cầu tham gia"
-                                                    : "THAM GIA NHÓM"}
+                                                  {groupInfo?.notFound
+                                                    ? "LIÊN KẾT HẾT HẠN"
+                                                    : groupInfo?.isApprovalRequired
+                                                      ? "Gửi yêu cầu tham gia"
+                                                      : "THAM GIA NHÓM"}
                                                 </button>
                                               </div>
                                               <div className="mt-2 text-[13px] font-medium leading-relaxed text-gray-400 break-all opacity-50">
