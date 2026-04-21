@@ -4,9 +4,11 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import axiosClient from "@/services/api";
 import { messageService, MessageDTO } from "@/services/messageService";
 import { groupService } from "@/services/groupService";
+import { contactService } from "@/services/contactService";
 import { socketService } from "@/services/socketService";
 import { toast } from "sonner";
 import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
+import FriendProfileModal from "@/components/ui/FriendProfileModal";
 import ChatSummaryButton from "@/components/ui/chatbot/ChatSummaryButton";
 import { CallSystemMessage } from "@/components/ui/call/CallSystemMessage";
 import { useCall } from "@/components/layout/CallProvider";
@@ -31,6 +33,7 @@ import {
   FolderIcon,
   NoSymbolIcon,
   ExclamationCircleIcon,
+  ExclamationTriangleIcon,
   ArrowPathIcon,
   ClipboardDocumentIcon,
   MapPinIcon,
@@ -85,6 +88,7 @@ const getMediaUrl = (url: string | undefined): string => {
 };
 
 const BOT_ID = "alo-bot";
+const GROUP_LINK_REGEX = /(?:https?:\/\/)?alo\.chat\/g\/([a-f\d]{24})/i;
 const EMPTY_ARRAY: any[] = [];
 const BOT_INFO = {
   id: BOT_ID,
@@ -119,6 +123,20 @@ export default function ChatPage() {
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
   const [showPinnedModal, setShowPinnedModal] = useState(false);
   const [activePollId, setActivePollId] = useState<string | null>(null);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaveOptions, setLeaveOptions] = useState({
+    isSilent: false,
+    preventReinvite: false,
+  });
+  const [isStranger, setIsStranger] = useState(false);
+  const [relationStatus, setRelationStatus] = useState<string>("NOT_FRIEND");
+  const [otherUserId, setOtherUserId] = useState<string | null>(null);
+  const [shouldShowSummary, setShouldShowSummary] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [summaryDismissed, setSummaryDismissed] = useState<
+    Record<string, boolean>
+  >({});
   const [showCallMemberSelector, setShowCallMemberSelector] = useState<{
     isVideo: boolean;
   } | null>(null);
@@ -130,12 +148,51 @@ export default function ChatPage() {
   const [mediaMessages, setMediaMessages] = useState<MessageDTO[]>([]);
   const [messageText, setMessageText] = useState("");
   const [conversationInfo, setConversationInfo] = useState<any>(null);
+
+  // Group Link Info Cache
+  const [groupLinkCache, setGroupLinkCache] = useState<Record<string, any>>({});
+
+  const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+  const myRole = useMemo(() => {
+    if (!conversationInfo || !myId) return "MEMBER";
+    const member = conversationInfo.members?.find(
+      (m: any) =>
+        String(m.userId) === String(myId) || String(m._id) === String(myId),
+    );
+    return member?.role?.toUpperCase() || "MEMBER";
+  }, [conversationInfo, myId]);
+  // Modal tham gia nhóm có câu hỏi
+  const [joinGroupModal, setJoinGroupModal] = useState<{
+    groupId: string;
+    question: string;
+    needApproval: boolean;
+  } | null>(null);
+  const [joinGroupAnswer, setJoinGroupAnswer] = useState("");
+  const [joiningGroup, setJoiningGroup] = useState(false);
+
   // Optimized selector with stable empty array to avoid infinite loop
   const typingForThisConvo = useChatStore(
     (state) => state.typingUsers[conversationId] || EMPTY_ARRAY,
   );
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isTypingRef = useRef(false);
+
+  const fetchGroupLinkInfo = useCallback(
+    async (groupId: string) => {
+      if (!groupId || groupLinkCache[groupId]) return;
+      try {
+        const res = await groupService.getGroupById(groupId);
+        if (res) {
+          // axios interceptor might have already unwrapped res.data
+          const groupInfo = res.data || res;
+          setGroupLinkCache((prev) => ({ ...prev, [groupId]: groupInfo }));
+        }
+      } catch (err) {
+        console.error("Lỗi lấy thông tin nhóm từ link:", err);
+      }
+    },
+    [groupLinkCache],
+  );
 
   useEffect(() => {
     const hasText = messageText.trim().length > 0;
@@ -150,7 +207,6 @@ export default function ChatPage() {
       isTypingRef.current = true;
       socketService.emitTyping({
         target: conversationId,
-        conversationId: conversationId,
         isGroup: !!conversationInfo?.isGroup,
       });
     } else if (
@@ -162,7 +218,6 @@ export default function ChatPage() {
       isTypingRef.current = false;
       socketService.emitStopTyping({
         target: conversationId,
-        conversationId: conversationId,
         isGroup: !!conversationInfo?.isGroup,
       });
     }
@@ -174,7 +229,6 @@ export default function ChatPage() {
           isTypingRef.current = false;
           socketService.emitStopTyping({
             target: conversationId,
-            conversationId: conversationId,
             isGroup: !!conversationInfo?.isGroup,
           });
         }
@@ -209,7 +263,6 @@ export default function ChatPage() {
   const [isMounted, setIsMounted] = useState(false);
   const fetchingUsersRef = useRef<Set<string>>(new Set());
 
-  const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const [activeAlbumIndex, setActiveAlbumIndex] = useState<{
     messageId: string;
     index: number;
@@ -524,25 +577,91 @@ export default function ChatPage() {
 
       const currentUserId =
         currentUser?.id || currentUser?._id || currentUser?.userId;
-      if (!g.isGroup && currentUserId && g.members) {
-        const other = g.members.find((m: any) => m.userId !== currentUserId);
-        if (other) {
+
+      // Kiểm tra kỹ xem có phải là chat 1-1 hay không
+      const isDirect =
+        !g.isGroup ||
+        g.type === "DIRECT" ||
+        (g.members?.length === 2 && !g.isGroup);
+
+      console.log("[DEBUG] Conversation Info:", {
+        id: conversationId,
+        isGroup: g.isGroup,
+        type: g.type,
+        memberCount: g.members?.length,
+        isDirect,
+      });
+
+      if (isDirect && currentUserId && g.members) {
+        // Tìm người kia (có thể là object hoặc chỉ là ID)
+        const otherMember = g.members.find((m: any) => {
+          const mId = m.userId || m._id || m;
+          return mId && String(mId) !== String(currentUserId);
+        });
+        const otherId =
+          otherMember?.userId ||
+          otherMember?._id ||
+          (typeof otherMember === "string" ? otherMember : null);
+
+        console.log("[DEBUG] Found Other Member:", { otherMember, otherId });
+
+        if (otherId) {
+          setOtherUserId(otherId);
           try {
-            const res: any = await axiosClient.get(`/users/${other.userId}`);
-            const u = res?.data?.data || res?.data || res;
+            console.log("[DEBUG] Fetching info for other user:", otherId);
+            const [userRes, friendsRes, relRes]: any = await Promise.all([
+              axiosClient.get(`/users/${otherId}`),
+              contactService.getFriendsList(),
+              axiosClient.get(`/contacts/relation-status`, {
+                params: { targetUserId: otherId },
+              }),
+            ]);
+
+            const u = userRes?.data?.data || userRes?.data || userRes;
+            const statusData = relRes?.data || relRes;
+            const currentStatus = statusData?.relationStatus || "NOT_FRIEND";
+            setRelationStatus(currentStatus);
             if (u) {
+              // Chỉ cập nhật tên nếu đây thực sự là chat 1-1
               displayName =
                 u.fullName ||
-                (u as any).displayName ||
-                (u as any).username ||
-                (u as any).name ||
+                u.displayName ||
+                u.username ||
+                u.name ||
                 "Người dùng";
               displayAvatar = u.avatar || displayAvatar;
             }
+
+            const friends = friendsRes || [];
+            const isFriend = friends.some(
+              (f: any) =>
+                String(f.requesterId) === String(otherId) ||
+                String(f.recipientId) === String(otherId),
+            );
+
+            console.log("[DEBUG] Relationship check:", {
+              otherId,
+              isFriend,
+              currentStatus,
+            });
+            setIsStranger(
+              !isFriend &&
+                currentStatus !== "I_SENT_REQUEST" &&
+                currentStatus !== "YOU_SENT_REQUEST" &&
+                currentStatus !== "THEY_SENT_REQUEST",
+            );
           } catch (error) {
-            console.error("Lỗi lấy thông tin other user trong 1-1 chat", error);
+            console.error(
+              "Lỗi lấy thông tin người dùng hoặc danh sách bạn bè:",
+              error,
+            );
+            setIsStranger(false);
           }
         }
+      } else {
+        // Nếu là nhóm, reset trạng thái người lạ
+        setIsStranger(false);
+        setOtherUserId(null);
       }
 
       setConversationInfo({ ...g, displayName, displayAvatar });
@@ -998,8 +1117,12 @@ export default function ChatPage() {
     if (!confirm("Bạn có chắc chắn muốn xóa lịch sử trò chuyện này?")) return;
     try {
       await groupService.clearConversation(conversationId);
+      // Nếu là người lạ, reset folder về 'stranger' để lần sau nhắn lại sẽ báo tin nhắn người lạ
+      if (isStranger) {
+        await groupService.updateConversationFolder(conversationId, "stranger");
+      }
       setMessages([]);
-      alert("Đã xóa lịch sử trò chuyện.");
+      toast.success("Đã xóa lịch sử trò chuyện.");
     } catch (err) {
       console.error("Lỗi xóa lịch sử:", err);
       alert("Không thể xóa lịch sử trò chuyện.");
@@ -1007,16 +1130,48 @@ export default function ChatPage() {
   };
 
   const handleLeaveGroup = async () => {
-    if (!confirm("Bạn có chắc chắn muốn rời khỏi nhóm này?")) return;
+    if (!conversationId || !conversationInfo) return;
+
+    const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+    const myMemberInfo = conversationInfo.members?.find(
+      (m: any) =>
+        String(m.userId) === String(myId) || String(m._id) === String(myId),
+    );
+    const isLeader = myMemberInfo?.role?.toLowerCase() === "leader";
+    const memberCount = conversationInfo.members?.length || 0;
+
+    // Trường hợp 1: Là trưởng nhóm và chỉ còn 1 mình -> Giải tán
+    if (isLeader && memberCount === 1) {
+      handleDisbandGroup();
+      return;
+    }
+
+    // Trường hợp 2: Là trưởng nhóm nhưng còn người khác -> Chặn
+    if (isLeader && memberCount > 1) {
+      alert(
+        "Bạn là trưởng nhóm. Hãy chuyển quyền trưởng nhóm hoặc giải tán nhóm trước khi rời.",
+      );
+      return;
+    }
+
+    setShowLeaveModal(true);
+  };
+
+  const confirmLeaveGroup = async () => {
+    const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
     try {
-      const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
       if (!myId) return;
-      await groupService.removeMember(conversationId, myId);
-      alert("Đã rời nhóm.");
+      await groupService.removeMember(conversationId, myId, {
+        isSilent: leaveOptions.isSilent,
+        preventReinvite: leaveOptions.preventReinvite,
+      });
+      toast.success("Đã rời nhóm thành công");
       router.push("/chat");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Lỗi rời nhóm:", err);
-      alert("Không thể rời nhóm.");
+      alert(err.response?.data?.message || "Không thể rời nhóm.");
+    } finally {
+      setShowLeaveModal(false);
     }
   };
 
@@ -1038,10 +1193,16 @@ export default function ChatPage() {
   };
 
   const handleRemoveMember = async (userId: string) => {
-    if (!confirm("Xác nhận mời thành viên này ra khỏi nhóm?")) return;
+    const isBanned = confirm(
+      "Xác nhận mời thành viên này ra khỏi nhóm? \n\nBạn có muốn chặn người này tham gia lại nhóm không?",
+    );
     try {
-      await groupService.removeMember(conversationId, userId);
-      toast.success("Đã mời thành viên ra khỏi nhóm");
+      await groupService.removeMember(conversationId, userId, { isBanned });
+      toast.success(
+        isBanned
+          ? "Đã mời ra và chặn thành viên"
+          : "Đã mời thành viên ra khỏi nhóm",
+      );
       handleRefreshData();
     } catch (err) {
       console.error("Lỗi xóa thành viên:", err);
@@ -1145,6 +1306,13 @@ export default function ChatPage() {
             }
           : undefined,
       });
+
+      // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
+      if (isStranger) {
+        groupService
+          .updateConversationFolder(conversationId, "priority")
+          .catch(console.error);
+      }
     } catch (err) {
       console.error("Lỗi gửi tin nhắn:", err);
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
@@ -1319,6 +1487,13 @@ export default function ChatPage() {
           setMessages((prev) => prev.filter((m) => m._id !== tempId));
         }
       }
+
+      // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
+      if (isStranger) {
+        groupService
+          .updateConversationFolder(conversationId, "priority")
+          .catch(console.error);
+      }
     } finally {
       setUploadingFile(false);
     }
@@ -1396,6 +1571,13 @@ export default function ChatPage() {
             }
           : undefined,
       });
+
+      // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
+      if (isStranger) {
+        groupService
+          .updateConversationFolder(conversationId, "priority")
+          .catch(console.error);
+      }
     } catch (err) {
       console.error("Lỗi gửi sticker:", err);
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
@@ -1450,6 +1632,20 @@ export default function ChatPage() {
      RENDER
   ───────────────────────────────────────── */
 
+  const adminIds = useMemo(() => {
+    if (!conversationInfo?.isGroup || !conversationInfo?.members)
+      return new Set<string>();
+    return new Set<string>(
+      conversationInfo.members
+        .filter(
+          (m: any) =>
+            m.role?.toUpperCase() === "LEADER" ||
+            m.role?.toUpperCase() === "DEPUTY",
+        )
+        .map((m: any) => String(m.userId || m._id)),
+    );
+  }, [conversationInfo]);
+
   const avatarMap = useMemo(
     () =>
       Object.fromEntries(
@@ -1468,7 +1664,12 @@ export default function ChatPage() {
           <div className="flex-1 flex flex-col min-w-0 h-full bg-white relative">
             {/* Chat Header */}
             <div className="h-19 px-6 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md z-10">
-              <div className="flex items-center gap-3">
+              <div
+                className={`flex items-center gap-3 ${!conversationInfo?.isGroup ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+                onClick={() => {
+                  if (!conversationInfo?.isGroup) setShowProfileModal(true);
+                }}
+              >
                 {/* Avatar */}
                 <div className="relative shrink-0">
                   {conversationInfo?.displayAvatar ? (
@@ -1506,11 +1707,18 @@ export default function ChatPage() {
 
                 {/* Tên & trạng thái */}
                 <div>
-                  <h2 className="text-[16px] font-black tracking-tight">
-                    {conversationInfo?.displayName ||
-                      conversationInfo?.name ||
-                      "Đang tải..."}
-                  </h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-[16px] font-black tracking-tight">
+                      {conversationInfo?.displayName ||
+                        conversationInfo?.name ||
+                        "Đang tải..."}
+                    </h2>
+                    {isStranger && (
+                      <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-[10px] font-black uppercase rounded-md tracking-wider">
+                        Người lạ
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[12px] font-bold text-gray-400 mt-0.5">
                     {conversationInfo?.isGroup
                       ? `${conversationInfo?.members?.length ?? ""} thành viên`
@@ -1544,6 +1752,49 @@ export default function ChatPage() {
                 </button>
               </div>
             </div>
+
+            {/* Stranger Warning Banner */}
+            {isStranger && (
+              <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-100 rounded-2xl flex items-center justify-between animate-in slide-in-from-top-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-red-500 shrink-0">
+                    <ExclamationTriangleIcon className="w-4 h-4" />
+                  </div>
+                  <p className="text-[13px] font-bold text-red-800">
+                    Hãy cẩn thận khi nhắn tin với người lạ.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (relationStatus === "NOT_FRIEND")
+                        setShowProfileModal(true);
+                    }}
+                    disabled={
+                      relationStatus === "I_SENT_REQUEST" ||
+                      relationStatus === "YOU_SENT_REQUEST"
+                    }
+                    className={`px-3 py-1.5 text-white text-[11px] font-black rounded-lg transition active:scale-95 shadow-sm ${
+                      relationStatus === "I_SENT_REQUEST" ||
+                      relationStatus === "YOU_SENT_REQUEST"
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-red-600 hover:bg-red-700"
+                    }`}
+                  >
+                    {relationStatus === "I_SENT_REQUEST" ||
+                    relationStatus === "YOU_SENT_REQUEST"
+                      ? "Đã gửi yêu cầu"
+                      : "Kết bạn"}
+                  </button>
+                  <button className="px-3 py-1.5 bg-white text-gray-700 text-[11px] font-black rounded-lg border border-gray-100 hover:bg-gray-50 transition active:scale-95 shadow-sm">
+                    Chặn
+                  </button>
+                  <button className="px-3 py-1.5 bg-white text-gray-700 text-[11px] font-black rounded-lg border border-gray-100 hover:bg-red-50 hover:text-red-600 transition active:scale-95 shadow-sm">
+                    Báo xấu
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Pinned Messages (nếu có) */}
             {pinnedMessages.length === 1 && (
@@ -1683,7 +1934,7 @@ export default function ChatPage() {
 
             {/* Floating Chat Summary Button */}
             {conversationId !== "alo-bot" && (
-              <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex justify-center w-full">
+              <div className="absolute top-20 left-1/2 -translate-x-1/2 z-10 pointer-events-none flex justify-center w-full">
                 <div className="pointer-events-auto">
                   <ChatSummaryButton
                     conversationId={conversationId}
@@ -1740,16 +1991,24 @@ export default function ChatPage() {
                           className="flex justify-center my-4 w-full px-10"
                         >
                           <div className="flex flex-col items-center gap-1.5 max-w-full">
-                            {gMsgs.map((msg) => (
-                              <div
-                                key={msg._id}
-                                className="bg-gray-100 px-4 py-1.5 rounded-full shadow-sm border border-gray-200/50 max-w-full"
-                              >
-                                <span className="text-[12px] text-gray-500 font-bold text-center block">
-                                  {msg.content}
-                                </span>
-                              </div>
-                            ))}
+                            {gMsgs
+                              .filter(
+                                (m) =>
+                                  !(
+                                    m.metadata?.isSilentLeave &&
+                                    myRole === "MEMBER"
+                                  ),
+                              )
+                              .map((msg) => (
+                                <div
+                                  key={msg._id}
+                                  className="bg-gray-100 px-4 py-1.5 rounded-full shadow-sm border border-gray-200/50 max-w-full"
+                                >
+                                  <span className="text-[12px] text-gray-500 font-bold text-center block">
+                                    {msg.content}
+                                  </span>
+                                </div>
+                              ))}
                           </div>
                         </div>
                       );
@@ -1857,18 +2116,35 @@ export default function ChatPage() {
                                       }
                                     />
                                   ) : (
-                                    <div className="flex justify-center w-full my-4 px-10">
-                                      <div className="bg-gray-100/50 backdrop-blur-sm text-gray-500 text-[11px] font-bold py-1.5 px-4 rounded-full border border-gray-200/50 shadow-sm text-center uppercase tracking-tight">
-                                        {msg.content}
-                                      </div>
-                                    </div>
+                                    (() => {
+                                      const isVisible = !(
+                                        msg.metadata?.isSilentLeave &&
+                                        myRole === "MEMBER"
+                                      );
+                                      if (!isVisible) return null;
+
+                                      return (
+                                        <div className="flex justify-center w-full my-4 px-10">
+                                          <div className="bg-gray-100/50 backdrop-blur-sm text-gray-500 text-[11px] font-bold py-1.5 px-4 rounded-full border border-gray-200/50 shadow-sm text-center uppercase tracking-tight">
+                                            {msg.content}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()
                                   )
                                 ) : (
                                   <div
                                     className={`relative max-w-full flex flex-col p-1.5 px-2 border shadow-sm ${
                                       isMine
-                                        ? "bg-blue-50/80 border-blue-100 shadow-blue-900/5 items-end"
-                                        : "bg-white border-gray-100 shadow-gray-900/5 items-start"
+                                        ? "bg-blue-50/80 shadow-blue-900/5 items-end"
+                                        : "bg-white shadow-gray-900/5 items-start"
+                                    } ${
+                                      conversationInfo?.isHighlightEnabled &&
+                                      adminIds.has(String(msg.senderId))
+                                        ? "border-amber-300 ring-2 ring-amber-200/50"
+                                        : isMine
+                                          ? "border-blue-100"
+                                          : "border-gray-100"
                                     } ${bubbleRadius}`}
                                   >
                                     {/* Reply Quote Box */}
@@ -2347,11 +2623,110 @@ export default function ChatPage() {
                                         </button>
                                       </div>
                                     ) : (
-                                      <div
-                                        className={`px-2 py-1 text-[15px] font-medium leading-relaxed text-gray-900 break-words whitespace-pre-wrap ${isMine ? "text-right" : "text-left"}`}
-                                      >
-                                        {msg.content}
-                                      </div>
+                                      (() => {
+                                        const groupMatch =
+                                          msg.content?.match(GROUP_LINK_REGEX);
+                                        if (groupMatch) {
+                                          const linkGroupId = groupMatch[1];
+                                          const groupInfo =
+                                            groupLinkCache[linkGroupId];
+
+                                          // Fetch if not cached
+                                          if (!groupInfo) {
+                                            fetchGroupLinkInfo(linkGroupId);
+                                          }
+
+                                          return (
+                                            <div className="mt-2 mb-1">
+                                              <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm w-64 max-w-full">
+                                                <div className="flex gap-3 mb-4">
+                                                  <img
+                                                    src={
+                                                      groupInfo?.groupAvatar
+                                                        ? getMediaUrl(
+                                                            groupInfo.groupAvatar,
+                                                          )
+                                                        : "/avt-mac-dinh.jpg"
+                                                    }
+                                                    className="w-12 h-12 rounded-2xl object-cover ring-2 ring-gray-50"
+                                                  />
+                                                  <div className="flex-1 min-w-0">
+                                                    <h4 className="text-sm font-black text-gray-900 truncate">
+                                                      {groupInfo?.name ||
+                                                        "Đang tải..."}
+                                                    </h4>
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
+                                                      Nhóm trò chuyện
+                                                    </p>
+                                                  </div>
+                                                </div>
+                                                <button
+                                                  onClick={async () => {
+                                                    const info = groupInfo;
+                                                    if (
+                                                      info?.isApprovalRequired
+                                                    ) {
+                                                      // Cần phê duyệt: kiểm tra có câu hỏi không
+                                                      setJoinGroupAnswer("");
+                                                      setJoinGroupModal({
+                                                        groupId: linkGroupId,
+                                                        question:
+                                                          info?.isQuestionEnabled
+                                                            ? info?.membershipQuestion ||
+                                                              ""
+                                                            : "",
+                                                        needApproval: true,
+                                                      });
+                                                    } else {
+                                                      // Tham gia trực tiếp
+                                                      try {
+                                                        const res =
+                                                          await groupService.requestJoinGroup(
+                                                            linkGroupId,
+                                                          );
+                                                        if (res.joined) {
+                                                          toast.success(
+                                                            "Đã tham gia nhóm thành công!",
+                                                          );
+                                                          router.push(
+                                                            `/chat/${linkGroupId}`,
+                                                          );
+                                                        } else {
+                                                          toast.success(
+                                                            "Đã gửi yêu cầu tham gia",
+                                                          );
+                                                        }
+                                                      } catch (err: any) {
+                                                        toast.error(
+                                                          err.response?.data
+                                                            ?.error ||
+                                                            "Lỗi khi tham gia",
+                                                        );
+                                                      }
+                                                    }
+                                                  }}
+                                                  className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-[11px] font-black hover:bg-blue-700 transition shadow-lg shadow-blue-100"
+                                                >
+                                                  {groupInfo?.isApprovalRequired
+                                                    ? "Gửi yêu cầu tham gia"
+                                                    : "THAM GIA NHÓM"}
+                                                </button>
+                                              </div>
+                                              <div className="mt-2 text-[13px] font-medium leading-relaxed text-gray-400 break-all opacity-50">
+                                                {msg.content}
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+
+                                        return (
+                                          <div
+                                            className={`px-2 py-1 text-[15px] font-medium leading-relaxed text-gray-900 break-words whitespace-pre-wrap ${isMine ? "text-right" : "text-left"}`}
+                                          >
+                                            {msg.content}
+                                          </div>
+                                        );
+                                      })()
                                     )}
 
                                     {/* end: system call bypasses bubble wrapper */}
@@ -3232,6 +3607,221 @@ export default function ChatPage() {
           message={forwardingMessage}
           currentUser={currentUser}
         />
+      )}
+
+      {/* Friend Profile Modal */}
+      {showProfileModal && (
+        <FriendProfileModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+          userId={otherUserId}
+          relationStatus={relationStatus}
+          onActionSuccess={() => fetchConversationInfo()}
+        />
+      )}
+      {/* Leave Group Modal */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-black text-gray-900 mb-2">
+              Rời khỏi nhóm?
+            </h3>
+            <p className="text-gray-500 text-sm mb-6">
+              Bạn sẽ không còn nhận được tin nhắn từ nhóm này nữa.
+            </p>
+
+            <div className="space-y-4 mb-8">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative flex items-center">
+                  <input
+                    type="checkbox"
+                    className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-gray-300 transition-all checked:border-blue-500 checked:bg-blue-500 hover:border-blue-400"
+                    checked={leaveOptions.isSilent}
+                    onChange={(e) =>
+                      setLeaveOptions((prev) => ({
+                        ...prev,
+                        isSilent: e.target.checked,
+                      }))
+                    }
+                  />
+                  <svg
+                    className="absolute h-3.5 w-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none left-0.75"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </div>
+                <span className="text-[14px] font-bold text-gray-700 group-hover:text-black transition-colors">
+                  Rời nhóm trong im lặng
+                </span>
+              </label>
+
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative flex items-center">
+                  <input
+                    type="checkbox"
+                    className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-gray-300 transition-all checked:border-red-500 checked:bg-red-500 hover:border-red-400"
+                    checked={leaveOptions.preventReinvite}
+                    onChange={(e) =>
+                      setLeaveOptions((prev) => ({
+                        ...prev,
+                        preventReinvite: e.target.checked,
+                      }))
+                    }
+                  />
+                  <svg
+                    className="absolute h-3.5 w-3.5 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none left-0.75"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </div>
+                <span className="text-[14px] font-bold text-gray-700 group-hover:text-black transition-colors">
+                  Chặn mời vào lại nhóm
+                </span>
+              </label>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                className="flex-1 py-3 rounded-xl font-black text-gray-500 hover:bg-gray-100 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={confirmLeaveGroup}
+                className="flex-1 py-3 rounded-xl font-black bg-red-500 text-white hover:bg-red-600 transition-colors shadow-lg shadow-red-200"
+              >
+                Rời nhóm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === Modal tham gia nhóm cần phê duyệt / câu hỏi === */}
+      {joinGroupModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md p-8 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="p-3 bg-blue-50 rounded-2xl">
+                <svg
+                  className="w-6 h-6 text-blue-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-gray-900">
+                  Yêu cầu tham gia nhóm
+                </h2>
+                <p className="text-[12px] text-gray-400 font-bold mt-0.5 uppercase tracking-widest">
+                  Cần phê duyệt từ nhóm trưởng
+                </p>
+              </div>
+            </div>
+
+            {joinGroupModal.question ? (
+              <>
+                <div className="mb-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+                  <p className="text-[11px] font-black text-blue-500 uppercase tracking-widest mb-2">
+                    Câu hỏi từ nhóm trưởng
+                  </p>
+                  <p className="text-sm font-bold text-gray-800 leading-relaxed">
+                    {joinGroupModal.question}
+                  </p>
+                </div>
+                <div className="mb-6">
+                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2">
+                    Câu trả lời của bạn *
+                  </label>
+                  <textarea
+                    value={joinGroupAnswer}
+                    onChange={(e) => setJoinGroupAnswer(e.target.value)}
+                    placeholder="Nhập câu trả lời của bạn..."
+                    rows={3}
+                    className="w-full px-4 py-3 text-sm font-medium border border-gray-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 resize-none transition"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="mb-6 p-4 bg-gray-50 rounded-2xl">
+                <p className="text-sm text-gray-600 font-medium leading-relaxed">
+                  Yêu cầu tham gia của bạn sẽ được gửi đến nhóm trưởng để xét
+                  duyệt. Vui lòng chờ phê duyệt.
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setJoinGroupModal(null);
+                  setJoinGroupAnswer("");
+                }}
+                className="flex-1 py-3 rounded-xl font-black text-gray-500 bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={async () => {
+                  if (joinGroupModal.question && !joinGroupAnswer.trim()) {
+                    toast.error("Vui lòng trả lời câu hỏi của nhóm trưởng");
+                    return;
+                  }
+                  setJoiningGroup(true);
+                  try {
+                    const res = await groupService.requestJoinGroup(
+                      joinGroupModal.groupId,
+                      joinGroupAnswer.trim() || undefined,
+                    );
+                    setJoinGroupModal(null);
+                    setJoinGroupAnswer("");
+                    if (res.joined) {
+                      toast.success("Đã tham gia nhóm thành công!");
+                      router.push(`/chat/${joinGroupModal.groupId}`);
+                    } else {
+                      toast.success(
+                        "Đã gửi yêu cầu tham gia! Vui lòng chờ nhóm trưởng phê duyệt.",
+                      );
+                    }
+                  } catch (err: any) {
+                    toast.error(
+                      err.response?.data?.error || "Gửi yêu cầu thất bại",
+                    );
+                  } finally {
+                    setJoiningGroup(false);
+                  }
+                }}
+                disabled={joiningGroup}
+                className="flex-1 py-3 rounded-xl font-black bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {joiningGroup ? "Đang gửi..." : "Gửi yêu cầu"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

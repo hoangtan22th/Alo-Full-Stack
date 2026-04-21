@@ -2,11 +2,14 @@ import { create } from "zustand";
 
 interface ChatState {
   typingUsers: Record<string, string[]>; // conversationId -> Array of userIds/names
+  friendIds: Set<string>;
   setTyping: (conversationId: string, userId: string, isTyping: boolean) => void;
+  setFriendIds: (ids: Set<string>) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
   typingUsers: {},
+  friendIds: new Set(),
   setTyping: (conversationId, userId, isTyping) => {
     set((state) => {
       const current = state.typingUsers[conversationId] || [];
@@ -22,4 +25,5 @@ export const useChatStore = create<ChatState>((set) => ({
       };
     });
   },
+  setFriendIds: (ids) => set({ friendIds: ids }),
 }));

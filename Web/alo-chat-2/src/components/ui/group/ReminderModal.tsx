@@ -6,6 +6,7 @@ import {
   CalendarDaysIcon,
   TrashIcon,
   ClockIcon,
+  PencilIcon,
 } from "@heroicons/react/24/outline";
 import { reminderService, ReminderDTO } from "@/services/reminderService";
 import { toast } from "sonner";
@@ -13,13 +14,15 @@ import { useAuthStore } from "@/store/useAuthStore";
 
 interface ReminderModalProps {
   conversationId: string;
+  canCreate?: boolean;
   onClose: () => void;
 }
 
-export default function ReminderModal({ conversationId, onClose }: ReminderModalProps) {
+export default function ReminderModal({ conversationId, canCreate = true, onClose }: ReminderModalProps) {
   const [reminders, setReminders] = useState<ReminderDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
   
   const { userId: currentUserId } = useAuthStore();
 
@@ -67,15 +70,46 @@ export default function ReminderModal({ conversationId, onClose }: ReminderModal
         repeat,
         remindFor,
       };
-      const created = await reminderService.createReminder(conversationId, payload);
-      if (created) {
-        toast.success("Đã tạo nhắc hẹn mới");
-        handleReset();
-        fetchReminders();
+
+      if (editingReminderId) {
+        const updated = await reminderService.updateReminder(editingReminderId, payload);
+        if (updated) {
+          toast.success("Đã cập nhật nhắc hẹn");
+          handleReset();
+          fetchReminders();
+        }
+      } else {
+        const created = await reminderService.createReminder(conversationId, payload);
+        if (created) {
+          toast.success("Đã tạo nhắc hẹn mới");
+          handleReset();
+          fetchReminders();
+        }
       }
     } catch (err) {
-      toast.error("Lỗi khi tạo nhắc hẹn");
+      toast.error(editingReminderId ? "Lỗi khi cập nhật nhắc hẹn" : "Lỗi khi tạo nhắc hẹn");
     }
+  };
+
+  const handleEditClick = (rem: ReminderDTO) => {
+    setEditingReminderId(rem._id);
+    setTitle(rem.title);
+    
+    const d = new Date(rem.time);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    
+    const hor = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    const timeStr = `${hor}:${min}`;
+    
+    setDate(dateStr);
+    setTime(timeStr);
+    setRepeat(rem.repeat);
+    setRemindFor(rem.remindFor);
+    setShowCreate(true);
   };
 
   const handleDeleteReminder = async (id: string) => {
@@ -93,6 +127,7 @@ export default function ReminderModal({ conversationId, onClose }: ReminderModal
 
   const handleReset = () => {
     setShowCreate(false);
+    setEditingReminderId(null);
     setTitle("");
     setDate("");
     setTime("");
@@ -106,8 +141,8 @@ export default function ReminderModal({ conversationId, onClose }: ReminderModal
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
           <div>
-            <h2 className="text-lg font-black text-gray-900">Nhắc hẹn</h2>
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Không bỏ lỡ các sự kiện quan trọng</p>
+            <h2 className="text-lg font-black text-gray-900">{editingReminderId ? "Chỉnh sửa nhắc hẹn" : "Nhắc hẹn"}</h2>
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">{editingReminderId ? "Cập nhật lại thông tin sự kiện" : "Không bỏ lỡ các sự kiện quan trọng"}</p>
           </div>
           <button
             onClick={onClose}
@@ -194,19 +229,21 @@ export default function ReminderModal({ conversationId, onClose }: ReminderModal
                   onClick={handleCreateReminder}
                   className="flex-1 py-3 rounded-xl font-bold text-[13px] bg-blue-600 text-white shadow-lg hover:shadow-blue-500/20 hover:-translate-y-0.5 active:translate-y-0 transition"
                 >
-                  TẠO NHẮC HẸN
+                  {editingReminderId ? "CẬP NHẬT" : "TẠO NHẮC HẸN"}
                 </button>
               </div>
             </div>
           ) : (
             <>
-              <button 
-                onClick={() => setShowCreate(true)}
-                className="w-full mb-6 py-4 flex items-center justify-center gap-3 bg-blue-50 text-blue-600 rounded-2xl border-2 border-dashed border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition group"
-              >
-                <PlusIcon className="w-5 h-5 group-hover:scale-110 transition" />
-                <span className="text-[14px] font-black uppercase tracking-tight">Tạo nhắc hẹn mới</span>
-              </button>
+              {canCreate && (
+                <button 
+                  onClick={() => setShowCreate(true)}
+                  className="w-full mb-6 py-4 flex items-center justify-center gap-3 bg-blue-50 text-blue-600 rounded-2xl border-2 border-dashed border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition group"
+                >
+                  <PlusIcon className="w-5 h-5 group-hover:scale-110 transition" />
+                  <span className="text-[14px] font-black uppercase tracking-tight">Tạo nhắc hẹn mới</span>
+                </button>
+              )}
 
               <div className="space-y-4">
                 {loading ? (
@@ -229,12 +266,22 @@ export default function ReminderModal({ conversationId, onClose }: ReminderModal
                              )}
                           </div>
                         </div>
-                        <button 
-                          onClick={() => handleDeleteReminder(rem._id)}
-                          className="absolute top-4 right-4 p-1.5 bg-white shadow-sm rounded-lg text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition"
-                        >
-                          <TrashIcon className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex gap-2 group-hover:opacity-100 transition absolute top-4 right-4">
+                          {rem.creatorId === currentUserId && (
+                            <button 
+                              onClick={() => handleEditClick(rem)}
+                              className="p-1.5 bg-white shadow-sm rounded-lg text-blue-500 hover:bg-blue-50 transition"
+                            >
+                              <PencilIcon className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => handleDeleteReminder(rem._id)}
+                            className="p-1.5 bg-white shadow-sm rounded-lg text-red-500 hover:bg-red-50 transition"
+                          >
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <div className="mt-3 text-[10px] font-black text-gray-400 uppercase tracking-widest border-t border-gray-100 pt-2">
                         Nhắc cho: {rem.remindFor === 'GROUP' ? 'Cả nhóm' : 'Chỉ mình tôi'}

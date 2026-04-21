@@ -92,8 +92,9 @@ export default function RemindersManagementScreen() {
   useEffect(() => {
     if (!socket || !id) return;
 
-    const handleGroupUpdated = (updatedGroup: any) => {
-      if (updatedGroup._id === id) {
+    const handleGroupUpdated = (data: any) => {
+      const updatedId = data._id || data.id || data.conversationId;
+      if (String(updatedId) === String(id)) {
         fetchData(true);
       }
     };
