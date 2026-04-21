@@ -394,14 +394,14 @@ export default function GroupSettingsModal({
             <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[1.5px] ml-1">Thiết lập tin nhắn</h3>
             <div className="bg-gray-50/50 rounded-3xl border border-gray-100 overflow-hidden divide-y divide-gray-50">
                <ToggleRow 
-                 icon={<BellAlertIcon className="w-6 h-6 text-orange-500" />}
+                 icon={<BellAlertIcon className="w-6 h-6 text-black" />}
                  title="Làm nổi bật tin nhắn Admin"
                  description="Tin nhắn từ trưởng/phó nhóm sẽ được hiển thị đặc biệt"
                  value={isHighlightEnabled}
                  onChange={toggleHighlight}
                />
                <ToggleRow 
-                 icon={<ClockIcon className="w-6 h-6 text-blue-500" />}
+                 icon={<ClockIcon className="w-6 h-6 text-black" />}
                  title="Xem tin nhắn gần đây"
                  description="Thành viên mới được xem các tin nhắn cũ"
                  value={isHistoryVisible}
@@ -416,7 +416,7 @@ export default function GroupSettingsModal({
             <div className="bg-gray-50/50 rounded-3xl border border-gray-100 overflow-hidden divide-y divide-gray-50">
                {/* Approval */}
                <ToggleRow 
-                 icon={<ShieldCheckIcon className="w-6 h-6 text-green-500" />}
+                 icon={<ShieldCheckIcon className="w-6 h-6 text-black" />}
                  title="Phê duyệt thành viên"
                  description="Yêu cầu quản trị viên duyệt khi có người mới"
                  value={isApprovalRequired}
@@ -428,7 +428,7 @@ export default function GroupSettingsModal({
                  <div className="p-5 bg-white/50 space-y-4 animate-in slide-in-from-top-2 duration-300">
                     <div className="flex items-center justify-between">
                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                          <div className="w-8 h-8 rounded-lg bg-gray-100 text-black flex items-center justify-center">
                              <DocumentTextIcon className="w-5 h-5" />
                           </div>
                           <span className="text-[13px] font-bold text-gray-700">Câu hỏi tham gia</span>
@@ -436,7 +436,7 @@ export default function GroupSettingsModal({
                        <button
                          onClick={toggleQuestion}
                          disabled={updating}
-                         className={`w-10 h-5 rounded-full transition-all relative ${isQuestionEnabled ? 'bg-indigo-600' : 'bg-gray-200'}`}
+                         className={`w-10 h-5 rounded-full transition-all relative ${isQuestionEnabled ? 'bg-black' : 'bg-gray-200'}`}
                        >
                          <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${isQuestionEnabled ? 'left-5.5' : 'left-0.5'}`} />
                        </button>
@@ -448,7 +448,7 @@ export default function GroupSettingsModal({
                           onChange={(e) => setMembershipQuestion(e.target.value)}
                           onBlur={saveQuestion}
                           placeholder="Nhập câu hỏi để thành viên trả lời..."
-                          className="w-full bg-white border border-gray-100 rounded-2xl p-3 text-[13px] font-medium focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all shadow-inner"
+                          className="w-full bg-white border border-gray-100 rounded-2xl p-3 text-[13px] font-medium focus:ring-2 focus:ring-black/10 outline-none transition-all shadow-inner"
                           rows={2}
                         />
                         <p className="text-[10px] text-gray-400 font-medium italic">Tự động lưu khi bạn nhấn ra ngoài.</p>
@@ -463,7 +463,7 @@ export default function GroupSettingsModal({
                   className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition active:scale-[0.98] group"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-11 h-11 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100 shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                    <div className="w-11 h-11 rounded-2xl bg-gray-50 flex items-center justify-center text-black border border-gray-100 shadow-sm group-hover:bg-black group-hover:text-white transition-all">
                       <LinkIcon className="w-6 h-6" />
                     </div>
                     <div className="text-left">
@@ -570,17 +570,17 @@ export default function GroupSettingsModal({
                     <button 
                       key={m.userId}
                       onClick={() => setSelectedNewLeaderId(m.userId)}
-                      className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all ${selectedNewLeaderId === m.userId ? 'border-blue-600 bg-blue-50 shadow-md' : 'border-gray-50 bg-white hover:border-gray-200'}`}
+                      className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all ${selectedNewLeaderId === m.userId ? 'border-black bg-gray-50 shadow-md' : 'border-gray-50 bg-white hover:border-gray-200'}`}
                     >
                        <div className="w-12 h-12 rounded-2xl bg-gray-900 flex items-center justify-center text-white overflow-hidden shadow-sm">
                           {m.user?.avatar ? <img src={getMediaUrl(m.user.avatar)} className="w-full h-full object-cover" /> : m.fullName?.charAt(0).toUpperCase()}
                        </div>
                        <div className="text-left flex-1">
-                          <p className={`text-[15px] font-black ${selectedNewLeaderId === m.userId ? 'text-blue-900' : 'text-gray-900'}`}>{m.fullName || m.user?.fullName || "Thành viên"}</p>
+                          <p className={`text-[15px] font-black ${selectedNewLeaderId === m.userId ? 'text-black' : 'text-gray-900'}`}>{m.fullName || m.user?.fullName || "Thành viên"}</p>
                           <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tighter">{m.role}</p>
                        </div>
                        {selectedNewLeaderId === m.userId && (
-                         <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
+                         <div className="w-6 h-6 bg-black rounded-full flex items-center justify-center">
                            <CheckIcon className="w-4 h-4 text-white stroke-[3px]" />
                          </div>
                        )}
@@ -628,7 +628,7 @@ export default function GroupSettingsModal({
                        <p className="text-[12px] text-gray-400 mb-6">Bạn cần bật tính năng này để mọi người có thể tham gia qua link hoặc mã QR.</p>
                        <button 
                          onClick={toggleLink}
-                         className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all"
+                         className="w-full py-3 bg-black text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition-all"
                        >
                          Bật tính năng link
                        </button>
@@ -657,7 +657,7 @@ export default function GroupSettingsModal({
                             onClick={handleCopyLink}
                             className="flex-1 flex flex-col items-center gap-2 group"
                           >
-                             <div className="w-14 h-14 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                             <div className="w-14 h-14 bg-gray-50 rounded-full flex items-center justify-center text-black group-hover:bg-black group-hover:text-white transition-all shadow-sm">
                                 <DocumentDuplicateIcon className="w-6 h-6" />
                              </div>
                              <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Sao chép</span>
@@ -673,7 +673,7 @@ export default function GroupSettingsModal({
                             }}
                             className="flex-1 flex flex-col items-center gap-2 group"
                           >
-                             <div className="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center text-green-600 group-hover:bg-green-600 group-hover:text-white transition-all shadow-sm">
+                             <div className="w-14 h-14 bg-gray-50 rounded-full flex items-center justify-center text-black group-hover:bg-black group-hover:text-white transition-all shadow-sm">
                                 <ShareIcon className="w-6 h-6" />
                              </div>
                              <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Chia sẻ</span>
@@ -683,7 +683,7 @@ export default function GroupSettingsModal({
                             onClick={handleSaveQR}
                             className="flex-1 flex flex-col items-center gap-2 group"
                           >
-                             <div className="w-14 h-14 bg-orange-50 rounded-full flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-all shadow-sm">
+                             <div className="w-14 h-14 bg-gray-50 rounded-full flex items-center justify-center text-black group-hover:bg-black group-hover:text-white transition-all shadow-sm">
                                 <ArrowDownTrayIcon className="w-6 h-6" />
                              </div>
                              <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Lưu QR</span>
@@ -700,7 +700,7 @@ export default function GroupSettingsModal({
                                 </div>
                                 <button
                                   onClick={() => toggleHistory(!isHistoryVisible)}
-                                  className={`w-11 h-6 rounded-full transition-all relative shrink-0 ${isHistoryVisible ? 'bg-green-500' : 'bg-gray-200'}`}
+                                  className={`w-11 h-6 rounded-full transition-all relative shrink-0 ${isHistoryVisible ? 'bg-black' : 'bg-gray-200'}`}
                                 >
                                   <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm ${isHistoryVisible ? 'left-6' : 'left-1'}`} />
                                 </button>
@@ -743,7 +743,7 @@ function ToggleRow({ icon, title, description, value, onChange, disabled }: Togg
       <button
         onClick={() => onChange(!value)}
         disabled={disabled}
-        className={`w-12 h-6 rounded-full transition-all relative ${value ? 'bg-blue-600' : 'bg-gray-200'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        className={`w-12 h-6 rounded-full transition-all relative ${value ? 'bg-black' : 'bg-gray-200'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       >
         <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm ${value ? 'left-7' : 'left-1'}`} />
       </button>
@@ -762,7 +762,7 @@ function PermissionRow({ icon, title, value, onChange }: PermissionRowProps) {
   return (
     <div className="flex items-center justify-between p-5">
       <div className="flex items-center gap-4">
-        <div className="w-10 h-10 bg-white border border-gray-50 rounded-xl flex items-center justify-center text-gray-400 shadow-sm group-hover:text-blue-500">
+        <div className="w-10 h-10 bg-white border border-gray-50 rounded-xl flex items-center justify-center text-gray-400 shadow-sm group-hover:text-black">
            {icon}
         </div>
         <span className="text-[14px] font-bold text-gray-700">{title}</span>
@@ -771,7 +771,7 @@ function PermissionRow({ icon, title, value, onChange }: PermissionRowProps) {
       <div className="flex bg-gray-100 p-1 rounded-xl gap-1 ring-1 ring-gray-200 shadow-inner">
          <button 
            onClick={() => onChange("EVERYONE")}
-           className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${value === "EVERYONE" ? "bg-white text-blue-600 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+           className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${value === "EVERYONE" ? "bg-white text-black shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
          >
            Tất cả
          </button>

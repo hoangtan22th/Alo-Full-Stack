@@ -161,7 +161,7 @@ export default function ReminderModal({ conversationId, canCreate = true, onClos
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Họp nhóm, Sinh nhật..."
-                  className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 transition"
+                  className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-black/10 transition"
                 />
               </div>
 
@@ -172,7 +172,7 @@ export default function ReminderModal({ conversationId, canCreate = true, onClos
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="w-full bg-gray-50 border-none rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 transition"
+                    className="w-full bg-gray-50 border-none rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-black/10 transition"
                   />
                 </div>
                 <div>
@@ -181,7 +181,7 @@ export default function ReminderModal({ conversationId, canCreate = true, onClos
                     type="time"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
-                    className="w-full bg-gray-50 border-none rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 transition"
+                    className="w-full bg-gray-50 border-none rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-black/10 transition"
                   />
                 </div>
               </div>
@@ -191,7 +191,7 @@ export default function ReminderModal({ conversationId, canCreate = true, onClos
                 <select 
                   value={repeat}
                   onChange={(e) => setRepeat(e.target.value)}
-                  className="w-full bg-gray-50 border-none rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 transition appearance-none"
+                  className="w-full bg-gray-50 border-none rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-black/10 transition appearance-none"
                 >
                   <option value="NONE">Không lặp lại</option>
                   <option value="DAILY">Hàng ngày</option>
@@ -227,7 +227,7 @@ export default function ReminderModal({ conversationId, canCreate = true, onClos
                 </button>
                 <button 
                   onClick={handleCreateReminder}
-                  className="flex-1 py-3 rounded-xl font-bold text-[13px] bg-blue-600 text-white shadow-lg hover:shadow-blue-500/20 hover:-translate-y-0.5 active:translate-y-0 transition"
+                  className="flex-1 py-3 rounded-xl font-bold text-[13px] bg-black text-white shadow-lg hover:shadow-black/20 hover:-translate-y-0.5 active:translate-y-0 transition"
                 >
                   {editingReminderId ? "CẬP NHẬT" : "TẠO NHẮC HẸN"}
                 </button>
@@ -238,7 +238,7 @@ export default function ReminderModal({ conversationId, canCreate = true, onClos
               {canCreate && (
                 <button 
                   onClick={() => setShowCreate(true)}
-                  className="w-full mb-6 py-4 flex items-center justify-center gap-3 bg-blue-50 text-blue-600 rounded-2xl border-2 border-dashed border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition group"
+                  className="w-full mb-6 py-4 flex items-center justify-center gap-3 bg-gray-50 text-black rounded-2xl border-2 border-dashed border-gray-200 hover:bg-gray-100 hover:border-black transition group"
                 >
                   <PlusIcon className="w-5 h-5 group-hover:scale-110 transition" />
                   <span className="text-[14px] font-black uppercase tracking-tight">Tạo nhắc hẹn mới</span>
@@ -248,16 +248,16 @@ export default function ReminderModal({ conversationId, canCreate = true, onClos
               <div className="space-y-4">
                 {loading ? (
                   <div className="flex flex-col items-center py-10">
-                    <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mb-3" />
+                    <div className="w-8 h-8 border-4 border-gray-200 border-t-black rounded-full animate-spin mb-3" />
                   </div>
                 ) : reminders.length > 0 ? (
                   reminders.map((rem) => (
-                    <div key={rem._id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-blue-200 transition group relative">
+                    <div key={rem._id} className="hover:border-black/20 transition group relative bg-gray-50 p-4 rounded-2xl border border-gray-100">
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="text-[14px] font-bold text-gray-900 pr-8">{rem.title}</h3>
                           <div className="flex items-center gap-4 mt-2">
-                             <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
+                             <div className="text-black bg-gray-200 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-[11px] font-black uppercase tracking-tighter">
                                <ClockIcon className="w-3.5 h-3.5" />
                                {new Date(rem.time).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
                              </div>
@@ -270,7 +270,7 @@ export default function ReminderModal({ conversationId, canCreate = true, onClos
                           {rem.creatorId === currentUserId && (
                             <button 
                               onClick={() => handleEditClick(rem)}
-                              className="p-1.5 bg-white shadow-sm rounded-lg text-blue-500 hover:bg-blue-50 transition"
+                              className="text-black hover:bg-gray-100 transition p-1.5 bg-white shadow-sm rounded-lg"
                             >
                               <PencilIcon className="w-3.5 h-3.5" />
                             </button>
