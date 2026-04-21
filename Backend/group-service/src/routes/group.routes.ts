@@ -60,6 +60,7 @@ router.put(
 
 // Các route có :groupId (PHẢI ĐẶT SAU CÁC ROUTE TĨNH)
 router.get("/api/v1/groups/:groupId", groupController.getGroupById);
+router.get("/api/v1/groups/:groupId/link-info", groupController.getGroupInfoForLink);
 router.put(
   "/api/v1/groups/:groupId",
   upload.single("avatarFile"),
