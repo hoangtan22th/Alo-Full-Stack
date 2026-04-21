@@ -2,6 +2,8 @@ package edu.iuh.fit.report_service.service.impl;
 
 import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import edu.iuh.fit.report_service.client.UserClient;
+import edu.iuh.fit.report_service.config.RabbitMQConfig;
+import edu.iuh.fit.report_service.dto.event.UserBannedEvent;
 import edu.iuh.fit.report_service.dto.request.AdminActionRequest;
 import edu.iuh.fit.report_service.dto.request.ReportCreationRequest;
 import edu.iuh.fit.report_service.dto.response.ReportAdminResponse;
@@ -14,6 +16,7 @@ import edu.iuh.fit.report_service.repository.ReportRepository;
 import edu.iuh.fit.report_service.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -27,6 +30,7 @@ public class ReportServiceImpl implements ReportService {
 
     private final ReportRepository reportRepository;
     private final UserClient userClient;
+    private final RabbitTemplate rabbitTemplate;
 
     @Override
     public ReportResponse createReport(ReportCreationRequest request) {
@@ -83,14 +87,34 @@ public class ReportServiceImpl implements ReportService {
                 report.setStatus(ReportStatus.REJECTED);
                 break;
             case WARN:
+                report.setStatus(ReportStatus.RESOLVED);
+                break;
             case BAN:
                 report.setStatus(ReportStatus.RESOLVED);
-                // Event publishing for BAN will go here in Phase 5
+                if (report.getTargetType() == TargetType.USER) {
+                    publishBanEvent(report);
+                }
                 break;
         }
 
         Report savedReport = reportRepository.save(report);
         return mapToAdminResponse(savedReport);
+    }
+
+    private void publishBanEvent(Report report) {
+        try {
+            UserBannedEvent event = UserBannedEvent.builder()
+                    .targetId(report.getTargetId())
+                    .adminNotes(report.getAdminNotes())
+                    .resolvedBy(report.getResolvedBy())
+                    .timestamp(LocalDateTime.now())
+                    .build();
+            
+            rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY_USER_BANNED, event);
+            log.info("Published USER_BANNED_EVENT to RabbitMQ for TargetId: {}", report.getTargetId());
+        } catch (Exception e) {
+            log.error("Failed to publish BANNED event for TargetId: {}", report.getTargetId(), e);
+        }
     }
 
     private ReportAdminResponse mapToAdminResponse(Report report) {
