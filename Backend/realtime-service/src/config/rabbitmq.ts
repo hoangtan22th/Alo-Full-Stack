@@ -20,10 +20,16 @@ export async function initRabbitMQ(io: Server) {
   // NEW: Setup binding for Admin Ban Events
   const adminExchange = "admin.exchange";
   const authBanQueue = "realtime.user.banned.queue";
-  await amqpChannel.assertExchange(adminExchange, "topic", { durable: false });
+  const authUnbanQueue = "realtime.user.unbanned.queue";
+  await amqpChannel.assertExchange(adminExchange, "topic", { durable: true });
   await amqpChannel.assertQueue(authBanQueue, { durable: true });
   await amqpChannel.bindQueue(authBanQueue, adminExchange, "user.banned");
+  await amqpChannel.assertQueue(authUnbanQueue, { durable: true });
+  await amqpChannel.bindQueue(authUnbanQueue, adminExchange, "user.unbanned");
   console.log(`RabbitMQ waiting for Admin Banned events in ${authBanQueue}.`);
+  console.log(
+    `RabbitMQ waiting for Admin Unbanned events in ${authUnbanQueue}.`,
+  );
 
   amqpChannel.consume(queue, (msg) => {
     if (msg !== null) {
@@ -105,6 +111,25 @@ export async function initRabbitMQ(io: Server) {
         }
       } catch (error) {
         console.error("Error processing Banned Event message", error);
+      }
+      amqpChannel.ack(msg);
+    }
+  });
+
+  amqpChannel.consume(authUnbanQueue, async (msg) => {
+    if (msg !== null) {
+      try {
+        const payload = JSON.parse(msg.content.toString());
+        console.log("Received USER_UNBANNED_EVENT via RabbitMQ:", payload);
+        const { targetId } = payload;
+        if (targetId) {
+          console.log(
+            `[Socket.IO] Processing Unban event for Target: ${targetId}`,
+          );
+          // Mặc dù Socket có thể không cần thiết phải connect/emit unbanned vì user chưa login, nhưng để log hoặc gửi notif realtime nếu login qua máy khác
+        }
+      } catch (error) {
+        console.error("Error processing Unbanned Event message", error);
       }
       amqpChannel.ack(msg);
     }

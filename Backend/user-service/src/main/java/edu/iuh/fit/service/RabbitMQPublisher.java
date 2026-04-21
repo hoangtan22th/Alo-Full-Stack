@@ -2,6 +2,7 @@ package edu.iuh.fit.service;
 
 import edu.iuh.fit.config.RabbitMQConfig;
 import edu.iuh.fit.dto.UserBannedEvent;
+import edu.iuh.fit.dto.UserUnbannedEvent;
 import edu.iuh.fit.dto.UserUpdatedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -59,15 +60,27 @@ public class RabbitMQPublisher {
     }
 
     public void publishUserUnbannedEvent(String userId) {
-        UserUpdatedEvent event = UserUpdatedEvent.builder()
+        UserUpdatedEvent updateEvent = UserUpdatedEvent.builder()
                 .id(userId)
                 .status("ACTIVE")
                 .build();
         rabbitTemplate.convertAndSend(
                 RabbitMQConfig.EXCHANGE_NAME,
                 RabbitMQConfig.ROUTING_KEY_UPDATE,
-                event
+                updateEvent
         );
-        log.info("Published UserUnbannedEvent for userID: {}", userId);
+        
+        UserUnbannedEvent unbanEvent = UserUnbannedEvent.builder()
+                .targetId(userId)
+                .adminNotes("Unbanned by Admin from User Management")
+                .resolvedBy("ADMIN")
+                .timestamp(LocalDateTime.now())
+                .build();
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.EXCHANGE_ADMIN,
+                RabbitMQConfig.ROUTING_KEY_USER_UNBANNED,
+                unbanEvent
+        );
+        log.info("Published UserUnbannedEvent to admin.exchange for userID: {}", userId);
     }
 }

@@ -20,6 +20,9 @@ public class RabbitMQConfig {
     public static final String EXCHANGE_ADMIN = "admin.exchange";
     public static final String QUEUE_AUTH_USER_BANNED = "auth.user.banned.queue";
     public static final String ROUTING_KEY_USER_BANNED = "user.banned";
+    
+    public static final String QUEUE_AUTH_USER_UNBANNED = "auth.user.unbanned.queue";
+    public static final String ROUTING_KEY_USER_UNBANNED = "user.unbanned";
 
     @Bean
     public TopicExchange userExchange() {
@@ -59,6 +62,16 @@ public class RabbitMQConfig {
     @Bean
     public Binding bindingUserBanned(Queue authUserBannedQueue, TopicExchange adminExchange) {
         return BindingBuilder.bind(authUserBannedQueue).to(adminExchange).with(ROUTING_KEY_USER_BANNED);
+    }
+    
+    @Bean
+    public Queue authUserUnbannedQueue() {
+        return new Queue(QUEUE_AUTH_USER_UNBANNED, true);
+    }
+
+    @Bean
+    public Binding bindingUserUnbanned(Queue authUserUnbannedQueue, TopicExchange adminExchange) {
+        return BindingBuilder.bind(authUserUnbannedQueue).to(adminExchange).with(ROUTING_KEY_USER_UNBANNED);
     }
 
     @Bean
