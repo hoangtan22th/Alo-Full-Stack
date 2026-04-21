@@ -107,8 +107,9 @@ export default function GroupMembersScreen() {
 
     // Lắng nghe thay đổi thông tin nhóm (thêm thành viên, đổi role...)
     const handleGroupUpdated = (data: any) => {
-      console.log("🔄 [Members] Received GROUP_UPDATED:", data._id);
-      if (data._id === id) {
+      const updatedId = data._id || data.id || data.conversationId;
+      console.log("🔄 [Members] Received GROUP_UPDATED:", updatedId);
+      if (String(updatedId) === String(id)) {
         fetchGroupDetails();
       }
     };

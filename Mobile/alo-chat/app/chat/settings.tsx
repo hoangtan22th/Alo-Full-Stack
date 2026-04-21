@@ -141,15 +141,23 @@ export default function GroupSettingsScreen() {
   useEffect(() => {
     if (!socket || !id) return;
 
-    const handleGroupUpdated = (updatedGroup: any) => {
-      if (updatedGroup._id === id) {
+    // Join room để nhận thông báo realtime cho group này
+    socket.emit("joinRoom", id);
+
+    const handleUpdate = (data: any) => {
+      const updatedId = data._id || data.id || data.conversationId;
+      if (String(updatedId) === String(id)) {
+        console.log("Group updated, fetching new details...");
         fetchGroupDetails();
       }
     };
 
-    socket.on("GROUP_UPDATED", handleGroupUpdated);
+    socket.on("GROUP_UPDATED", handleUpdate);
+    socket.on("CONVERSATION_UPDATED", handleUpdate);
+
     return () => {
-      socket.off("GROUP_UPDATED", handleGroupUpdated);
+      socket.off("GROUP_UPDATED", handleUpdate);
+      socket.off("CONVERSATION_UPDATED", handleUpdate);
     };
   }, [socket, id]);
 

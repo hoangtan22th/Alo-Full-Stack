@@ -20,7 +20,11 @@ import {
   TrashIcon,
   XMarkIcon,
   MapPinIcon,
+  UserGroupIcon,
+  ChatBubbleLeftRightIcon,
+  UserIcon,
 } from "@heroicons/react/24/outline";
+import CreateGroupModal from "@/components/ui/group/CreateGroupModal";
 
 // --- Sub-component: ManageLabelsModal ---
 function ManageLabelsModal({ 
@@ -181,6 +185,8 @@ export default function ConversationSidebar() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
   const { user: currentUser } = useAuthStore();
 
   // Labels & Pin states
@@ -193,8 +199,25 @@ export default function ConversationSidebar() {
   const [onlineUsers, setOnlineUsers] = useState<Record<string, boolean>>({});
   const { typingUsers } = useChatStore();
   const menuRef = useRef<HTMLDivElement>(null);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
   const conversationIdRef = useRef(conversationId);
   const userFetchCache = useRef<Record<string, any>>({});
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenuId(null);
+        setMenuView("main");
+      }
+      if (plusMenuRef.current && !plusMenuRef.current.contains(event.target as Node)) {
+        setShowPlusMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   useEffect(() => {
     conversationIdRef.current = conversationId;
@@ -333,11 +356,22 @@ export default function ConversationSidebar() {
           return next;
         });
       }),
-      socketService.onConversationCreated((newConvo: any) => {
+      socketService.onConversationCreated(async (newConvo: any) => {
         setConversations(prev => {
-          const exists = prev.some(c => (c._id || c.id) === (newConvo._id || newConvo.id));
+          const convoId = newConvo._id || newConvo.id;
+          const exists = prev.some(c => (c.id || c._id) === convoId);
           if (exists) return prev;
-          return [newConvo, ...prev];
+          
+          // Chuẩn hoá để tránh lỗi key
+          const formatted = {
+            ...newConvo,
+            id: convoId,
+            time: new Date(newConvo.updatedAt || new Date()).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          };
+          return [formatted, ...prev];
         });
       }),
       socketService.onConversationRemoved((data: { conversationId: string }) => {
@@ -500,12 +534,47 @@ export default function ConversationSidebar() {
         <div className="p-5 flex flex-col gap-5">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-black tracking-tight text-black">Messages</h1>
-            <button
-              onClick={() => setShowNewChatModal(true)}
-              className="w-8 h-8 bg-black rounded-full text-white flex items-center justify-center hover:bg-gray-800 transition shadow-md active:scale-95"
-            >
-              <PlusIcon className="w-5 h-5 stroke-2" />
-            </button>
+            <div className="relative" ref={plusMenuRef}>
+              <button
+                onClick={() => setShowPlusMenu(!showPlusMenu)}
+                className={`w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 shadow-sm active:scale-95 ${
+                  showPlusMenu ? "bg-black text-white" : "bg-gray-100 text-gray-900 hover:bg-gray-200"
+                }`}
+              >
+                <PlusIcon className={`w-5 h-5 stroke-2 transition-transform duration-300 ${showPlusMenu ? "rotate-45" : ""}`} />
+              </button>
+
+              {showPlusMenu && (
+                <div className="absolute top-11 right-0 w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[80] animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-1.5 flex flex-col gap-0.5">
+                    <button
+                      onClick={() => {
+                        setShowNewChatModal(true);
+                        setShowPlusMenu(false);
+                      }}
+                      className="flex items-center gap-3 w-full px-4 py-3 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                    >
+                      <div className="w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center">
+                        <UserIcon className="w-5 h-5 text-blue-500" />
+                      </div>
+                      Tạo chat cá nhân
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowCreateGroupModal(true);
+                        setShowPlusMenu(false);
+                      }}
+                      className="flex items-center gap-3 w-full px-4 py-3 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                    >
+                      <div className="w-8 h-8 bg-purple-50 rounded-full flex items-center justify-center">
+                        <UserGroupIcon className="w-5 h-5 text-purple-500" />
+                      </div>
+                      Tạo nhóm chat
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="relative">
@@ -554,13 +623,13 @@ export default function ConversationSidebar() {
           ) : (
             filteredConversations.map((chat) => (
               <div
-                key={chat.id}
-                onClick={() => router.push(`/chat/${chat.id}`)}
+                key={chat.id || chat._id}
+                onClick={() => router.push(`/chat/${chat.id || chat._id}`)}
                 className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-[background-color] duration-150 group relative select-none outline-none border ${
-                  conversationId === chat.id 
+                  conversationId === (chat.id || chat._id) 
                     ? "bg-[#F5F5F5] border-[#F5F5F5]" 
                     : "hover:bg-gray-50 border-transparent hover:border-gray-100"
-                } ${pinnedIds.has(chat.id) ? "bg-blue-50/30 shadow-sm" : ""}`}
+                } ${pinnedIds.has(chat.id || chat._id) ? "bg-blue-50/30 shadow-sm" : ""}`}
               >
                 <div className="relative shrink-0">
                   {chat.avatar ? (
@@ -712,6 +781,13 @@ export default function ConversationSidebar() {
         onClose={() => setShowNewChatModal(false)} 
         onChatCreated={fetchGroups}
       />
+
+      {showCreateGroupModal && (
+        <CreateGroupModal 
+          onClose={() => setShowCreateGroupModal(false)} 
+          onSuccess={fetchGroups}
+        />
+      )}
     </>
   );
 }

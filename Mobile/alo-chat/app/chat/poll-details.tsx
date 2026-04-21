@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowLeftIcon, PlusIcon, LockClosedIcon } from "react-native-heroicons/outline";
-import { CheckCircleIcon } from "react-native-heroicons/solid";
+import { CheckCircleIcon, CheckIcon } from "react-native-heroicons/solid";
 import { pollService, PollDTO, PollResultDTO } from "../../services/pollService";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSocket } from "../../contexts/SocketContext";
@@ -35,6 +35,7 @@ export default function PollDetailsScreen() {
   const [userCache, setUserCache] = useState<Record<string, UserProfileDTO>>({});
   
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const [initialVotes, setInitialVotes] = useState<string[]>([]);
   const [newOptionText, setNewOptionText] = useState("");
   const [isAddingOption, setIsAddingOption] = useState(false);
 
@@ -58,6 +59,7 @@ export default function PollDetailsScreen() {
            }
          });
          setSelectedOptions(userVotes);
+         setInitialVotes(userVotes);
       }
     } catch (e) {
       console.error(e);
@@ -122,12 +124,16 @@ export default function PollDetailsScreen() {
         setSelectedOptions(prev => [...prev, optionId]);
       }
     } else {
-      setSelectedOptions([optionId]);
+      if (selectedOptions.includes(optionId)) {
+        setSelectedOptions([]);
+      } else {
+        setSelectedOptions([optionId]);
+      }
     }
   };
 
   const handleVote = async () => {
-     if (selectedOptions.length === 0) return;
+     if (selectedOptions.length === 0 && initialVotes.length === 0) return;
      setSubmitting(true);
      try {
        const ok = await pollService.votePoll(pollId as string, selectedOptions);
@@ -291,7 +297,9 @@ export default function PollDetailsScreen() {
                   >
                      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
                         {isSelected ? (
-                           <CheckCircleIcon size={24} color="#3b82f6" style={{ marginRight: 12 }} />
+                           <View style={{ width: 24, height: 24, borderRadius: poll.settings.allowMultipleAnswers ? 6 : 12, backgroundColor: "#3b82f6", marginRight: 12, alignItems: "center", justifyContent: "center" }}>
+                              <CheckIcon size={16} color="white" />
+                           </View>
                         ) : (
                            <View style={{ width: 24, height: 24, borderRadius: poll.settings.allowMultipleAnswers ? 6 : 12, borderWidth: 1.5, borderColor: "#d1d5db", marginRight: 12 }} />
                         )}
@@ -372,16 +380,23 @@ export default function PollDetailsScreen() {
 
       {/* Floating Action Button for Voting */}
       {!readonly && (
-         <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 16), paddingTop: 16, backgroundColor: "white", borderTopWidth: 1, borderTopColor: "#f3f4f6" }}>
+         <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 16), paddingTop: 8, backgroundColor: "white", borderTopWidth: 1, borderTopColor: "#f3f4f6" }}>
+            {selectedOptions.length > 0 && (
+              <TouchableOpacity onPress={() => setSelectedOptions([])} style={{ alignSelf: "flex-end", marginBottom: 8 }}>
+                 <Text style={{ color: "#ef4444", fontWeight: "600", fontSize: 13 }}>Bỏ chọn tất cả</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity 
                onPress={handleVote}
-               disabled={submitting || selectedOptions.length === 0}
-               style={{ backgroundColor: selectedOptions.length > 0 ? "#3b82f6" : "#e5e7eb", paddingVertical: 16, borderRadius: 16, alignItems: "center", shadowColor: selectedOptions.length > 0 ? "#3b82f6" : "transparent", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: selectedOptions.length > 0 ? 4 : 0 }}
+               disabled={submitting || (selectedOptions.length === 0 && initialVotes.length === 0)}
+               style={{ backgroundColor: (selectedOptions.length > 0 || initialVotes.length > 0) ? "#3b82f6" : "#e5e7eb", paddingVertical: 16, borderRadius: 16, alignItems: "center", shadowColor: (selectedOptions.length > 0 || initialVotes.length > 0) ? "#3b82f6" : "transparent", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: (selectedOptions.length > 0 || initialVotes.length > 0) ? 4 : 0 }}
             >
                {submitting ? (
                   <ActivityIndicator color="white" />
                ) : (
-                  <Text style={{ fontSize: 16, fontWeight: "bold", color: selectedOptions.length > 0 ? "white" : "#9ca3af" }}>Gửi bình chọn</Text>
+                  <Text style={{ fontSize: 16, fontWeight: "bold", color: (selectedOptions.length > 0 || initialVotes.length > 0) ? "white" : "#9ca3af" }}>
+                    {selectedOptions.length === 0 && initialVotes.length > 0 ? "Gỡ bình chọn" : "Gửi bình chọn"}
+                  </Text>
                )}
             </TouchableOpacity>
          </View>

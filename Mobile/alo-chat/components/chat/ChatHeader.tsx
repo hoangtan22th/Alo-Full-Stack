@@ -18,6 +18,7 @@ interface ChatHeaderProps {
   userStatus: any;
   onBack: () => void;
   onInfo: () => void;
+  onHeaderClick?: () => void;
   onSearchToggle?: () => void;
 }
 
@@ -31,6 +32,7 @@ export const ChatHeader = ({
   userStatus,
   onBack,
   onInfo,
+  onHeaderClick,
   onSearchToggle,
 }: ChatHeaderProps) => {
   const getOfflineText = (lastActive?: number) => {
@@ -53,7 +55,7 @@ export const ChatHeader = ({
         <TouchableOpacity
           className="flex-row items-center flex-1"
           activeOpacity={0.7}
-          onPress={onInfo}
+          onPress={onHeaderClick || onInfo}
         >
           <View className="relative">
             {avatar ? (

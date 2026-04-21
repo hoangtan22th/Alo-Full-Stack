@@ -26,6 +26,7 @@ import {
   PhotoIcon,
   ChartBarIcon,
   Cog6ToothIcon,
+  ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 import { MessageDTO } from "@/services/messageService";
 import AddMemberModal from "../ui/group/AddMemberModal";
@@ -34,6 +35,7 @@ import NoteModal from "../ui/group/NoteModal";
 import ReminderModal from "../ui/group/ReminderModal";
 import JoinLinkModal from "../ui/group/JoinLinkModal";
 import MemberManagementModal from "../ui/group/MemberManagementModal";
+import GroupSettingsModal from "../ui/group/GroupSettingsModal";
 import { groupService } from "@/services/groupService";
 import { toast } from "sonner";
 import { getMediaUrl } from "../../utils/media";
@@ -83,6 +85,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   const [showJoinLinkModal, setShowJoinLinkModal] = useState(false);
   const [showMemberManagementModal, setShowMemberManagementModal] =
     useState(false);
+  const [showGroupSettingsModal, setShowGroupSettingsModal] = useState(false);
   const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
 
   // Group Info Editing State
@@ -192,7 +195,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
   return (
     <div
-      className={`flex flex-col shrink-0 bg-white h-full transition-all duration-300 ease-in-out border-l border-gray-100 shadow-xl z-20 overflow-hidden ${
+      className={`flex flex-col shrink-0 bg-white h-full transition-all duration-300 ease-in-out border-l border-gray-100 shadow-xl z-[100] overflow-hidden ${
         show ? "w-[340px] xl:w-90 opacity-100" : "w-0 opacity-0"
       }`}
     >
@@ -449,7 +452,11 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
               </h3>
               <div className="space-y-1">
                 {isManager && (
-                  <SettingItem icon={<Cog6ToothIcon />} label="Cài đặt nhóm" />
+                  <SettingItem 
+                    icon={<Cog6ToothIcon />} 
+                    label="Cài đặt nhóm" 
+                    onClick={() => setShowGroupSettingsModal(true)}
+                  />
                 )}
                 <SettingItem
                   icon={<LinkIcon />}
@@ -537,8 +544,12 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
       {showJoinLinkModal && (
         <JoinLinkModal
+          isOpen={showJoinLinkModal}
           groupId={conversationId}
           groupName={conversationInfo?.displayName || "Nhóm"}
+          groupAvatar={conversationInfo?.displayAvatar}
+          isHistoryVisible={conversationInfo?.isHistoryVisible}
+          currentUserName={currentUser?.fullName}
           isManager={isManager}
           onClose={() => setShowJoinLinkModal(false)}
         />
@@ -557,6 +568,27 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
             setShowMemberManagementModal(false);
             setShowAddMemberModal(true);
           }}
+        />
+      )}
+
+      {showGroupSettingsModal && (
+        <GroupSettingsModal
+          groupId={conversationId}
+          groupName={conversationInfo?.displayName || "Nhóm"}
+          groupAvatar={conversationInfo?.displayAvatar}
+          isApprovalRequired={conversationInfo?.isApprovalRequired || false}
+          isLinkEnabled={conversationInfo?.isLinkEnabled || false}
+          isHistoryVisible={conversationInfo?.isHistoryVisible}
+          isHighlightEnabled={conversationInfo?.isHighlightEnabled}
+          permissions={conversationInfo?.permissions}
+          isQuestionEnabled={conversationInfo?.isQuestionEnabled}
+          membershipQuestion={conversationInfo?.membershipQuestion}
+          members={conversationInfo?.members || []}
+          currentUserName={currentUser?.fullName}
+          currentUserRole={currentUserRole}
+          onClose={() => setShowGroupSettingsModal(false)}
+          onRefreshData={onRefreshData}
+          onDisbandGroup={onDisbandGroup}
         />
       )}
     </div>

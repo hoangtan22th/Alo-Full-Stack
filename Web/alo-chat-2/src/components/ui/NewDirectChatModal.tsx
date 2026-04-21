@@ -15,11 +15,13 @@ import { useRouter } from "next/navigation";
 interface NewDirectChatModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onChatCreated?: () => void;
 }
 
 export default function NewDirectChatModal({
   isOpen,
   onClose,
+  onChatCreated,
 }: NewDirectChatModalProps) {
   const router = useRouter();
   const currentUserId = useAuthStore((s) => s.userId);
@@ -79,6 +81,7 @@ export default function NewDirectChatModal({
       }
 
       onClose();
+      if (onChatCreated) onChatCreated();
       router.push(`/chat/${convoId}`);
     } catch (error) {
       toast.error("Lỗi khi tạo cuộc hội thoại");

@@ -154,7 +154,6 @@ export default function ChatPage() {
       isTypingRef.current = true;
       socketService.emitTyping({
         target: conversationId,
-        conversationId: conversationId,
         isGroup: !!conversationInfo?.isGroup,
       });
     } else if (
@@ -166,7 +165,6 @@ export default function ChatPage() {
       isTypingRef.current = false;
       socketService.emitStopTyping({
         target: conversationId,
-        conversationId: conversationId,
         isGroup: !!conversationInfo?.isGroup,
       });
     }
@@ -178,7 +176,6 @@ export default function ChatPage() {
           isTypingRef.current = false;
           socketService.emitStopTyping({
             target: conversationId,
-            conversationId: conversationId,
             isGroup: !!conversationInfo?.isGroup,
           });
         }
@@ -1031,16 +1028,39 @@ export default function ChatPage() {
   };
 
   const handleLeaveGroup = async () => {
+    if (!conversationId || !conversationInfo) return;
+
+    const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+    const myMemberInfo = conversationInfo.members?.find(
+      (m: any) =>
+        String(m.userId) === String(myId) || String(m._id) === String(myId),
+    );
+    const isLeader = myMemberInfo?.role?.toLowerCase() === "leader";
+    const memberCount = conversationInfo.members?.length || 0;
+
+    // Trường hợp 1: Là trưởng nhóm và chỉ còn 1 mình -> Giải tán
+    if (isLeader && memberCount === 1) {
+      handleDisbandGroup();
+      return;
+    }
+
+    // Trường hợp 2: Là trưởng nhóm nhưng còn người khác -> Chặn
+    if (isLeader && memberCount > 1) {
+      alert(
+        "Bạn là trưởng nhóm. Hãy chuyển quyền trưởng nhóm hoặc giải tán nhóm trước khi rời.",
+      );
+      return;
+    }
+
     if (!confirm("Bạn có chắc chắn muốn rời khỏi nhóm này?")) return;
     try {
-      const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
       if (!myId) return;
       await groupService.removeMember(conversationId, myId);
-      alert("Đã rời nhóm.");
+      toast.success("Đã rời nhóm thành công");
       router.push("/chat");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Lỗi rời nhóm:", err);
-      alert("Không thể rời nhóm.");
+      alert(err.response?.data?.message || "Không thể rời nhóm.");
     }
   };
 
@@ -1470,6 +1490,15 @@ export default function ChatPage() {
      RENDER
   ───────────────────────────────────────── */
 
+  const adminIds = useMemo(() => {
+    if (!conversationInfo?.isGroup || !conversationInfo?.members) return new Set<string>();
+    return new Set<string>(
+      conversationInfo.members
+        .filter((m: any) => m.role?.toUpperCase() === "LEADER" || m.role?.toUpperCase() === "DEPUTY")
+        .map((m: any) => String(m.userId || m._id))
+    );
+  }, [conversationInfo]);
+
   const avatarMap = useMemo(
     () =>
       Object.fromEntries(
@@ -1743,7 +1772,7 @@ export default function ChatPage() {
 
             {/* Floating Chat Summary Button */}
             {conversationId !== "alo-bot" && (
-              <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 pointer-events-none flex justify-center w-full">
+              <div className="absolute top-20 left-1/2 -translate-x-1/2 z-10 pointer-events-none flex justify-center w-full">
                 <div className="pointer-events-auto">
                   <ChatSummaryButton
                     conversationId={conversationId}
@@ -1912,8 +1941,14 @@ export default function ChatPage() {
                                   <div
                                     className={`relative max-w-full flex flex-col p-1.5 px-2 border shadow-sm ${
                                       isMine
-                                        ? "bg-blue-50/80 border-blue-100 shadow-blue-900/5 items-end"
-                                        : "bg-white border-gray-100 shadow-gray-900/5 items-start"
+                                        ? "bg-blue-50/80 shadow-blue-900/5 items-end"
+                                        : "bg-white shadow-gray-900/5 items-start"
+                                    } ${
+                                      conversationInfo?.isHighlightEnabled && adminIds.has(String(msg.senderId))
+                                        ? "border-amber-300 ring-2 ring-amber-200/50"
+                                        : isMine
+                                        ? "border-blue-100"
+                                        : "border-gray-100"
                                     } ${bubbleRadius}`}
                                   >
                                     {/* Reply Quote Box */}

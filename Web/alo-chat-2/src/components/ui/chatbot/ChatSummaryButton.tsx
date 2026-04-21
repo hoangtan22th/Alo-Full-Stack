@@ -241,7 +241,7 @@ export default function ChatSummaryButton({
 
   return (
     <>
-      <div className="relative group/btn z-50">
+      <div className="relative group/btn z-10">
         <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full blur-md opacity-30 group-hover/btn:opacity-60 transition duration-300"></div>
 
         <button
