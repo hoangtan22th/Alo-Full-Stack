@@ -3,6 +3,7 @@ package edu.iuh.fit.report_service.dto.request;
 import edu.iuh.fit.report_service.entity.ReportReason;
 import edu.iuh.fit.report_service.entity.TargetType;
 import edu.iuh.fit.report_service.validation.ValidEvidence;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,11 +19,11 @@ import java.util.List;
 @ValidEvidence
 public class ReportCreationRequest {
 
-    @NotNull(message = "Reporter ID cannot be null")
-    private Long reporterId;
+    @NotBlank(message = "Reporter ID cannot be null")
+    private String reporterId;
 
-    @NotNull(message = "Target ID cannot be null")
-    private Long targetId;
+    @NotBlank(message = "Target ID cannot be null")
+    private String targetId;
 
     @NotNull(message = "Target Type is required")
     private TargetType targetType;

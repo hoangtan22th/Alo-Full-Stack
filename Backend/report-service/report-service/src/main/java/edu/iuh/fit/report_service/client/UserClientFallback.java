@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class UserClientFallback implements UserClient {
     @Override
-    public ApiResponse<UserResponse> getUserById(Long id) {
+    public ApiResponse<UserResponse> getUserById(String id) {
         log.warn("Fallback called for getting UserId {}", id);
         UserResponse fallbackUser = UserResponse.builder()
                 .id(id)

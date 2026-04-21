@@ -22,20 +22,19 @@ public class ReportAdminResponse {
     // Aggregated data via Feign
     private UserResponse reporter;
 
-    private Long targetId;
+    private String targetId;
     private UserResponse targetUser; // Will be populated if targetType == USER
     private TargetType targetType;
-
+    
     private ReportReason reason;
     private ReportStatus status;
-
+    
     private String description;
     private List<String> imageUrls;
     private List<Long> messageIds;
-
+    
     private String adminNotes;
-    private Long resolvedBy;
-
+    private String resolvedBy;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

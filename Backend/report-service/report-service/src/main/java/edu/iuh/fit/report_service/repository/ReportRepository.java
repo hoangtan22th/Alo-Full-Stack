@@ -10,6 +10,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ReportRepository extends MongoRepository<Report, String> {
     Page<Report> findByStatus(ReportStatus status, Pageable pageable);
-    Page<Report> findByReporterId(Long reporterId, Pageable pageable);
-    Page<Report> findByTargetId(Long targetId, Pageable pageable);
+    Page<Report> findByReporterId(String reporterId, Pageable pageable);
+    Page<Report> findByTargetId(String targetId, Pageable pageable);
 }

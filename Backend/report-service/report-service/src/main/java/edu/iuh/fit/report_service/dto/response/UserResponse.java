@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserResponse {
-    private Long id;
+    private String id;
     private String name;
     private String avatar;
     // other fields if needed, Feign will ignore unknown fields

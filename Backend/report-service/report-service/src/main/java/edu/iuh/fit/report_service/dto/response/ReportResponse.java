@@ -13,8 +13,8 @@ import java.time.LocalDateTime;
 public class ReportResponse {
 
     private String id;
-    private Long reporterId;
-    private Long targetId;
+    private String reporterId;
+    private String targetId;
     private TargetType targetType;
     private ReportReason reason;
     private ReportStatus status;

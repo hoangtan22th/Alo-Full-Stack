@@ -26,11 +26,11 @@ public class Report {
 
     @Indexed
     @Field("reporter_id")
-    private Long reporterId;
+    private String reporterId;
 
     @Indexed
     @Field("target_id")
-    private Long targetId;
+    private String targetId;
 
     @Field("target_type")
     private TargetType targetType;
@@ -56,7 +56,7 @@ public class Report {
     private String adminNotes;
 
     @Field("resolved_by")
-    private Long resolvedBy;
+    private String resolvedBy;
 
     @CreatedDate
     @Field("created_at")

@@ -146,7 +146,7 @@ public class ReportServiceImpl implements ReportService {
                 .build();
     }
 
-    private UserResponse fetchUserSafe(Long userId) {
+    private UserResponse fetchUserSafe(String userId) {
         try {
             ApiResponse<UserResponse> response = userClient.getUserById(userId);
             if (response != null && response.getData() != null) {

@@ -1,4 +1,4 @@
-package edu.iuh.fit.report_service.dto.event;
+package edu.iuh.fit.auth_service.dto.event;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
