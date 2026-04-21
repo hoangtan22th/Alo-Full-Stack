@@ -5,9 +5,10 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { socketService } from "@/services/socketService";
 import { messageService } from "@/services/messageService";
 
-const ZegoCallRoom = dynamic(() => import("@/components/ui/call/ZegoCallRoom"), { ssr: false });
+const LiveKitCallRoom = dynamic(() => import("@/components/ui/call/LiveKitCallRoom"), { ssr: false });
 import { PhoneIcon, VideoCameraIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
+import IncomingCallModal from "@/components/ui/call/IncomingCallModal";
 
 interface CallState {
   active: boolean;
@@ -16,6 +17,9 @@ interface CallState {
   isCaller?: boolean;
   isGroup?: boolean;
   hasSomeoneJoined?: boolean;
+  targetName?: string;
+  targetAvatar?: string;
+  members?: any[];
 }
 
 interface IncomingCall {
@@ -26,15 +30,16 @@ interface IncomingCall {
     avatar?: string;
   };
   isVideo: boolean;
+  isGroup?: boolean;
 }
 
 interface CallContextType {
   callState: CallState;
   incomingCall: IncomingCall | null;
-  startCall: (targetRoomId: string, isVideo: boolean, isGroup: boolean) => void;
+  startCall: (targetRoomId: string, isVideo: boolean, isGroup: boolean, targetName?: string, targetAvatar?: string, inviteeIds?: string[], members?: any[]) => void;
   acceptCall: () => void;
   declineCall: () => void;
-  endCall: () => void;
+  endCall: (duration?: number) => void;
 }
 
 const CallContext = createContext<CallContextType | undefined>(undefined);
@@ -143,6 +148,7 @@ export default function CallProvider({ children }: { children: React.ReactNode }
     };
 
     const handleCallCanceled = (data: { roomId: string }) => {
+      // Nếu mình đang rung chuông mà họ hủy -> Tắt rung
       if (incomingCall?.roomId === data.roomId) {
         setIncomingCall(null);
         stopRingtone();
@@ -153,14 +159,18 @@ export default function CallProvider({ children }: { children: React.ReactNode }
     const handleCallDeclined = (data: { roomId: string }) => {
       if (callStateRef.current.roomId === data.roomId) {
         toast.error("Đối phương đã từ chối cuộc gọi");
-        endCall();
+        if (!callStateRef.current.isGroup) {
+          endCall();
+        }
       }
     };
 
     const handleCallBusy = (data: { roomId: string }) => {
       if (callStateRef.current.roomId === data.roomId) {
         toast.error("Đối phương đang bận");
-        endCall();
+        if (!callStateRef.current.isGroup) {
+          endCall();
+        }
       }
     };
 
@@ -177,13 +187,13 @@ export default function CallProvider({ children }: { children: React.ReactNode }
     };
   }, [myId, incomingCall, playRingtone, stopRingtone]);
 
-  const startCall = (targetRoomId: string, isVideo: boolean, isGroup: boolean) => {
+  const startCall = (targetRoomId: string, isVideo: boolean, isGroup: boolean, targetName?: string, targetAvatar?: string, inviteeIds?: string[], members?: any[]) => {
     if (callState.active) {
       toast.error("Bạn đang trong một cuộc gọi khác");
       return;
     }
 
-    setCallState({ active: true, isVideo, roomId: targetRoomId, isCaller: true, isGroup, hasSomeoneJoined: false });
+    setCallState({ active: true, isVideo, roomId: targetRoomId, isCaller: true, isGroup, hasSomeoneJoined: false, targetName, targetAvatar, members });
     playRingtone();
 
     socketService.initiateCall({
@@ -193,7 +203,9 @@ export default function CallProvider({ children }: { children: React.ReactNode }
         name: currentUser?.fullName || "Tôi",
         avatar: currentUser?.avatar
       },
-      isVideo
+      isVideo,
+      inviteeIds,
+      isGroup
     });
   };
 
@@ -205,8 +217,10 @@ export default function CallProvider({ children }: { children: React.ReactNode }
       isVideo: incomingCall.isVideo, 
       roomId: incomingCall.roomId, 
       isCaller: false, 
-      isGroup: false, // 1-1 call by default for incoming
-      hasSomeoneJoined: true 
+      isGroup: incomingCall.isGroup || false,
+      hasSomeoneJoined: true,
+      targetName: incomingCall.caller?.name,
+      targetAvatar: incomingCall.caller?.avatar
     });
     setIncomingCall(null);
   };
@@ -231,15 +245,59 @@ export default function CallProvider({ children }: { children: React.ReactNode }
     setIncomingCall(null);
   };
 
-  const endCall = () => {
+  const endCall = (duration?: number) => {
     const currentRoomId = callState.roomId;
     if (currentRoomId) {
-      socketService.cancelCall({ targetRoom: currentRoomId });
+      // Chỉ gửi CANCEL_CALL nếu là người gọi
+      if (callState.isCaller) {
+        socketService.cancelCall({ 
+          targetRoom: currentRoomId,
+          inviteeIds: callState.members?.map(m => m.userId)
+        });
+        
+        // Nếu chưa ai bắt máy -> Lưu tin nhắn gọi nhỡ
+        if (!callState.hasSomeoneJoined) {
+          messageService.sendMessage({
+            conversationId: currentRoomId,
+            type: "system",
+            content: callState.isVideo ? "Cuộc gọi video nhỡ" : "Cuộc gọi thoại nhỡ",
+            metadata: { 
+              callType: callState.isVideo ? 'video' : 'audio', 
+              callStatus: 'canceled', 
+              callDuration: 0 
+            }
+          });
+        }
+      }
+
+      // Nếu cuộc gọi đã kết thúc và có thời lượng -> Lưu tin nhắn kết thúc
+      if (callState.hasSomeoneJoined && duration !== undefined) {
+        const mins = Math.floor(duration / 60);
+        const secs = duration % 60;
+        const durationStr = mins > 0 ? `${mins} phút ${secs} giây` : `${secs} giây`;
+        
+        messageService.sendMessage({
+          conversationId: currentRoomId,
+          type: "system",
+          content: `Cuộc gọi ${callState.isVideo ? 'video' : 'thoại'} kết thúc • ${durationStr}`,
+          metadata: { 
+            callType: callState.isVideo ? 'video' : 'audio', 
+            callStatus: 'ended', 
+            callDuration: duration 
+          }
+        });
+      }
     }
     stopRingtone();
     setCallState({ active: false, isVideo: false, hasSomeoneJoined: false });
     setCallEndedUi(false);
   };
+
+  const handleUserJoined = useCallback(() => {
+    console.log("👥 [Call] User joined, stopping ringtone");
+    setCallState(prev => ({ ...prev, hasSomeoneJoined: true }));
+    stopRingtone();
+  }, [stopRingtone]);
 
   return (
     <CallContext.Provider value={{ callState, incomingCall, startCall, acceptCall, declineCall, endCall }}>
@@ -249,68 +307,26 @@ export default function CallProvider({ children }: { children: React.ReactNode }
         <>
           {/* Incoming Call Modal */}
           {incomingCall && !callState.active && (
-            <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
-              <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm overflow-hidden flex flex-col items-center p-8 relative animate-in zoom-in-95 duration-300">
-                <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-blue-50 to-transparent"></div>
-                
-                <div className="relative mb-6">
-                  <div className="absolute inset-0 bg-blue-400 rounded-full animate-ping opacity-20"></div>
-                  {incomingCall.caller?.avatar ? (
-                    <img src={incomingCall.caller.avatar} alt="Avatar" className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg relative z-10" />
-                  ) : (
-                    <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-white text-3xl font-bold border-4 border-white shadow-lg relative z-10">
-                      {(incomingCall.caller?.name || "?").charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                </div>
-
-                <h3 className="text-xl font-black text-gray-900 mb-1 z-10">{incomingCall.caller?.name || "Ai đó"}</h3>
-                <p className="text-blue-600 font-bold text-sm animate-pulse z-10 mb-8">
-                  Đang gọi {incomingCall.isVideo ? "Video" : "Thoại"} cho bạn...
-                </p>
-
-                <div className="flex items-center gap-12 z-10">
-                  <button 
-                    onClick={declineCall}
-                    className="flex flex-col items-center gap-3 group"
-                  >
-                    <div className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center text-white shadow-lg shadow-red-200 group-hover:bg-red-600 group-active:scale-90 transition-all">
-                      <XMarkIcon className="w-8 h-8" strokeWidth={2.5} />
-                    </div>
-                    <span className="text-xs font-bold text-gray-500">Từ chối</span>
-                  </button>
-
-                  <button 
-                    onClick={acceptCall}
-                    className="flex flex-col items-center gap-3 group"
-                  >
-                    <div className="w-16 h-16 rounded-full bg-green-500 flex items-center justify-center text-white shadow-lg shadow-green-200 group-hover:bg-green-600 group-active:scale-90 transition-all animate-bounce">
-                      {incomingCall.isVideo ? <VideoCameraIcon className="w-8 h-8"/> : <PhoneIcon className="w-8 h-8"/>}
-                    </div>
-                    <span className="text-xs font-bold text-gray-500">Trả lời</span>
-                  </button>
-                </div>
-              </div>
-            </div>
+            <IncomingCallModal 
+              incomingCall={incomingCall}
+              onAccept={acceptCall}
+              onDecline={declineCall}
+            />
           )}
 
-          {/* Zego Call Room */}
+          {/* LiveKit Call Room */}
           {callState.active && !callEndedUi && callState.roomId && (
-            <ZegoCallRoom
+            <LiveKitCallRoom
               roomId={callState.roomId}
-              userId={myId || "unknown"}
               userName={currentUser?.fullName || "Tôi"}
               isVideoCall={callState.isVideo}
-              isGroup={callState.isGroup || false}
-              onLeaveRoom={() => endCall()}
-              onUserJoin={() => {
-                console.log("👥 [Call] User joined, stopping ringtone");
-                setCallState(prev => ({ ...prev, hasSomeoneJoined: true }));
-                stopRingtone();
-              }}
+              onLeaveRoom={(duration) => endCall(duration)}
+              onUserJoin={handleUserJoined}
               myAvatar={currentUser?.avatar}
-              targetName={incomingCall?.caller?.name}
-              targetAvatar={incomingCall?.caller?.avatar}
+              targetName={callState.targetName || incomingCall?.caller?.name}
+              targetAvatar={callState.targetAvatar || incomingCall?.caller?.avatar}
+              conversationMembers={callState.members}
+              isGroup={callState.isGroup || false}
             />
           )}
         </>

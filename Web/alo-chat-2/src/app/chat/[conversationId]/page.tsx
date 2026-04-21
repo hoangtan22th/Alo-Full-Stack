@@ -10,6 +10,7 @@ import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import ChatSummaryButton from "@/components/ui/chatbot/ChatSummaryButton";
 import { CallSystemMessage } from "@/components/ui/call/CallSystemMessage";
 import { useCall } from "@/components/layout/CallProvider";
+import GroupCallSelector from "@/components/ui/call/GroupCallSelector";
 
 import JSZip from "jszip";
 import {
@@ -40,8 +41,10 @@ import {
   PencilIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  CheckIcon,
   PhotoIcon,
 } from "@heroicons/react/24/outline";
+import { motion } from "framer-motion";
 import BotChatArea from "@/components/ui/BotChatArea";
 import { useAuthStore } from "@/store/useAuthStore";
 import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
@@ -98,6 +101,8 @@ export default function ChatPage() {
   // State cho tin nhắn ghim
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
   const [showPinnedModal, setShowPinnedModal] = useState(false);
+  const [showCallMemberSelector, setShowCallMemberSelector] = useState<{isVideo: boolean} | null>(null);
+  const [selectedCallMembers, setSelectedCallMembers] = useState<string[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
@@ -603,11 +608,31 @@ export default function ChatPage() {
   }, [conversationId, currentUser, fetchConversationInfo]);
 
   const handleStartCall = useCallback(
-    (isVideo: boolean) => {
-      startCall(conversationId, isVideo, !!conversationInfo?.isGroup);
+    (isVideo: boolean, forcedInviteeIds?: string[]) => {
+      if (conversationInfo?.isGroup && !forcedInviteeIds) {
+        setShowCallMemberSelector({ isVideo });
+        setSelectedCallMembers([]);
+        return;
+      }
+
+      startCall(
+        conversationId, 
+        isVideo, 
+        !!conversationInfo?.isGroup,
+        conversationInfo?.displayName,
+        conversationInfo?.displayAvatar,
+        forcedInviteeIds,
+        conversationInfo?.members
+      );
     },
     [conversationId, conversationInfo, startCall],
   );
+
+  const confirmGroupCall = (selectedIds: string[]) => {
+    const isVideo = showCallMemberSelector?.isVideo || false;
+    setShowCallMemberSelector(null);
+    handleStartCall(isVideo, selectedIds);
+  };
 
   // Handle call query param
   useEffect(() => {
@@ -1437,6 +1462,17 @@ export default function ChatPage() {
                 </div>
               </div>
             )}
+
+            {/* Modal chọn thành viên gọi nhóm */}
+            <GroupCallSelector 
+              isOpen={!!showCallMemberSelector}
+              onClose={() => setShowCallMemberSelector(null)}
+              onConfirm={confirmGroupCall}
+              members={conversationInfo?.members || []}
+              myId={myId || ""}
+              userCache={userCache}
+              isVideo={showCallMemberSelector?.isVideo || false}
+            />
 
             {/* Floating Chat Summary Button */}
             {conversationId !== "alo-bot" && (
