@@ -92,7 +92,7 @@ public class UserServiceImpl implements UserService {
         userProfileRepository.save(user);
 
         // Phát sự kiện sang auth-service để ban account
-        rabbitMQPublisher.publishUserBannedEvent(id);
+        rabbitMQPublisher.publishUserBannedEvent(id, "Banned by Admin manually from Dashboard");
     }
 
     @Override
