@@ -8,6 +8,7 @@ import { socketService } from "@/services/socketService";
 import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useChatStore } from "@/store/useChatStore";
+import { contactService } from "@/services/contactService";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -199,6 +200,7 @@ export default function ConversationSidebar() {
   const [showManageLabelsModal, setShowManageLabelsModal] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Record<string, boolean>>({});
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+  const [friendIds, setFriendIds] = useState<Set<string>>(new Set());
   const { typingUsers } = useChatStore();
   const menuRef = useRef<HTMLDivElement>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
@@ -331,13 +333,17 @@ export default function ConversationSidebar() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      const friends = await contactService.getFriendsList();
+      const fIds = new Set(friends.map(f => f.requesterId === currentUser?.id ? f.recipientId : f.requesterId));
+      setFriendIds(fIds);
+      
       await Promise.all([fetchGroups(), fetchLabelsInfo(), fetchPinnedInfo()]);
     } catch (error) {
       console.error("Lỗi tải dữ liệu:", error);
     } finally {
       setLoading(false);
     }
-  }, [fetchGroups, fetchLabelsInfo, fetchPinnedInfo]);
+  }, [fetchGroups, fetchLabelsInfo, fetchPinnedInfo, currentUser]);
 
   useEffect(() => {
     fetchData();
@@ -552,10 +558,14 @@ export default function ConversationSidebar() {
     const tabMatch = activeTab === "Ưu tiên" ? folder === "priority" : folder === "other";
     if (!tabMatch) return false;
 
-    // Filter by Label
+    // Filter by Label / Category
     if (selectedLabelId) {
       if (selectedLabelId === "none") {
         return !labelAssignments[chat.id];
+      }
+      if (selectedLabelId === "stranger") {
+        if (chat.isGroup || chat.id === BOT_ID) return false;
+        return chat.otherMemberUserId && !friendIds.has(chat.otherMemberUserId);
       }
       const chatLabelId = labelAssignments[chat.id]?._id || labelAssignments[chat.id]?.id;
       return chatLabelId === selectedLabelId;
@@ -641,37 +651,64 @@ export default function ConversationSidebar() {
                 </button>
               ))}
             </div>
-            <div className="relative group/filter">
+            <div className="relative group/filter pb-4 -mb-4">
               <button className={`p-1.5 rounded-lg transition-colors ${selectedLabelId ? "bg-blue-50 text-blue-500" : "text-gray-400 hover:text-black"}`}>
                 <Bars3BottomRightIcon className="w-4 h-4" />
               </button>
               
-              {/* Label Filter Dropdown */}
-              <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-100 rounded-xl shadow-xl hidden group-hover/filter:block z-[90] p-1 animate-in fade-in zoom-in-95 duration-150">
-                <p className="px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 mb-1">Lọc theo nhãn</p>
-                <button 
-                  onClick={() => setSelectedLabelId(null)}
-                  className={`flex items-center gap-2 w-full px-3 py-2 text-[12px] font-bold rounded-lg transition-colors ${!selectedLabelId ? "bg-gray-50 text-black" : "text-gray-500 hover:bg-gray-50"}`}
-                >
-                  Tất cả
-                </button>
-                <button 
-                  onClick={() => setSelectedLabelId("none")}
-                  className={`flex items-center gap-2 w-full px-3 py-2 text-[12px] font-bold rounded-lg transition-colors ${selectedLabelId === "none" ? "bg-gray-50 text-black" : "text-gray-500 hover:bg-gray-50"}`}
-                >
-                  <div className="w-2 h-2 rounded-full bg-gray-200" />
-                  Không có nhãn
-                </button>
-                {labels.map(l => (
-                  <button 
-                    key={l._id || l.id}
-                    onClick={() => setSelectedLabelId(l._id || l.id)}
-                    className={`flex items-center gap-2 w-full px-3 py-2 text-[12px] font-bold rounded-lg transition-colors ${selectedLabelId === (l._id || l.id) ? "bg-gray-50 text-black" : "text-gray-700 hover:bg-gray-50"}`}
-                  >
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: l.color }} />
-                    {l.name}
-                  </button>
-                ))}
+              {/* Label Filter Dropdown Wrapper with bridge */}
+              <div className="absolute right-0 top-[100%] pt-2 w-64 hidden group-hover/filter:block z-[90] animate-in fade-in zoom-in-95 duration-150">
+                {/* Bridge to extend hover area */}
+                <div className="absolute -top-4 left-[-20%] right-[-10%] h-6 bg-transparent" />
+                
+                <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl p-1 overflow-hidden relative">
+                  <p className="px-3 py-2.5 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 mb-1">Lọc theo danh mục</p>
+                  <div className="flex flex-col gap-0.5">
+                    <button 
+                      onClick={() => setSelectedLabelId(null)}
+                      className={`flex items-center gap-3 w-full px-3 py-2.5 text-[12px] font-bold rounded-xl transition-colors ${!selectedLabelId ? "bg-gray-50 text-black" : "text-gray-500 hover:bg-gray-50"}`}
+                    >
+                      <div className="w-5 h-5 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full ring-2 ring-gray-200" />
+                      </div>
+                      Tất cả tin nhắn
+                    </button>
+                    <button 
+                      onClick={() => setSelectedLabelId("stranger")}
+                      className={`flex items-center gap-3 w-full px-3 py-2.5 text-[12px] font-bold rounded-xl transition-colors ${selectedLabelId === "stranger" ? "bg-gray-50 text-black" : "text-gray-500 hover:bg-gray-50"}`}
+                    >
+                      <div className="w-5 h-5 flex items-center justify-center">
+                        <UserIcon className="w-4 h-4 text-gray-400" />
+                      </div>
+                      Tin nhắn từ người lạ
+                    </button>
+                    <button 
+                      onClick={() => setSelectedLabelId("none")}
+                      className={`flex items-center gap-3 w-full px-3 py-2.5 text-[12px] font-bold rounded-xl transition-colors ${selectedLabelId === "none" ? "bg-gray-50 text-black" : "text-gray-500 hover:bg-gray-50"}`}
+                    >
+                      <div className="w-5 h-5 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-gray-100 border border-gray-200" />
+                      </div>
+                      Chưa gắn thẻ phân loại
+                    </button>
+                    <div className="h-px bg-gray-50 my-1 mx-2" />
+                    {labels.length > 0 && (
+                      <p className="px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest opacity-50">Thẻ phân loại</p>
+                    )}
+                    {labels.map(l => (
+                      <button 
+                        key={l._id || l.id}
+                        onClick={() => setSelectedLabelId(l._id || l.id)}
+                        className={`flex items-center gap-3 w-full px-3 py-2.5 text-[12px] font-bold rounded-xl transition-colors ${selectedLabelId === (l._id || l.id) ? "bg-gray-50 text-black" : "text-gray-700 hover:bg-gray-50"}`}
+                      >
+                        <div className="w-5 h-5 flex items-center justify-center">
+                          <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: l.color }} />
+                        </div>
+                        {l.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
