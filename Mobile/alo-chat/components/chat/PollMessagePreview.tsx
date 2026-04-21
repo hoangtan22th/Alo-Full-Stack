@@ -6,7 +6,7 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { ChartBarIcon, CheckCircleIcon } from "react-native-heroicons/solid";
+import { ChartBarIcon, CheckCircleIcon, CheckIcon } from "react-native-heroicons/solid";
 import { PlusCircleIcon } from "react-native-heroicons/outline";
 import {
   pollService,
@@ -159,7 +159,9 @@ export const PollMessagePreview = ({
   const totalVotes = results.reduce((acc, r) => acc + r.count, 0) || 1; // avoid / 0
 
   return (
-    <View
+    <TouchableOpacity
+      onPress={handleOpenDetails}
+      activeOpacity={0.95}
       style={{
         width: 300,
         backgroundColor: "white",
@@ -255,11 +257,19 @@ export const PollMessagePreview = ({
                 }}
               >
                 {isSelected ? (
-                  <CheckCircleIcon
-                    size={20}
-                    color="#3b82f6"
-                    style={{ marginRight: 8 }}
-                  />
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: poll.settings.allowMultipleAnswers ? 4 : 10,
+                      backgroundColor: "#3b82f6",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginRight: 8,
+                    }}
+                  >
+                    <CheckIcon size={14} color="white" />
+                  </View>
                 ) : (
                   <View
                     style={{
@@ -336,69 +346,52 @@ export const PollMessagePreview = ({
       {/* Actions */}
       <View
         style={{
-          flexDirection: "row",
           borderTopWidth: 1,
           borderTopColor: "#f3f4f6",
         }}
       >
-        <TouchableOpacity
-          onPress={handleOpenDetails}
-          style={{
-            flex: 1,
-            paddingVertical: 12,
-            alignItems: "center",
-            borderRightWidth: 1,
-            borderRightColor: "#f3f4f6",
-          }}
-        >
-          <Text style={{ fontSize: 14, fontWeight: "600", color: "#6b7280" }}>
-            Chi tiết
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={handleVote}
-          disabled={submitting || readonly || selectedOptions.length === 0}
-          style={{
-            flex: 1,
-            paddingVertical: 12,
-            alignItems: "center",
-            backgroundColor:
-              !hasVoted && selectedOptions.length > 0 && !readonly
-                ? "#3b82f6"
-                : "transparent",
-          }}
-        >
-          {submitting ? (
-            <ActivityIndicator
-              size="small"
-              color={
-                !hasVoted && selectedOptions.length > 0 && !readonly
-                  ? "white"
-                  : isSender
-                    ? "white"
-                    : "#3b82f6"
-              }
-            />
-          ) : (
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "bold",
-                color: hasVoted
-                  ? "#10b981"
-                  : selectedOptions.length > 0 && !readonly
-                    ? "white"
-                    : isSender
-                      ? "#d1d5db"
-                      : "#9ca3af",
-              }}
-            >
-              {hasVoted ? "✓ Đã chọn" : "Bình chọn"}
+        {hasVoted ? (
+          <TouchableOpacity
+            onPress={handleOpenDetails}
+            style={{
+              paddingVertical: 12,
+              alignItems: "center",
+              backgroundColor: "transparent",
+            }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: "bold", color: "#3b82f6" }}>
+              Đổi bình chọn
             </Text>
-          )}
-        </TouchableOpacity>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={selectedOptions.length > 0 ? handleVote : handleOpenDetails}
+            disabled={submitting || readonly}
+            style={{
+              paddingVertical: 12,
+              alignItems: "center",
+              backgroundColor: selectedOptions.length > 0 ? "#3b82f6" : "transparent",
+            }}
+          >
+            {submitting ? (
+              <ActivityIndicator
+                size="small"
+                color={selectedOptions.length > 0 ? "white" : "#3b82f6"}
+              />
+            ) : (
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "bold",
+                  color: selectedOptions.length > 0 ? "white" : "#3b82f6",
+                }}
+              >
+                Bình chọn
+              </Text>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
