@@ -879,7 +879,7 @@ export default function GroupListPage() {
 
       {showQrModal && selectedGroup && (
         <div
-          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
           onClick={() => setShowQrModal(false)}
         >
           <div
@@ -916,7 +916,7 @@ export default function GroupListPage() {
 
       {confirmModal.isOpen && (
         <div
-          className="fixed inset-0 z-[140] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-[11100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
           onClick={() =>
             !leaveLoading &&
             setConfirmModal((prev) => ({ ...prev, isOpen: false }))

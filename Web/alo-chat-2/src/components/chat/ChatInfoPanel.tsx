@@ -544,8 +544,11 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
       {showJoinLinkModal && (
         <JoinLinkModal
+          isOpen={showJoinLinkModal}
           groupId={conversationId}
           groupName={conversationInfo?.displayName || "Nhóm"}
+          groupAvatar={conversationInfo?.displayAvatar}
+          isHistoryVisible={conversationInfo?.isHistoryVisible}
           isManager={isManager}
           onClose={() => setShowJoinLinkModal(false)}
         />
@@ -571,12 +574,19 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
         <GroupSettingsModal
           groupId={conversationId}
           groupName={conversationInfo?.displayName || "Nhóm"}
+          groupAvatar={conversationInfo?.displayAvatar}
           isApprovalRequired={conversationInfo?.isApprovalRequired || false}
           isLinkEnabled={conversationInfo?.isLinkEnabled || false}
+          isHistoryVisible={conversationInfo?.isHistoryVisible}
+          isHighlightEnabled={conversationInfo?.isHighlightEnabled}
+          permissions={conversationInfo?.permissions}
           isQuestionEnabled={conversationInfo?.isQuestionEnabled}
           membershipQuestion={conversationInfo?.membershipQuestion}
+          members={conversationInfo?.members || []}
+          currentUserRole={currentUserRole}
           onClose={() => setShowGroupSettingsModal(false)}
           onRefreshData={onRefreshData}
+          onDisbandGroup={onDisbandGroup}
         />
       )}
     </div>
