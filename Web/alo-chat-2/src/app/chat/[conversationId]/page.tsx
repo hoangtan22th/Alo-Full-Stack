@@ -499,150 +499,126 @@ export default function ChatPage() {
     socketService.joinRoom(conversationId);
 
     // Lắng nghe tin nhắn mới
-    socketService.off("message-received"); // remove listener cũ trước khi gắn mới
-    socketService.onMessageReceived((newMsg: any) => {
-      const activeConvoId = conversationIdRef.current;
-      if (String(newMsg.conversationId) === String(activeConvoId)) {
-        setMessages((prev) => {
-          // Tránh duplicate: nếu tin đã có trong list (do optimistic UI) thì replace
-          const existsIdx = prev.findIndex(
-            (m) => m._id === newMsg._id || m._id.startsWith("temp_"),
-          );
-          if (existsIdx !== -1 && prev[existsIdx]._id.startsWith("temp_")) {
-            // Replace optimistic message bằng message thật từ socket
-            const updated = [...prev];
-            updated[existsIdx] = newMsg;
-            return updated;
-          }
-          // Duplicate bảo vệ — nếu đã có _id này thì bỏ qua
-          if (prev.some((m) => m._id === newMsg._id)) return prev;
-          return [...prev, newMsg];
-        });
-
-        // Cập nhật media/files cho InfoPanel
-        if (newMsg.type === "image" || newMsg.type === "file") {
-          setMediaMessages((prev) => {
-            if (prev.some((m) => m._id === newMsg._id)) return prev;
-            return [newMsg, ...prev];
-          });
-        }
-
-        // Nếu tin từ người khác → đánh dấu đã đọc
-        const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
-        if (myId && String(newMsg.senderId) !== String(myId)) {
-          messageService.markAsRead(activeConvoId).catch(console.error);
-        }
-      }
-    });
-
-    // Lắng nghe đối phương đã đọc
-    socketService.off("messages-read");
-    socketService.onMessagesRead((data) => {
-      if (String(data.conversationId) === String(conversationIdRef.current)) {
-        setMessages((prev) => prev.map((m) => ({ ...m, isRead: true })));
-      }
-    });
-
-    // Lắng nghe thay đổi cảm xúc
-    socketService.off("message-reaction-updated");
-    socketService.onMessageReactionUpdated((data) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m._id === data.messageId ? { ...m, reactions: data.reactions } : m,
-        ),
-      );
-    });
-
-    // Lắng nghe thu hồi tin nhắn
-    socketService.off("message-revoked");
-    socketService.onMessageRevoked((data) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m._id === data.messageId
-            ? {
-              ...m,
-              isRevoked: true,
-              revokedAt: data.revokedAt || new Date().toISOString(),
+    const unsubs = [
+      socketService.onMessageReceived((newMsg: any) => {
+        const activeConvoId = conversationIdRef.current;
+        if (String(newMsg.conversationId) === String(activeConvoId)) {
+          setMessages((prev) => {
+            // Tránh duplicate: nếu tin đã có trong list (do optimistic UI) thì replace
+            const existsIdx = prev.findIndex(
+              (m) => m._id === newMsg._id || m._id.startsWith("temp_"),
+            );
+            if (existsIdx !== -1 && prev[existsIdx]._id.startsWith("temp_")) {
+              // Replace optimistic message bằng message thật từ socket
+              const updated = [...prev];
+              updated[existsIdx] = newMsg;
+              return updated;
             }
-            : m,
-        ),
-      );
-    });
+            // Duplicate bảo vệ — nếu đã có _id này thì bỏ qua
+            if (prev.some((m) => m._id === newMsg._id)) return prev;
+            return [...prev, newMsg];
+          });
 
-    // Lắng nghe ghim/bỏ ghim tin nhắn real-time
-    socketService.off("message-pinned");
-    socketService.onMessagePinned((data: any) => {
-      // data: { messageId, isPinned, conversationId }
-      if (String(data.conversationId) === String(conversationIdRef.current)) {
+          // Cập nhật media/files cho InfoPanel
+          if (newMsg.type === "image" || newMsg.type === "file") {
+            setMediaMessages((prev) => {
+              if (prev.some((m) => m._id === newMsg._id)) return prev;
+              return [newMsg, ...prev];
+            });
+          }
+
+          // Nếu tin từ người khác → đánh dấu đã đọc
+          const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
+          if (myId && String(newMsg.senderId) !== String(myId)) {
+            messageService.markAsRead(activeConvoId).catch(console.error);
+          }
+        }
+      }),
+
+      socketService.onMessagesRead((data) => {
+        if (String(data.conversationId) === String(conversationIdRef.current)) {
+          setMessages((prev) => prev.map((m) => ({ ...m, isRead: true })));
+        }
+      }),
+
+      socketService.onMessageReactionUpdated((data) => {
         setMessages((prev) =>
           prev.map((m) =>
-            m._id === data.messageId ? { ...m, isPinned: data.isPinned } : m,
+            m._id === data.messageId ? { ...m, reactions: data.reactions } : m,
           ),
         );
-      }
-    });
+      }),
 
-    // Lắng nghe cập nhật tin nhắn (VD: thu hồi 1 ảnh trong album)
-    socketService.off("message-updated");
-    socketService.onMessageUpdated((newMsg: any) => {
-      if (String(newMsg.conversationId) === String(conversationIdRef.current)) {
+      socketService.onMessageRevoked((data) => {
         setMessages((prev) =>
-          prev.map((m) => (m._id === newMsg._id ? newMsg : m)),
+          prev.map((m) =>
+            m._id === data.messageId
+              ? {
+                ...m,
+                isRevoked: true,
+                revokedAt: data.revokedAt || new Date().toISOString(),
+              }
+              : m,
+          ),
         );
-      }
-    });
+      }),
 
-    // --- REALTIME INFO PANEL & CONVERSATION SYNC ---
-    // Lắng nghe cập nhật thông tin nhóm/cuộc trò chuyện
-    socketService.off("GROUP_UPDATED");
-    socketService.onGroupUpdated((data: any) => {
-      const activeConvoId = conversationIdRef.current;
-      const updatedConvoId = data._id || data.conversationId || data.id;
-      if (String(updatedConvoId) === String(activeConvoId)) {
-        console.log("🔄 [Realtime] Group updated, refreshing info...");
-        fetchConversationInfo();
-      }
-    });
+      socketService.onMessagePinned((data: any) => {
+        if (String(data.conversationId) === String(conversationIdRef.current)) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m._id === data.messageId ? { ...m, isPinned: data.isPinned } : m,
+            ),
+          );
+        }
+      }),
 
-    socketService.off("CONVERSATION_UPDATED");
-    socketService.onConversationUpdated((data: any) => {
-      const activeConvoId = conversationIdRef.current;
-      const updatedConvoId = data._id || data.conversationId || data.id;
-      if (String(updatedConvoId) === String(activeConvoId)) {
-        console.log("🔄 [Realtime] Conversation updated, refreshing info...");
-        fetchConversationInfo();
-      }
-    });
+      socketService.onMessageUpdated((newMsg: any) => {
+        if (String(newMsg.conversationId) === String(conversationIdRef.current)) {
+          setMessages((prev) =>
+            prev.map((m) => (m._id === newMsg._id ? newMsg : m)),
+          );
+        }
+      }),
 
-    // Lắng nghe giải tán nhóm hoặc bị mời ra khỏi nhóm
-    socketService.off("CONVERSATION_REMOVED");
-    socketService.onConversationRemoved((data: any) => {
-      const activeConvoId = conversationIdRef.current;
-      if (String(data.conversationId) === String(activeConvoId)) {
-        const reason = data.reason || "removed";
-        const groupName = data.groupName || "cuộc trò chuyện";
+      socketService.onGroupUpdated((data: any) => {
+        const activeConvoId = conversationIdRef.current;
+        const updatedConvoId = data._id || data.conversationId || data.id;
+        if (String(updatedConvoId) === String(activeConvoId)) {
+          console.log("🔄 [Realtime] Group updated, refreshing info...");
+          fetchConversationInfo();
+        }
+      }),
 
-        if (reason === "leave") return; // Tự rời thì đã handle ở button click
+      socketService.onConversationUpdated((data: any) => {
+        const activeConvoId = conversationIdRef.current;
+        const updatedConvoId = data._id || data.conversationId || data.id;
+        if (String(updatedConvoId) === String(activeConvoId)) {
+          console.log("🔄 [Realtime] Conversation updated, refreshing info...");
+          fetchConversationInfo();
+        }
+      }),
 
-        toast.info(
-          reason === "delete"
-            ? `Nhóm "${groupName}" đã được giải tán`
-            : `Bạn đã không còn là thành viên của nhóm "${groupName}"`,
-        );
-        router.replace("/chat");
-      }
-    });
+      socketService.onConversationRemoved((data: any) => {
+        const activeConvoId = conversationIdRef.current;
+        if (String(data.conversationId) === String(activeConvoId)) {
+          const reason = data.reason || "removed";
+          const groupName = data.groupName || "cuộc trò chuyện";
+
+          if (reason === "leave") return;
+
+          toast.info(
+            reason === "delete"
+              ? `Nhóm "${groupName}" đã được giải tán`
+              : `Bạn đã không còn là thành viên của nhóm "${groupName}"`,
+          );
+          router.replace("/chat");
+        }
+      }),
+    ];
 
     return () => {
-      socketService.off("message-received");
-      socketService.off("messages-read");
-      socketService.off("message-reaction-updated");
-      socketService.off("message-revoked");
-      socketService.off("message-pinned");
-      socketService.off("message-updated");
-      socketService.off("GROUP_UPDATED");
-      socketService.off("CONVERSATION_UPDATED");
-      socketService.off("CONVERSATION_REMOVED");
+      unsubs.forEach((unsub) => unsub());
     };
   }, [conversationId, currentUser]);
 

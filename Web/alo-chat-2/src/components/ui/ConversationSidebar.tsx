@@ -315,138 +315,114 @@ export default function ConversationSidebar() {
   useEffect(() => {
     fetchData();
 
-    socketService.onPinUpdated((data: { conversationId: string; isPinned: boolean }) => {
-      setPinnedIds(prev => {
-        const next = new Set(prev);
-        if (data.isPinned) next.add(data.conversationId);
-        else next.delete(data.conversationId);
-        return next;
-      });
-    });
-
-    socketService.onLabelUpdated((data: { conversationId: string; label: any }) => {
-      setLabelAssignments(prev => {
-        const next = { ...prev };
-        if (data.label) next[data.conversationId] = data.label;
-        else delete next[data.conversationId];
-        return next;
-      });
-    });
-
-    socketService.onConversationCreated((newConvo: any) => {
-      setConversations(prev => {
-        const exists = prev.some(c => (c._id || c.id) === (newConvo._id || newConvo.id));
-        if (exists) return prev;
-        return [newConvo, ...prev];
-      });
-    });
-
-    socketService.onConversationRemoved((data: { conversationId: string }) => {
-      setConversations(prev => prev.filter(c => (c._id || c.id) !== data.conversationId));
-      if (conversationIdRef.current === data.conversationId) {
-        router.push('/chat');
-      }
-    });
-
-    socketService.onConversationUpdated((data: any) => {
-      console.log("📡 [Socket] Conversation updated:", data.conversationId);
-      // Refresh list để lấy tin nhắn mới và re-order
-      fetchGroups();
-    });
-
-    socketService.onMessageReceived((msg: any) => {
-      const convoId = msg.conversationId || msg.roomId;
-      if (!convoId) return;
-
-      setConversations((prev) => {
-        const index = prev.findIndex((c) => (c.id || c._id) === convoId);
-        if (index === -1) {
-          // Nếu conversation chưa có trong list, fetch lại list
-          fetchGroups();
-          return prev;
-        }
-
-        const next = [...prev];
-        const convo = { ...next[index] };
-        
-        // Update last message & unread count
-        convo.message = msg.type === "file" ? `[File] ${msg.metadata?.fileName || msg.content}` : msg.content;
-        convo.updatedAt = msg.createdAt || new Date().toISOString();
-        convo.time = new Date(convo.updatedAt).toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
+    const unsubs = [
+      socketService.onPinUpdated((data: { conversationId: string; isPinned: boolean }) => {
+        setPinnedIds(prev => {
+          const next = new Set(prev);
+          if (data.isPinned) next.add(data.conversationId);
+          else next.delete(data.conversationId);
+          return next;
         });
-
-        // Chỉ tăng unread nếu không phải mình gửi và không đang mở chat đó
-        const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
-        if (msg.senderId !== currentUserId && conversationIdRef.current !== convoId) {
-          convo.unreadCount = (convo.unreadCount || 0) + 1;
+      }),
+      socketService.onLabelUpdated((data: { conversationId: string; label: any }) => {
+        setLabelAssignments(prev => {
+          const next = { ...prev };
+          if (data.label) next[data.conversationId] = data.label;
+          else delete next[data.conversationId];
+          return next;
+        });
+      }),
+      socketService.onConversationCreated((newConvo: any) => {
+        setConversations(prev => {
+          const exists = prev.some(c => (c._id || c.id) === (newConvo._id || newConvo.id));
+          if (exists) return prev;
+          return [newConvo, ...prev];
+        });
+      }),
+      socketService.onConversationRemoved((data: { conversationId: string }) => {
+        setConversations(prev => prev.filter(c => (c._id || c.id) !== data.conversationId));
+        if (conversationIdRef.current === data.conversationId) {
+          router.push('/chat');
         }
+      }),
+      socketService.onConversationUpdated((data: any) => {
+        console.log("📡 [Socket] Conversation updated:", data.conversationId);
+        fetchGroups();
+      }),
+      socketService.onMessageReceived((msg: any) => {
+        const convoId = msg.conversationId || msg.roomId;
+        if (!convoId) return;
 
-        next.splice(index, 1);
-        return [convo, ...next];
-      });
-    });
+        setConversations((prev) => {
+          const index = prev.findIndex((c) => (c.id || c._id) === convoId);
+          if (index === -1) {
+            fetchGroups();
+            return prev;
+          }
 
-    socketService.onMessagesRead((data: { conversationId: string; userId: string }) => {
-      const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
-      if (data.userId === currentUserId) {
-        setConversations((prev) => 
-          prev.map((c) => 
-            (c.id || c._id) === data.conversationId 
-              ? { ...c, unreadCount: 0 } 
-              : c
-          )
-        );
-      }
-    });
+          const next = [...prev];
+          const convo = { ...next[index] };
+          
+          convo.message = msg.type === "file" ? `[File] ${msg.metadata?.fileName || msg.content}` : msg.content;
+          convo.updatedAt = msg.createdAt || new Date().toISOString();
+          convo.time = new Date(convo.updatedAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
 
-    socketService.onTyping((data: { conversationId: string; userId: string; fullName?: string }) => {
-      const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
-      if (data.userId === currentUserId) return;
+          const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
+          if (msg.senderId !== currentUserId && conversationIdRef.current !== convoId) {
+            convo.unreadCount = (convo.unreadCount || 0) + 1;
+          }
 
-      setTypingStatus((prev) => ({
-        ...prev,
-        [data.conversationId]: `${data.fullName || "Ai đó"} đang soạn tin...`,
-      }));
-    });
+          next.splice(index, 1);
+          return [convo, ...next];
+        });
+      }),
+      socketService.onMessagesRead((data: { conversationId: string; userId: string }) => {
+        const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
+        if (data.userId === currentUserId) {
+          setConversations((prev) => 
+            prev.map((c) => 
+              (c.id || c._id) === data.conversationId 
+                ? { ...c, unreadCount: 0 } 
+                : c
+            )
+          );
+        }
+      }),
+      socketService.onTyping((data: { conversationId: string; userId: string; fullName?: string }) => {
+        const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
+        if (data.userId === currentUserId) return;
 
-    socketService.onStopTyping((data: { conversationId: string; userId: string }) => {
-      setTypingStatus((prev) => {
-        const next = { ...prev };
-        delete next[data.conversationId];
-        return next;
-      });
-    });
-
-    socketService.onUserOnline((data: { userId: string }) => {
-      setOnlineUsers((prev) => ({ ...prev, [data.userId]: true }));
-    });
-
-    socketService.onUserOffline((data: { userId: string }) => {
-      setOnlineUsers((prev) => ({ ...prev, [data.userId]: false }));
-    });
-
-    socketService.onUserStatusResult((data: { userId: string; status: string }) => {
-      setOnlineUsers((prev) => ({
-        ...prev,
-        [data.userId]: data.status === "online",
-      }));
-    });
+        setTypingStatus((prev) => ({
+          ...prev,
+          [data.conversationId]: `${data.fullName || "Ai đó"} đang soạn tin...`,
+        }));
+      }),
+      socketService.onStopTyping((data: { conversationId: string; userId: string }) => {
+        setTypingStatus((prev) => {
+          const next = { ...prev };
+          delete next[data.conversationId];
+          return next;
+        });
+      }),
+      socketService.onUserOnline((data: { userId: string }) => {
+        setOnlineUsers((prev) => ({ ...prev, [data.userId]: true }));
+      }),
+      socketService.onUserOffline((data: { userId: string }) => {
+        setOnlineUsers((prev) => ({ ...prev, [data.userId]: false }));
+      }),
+      socketService.onUserStatusResult((data: { userId: string; status: string }) => {
+        setOnlineUsers((prev) => ({
+          ...prev,
+          [data.userId]: data.status === "online",
+        }));
+      }),
+    ];
 
     return () => {
-      socketService.off("CONVERSATION_PIN_UPDATED");
-      socketService.off("CONVERSATION_LABEL_UPDATED");
-      socketService.off("CONVERSATION_CREATED");
-      socketService.off("CONVERSATION_REMOVED");
-      socketService.off("CONVERSATION_UPDATED");
-      socketService.off("message-received");
-      socketService.off("messages-read");
-      socketService.off("TYPING");
-      socketService.off("STOP_TYPING");
-      socketService.off("USER_ONLINE");
-      socketService.off("USER_OFFLINE");
-      socketService.off("USER_STATUS_RESULT");
+      unsubs.forEach(unsub => unsub());
     };
   }, [fetchData, router, currentUser]);
 
