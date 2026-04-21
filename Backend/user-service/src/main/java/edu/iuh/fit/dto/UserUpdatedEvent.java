@@ -10,6 +10,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class UserUpdatedEvent {
+
     private String id;
     private String phoneNumber;
+    private String status;
 }

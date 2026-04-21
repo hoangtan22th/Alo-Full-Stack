@@ -9,8 +9,9 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
-import { ArrowLeftIcon } from "react-native-heroicons/outline";
+import { ArrowLeftIcon, IdentificationIcon, ShieldCheckIcon, ChatBubbleBottomCenterTextIcon } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { groupService } from "../../services/groupService";
 import { userService } from "../../services/userService";
@@ -22,6 +23,8 @@ export default function PendingMembersScreen() {
   const { id } = useLocalSearchParams();
 
   const [isApprovalRequired, setIsApprovalRequired] = useState(false);
+  const [isQuestionEnabled, setIsQuestionEnabled] = useState(false);
+  const [membershipQuestion, setMembershipQuestion] = useState("");
   const [pendingUsers, setPendingUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -37,6 +40,8 @@ export default function PendingMembersScreen() {
 
       if (groupData) {
         setIsApprovalRequired(groupData.isApprovalRequired || false);
+        setIsQuestionEnabled(groupData.isQuestionEnabled || false);
+        setMembershipQuestion(groupData.membershipQuestion || "");
       }
 
       // 2. Lấy danh sách join requests
@@ -59,6 +64,7 @@ export default function PendingMembersScreen() {
               name: userData?.fullName || "Người dùng",
               avatar: userData?.avatar || "",
               requestedAt: req.requestedAt,
+              answer: req.answer || "",
             };
           }),
         );
@@ -120,6 +126,32 @@ export default function PendingMembersScreen() {
     }
   };
 
+  const toggleQuestion = async (newValue: boolean) => {
+    if (!id) return;
+    try {
+      setIsQuestionEnabled(newValue);
+      await groupService.updateGroupSettings(id as string, {
+        isQuestionEnabled: newValue,
+      });
+    } catch (error) {
+      console.error("Lỗi cập nhật câu hỏi:", error);
+      Alert.alert("Lỗi", "Cập nhật thất bại.");
+      setIsQuestionEnabled(!newValue);
+    }
+  };
+
+  const updateQuestion = async (question: string) => {
+    if (!id) return;
+    try {
+      await groupService.updateGroupSettings(id as string, {
+        membershipQuestion: question,
+      });
+    } catch (error) {
+      console.error("Lỗi lưu câu hỏi:", error);
+      Alert.alert("Lỗi", "Lưu câu hỏi thất bại.");
+    }
+  };
+
   const handleApprove = async (userId: string) => {
     try {
       await groupService.approveJoinRequest(id as string, userId);
@@ -172,6 +204,40 @@ export default function PendingMembersScreen() {
           />
         </View>
 
+        <View className="px-5 py-4 border-b border-gray-100">
+          <View className="flex-row items-center justify-between mb-4">
+            <View className="flex-1 pr-4">
+              <Text className="text-[16px] font-medium text-gray-900 mb-1">
+                Câu hỏi tham gia
+              </Text>
+              <Text className="text-[13px] text-gray-500">
+                Yêu cầu người tham gia trả lời câu hỏi trước khi gửi yêu cầu.
+              </Text>
+            </View>
+            <Switch
+              trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+              thumbColor={"#ffffff"}
+              onValueChange={toggleQuestion}
+              value={isQuestionEnabled}
+            />
+          </View>
+
+          {isQuestionEnabled && (
+            <View className="bg-gray-50 rounded-2xl p-4 border border-gray-200">
+              <TextInput
+                placeholder="Nhập câu hỏi của bạn..."
+                className="text-[15px] text-gray-900"
+                multiline
+                numberOfLines={3}
+                value={membershipQuestion}
+                onChangeText={setMembershipQuestion}
+                onBlur={() => updateQuestion(membershipQuestion)}
+                style={{ minHeight: 60, textAlignVertical: "top" }}
+              />
+            </View>
+          )}
+        </View>
+
         {isApprovalRequired && (
           <View className="px-5 py-4">
             <Text className="text-[13px] font-bold text-gray-500 uppercase tracking-wider mb-2">
@@ -219,6 +285,16 @@ export default function PendingMembersScreen() {
                       <Text className="text-[13px] text-gray-500 mt-0.5">
                         Muốn tham gia nhóm
                       </Text>
+                      {user.answer ? (
+                        <View className="mt-2 bg-blue-50 p-3 rounded-xl border border-blue-100">
+                          <Text className="text-[11px] font-bold text-blue-600 uppercase mb-1">
+                            Câu trả lời:
+                          </Text>
+                          <Text className="text-[14px] text-gray-700 italic">
+                            "{user.answer}"
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
 

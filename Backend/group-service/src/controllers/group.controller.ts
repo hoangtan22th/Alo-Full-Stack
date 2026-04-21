@@ -74,7 +74,9 @@ async function postSystemMessage(
       "Content-Type": "application/json",
     };
     if (authHeader) {
-      headers["Authorization"] = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+      headers["Authorization"] = Array.isArray(authHeader)
+        ? authHeader[0]
+        : authHeader;
     }
 
     await fetch(`${gatewayUrl}/api/v1/messages`, {
@@ -305,7 +307,9 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
     // Real-time Sync: Thông báo cho thành viên mới về nhóm này
     rabbitMQProducer.publishConversationCreated(group).catch(console.error);
     // Thông báo đẩy (In-app) cho thành viên mới
-    rabbitMQProducer.publishAddedToGroup(String(newUserId), group).catch(console.error);
+    rabbitMQProducer
+      .publishAddedToGroup(String(newUserId), group)
+      .catch(console.error);
 
     // Bắn tin nhắn hệ thống
     const newUserName = await getUserFullName(String(newUserId), authHeader);
@@ -558,7 +562,12 @@ export const deleteGroup = async (
       for (const member of group.members) {
         if (member.userId) {
           rabbitMQProducer
-            .publishConversationRemoved(groupId, String(member.userId), group.name || "Nhóm", "delete")
+            .publishConversationRemoved(
+              groupId,
+              String(member.userId),
+              group.name || "Nhóm",
+              "delete",
+            )
             .catch(console.error);
         }
       }
@@ -678,7 +687,9 @@ export const requestJoinGroup = async (
       group.members.push({
         userId: requesterId,
         role: "MEMBER",
-        joinedAt: group.isHistoryVisible ? group.createdAt || new Date() : new Date(),
+        joinedAt: group.isHistoryVisible
+          ? group.createdAt || new Date()
+          : new Date(),
       });
 
       // Xoá join requests nếu lỡ có trễ (ví dụ họ đã từng gửi trước khi nhóm tắt phê duyệt)
@@ -715,7 +726,13 @@ export const requestJoinGroup = async (
       group.joinRequests = [];
     }
 
-    group.joinRequests.push({ userId: requesterId, requestedAt: new Date() });
+    const { answer } = req.body;
+
+    group.joinRequests.push({
+      userId: requesterId,
+      requestedAt: new Date(),
+      answer: answer || "",
+    });
     await group.save();
 
     // Bắn tin cho admin
@@ -731,6 +748,8 @@ export const requestJoinGroup = async (
       rabbitMQProducer
         .publishNewJoinRequest(groupId, requesterName, admins, group.name)
         .catch(console.error);
+
+      rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
     } catch (notifErr) {
       console.error("[RequestJoinGroup] Notification Error:", notifErr);
     }
@@ -824,7 +843,9 @@ export const approveJoinRequest = async (
       group.members.push({
         userId: String(userId),
         role: "MEMBER",
-        joinedAt: group.isHistoryVisible ? group.createdAt || new Date() : new Date(),
+        joinedAt: group.isHistoryVisible
+          ? group.createdAt || new Date()
+          : new Date(),
       });
     }
 
@@ -833,7 +854,9 @@ export const approveJoinRequest = async (
     // Real-time Sync: Thông báo cho người vừa được duyệt về hội thoại mới hiển thị
     rabbitMQProducer.publishConversationCreated(group).catch(console.error);
     // Thông báo đẩy (In-app) cho người dùng được duyệt
-    rabbitMQProducer.publishJoinRequestApproved(userId, group).catch(console.error);
+    rabbitMQProducer
+      .publishJoinRequestApproved(userId, group)
+      .catch(console.error);
 
     // Bắn tin nhắn hệ thống
     const targetName = await getUserFullName(userId, req.headers.authorization);
@@ -896,6 +919,8 @@ export const rejectJoinRequest = async (
     rabbitMQProducer
       .publishJoinRequestRejected(userId, group.name || "Nhóm")
       .catch(console.error);
+
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
 
     res.status(200).json({ message: "Đã từ chối yêu cầu", data: group });
   } catch (error: any) {
@@ -1010,12 +1035,18 @@ export const updateGroup = async (
       (m: any) => m.userId.toString() === currentUserId,
     );
 
-    if (
-      !currentMember ||
-      (currentMember.role !== "LEADER" && currentMember.role !== "DEPUTY")
-    ) {
+    if (!currentMember) {
+      res.status(403).json({ error: "Bạn không phải thành viên của nhóm này" });
+      return;
+    }
+
+    const editPermission = group.permissions?.editGroupInfo || "ADMIN";
+    const isAdmin =
+      currentMember.role === "LEADER" || currentMember.role === "DEPUTY";
+
+    if (editPermission === "ADMIN" && !isAdmin) {
       res.status(403).json({
-        error: "Bạn không có quyền cập nhật thông tin nhóm này",
+        error: "Chỉ Trưởng nhóm và Phó nhóm mới có quyền cập nhật thông tin",
       });
       return;
     }
@@ -1155,7 +1186,9 @@ export const updateHistorySetting = async (
       (m) => m.userId.toString() === requesterId,
     );
     if (!member || (member.role !== "LEADER" && member.role !== "DEPUTY")) {
-      res.status(403).json({ error: "Bạn không có quyền thay đổi thiết lập này" });
+      res
+        .status(403)
+        .json({ error: "Bạn không có quyền thay đổi thiết lập này" });
       return;
     }
 
@@ -1172,6 +1205,232 @@ export const updateHistorySetting = async (
     res.status(200).json({
       message: "Đã cập nhật thiết lập xem lịch sử",
       data: { isHistoryVisible: group.isHistoryVisible },
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 19. Admin: Tìm kiếm/Lọc danh sách nhóm (Có phân trang)
+export const searchGroupsAdmin = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { name, isGroup, isBanned, page = 0, size = 10 } = req.query;
+
+    const query: any = {};
+
+    if (name) {
+      const searchStr = name as string;
+      const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(searchStr);
+
+      if (isValidObjectId) {
+        query.$or = [
+          { _id: searchStr },
+          { name: { $regex: searchStr, $options: "i" } },
+        ];
+      } else {
+        query.name = { $regex: searchStr, $options: "i" };
+      }
+    }
+
+    if (isGroup !== undefined) {
+      query.isGroup = isGroup === "true";
+    }
+
+    if (isBanned !== undefined) {
+      query.isBanned = isBanned === "true";
+    }
+
+    const p = Math.max(0, parseInt(page as string, 10));
+    const s = Math.max(1, parseInt(size as string, 10));
+
+    const totalElements = await Conversation.countDocuments(query);
+    const totalPages = Math.ceil(totalElements / s);
+
+    const groups = await Conversation.find(query)
+      .sort({ createdAt: -1 })
+      .skip(p * s)
+      .limit(s);
+
+    const pageResponse = {
+      content: groups,
+      page: p,
+      size: s,
+      totalElements,
+      totalPages,
+      last: p >= totalPages - 1,
+    };
+
+    // The frontend currently expects API standard response: { code: xxx, data: ... }
+    // or just the JSON object. Our controller returns res.status(200).json({ data: pageResponse })
+    res.status(200).json({ data: pageResponse });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 20. Admin: Ban / Unban Group
+export const toggleBanGroupAdmin = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const groupId = String(req.params.groupId || "");
+    const { isBanned } = req.body;
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy hội thoại / nhóm" });
+      return;
+    }
+
+    if (typeof isBanned === "boolean") {
+      group.isBanned = isBanned;
+      await group.save();
+    }
+
+    // Thông báo cho mọi người nếu cần
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
+
+    res
+      .status(200)
+      .json({ message: "Cập nhật trạng thái cấm thành công", data: group });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+// 21. Update settings
+export const updateSettings = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const groupId = String(req.params.groupId || "");
+    const {
+      isHighlightEnabled,
+      permissions,
+      membershipQuestion,
+      isQuestionEnabled,
+    } = req.body;
+    const requesterId = (req.headers["x-user-id"] || "").toString();
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    // Check permissions (Only Leader/Deputy can update these settings)
+    const member = group.members.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (!member || (member.role !== "LEADER" && member.role !== "DEPUTY")) {
+      res
+        .status(403)
+        .json({ error: "Bạn không có quyền thay đổi thiết lập này" });
+      return;
+    }
+
+    if (typeof isHighlightEnabled === "boolean") {
+      group.isHighlightEnabled = isHighlightEnabled;
+    }
+
+    if (permissions && typeof permissions === "object") {
+      // Deep merge or specific assign
+      if (permissions.editGroupInfo)
+        group.permissions.editGroupInfo = permissions.editGroupInfo;
+      if (permissions.createNotes)
+        group.permissions.createNotes = permissions.createNotes;
+      if (permissions.createPolls)
+        group.permissions.createPolls = permissions.createPolls;
+      if (permissions.pinMessages)
+        group.permissions.pinMessages = permissions.pinMessages;
+      if (permissions.sendMessage)
+        group.permissions.sendMessage = permissions.sendMessage;
+      if (permissions.createReminders)
+        group.permissions.createReminders = permissions.createReminders;
+    }
+
+    if (typeof membershipQuestion === "string") {
+      group.membershipQuestion = membershipQuestion;
+    }
+
+    if (typeof isQuestionEnabled === "boolean") {
+      group.isQuestionEnabled = isQuestionEnabled;
+    }
+
+    await group.save();
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
+
+    res.status(200).json({
+      message: "Cập nhật thiết lập thành công",
+      data: group,
+    });
+  } catch (error: any) {
+    console.error("[updateSettings] Error:", error);
+  }
+};
+
+// 22. Admin: Lấy thống kê về nhóm
+export const getGroupStatsAdmin = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    // 1. Tổng số nhóm
+    const totalGroups = await Conversation.countDocuments({ isGroup: true });
+
+    // 2. Số nhóm tạo trong ngày hôm nay và hôm qua
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    const createdToday = await Conversation.countDocuments({
+      isGroup: true,
+      createdAt: { $gte: startOfToday, $lte: endOfToday },
+    });
+
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+    const endOfYesterday = new Date(endOfToday);
+    endOfYesterday.setDate(endOfYesterday.getDate() - 1);
+
+    const createdYesterday = await Conversation.countDocuments({
+      isGroup: true,
+      createdAt: { $gte: startOfYesterday, $lte: endOfYesterday },
+    });
+
+    let createdTodayTrend = 0;
+    if (createdYesterday === 0) {
+      createdTodayTrend = createdToday > 0 ? 100 : 0;
+    } else {
+      createdTodayTrend =
+        Math.round(
+          ((createdToday - createdYesterday) / createdYesterday) * 100 * 10,
+        ) / 10;
+    }
+
+    // 3. Trung bình số lượng thành viên
+    const avgResult = await Conversation.aggregate([
+      { $match: { isGroup: true } },
+      { $project: { memberCount: { $size: { $ifNull: ["$members", []] } } } },
+      { $group: { _id: null, avgMembers: { $avg: "$memberCount" } } },
+    ]);
+
+    const avgMembers =
+      avgResult.length > 0 ? Math.round(avgResult[0].avgMembers) : 0;
+
+    res.status(200).json({
+      data: {
+        totalGroups,
+        createdToday,
+        createdYesterday,
+        createdTodayTrend,
+        avgMembers,
+      },
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

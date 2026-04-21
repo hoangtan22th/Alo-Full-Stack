@@ -102,10 +102,13 @@ export default function GlobalChatScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<MessageDTO[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [groupDetails, setGroupDetails] = useState<any>(null);
+  const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
 
 
   const chatInputRef = useRef<any>(null);
   const replyingToRef = useRef<MessageDTO | null>(null);
+  const fetchingRef = useRef(false); // V3: Strict protection against concurrent fetches
 
   const setReplyingToWithRef = (msg: MessageDTO | null) => {
     setReplyingTo(msg);
@@ -258,24 +261,27 @@ export default function GlobalChatScreen() {
   }, [id, isGroup, paramsTargetUserId]);
 
   const fetchMsgs = async (reset = false) => {
-    if (!resolvedConversationId) return;
+    if (!resolvedConversationId || fetchingRef.current) return;
+    fetchingRef.current = true; // Block further calls immediately
+
     if (reset) {
       setSkip(0);
+      setLoadingMore(true);
     } else {
       setLoadingMore(true);
     }
 
     try {
       const currentSkip = reset ? 0 : skip;
+      console.log(`[Chat] Fetching messages. skip=${currentSkip}, reset=${reset}`);
       const response = await messageService.getMessageHistory(resolvedConversationId, 50, currentSkip);
       const newMsgs = response.messages || [];
-      const hasMoreData = response.hasMore ?? newMsgs.length === 50;
+      const hasMoreData = response.hasMore ?? newMsgs.length >= 50;
 
       if (reset) {
         setMessages(newMsgs);
       } else {
         setMessages((prev) => {
-          // Lọc bỏ tin nhắn đã tồn tại để tránh lỗi key FlatList
           const existingIds = new Set(prev.map((m: MessageDTO) => m._id));
           const filteredNew = newMsgs.filter((m: MessageDTO) => !existingIds.has(m._id));
           return [...filteredNew, ...prev];
@@ -284,6 +290,7 @@ export default function GlobalChatScreen() {
 
       setHasMore(hasMoreData);
       setSkip((prev) => (reset ? newMsgs.length : prev + newMsgs.length));
+      console.log(`[Chat] Fetched ${newMsgs.length} messages. skip=${skip}, hasMore=${hasMoreData}`);
 
       if (reset) {
         messageService.markAsRead(resolvedConversationId).catch(() => { });
@@ -292,6 +299,7 @@ export default function GlobalChatScreen() {
       console.error("Lỗi tải tin nhắn:", e);
     } finally {
       setLoadingMore(false);
+      fetchingRef.current = false; // Release block
     }
   };
 
@@ -305,18 +313,55 @@ export default function GlobalChatScreen() {
     }
   };
 
+  const fetchGroupDetails = async () => {
+    if (!resolvedConversationId || !isGroupChat) return;
+    try {
+      const res = await groupService.getGroupById(resolvedConversationId);
+      const data = res?.data?.data || res?.data || res;
+      if (data) {
+        setGroupDetails(data);
+        const admins = new Set<string>(
+          (data.members || [])
+            .filter((m: any) => m.role === "LEADER" || m.role === "DEPUTY")
+            .map((m: any) => String(m.userId)),
+        );
+        setAdminIds(admins);
+        if (data.name) setRealtimeGroupName(data.name);
+        if (data.groupAvatar) setRealtimeAvatar(data.groupAvatar);
+      }
+    } catch (e) {
+      console.error("Lỗi fetch group details:", e);
+    }
+  };
+
   useEffect(() => {
     if (resolvedConversationId) {
       fetchMsgs(true);
       fetchPinnedMessages();
+      if (isGroupChat) {
+        fetchGroupDetails();
+      }
     }
-  }, [resolvedConversationId]);
+  }, [resolvedConversationId, isGroupChat]);
 
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {
+      console.log(`[Chat] Loading more messages... skip=${skip}`);
       fetchMsgs(false);
     }
   };
+
+  const canPinMessage = useMemo(() => {
+    if (!isGroupChat) return true;
+    if (!groupDetails) return false;
+
+    const pinPermission = groupDetails.permissions?.pinMessages || "EVERYONE";
+    if (pinPermission === "EVERYONE") return true;
+
+    // Admin-only: Check if current user is LEADER or DEPUTY
+    return adminIds.has(String(currentUserId));
+  }, [isGroupChat, groupDetails, adminIds, currentUserId]);
+
 
   useEffect(() => {
     if (!socket || !resolvedConversationId) return;
@@ -404,6 +449,23 @@ export default function GlobalChatScreen() {
       }
     };
 
+    const handleGroupUpdated = (data: any) => {
+      const updatedGroup = data.group ? data.group : data;
+      if (updatedGroup._id === resolvedConversationId) {
+        setGroupDetails(updatedGroup);
+        if (updatedGroup.members) {
+          const admins = new Set<string>(
+            (updatedGroup.members || [])
+              .filter((m: any) => m.role === "LEADER" || m.role === "DEPUTY")
+              .map((m: any) => String(m.userId)),
+          );
+          setAdminIds(admins);
+        }
+        if (updatedGroup.name) setRealtimeGroupName(updatedGroup.name);
+        if (updatedGroup.groupAvatar) setRealtimeAvatar(updatedGroup.groupAvatar);
+      }
+    };
+
     socket.on("message-received", handleMessageReceived);
     socket.on("message-reaction-updated", handleReactionUpdated);
     socket.on("messages-read", handleMessagesRead);
@@ -412,6 +474,7 @@ export default function GlobalChatScreen() {
     socket.on("message-pinned", handleMessagePinned);
     socket.on("message-revoked", handleMessageRevoked);
     socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
+    socket.on("GROUP_UPDATED", handleGroupUpdated);
 
     return () => {
       socket.off("message-received", handleMessageReceived);
@@ -422,6 +485,7 @@ export default function GlobalChatScreen() {
       socket.off("message-pinned", handleMessagePinned);
       socket.off("message-revoked", handleMessageRevoked);
       socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
+      socket.off("GROUP_UPDATED", handleGroupUpdated);
     };
   }, [socket, resolvedConversationId, isGroupChat, targetUserId]);
 
@@ -661,13 +725,30 @@ export default function GlobalChatScreen() {
     return groups;
   }, [messages, currentUserId]);
 
+  const invertedMessages = useMemo(() => {
+    return [...messageGroups].reverse();
+  }, [messageGroups]);
+
+  const canSendMessage = useMemo(() => {
+    if (!isGroupChat) return true;
+    if (!groupDetails) return true;
+
+    const sendPermission = groupDetails.permissions?.sendMessage || "EVERYONE";
+    if (sendPermission === "EVERYONE") return true;
+
+    return adminIds.has(String(currentUserId));
+  }, [isGroupChat, groupDetails, adminIds, currentUserId]);
+
   useEffect(() => {
     const showSub = Keyboard.addListener("keyboardDidShow", () => {
       setKeyboardVisible(true);
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     });
     const hideSub = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
-    return () => { showSub.remove(); hideSub.remove(); };
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
   }, []);
 
   const handlePinMessage = async () => {
@@ -755,14 +836,14 @@ export default function GlobalChatScreen() {
         <View className="absolute top-0 left-0 right-0 bottom-0" style={{ paddingTop: pinnedMessages.length > 0 ? 64 : 0 }}>
           <FlatList
             ref={flatListRef}
-            data={[...messageGroups].reverse()}
+            data={invertedMessages}
             keyExtractor={(item) => item.messages[0]?._id + "_group"}
             inverted
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.5}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             className="flex-1 px-4"
-            contentContainerStyle={{ paddingTop: 80, paddingBottom: 0 }}
+            contentContainerStyle={{ flexGrow: 1, paddingTop: 80, paddingBottom: 0 }}
             ListHeaderComponent={typingUsers.length > 0 ? (
               <View className="mb-6 self-start flex-row items-center px-5 py-3 shadow-sm bg-white rounded-3xl rounded-bl-lg">
                 <Text className="text-gray-500 italic text-sm">{typingUsers.length === 1 ? "Có người đang nhắn tin..." : "Nhiều người đang nhắn tin..."}</Text>
@@ -813,6 +894,10 @@ export default function GlobalChatScreen() {
                         setExpandedTimeMsgId={setExpandedTimeMsgId}
                         onReplyClick={scrollToMessage}
                         isHighlighted={msg._id === highlightedMsgId}
+                        isAdminHighlighted={
+                          groupDetails?.isHighlightEnabled &&
+                          adminIds.has(String(msg.senderId))
+                        }
                       />
                     ))}
                   </View>
@@ -914,6 +999,7 @@ export default function GlobalChatScreen() {
             isKeyboardVisible={isKeyboardVisible}
             replyingTo={replyingTo}
             onCancelReply={() => setReplyingToWithRef(null)}
+            canSendMessage={canSendMessage}
           />
         </View>
       </View>
@@ -934,6 +1020,7 @@ export default function GlobalChatScreen() {
         onUnpin={handleUnpinMessage}
         onReply={handleReply}
         isPinned={!!selectedMessageId && pinnedMessages.some((m: MessageDTO) => m._id === selectedMessageId)}
+        canPin={canPinMessage}
         currentUserId={currentUserId as string}
       />
     </KeyboardAvoidingView>

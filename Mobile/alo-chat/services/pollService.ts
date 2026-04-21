@@ -106,5 +106,17 @@ export const pollService = {
       console.error("Lỗi khi lấy kết quả bình chọn:", error);
       return [];
     }
-  }
+  },
+
+  getPollsByConversation: async (
+    conversationId: string,
+  ): Promise<PollDTO[]> => {
+    try {
+      const response = await api.get(`/polls/conversation/${conversationId}`);
+      return response as any;
+    } catch (error) {
+      console.error("Lỗi khi lấy danh sách bình chọn:", error);
+      return [];
+    }
+  },
 };

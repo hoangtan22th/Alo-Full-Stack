@@ -14,6 +14,10 @@ import {
 import { useState, useEffect } from "react";
 import axiosClient from "@/services/api";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { groupService } from "@/services/groupService";
+import { socketService } from "@/services/socketService";
+import { useAuthStore } from "@/store/useAuthStore";
 
 export default function FriendProfileModal({
   isOpen,
@@ -25,6 +29,7 @@ export default function FriendProfileModal({
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     if (isOpen && userId) {
@@ -53,6 +58,16 @@ export default function FriendProfileModal({
     setActionLoading(true);
     try {
       await axiosClient.post("/contacts/request", { recipientId: userId });
+      
+      // [REALTIME] Emit socket event trực tiếp
+      const me: any = await axiosClient.get("/auth/me");
+      const myData = me?.data || me;
+      socketService.emitFriendRequestSent({
+        recipientId: userId,
+        requesterName: myData.fullName,
+        requesterAvatar: myData.avatar
+      });
+
       toast.success("Đã gửi lời mời kết bạn!");
       onActionSuccess?.();
       onClose();
@@ -80,12 +95,101 @@ export default function FriendProfileModal({
   const handleAccept = async () => {
     setActionLoading(true);
     try {
+      // 1. Chấp nhận kết bạn trên DB
       await axiosClient.put(`/contacts/${userId}/accept`);
+      
+      // 2. [REALTIME] Emit socket event cho người gửi lời mời
+      const me: any = await axiosClient.get("/auth/me");
+      const myData = me?.data || me;
+      socketService.emitFriendRequestAccepted({
+        recipientId: userId,
+        accepterName: myData.fullName
+      });
+
       toast.success("Đã trở thành bạn bè!");
+
+      // 3. Tự động tạo cuộc hội thoại và gửi tin nhắn chúc mừng
+      const conversation = await groupService.createDirectConversation(userId);
+      const convoId = conversation?._id || conversation?.id || conversation?.data?._id || conversation?.data?.id;
+
+      if (convoId) {
+        // Gửi tin nhắn hệ thống
+        await axiosClient.post("/messages", {
+          conversationId: convoId,
+          type: "system",
+          content: "🎉 Hai bạn đã trở thành bạn bè. Hãy bắt đầu trò chuyện!",
+        });
+
+        // 4. Nhảy vào khung chat
+        onClose();
+        router.push(`/chat/${convoId}`);
+      } else {
+        onActionSuccess?.();
+        onClose();
+      }
+    } catch (err) {
+      console.error("Lỗi khi chấp nhận kết bạn:", err);
+      toast.error("Lỗi khi chấp nhận kết bạn");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRemoveFriend = async () => {
+    setActionLoading(true);
+    try {
+      await axiosClient.delete(`/contacts/friend/${userId}`);
+      toast.success("Đã xoá khỏi danh sách bạn bè!");
       onActionSuccess?.();
       onClose();
     } catch (err) {
-      toast.error("Lỗi khi chấp nhận");
+      toast.error("Lỗi khi xoá bạn");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleMessage = async () => {
+    setActionLoading(true);
+    try {
+      const conversation = await groupService.createDirectConversation(userId);
+      const convoId =
+        conversation?._id ||
+        conversation?.id ||
+        conversation?.data?._id ||
+        conversation?.data?.id;
+
+      if (!convoId) {
+        toast.error("Không tạo được cuộc hội thoại");
+        return;
+      }
+      onClose();
+      router.push(`/chat/${convoId}`);
+    } catch (error) {
+      toast.error("Lỗi khi tạo cuộc hội thoại");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCall = async (isVideo: boolean) => {
+    setActionLoading(true);
+    try {
+      const conversation = await groupService.createDirectConversation(userId);
+      const convoId =
+        conversation?._id ||
+        conversation?.id ||
+        conversation?.data?._id ||
+        conversation?.data?.id;
+
+      if (!convoId) {
+        toast.error("Không tạo được cuộc hội thoại");
+        return;
+      }
+      onClose();
+      router.push(`/chat/${convoId}?call=${isVideo ? "video" : "audio"}`);
+    } catch (error) {
+      toast.error("Lỗi khi tạo cuộc gọi");
     } finally {
       setActionLoading(false);
     }
@@ -171,10 +275,18 @@ export default function FriendProfileModal({
             <div className="mt-4 space-y-2">
               {relationStatus === "ACCEPTED" ? (
                 <div className="flex gap-2">
-                  <button className="flex-1 bg-gray-100 text-gray-900 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-200 transition">
+                  <button 
+                    onClick={() => handleCall(false)}
+                    disabled={actionLoading}
+                    className="flex-1 bg-gray-100 text-gray-900 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-200 transition"
+                  >
                     Gọi điện
                   </button>
-                  <button className="flex-1 bg-black text-white py-2.5 rounded-xl font-bold text-xs hover:bg-neutral-800 transition">
+                  <button 
+                    onClick={handleMessage}
+                    disabled={actionLoading}
+                    className="flex-1 bg-black text-white py-2.5 rounded-xl font-bold text-xs hover:bg-neutral-800 transition"
+                  >
                     Nhắn tin
                   </button>
                 </div>
@@ -255,6 +367,8 @@ export default function FriendProfileModal({
                   icon={TrashIcon}
                   label="Xóa khỏi danh sách bạn bè"
                   color="text-red-500"
+                  onClick={handleRemoveFriend}
+                  disabled={actionLoading}
                 />
               )}
             </div>

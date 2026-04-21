@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import AuthProvider from "../components/layout/AuthProvider";
+import CallProvider from "../components/layout/CallProvider";
 import { Toaster } from "sonner";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import GlobalNotificationHandler from "../components/layout/GlobalNotificationHandler";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -29,8 +31,11 @@ export default function RootLayout({
           }
         >
           <AuthProvider>
-            <Toaster position="top-right" />
-            {children}
+            <CallProvider>
+              <GlobalNotificationHandler />
+              <Toaster position="bottom-right" expand={true} richColors />
+              {children}
+            </CallProvider>
           </AuthProvider>
         </GoogleOAuthProvider>
       </body>

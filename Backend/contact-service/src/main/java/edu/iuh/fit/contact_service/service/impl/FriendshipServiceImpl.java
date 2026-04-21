@@ -39,7 +39,8 @@ public class FriendshipServiceImpl implements FriendshipService {
             throw new AppException(e.status(), "Lỗi khi gọi service auth: " + e.getMessage());
         }
 
-        if (userResponse == null || userResponse.getData() == null || userResponse.getData().getContent() == null || userResponse.getData().getContent().isEmpty()) {
+        if (userResponse == null || userResponse.getData() == null || userResponse.getData().getContent() == null
+                || userResponse.getData().getContent().isEmpty()) {
             throw new ResourceNotFoundException("Không tìm thấy người dùng!");
         }
 
@@ -115,7 +116,8 @@ public class FriendshipServiceImpl implements FriendshipService {
     @Override
     public List<FriendshipResponseDTO> getPendingRequests(String userId) {
         List<Friendship> requests = friendshipRepository.findByRecipientIdAndStatus(userId, FriendshipStatus.PENDING);
-        if (requests.isEmpty()) return List.of();
+        if (requests.isEmpty())
+            return List.of();
 
         List<String> requesterIds = requests.stream()
                 .map(Friendship::getRequesterId)
@@ -139,7 +141,8 @@ public class FriendshipServiceImpl implements FriendshipService {
     @Override
     public List<FriendshipResponseDTO> getSentRequests(String userId) {
         List<Friendship> requests = friendshipRepository.findByRequesterIdAndStatus(userId, FriendshipStatus.PENDING);
-        if (requests.isEmpty()) return List.of();
+        if (requests.isEmpty())
+            return List.of();
 
         List<String> recipientIds = requests.stream()
                 .map(Friendship::getRecipientId)
@@ -163,7 +166,8 @@ public class FriendshipServiceImpl implements FriendshipService {
     @Override
     public List<FriendshipResponseDTO> getFriendsList(String userId) {
         List<Friendship> friends = friendshipRepository.findFriendsByUserId(userId);
-        if (friends.isEmpty()) return List.of();
+        if (friends.isEmpty())
+            return List.of();
 
         // Lấy ID của đối phương
         List<String> friendIds = friends.stream()
@@ -234,6 +238,7 @@ public class FriendshipServiceImpl implements FriendshipService {
                 .createdAt(friendship.getCreateAt() != null ? friendship.getCreateAt().toString() : null)
                 .build();
     }
+
     @Override
     @Transactional
     public void revokeRequest(String requesterId, String recipientId) {
@@ -246,13 +251,15 @@ public class FriendshipServiceImpl implements FriendshipService {
             throw new ForbiddenException("Ông không phải người gửi lời mời này, không được thu hồi!");
         }
 
-        // Nếu lời mời đã được chấp nhận (ACCEPTED) thì không cho thu hồi kiểu này (phải dùng chức năng Hủy kết bạn)
+        // Nếu lời mời đã được chấp nhận (ACCEPTED) thì không cho thu hồi kiểu này (phải
+        // dùng chức năng Hủy kết bạn)
         if (friendship.getStatus() != FriendshipStatus.PENDING) {
             throw new AppException(400, "Lời mời đã được xử lý, không thể thu hồi");
         }
 
         friendshipRepository.delete(friendship);
     }
+
     @Override
     @Transactional
     public void removeFriend(String userId, String friendId) {

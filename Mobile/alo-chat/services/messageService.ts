@@ -71,19 +71,56 @@ export interface MessageHistoryResponse {
  * Chuẩn hóa response từ getMessageHistory.
  */
 function extractHistory(raw: any): MessageHistoryResponse {
-  // Case 1: interceptor đã unwrap
-  if (raw && Array.isArray(raw.messages)) return raw;
-  // Case 2: interceptor KHÔNG unwrap
-  if (raw?.data && Array.isArray(raw.data.messages)) return raw.data;
-  // Case 3: gateway wrapper
-  if (raw?.data?.data && Array.isArray(raw.data.data.messages))
-    return raw.data.data.messages;
+  console.log("[MessageService] Extracting history from:", JSON.stringify(raw).substring(0, 200));
 
+  let target = raw;
+
+  // 1. Nếu raw là Axios Response (có .data)
+  if (target?.data && !Array.isArray(target.data)) {
+    // Nếu trong data lại có .data (Gateway wrapping { status, data: { ... } })
+    if (target.data.data && !Array.isArray(target.data.data)) {
+      target = target.data.data;
+    } else {
+      target = target.data;
+    }
+  }
+
+  // 2. Nếu target vẫn có .data (Double wrapping)
+  if (target?.data && !Array.isArray(target.data) && target.data.messages) {
+    target = target.data;
+  }
+
+  // 3. Kiểm tra xem target có phải là object chứa messages không
+  if (target && Array.isArray(target.messages)) {
+    return {
+      conversationId: target.conversationId || "",
+      messages: target.messages,
+      count: target.count || target.messages.length,
+      limit: target.limit || 50,
+      skip: target.skip || 0,
+      hasMore: target.hasMore ?? target.messages.length >= 50,
+    };
+  }
+
+  // 4. Fallback: Nếu target là một mảng trực tiếp
+  const messagesArray = Array.isArray(target) ? target : Array.isArray(raw) ? raw : [];
+  if (messagesArray.length > 0 || Array.isArray(target)) {
+    return {
+      conversationId: "",
+      messages: messagesArray,
+      count: messagesArray.length,
+      limit: 50,
+      skip: 0,
+      hasMore: messagesArray.length >= 50,
+    };
+  }
+
+  // 5. Fallback cuối cùng: rỗng
   return {
     conversationId: "",
     messages: [],
     count: 0,
-    limit: 0,
+    limit: 50,
     skip: 0,
     hasMore: false,
   };

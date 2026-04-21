@@ -1,107 +1,124 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useRouter, usePathname } from "next/navigation";
-
 import Swal from "sweetalert2";
-
 import { socketService } from "../../services/socketService";
+import { toast } from "sonner";
 
-// Các route cho phép xem khi chưa đăng nhập
 const publicRoutes = ["/login", "/register"];
 
-export default function AuthProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { isAuthenticated, logout } = useAuthStore();
+export default function AuthProvider({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, user, logout, fetchProfile } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const listenersAttached = useRef(false);
 
-  // 1. Xử lý event logout toàn cục (ví dụ từ axios interceptor)
-  useEffect(() => {
-    const handleForceLogout = () => {
-      // Ngăn chặn hiển thị đè đúp Swal nếu đã có một cái đang mở
-      if (document.body.classList.contains("swal2-shown")) {
-         return;
-      }
-
-      // 1. Chỉ ngắt kết nối socket để ko gửi/nhận thêm tin nhắn (treo UI lại)
-      socketService.disconnect();
-      
-      // 2. Hiển thị Swal bằng static import và đợi user xác nhận
-      Swal.fire({
-        icon: 'warning',
-        title: 'Đã ngắt kết nối',
-        text: 'Tài khoản của bạn đã bị đăng nhập ở một thiết bị khác. Vui lòng đăng nhập lại.',
-        confirmButtonColor: '#000',
-        allowOutsideClick: false, // Bắt buộc user phải bấm OK
-        allowEscapeKey: false,
-      }).then((result) => {
-        // Chỉ logout khi người dùng thực sự bấm nút OK (Confirm)
-        if (result.isConfirmed) {
-          // 3. Gọi logout để huỷ state + chuyển trang TỰ NGUYỆN
-          logout();
-          router.push("/login"); // Push login sau khi logout
-        }
-      });
-    };
-
-    window.addEventListener("force_logout", handleForceLogout);
-    return () => window.removeEventListener("force_logout", handleForceLogout);
-  }, [logout, router]);
-
-  // 2. Kích hoạt mounted để bắt đầu logic bảo vệ routes (SSR -> Client)
+  // 1. Chỉ đánh dấu mounted một lần duy nhất + Fetch Profile nếu thiếu
   useEffect(() => {
     setMounted(true);
-  }, []);
+    const token = localStorage.getItem("accessToken");
+    if (token && !user) {
+      console.log("🔄 [Auth] Profile missing on reload, fetching...");
+      fetchProfile();
+    }
+  }, [user, fetchProfile]);
 
-  // 3. Logic bảo vệ route (Private/Public) & Quản lý Socket Toàn Cục
+  // 2. Logic Socket - Tách biệt hoàn toàn
   useEffect(() => {
     if (!mounted) return;
-
-    const token = localStorage.getItem("accessToken");
-    const isAuth = isAuthenticated || !!token;
-
-    // Quản lý Socket
-    if (isAuth) {
-      if (!socketService.connected) {
-        socketService.connect();
-      }
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (isAuthenticated || token) {
+      if (!socketService.connected) socketService.connect();
     } else {
       socketService.disconnect();
     }
+  }, [mounted, isAuthenticated]);
 
-    // Kiểm tra xem route hiện tại có phải là route public hay không
-    const isPublicRoute = publicRoutes.some((route) =>
-      pathname?.startsWith(route),
-    );
+  // 3. Bảo vệ Route - Sử dụng logic đơn giản nhất có thể
+  useEffect(() => {
+    if (!mounted) return;
+    
+    const token = localStorage.getItem("accessToken");
+    const isAuth = isAuthenticated || !!token;
+    const isPublicPath = publicRoutes.some(r => pathname?.startsWith(r));
 
-    // TH1: Cố tình truy cập Private Route khi chưa đăng nhập
-    if (!isAuth && !isPublicRoute) {
-      router.push("/login");
-    }
-    // TH2: Đã đăng nhập nhưng cố vào lại Public Route (login, register)
-    else if (isAuth && isPublicRoute) {
+    // CHỈ redirect nếu thực sự cần thiết và KHÔNG đang ở trang đó
+    if (!isAuth && !isPublicPath) {
+      console.log("🛡️ [Auth] Unauthenticated -> /login");
+      router.replace("/login");
+    } else if (isAuth && isPublicPath) {
+      console.log("🛡️ [Auth] Authenticated -> /chat");
       router.replace("/chat");
     }
-  }, [pathname, isAuthenticated, mounted, router]);
+  }, [mounted, isAuthenticated, pathname]); // Bỏ router khỏi deps nếu có thể
 
-  // Tránh Hydration Mismatch
-  if (!mounted) return null;
+  // 4. Social Handlers
+  const handleFriendRequestReceived = useCallback((data: any) => {
+    toast.info("👤 Lời mời kết bạn mới!", {
+      description: `${data.requesterName || "Ai đó"} muốn kết bạn.`,
+      action: { label: "Xem", onClick: () => router.push("/contacts/requests") },
+    });
+    window.dispatchEvent(new CustomEvent("new_friend_request", { detail: data }));
+  }, [router]);
 
-  // Render Blocking: Chặn màn hình nhấp nháy UI nếu điều kiện bắt buộc redirect đang xảy ra
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
-  const isAuth = isAuthenticated || !!token;
-  const isPublicRoute = publicRoutes.some((route) =>
-    pathname?.startsWith(route),
-  );
+  const handleFriendRequestAccepted = useCallback((data: any) => {
+    toast.success("🎉 Bạn mới!", { description: `${data.accepterName || "Ai đó"} đã đồng ý.` });
+    window.dispatchEvent(new CustomEvent("friend_list_updated", { detail: data }));
+  }, []);
 
-  if (!isAuth && !isPublicRoute) return null; // Đang bị redirect về /login
-  if (isAuth && isPublicRoute) return null; // Đang bị redirect về /
+  const handleFriendListUpdated = useCallback((data: any) => {
+    window.dispatchEvent(new CustomEvent("friend_list_updated", { detail: data }));
+  }, []);
 
+  const handleReminderDue = useCallback((data: { title: string; conversationId: string }) => {
+    toast("⏰ Nhắc hẹn!", {
+      description: `Đã đến giờ: ${data.title}`,
+      action: {
+        label: "Đến xem",
+        onClick: () => router.push(`/chat/${data.conversationId}`),
+      },
+      duration: 10000,
+    });
+  }, [router]);
+
+  const handleMessageReceived = useCallback((data: any) => {
+    const msg = data.message || data;
+    // Nhắc hẹn nhóm (System message)
+    if (msg.type === "system" && msg.metadata?.isReminder) {
+      toast("📢 Nhắc hẹn nhóm!", {
+        description: msg.metadata.title || msg.content,
+        action: {
+          label: "Đến xem",
+          onClick: () => router.push(`/chat/${msg.conversationId}`),
+        },
+        duration: 10000,
+      });
+    }
+  }, [router]);
+
+  // 5. Gắn listener
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (!mounted || (!isAuthenticated && !token) || listenersAttached.current) return;
+
+    const unsubs = [
+      socketService.onFriendRequestReceived(handleFriendRequestReceived),
+      socketService.onFriendRequestAccepted(handleFriendRequestAccepted),
+      socketService.onFriendListUpdated(handleFriendListUpdated),
+      socketService.onReminderDue(handleReminderDue),
+      socketService.onMessageReceived(handleMessageReceived),
+    ];
+    
+    listenersAttached.current = true;
+
+    return () => {
+      unsubs.forEach(unsub => unsub());
+      listenersAttached.current = false;
+    };
+  }, [mounted, isAuthenticated, handleFriendRequestReceived, handleFriendRequestAccepted, handleFriendListUpdated, handleReminderDue, handleMessageReceived]);
+
+  // Luôn render children để tránh lệch Hydration giữa Server và Client
   return <>{children}</>;
 }

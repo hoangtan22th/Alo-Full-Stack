@@ -32,6 +32,7 @@ interface MessageContextMenuProps {
   onUnpin: () => void;
   onReply: (msg: MessageDTO) => void;
   isPinned: boolean;
+  canPin?: boolean;
   currentUserId: string;
 }
 
@@ -49,6 +50,7 @@ export const MessageContextMenu = ({
   onUnpin,
   onReply,
   isPinned,
+  canPin = true,
   currentUserId,
 }: MessageContextMenuProps) => {
   if (!visible || !selectedMsg || !layout) return null;
@@ -218,26 +220,28 @@ export const MessageContextMenu = ({
                 </TouchableOpacity>
               )}
 
-              {isPinned ? (
-                <TouchableOpacity
-                  onPress={onUnpin}
-                  className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
-                >
-                  <MapPinIcon size={18} color="#f87171" />
-                  <Text className="text-[14px] font-medium text-red-500">
-                    Bỏ ghim
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  onPress={onPin}
-                  className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
-                >
-                  <MapPinIcon size={18} color="#4b5563" />
-                  <Text className="text-[14px] font-medium text-gray-700">
-                    Ghim tin nhắn
-                  </Text>
-                </TouchableOpacity>
+              {canPin && (
+                isPinned ? (
+                  <TouchableOpacity
+                    onPress={onUnpin}
+                    className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
+                  >
+                    <MapPinIcon size={18} color="#f87171" />
+                    <Text className="text-[14px] font-medium text-red-500">
+                      Bỏ ghim
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    onPress={onPin}
+                    className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
+                  >
+                    <MapPinIcon size={18} color="#4b5563" />
+                    <Text className="text-[14px] font-medium text-gray-700">
+                      Ghim tin nhắn
+                    </Text>
+                  </TouchableOpacity>
+                )
               )}
 
               {isSender && !selectedMsg.isRevoked && (

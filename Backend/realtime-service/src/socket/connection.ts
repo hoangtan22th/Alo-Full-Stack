@@ -109,19 +109,50 @@ export function initSocketConnection(io: Server) {
     });
 
     // 5.2 Handle Call Signaling
-    socket.on("CALL_INITIATED", (data: { targetRoom: string; caller: any; isVideo: boolean }) => {
+    socket.on("CALL_INITIATED", (data: { targetRoom: string; caller: any; isVideo: boolean; inviteeIds?: string[]; isGroup?: boolean }) => {
       console.log(`[Socket.IO] Call initiated by ${userId} to room_${data.targetRoom}`);
-      socket.to(`room_${data.targetRoom}`).emit("INCOMING_CALL", {
+      const payload = {
         roomId: data.targetRoom,
         caller: data.caller,
         isVideo: data.isVideo,
+        isGroup: data.isGroup || false
+      };
+
+      if (data.inviteeIds && data.inviteeIds.length > 0) {
+        data.inviteeIds.forEach(id => {
+          socket.to(`user_${id}`).emit("INCOMING_CALL", payload);
+        });
+      } else {
+        socket.to(`room_${data.targetRoom}`).emit("INCOMING_CALL", payload);
+      }
+    });
+
+    socket.on("CANCEL_CALL", (data: { targetRoom: string; inviteeIds?: string[] }) => {
+      console.log(`[Socket.IO] Call canceled by ${userId} for room_${data.targetRoom}`);
+      if (data.inviteeIds && data.inviteeIds.length > 0) {
+        data.inviteeIds.forEach(id => {
+          socket.to(`user_${id}`).emit("CALL_CANCELED", { roomId: data.targetRoom });
+        });
+      } else {
+        socket.to(`room_${data.targetRoom}`).emit("CALL_CANCELED", {
+          roomId: data.targetRoom,
+        });
+      }
+    });
+    
+    socket.on("CALL_DECLINED", (data: { targetRoom: string }) => {
+      console.log(`[Socket.IO] Call declined by ${userId} for room_${data.targetRoom}`);
+      socket.to(`room_${data.targetRoom}`).emit("CALL_DECLINED", {
+        roomId: data.targetRoom,
+        userId: userId // Tell others who declined
       });
     });
 
-    socket.on("CANCEL_CALL", (data: { targetRoom: string }) => {
-      console.log(`[Socket.IO] Call canceled by ${userId} for room_${data.targetRoom}`);
-      socket.to(`room_${data.targetRoom}`).emit("CALL_CANCELED", {
+    socket.on("CALL_BUSY", (data: { targetRoom: string }) => {
+      console.log(`[Socket.IO] Call busy from ${userId} for room_${data.targetRoom}`);
+      socket.to(`room_${data.targetRoom}`).emit("CALL_BUSY", {
         roomId: data.targetRoom,
+        userId: userId
       });
     });
 
@@ -143,6 +174,27 @@ export function initSocketConnection(io: Server) {
       } catch (error) {
         console.error("Error checking user status", error);
       }
+    });
+
+    // 7. Social Events (Bypass RabbitMQ for simple UI notifications)
+    socket.on("EMIT_FRIEND_REQUEST_SENT", (data: { recipientId: string; requesterName: string; requesterAvatar?: string }) => {
+      console.log(`[Socket.IO] Friend request from ${userId} to ${data.recipientId}`);
+      socket.to(`user_${data.recipientId}`).emit("NEW_FRIEND_REQUEST", {
+        requesterId: userId,
+        requesterName: data.requesterName,
+        requesterAvatar: data.requesterAvatar,
+      });
+    });
+
+    socket.on("EMIT_FRIEND_REQUEST_ACCEPTED", (data: { recipientId: string; accepterName: string }) => {
+      console.log(`[Socket.IO] Friend request accepted by ${userId} for ${data.recipientId}`);
+      // Notify the original requester
+      socket.to(`user_${data.recipientId}`).emit("FRIEND_REQUEST_ACCEPTED", {
+        accepterId: userId,
+        accepterName: data.accepterName,
+      });
+      // Also notify everyone to refresh friend lists
+      io.to(`user_${data.recipientId}`).to(`user_${userId}`).emit("FRIEND_LIST_UPDATED", {});
     });
 
     // ============================================

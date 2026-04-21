@@ -70,11 +70,11 @@ export default function ZegoCallRoom({
 
       // Lấy AppID và Secret từ biến môi trường
       const appID = Number(
-        process.env.NEXT_PUBLIC_ZEGO_APP_ID || import.meta.env.VITE_ZEGO_APP_ID,
+        process.env.NEXT_PUBLIC_ZEGO_APP_ID || (import.meta as any).env?.VITE_ZEGO_APP_ID,
       );
       const serverSecret =
         process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET ||
-        import.meta.env.VITE_ZEGO_SERVER_SECRET;
+        (import.meta as any).env?.VITE_ZEGO_SERVER_SECRET;
 
       if (!appID || !serverSecret) {
         console.error("Lỗi: Thiếu cấu hình ZegoCloud trong file .env");
@@ -100,9 +100,7 @@ export default function ZegoCallRoom({
         maxUsers: isGroup ? 50 : 2,
         scenario: {
           // Tự động chọn kịch bản 1-1 hoặc Nhóm dựa trên prop isGroup
-          mode: isGroup
-            ? ZegoUIKitPrebuilt.GroupCall
-            : ZegoUIKitPrebuilt.OneONoneCall,
+          mode: ZegoUIKitPrebuilt.GroupCall,
         },
         layout: "Auto",
 
@@ -150,6 +148,7 @@ export default function ZegoCallRoom({
 
         onLeaveRoom: () => callbacksRef.current.onLeaveRoom(),
         onUserJoin: (users: any[]) => {
+          console.log("📍 [Zego] onUserJoin triggered:", users);
           participantCountRef.current += users.length;
           callbacksRef.current.onUserJoin?.(users);
         },

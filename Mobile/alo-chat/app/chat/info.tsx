@@ -11,11 +11,11 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
+  TextInput,
   Image,
   Alert,
   Modal,
-  Switch,
+  ScrollView,
 } from "react-native";
 import {
   ArrowLeftIcon,
@@ -35,6 +35,10 @@ import {
   PencilIcon,
   CameraIcon,
   LinkIcon,
+  Cog6ToothIcon,
+  ChartBarIcon,
+  PencilSquareIcon,
+  CalendarDaysIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -72,6 +76,11 @@ export default function ChatInfoScreen() {
     (membersCount as string) || "0",
   );
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [permissions, setPermissions] = useState<any>(null);
+
+  // States cho modal đổi tên (Fix Alert.prompt trên Android)
+  const [isEditNameModalVisible, setIsEditNameModalVisible] = useState(false);
+  const [tempGroupName, setTempGroupName] = useState("");
 
   const fetchGroupDetails = async () => {
     try {
@@ -96,6 +105,10 @@ export default function ChatInfoScreen() {
       }
       if (typeof groupData?.isHistoryVisible === "boolean") {
         setIsHistoryVisible(groupData.isHistoryVisible);
+      }
+
+      if (groupData?.permissions) {
+        setPermissions(groupData.permissions);
       }
 
       if (groupData && groupData.members) {
@@ -252,6 +265,11 @@ export default function ChatInfoScreen() {
   const isAdmin = currentUserRole === "leader";
   const isDeputy = currentUserRole === "deputy";
   const isManager = isAdmin || isDeputy;
+  const canEdit = isGroup && (isManager || permissions?.editGroupInfo === "EVERYONE");
+  const canCreatePoll = isGroup && (isManager || permissions?.createPolls === "EVERYONE");
+  const canCreateNote = isGroup && (isManager || permissions?.createNotes === "EVERYONE");
+  const canCreateReminder = isGroup && (isManager || permissions?.createReminders === "EVERYONE");
+  const hasAnyUtility = canCreatePoll || canCreateNote || canCreateReminder;
 
   const handleLeaveGroup = () => {
     if (isAdmin) {
@@ -366,30 +384,26 @@ export default function ChatInfoScreen() {
   };
 
   const handleEditName = () => {
-    Alert.prompt(
-      "Đổi tên nhóm",
-      "Nhập tên nhóm mới:",
-      [
-        { text: "Hủy", style: "cancel" },
-        {
-          text: "Lưu",
-          onPress: async (newName?: string) => {
-            const trimmedName = newName?.trim();
-            if (!trimmedName) return;
-            try {
-              await groupService.updateGroup(id as string, trimmedName);
-              Alert.alert("Thành công", "Đã cập nhật tên nhóm");
-              fetchGroupDetails();
-            } catch (error) {
-              console.error(error);
-              Alert.alert("Lỗi", "Không thể cập nhật tên nhóm.");
-            }
-          },
-        },
-      ],
-      "plain-text",
-      groupName,
-    );
+    setTempGroupName(groupName);
+    setIsEditNameModalVisible(true);
+  };
+
+  const confirmEditName = async () => {
+    const trimmedName = tempGroupName?.trim();
+    if (!trimmedName || trimmedName === groupName) {
+      setIsEditNameModalVisible(false);
+      return;
+    }
+    try {
+      await groupService.updateGroup(id as string, trimmedName);
+      setGroupName(trimmedName);
+      setIsEditNameModalVisible(false);
+      Alert.alert("Thành công", "Đã cập nhật tên nhóm");
+      fetchGroupDetails();
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Lỗi", "Không thể cập nhật tên nhóm.");
+    }
   };
 
   const handleDisbandGroup = () => {
@@ -424,9 +438,18 @@ export default function ChatInfoScreen() {
           <ArrowLeftIcon size={24} color="#000" />
         </TouchableOpacity>
         <Text className="text-lg font-bold text-gray-900">Thông tin</Text>
-        <TouchableOpacity className="p-2 -mr-2">
-          <EllipsisVerticalIcon size={24} color="#000" />
-        </TouchableOpacity>
+        {isGroup && isManager ? (
+          <TouchableOpacity
+            onPress={() => router.push(`/chat/settings?id=${id}`)}
+            className="p-2 -mr-2"
+          >
+            <Cog6ToothIcon size={24} color="#000" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity className="p-2 -mr-2">
+            <EllipsisVerticalIcon size={24} color="#000" />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
@@ -434,7 +457,7 @@ export default function ChatInfoScreen() {
         <View className="items-center mt-6">
           <View className="relative">
             <TouchableOpacity
-              disabled={!isGroup}
+              disabled={!isGroup || !canEdit}
               activeOpacity={0.7}
               onPress={handleChangeAvatar}
             >
@@ -452,7 +475,7 @@ export default function ChatInfoScreen() {
               )}
             </TouchableOpacity>
 
-            {isGroup ? (
+            {isGroup && canEdit ? (
               <TouchableOpacity
                 onPress={handleChangeAvatar}
                 className="absolute bottom-0 right-0 w-8 h-8 bg-[#f5f6f8] border-[3px] border-white rounded-full items-center justify-center shadow-sm"
@@ -467,11 +490,12 @@ export default function ChatInfoScreen() {
           </View>
 
           <View className="flex-row items-center justify-center mt-4 mb-1">
-            {isGroup && <View className="w-8" />}
+            {isGroup && !canEdit && <View className="w-0" />}
+            {isGroup && canEdit && <View className="w-8" />}
             <Text className="text-[22px] font-extrabold text-gray-900 text-center">
               {groupName || (isGroup ? `Nhóm ${id}` : "Nhắn tin")}
             </Text>
-            {isGroup && (
+            {isGroup && canEdit && (
               <TouchableOpacity
                 className="ml-2 p-1 w-6 items-start"
                 onPress={handleEditName}
@@ -611,7 +635,7 @@ export default function ChatInfoScreen() {
             {fileList.length > 0 ? (
               fileList.slice(0, 3).map((file, index) => {
                 const uniqueKey = file._id
-                  ? `${file._id}-${index}`
+                   ? `${file._id}-${index}`
                   : `file-fallback-${index}-${Math.random().toString(36).substring(2)}`;
                 return (
                   <View key={uniqueKey}>
@@ -648,6 +672,35 @@ export default function ChatInfoScreen() {
           </View>
         </View>
 
+        {/* SECTION: TIỆN ÍCH NHÓM */}
+        {isGroup && (
+          <View className="mt-10 px-5">
+            <Text className="text-[11px] font-bold text-gray-500 uppercase tracking-[1px] mb-4">
+              Tiện ích nhóm
+            </Text>
+
+            <View className="bg-[#f5f6f8] rounded-[24px]">
+              <SettingItem
+                icon={<ChartBarIcon size={24} color="#4b5563" />}
+                title="Bình chọn"
+                onPress={() => router.push(`/chat/polls?id=${id}`)}
+              />
+              <View className="h-[1px] bg-white w-[90%] self-end" />
+              <SettingItem
+                icon={<PencilSquareIcon size={24} color="#4b5563" />}
+                title="Ghi chú"
+                onPress={() => router.push(`/chat/notes?id=${id}`)}
+              />
+              <View className="h-[1px] bg-white w-[90%] self-end" />
+              <SettingItem
+                icon={<CalendarDaysIcon size={24} color="#4b5563" />}
+                title="Nhắc hẹn"
+                onPress={() => router.push(`/chat/reminders?id=${id}`)}
+              />
+            </View>
+          </View>
+        )}
+
         {/* SECTION: THÔNG TIN KHÁC */}
         {isGroup && (
           <View className="mt-10 px-5">
@@ -656,6 +709,16 @@ export default function ChatInfoScreen() {
             </Text>
 
             <View className="bg-[#f5f6f8] rounded-[24px]">
+              {isManager && (
+                <>
+                  <SettingItem
+                    icon={<Cog6ToothIcon size={24} color="#4b5563" />}
+                    title="Cài đặt nhóm"
+                    onPress={() => router.push(`/chat/settings?id=${id}`)}
+                  />
+                  <View className="h-[1px] bg-white w-[90%] self-end" />
+                </>
+              )}
               <SettingItem
                 icon={<LinkIcon size={24} color="#4b5563" />}
                 title="Link tham gia nhóm"
@@ -791,6 +854,46 @@ export default function ChatInfoScreen() {
         </View>
       </Modal>
 
+      {/* Modal Đổi tên nhóm (Fix Alert.prompt trên Android) */}
+      <Modal
+        visible={isEditNameModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setIsEditNameModalVisible(false)}
+      >
+        <View className="flex-1 justify-center bg-black/40 px-6">
+          <View className="bg-white rounded-[24px] p-6 shadow-xl">
+            <Text className="text-lg font-bold text-gray-900 mb-2">Đổi tên nhóm</Text>
+            <Text className="text-[13px] text-gray-500 mb-4">
+              Nhập tên nhóm mới để mọi người dễ dàng nhận diện.
+            </Text>
+            
+            <TextInput
+              className="bg-gray-100 rounded-xl px-4 py-3 text-base text-gray-900 mb-6 border border-gray-200"
+              placeholder="Nhập tên nhóm..."
+              value={tempGroupName}
+              onChangeText={setTempGroupName}
+              autoFocus
+            />
+
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                className="flex-1 bg-gray-100 py-3.5 rounded-xl items-center"
+                onPress={() => setIsEditNameModalVisible(false)}
+              >
+                <Text className="text-gray-600 font-bold">Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 bg-[#007AFF] py-3.5 rounded-xl items-center"
+                onPress={confirmEditName}
+              >
+                <Text className="text-white font-bold">Lưu</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <GalleryViewerModal
         images={mediaList}
         initialIndex={viewerIndex ?? 0}
@@ -900,3 +1003,4 @@ function SettingItem({
     </TouchableOpacity>
   );
 }
+
