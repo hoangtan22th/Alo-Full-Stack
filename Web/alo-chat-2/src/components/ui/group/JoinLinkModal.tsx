@@ -7,6 +7,7 @@ import {
   ShareIcon,
   ArrowDownTrayIcon,
   DocumentDuplicateIcon,
+  PaperAirplaneIcon,
 } from "@heroicons/react/24/outline";
 import { groupService } from "@/services/groupService";
 import { messageService } from "@/services/messageService";
@@ -108,6 +109,22 @@ export default function JoinLinkModal({
     toast.success("Đã sao chép link tham gia nhóm");
   };
 
+  const handleShareToChat = async () => {
+    try {
+      setUpdating(true);
+      await messageService.sendMessage({
+        conversationId: groupId,
+        type: "text",
+        content: `Mời bạn tham gia nhóm qua link: ${shareUrl}`,
+      });
+      toast.success("Đã chia sẻ link vào nhóm");
+    } catch (err) {
+      toast.error("Không thể chia sẻ link");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const handleSaveQR = () => {
     const svg = document.getElementById("info-qr-code");
     if (svg) {
@@ -192,10 +209,10 @@ export default function JoinLinkModal({
                    </div>
 
                    {/* Action Buttons */}
-                   <div className="flex gap-4 w-full mb-10 shrink-0">
+                   <div className="grid grid-cols-2 gap-4 w-full mb-10 shrink-0">
                       <button 
                         onClick={handleCopyLink}
-                        className="flex-1 flex flex-col items-center gap-2 group"
+                        className="flex flex-col items-center gap-2 group"
                       >
                          <div className="w-14 h-14 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
                             <DocumentDuplicateIcon className="w-6 h-6" />
@@ -211,7 +228,7 @@ export default function JoinLinkModal({
                               handleCopyLink();
                            }
                         }}
-                        className="flex-1 flex flex-col items-center gap-2 group"
+                        className="flex flex-col items-center gap-2 group"
                       >
                          <div className="w-14 h-14 bg-green-50 rounded-full flex items-center justify-center text-green-600 group-hover:bg-green-600 group-hover:text-white transition-all shadow-sm">
                             <ShareIcon className="w-6 h-6" />
@@ -221,12 +238,23 @@ export default function JoinLinkModal({
 
                       <button 
                         onClick={handleSaveQR}
-                        className="flex-1 flex flex-col items-center gap-2 group"
+                        className="flex flex-col items-center gap-2 group"
                       >
                          <div className="w-14 h-14 bg-orange-50 rounded-full flex items-center justify-center text-orange-600 group-hover:bg-orange-600 group-hover:text-white transition-all shadow-sm">
                             <ArrowDownTrayIcon className="w-6 h-6" />
                          </div>
                          <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Lưu QR</span>
+                      </button>
+
+                      <button 
+                        onClick={handleShareToChat}
+                        disabled={updating}
+                        className="flex flex-col items-center gap-2 group"
+                      >
+                         <div className="w-14 h-14 bg-purple-50 rounded-full flex items-center justify-center text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-all shadow-sm">
+                            <PaperAirplaneIcon className="w-6 h-6" />
+                         </div>
+                         <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Gửi chat</span>
                       </button>
                    </div>
 

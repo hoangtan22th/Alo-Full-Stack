@@ -252,6 +252,25 @@ export const addMember = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Kiểm tra xem có bị ban hoặc chặn mời lại không
+    const removedInfo = group.removedMembers?.find(
+      (rm) => rm.userId.toString() === newUserId.toString(),
+    );
+    if (removedInfo) {
+      if (removedInfo.isBanned) {
+        res
+          .status(403)
+          .json({ error: "Người dùng này đã bị cấm tham gia nhóm" });
+        return;
+      }
+      if (removedInfo.preventReinvite) {
+        res
+          .status(403)
+          .json({ error: "Người dùng này đã chặn lời mời vào nhóm này" });
+        return;
+      }
+    }
+
     // Kiểm tra đã kết bạn chưa
     const authHeader = req.headers.authorization;
     const friendIds = await getFriendIds(requesterId, authHeader);
@@ -335,7 +354,8 @@ export const removeMember = async (
   try {
     const groupId = String(req.params.groupId || "");
     const userId = String(req.params.userId || "");
-    const requesterId = String(req.headers["x-user-id"] || ""); // Người bấm nút
+    const requesterId = String(req.headers["x-user-id"] || "");
+    const { isSilent, isBanned, preventReinvite } = req.body;
 
     const group = await Conversation.findById(groupId);
     if (!group) {
@@ -351,8 +371,11 @@ export const removeMember = async (
       return;
     }
 
-    // TRƯỜNG HỢP 1: TỰ RỜI NHÓM (userId === requesterId)
-    if (userId === requesterId) {
+    let reason: "LEAVE" | "KICK" = "KICK";
+
+    // TRƯỜNG HỢP 1: TỰ RỜI NHÓM
+    // Sử dụng trim() và toString() để đảm bảo so sánh chính xác giữa Mongo ID và Header ID
+    if (userId.toString().trim() === requesterId.toString().trim()) {
       if (requester.role === "LEADER") {
         res.status(400).json({
           error:
@@ -360,46 +383,70 @@ export const removeMember = async (
         });
         return;
       }
-      // Cho phép rời nhóm bình thường
+      reason = "LEAVE";
     }
-    // TRƯỜNG HỢP 2: BỊ KICK (userId !== requesterId)
+    // TRƯỜNG HỢP 2: BỊ KICK
     else {
-      // Chỉ LEADER hoặc DEPUTY mới được kick
       if (requester.role === "MEMBER") {
         res.status(403).json({ error: "Bạn không có quyền kick thành viên" });
         return;
       }
-      // DEPUTY không thể kick LEADER hoặc DEPUTY khác
       if (requester.role === "DEPUTY" && target.role !== "MEMBER") {
         res
           .status(403)
           .json({ error: "Phó nhóm chỉ có thể kick Thành viên thường" });
         return;
       }
+      reason = "KICK";
     }
 
-    // Thực hiện xóa
+    // Cập nhật removedMembers
+    if (!group.removedMembers) group.removedMembers = [];
+
+    // Xóa thông tin cũ nếu có
+    group.removedMembers = group.removedMembers.filter(
+      (rm) => rm.userId !== userId,
+    );
+
+    group.removedMembers.push({
+      userId,
+      removedAt: new Date(),
+      reason,
+      isBanned: reason === "KICK" ? !!isBanned : false,
+      preventReinvite: reason === "LEAVE" ? !!preventReinvite : false,
+    });
+
+    // Thực hiện xóa khỏi members
     group.members = group.members.filter((m) => m.userId !== userId);
     await group.save();
 
-    // Real-time Sync: Thông báo cho người bị gỡ rằng họ không còn trong nhóm
-    const reason = userId === requesterId ? "leave" : "kick";
+    // Real-time Sync
     rabbitMQProducer
-      .publishConversationRemoved(groupId, userId, group.name || "Nhóm", reason)
+      .publishConversationRemoved(
+        groupId,
+        userId,
+        group.name || "Nhóm",
+        reason.toLowerCase() as "kick" | "leave" | "delete",
+      )
       .catch(console.error);
 
-    // Bắn tin nhắn hệ thống
-    const targetName = await getUserFullName(userId, req.headers.authorization);
-    const messageContent =
-      userId === requesterId
-        ? `${targetName} đã rời khỏi nhóm`
-        : `${targetName} đã bị mời ra khỏi nhóm`;
-    await postSystemMessage(
-      groupId,
-      requesterId,
-      messageContent,
-      req.headers.authorization,
-    );
+    // Bắn tin nhắn hệ thống (Nếu không phải rời trong im lặng)
+    if (!isSilent) {
+      const targetName = await getUserFullName(
+        userId,
+        req.headers.authorization,
+      );
+      const messageContent =
+        reason === "LEAVE"
+          ? `${targetName} đã rời khỏi nhóm`
+          : `${targetName} đã bị mời ra khỏi nhóm`;
+      await postSystemMessage(
+        groupId,
+        requesterId,
+        messageContent,
+        req.headers.authorization,
+      );
+    }
 
     rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
     res.status(200).json({ message: "Thao tác thành công", data: group });
@@ -622,10 +669,20 @@ export const getGroupById = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const groupId = String(req.params.groupId || "");
-    const group = await Conversation.findById(groupId);
+    const groupId = String(req.params.groupId || "").trim();
+    if (!groupId || groupId.length !== 24) {
+      res.status(400).json({ error: `Mã nhóm không hợp lệ: ${groupId}` });
+      return;
+    }
+    
+    // Try both methods for robustness
+    let group = await Conversation.findById(groupId);
     if (!group) {
-      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      group = await Conversation.findOne({ _id: groupId });
+    }
+
+    if (!group) {
+      res.status(404).json({ error: `Không tìm thấy nhóm với ID: ${groupId}` });
       return;
     }
     res.status(200).json({ data: group });
@@ -640,8 +697,13 @@ export const requestJoinGroup = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const groupId = String(req.params.groupId || "");
+    const groupId = String(req.params.groupId || "").trim();
     const requesterId = String(req.headers["x-user-id"] || "");
+
+    if (!groupId || groupId.length !== 24) {
+      res.status(400).json({ error: "Mã nhóm không hợp lệ" });
+      return;
+    }
 
     if (!requesterId) {
       res.status(401).json({ error: "Unauthorized" });
@@ -679,6 +741,15 @@ export const requestJoinGroup = async (
     );
     if (hasRequested) {
       res.status(400).json({ error: "Bạn đã gửi yêu cầu tham gia rồi" });
+      return;
+    }
+
+    // Checking if banned
+    const removedInfo = group.removedMembers?.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (removedInfo?.isBanned) {
+      res.status(403).json({ error: "Bạn đã bị chặn khỏi nhóm này" });
       return;
     }
 
@@ -726,7 +797,7 @@ export const requestJoinGroup = async (
       group.joinRequests = [];
     }
 
-    const { answer } = req.body;
+    const { answer } = req.body || {};
 
     group.joinRequests.push({
       userId: requesterId,
@@ -1440,6 +1511,7 @@ export const getGroupStatsAdmin = async (
 };
 
 // 12. Cập nhật danh mục (Ưu tiên / Khác)
+// 12. Cập nhật danh mục (Ưu tiên / Khác)
 export const updateConversationFolder = async (
   req: Request,
   res: Response,
@@ -1477,5 +1549,232 @@ export const updateConversationFolder = async (
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+};
+
+// 23. Mời vào nhóm (Hỗ trợ mời người chưa kết bạn)
+export const inviteToGroup = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const groupId = String(req.params.groupId || "").trim();
+    if (!groupId || groupId.length !== 24) {
+      res.status(400).json({ error: "Mã nhóm không hợp lệ" });
+      return;
+    }
+    const { targetUserId } = req.body;
+    const requesterId = String(req.headers["x-user-id"] || "");
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    // 1. Kiểm tra xem đã là thành viên chưa
+    if (group.members.some((m) => m.userId === targetUserId)) {
+      res.status(400).json({ error: "Người dùng đã là thành viên của nhóm" });
+      return;
+    }
+
+    // 2. Kiểm tra ban/block
+    const removedInfo = group.removedMembers?.find(
+      (rm) => rm.userId === targetUserId,
+    );
+    if (removedInfo) {
+      if (removedInfo.isBanned) {
+        res
+          .status(403)
+          .json({ error: "Người dùng này đã bị cấm tham gia nhóm" });
+        return;
+      }
+      if (removedInfo.preventReinvite) {
+        res
+          .status(403)
+          .json({ error: "Người dùng này đã chặn lời mời vào nhóm này" });
+        return;
+      }
+    }
+
+    // 3. Kiểm tra xem đã mời chưa
+    if (!group.invitations) group.invitations = [];
+    if (group.invitations.some((inv) => inv.userId === targetUserId)) {
+      res.status(400).json({ error: "Đã gửi lời mời cho người dùng này rồi" });
+      return;
+    }
+
+    // 4. Thêm lời mời
+    group.invitations.push({
+      userId: targetUserId,
+      invitedBy: requesterId,
+      invitedAt: new Date(),
+    });
+
+    await group.save();
+
+    // Thông báo cho người được mời (Real-time Sync)
+    rabbitMQProducer
+      .publishAddedToGroup(targetUserId, group)
+      .catch(console.error);
+
+    res
+      .status(200)
+      .json({ message: "Đã gửi lời mời tham gia nhóm", data: group });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 24. Lấy danh sách lời mời của tôi
+export const getMyInvitations = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = String(req.headers["x-user-id"] || "");
+    const invitations = await Conversation.find({
+      "invitations.userId": userId,
+    });
+    res.status(200).json({ data: invitations });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 25. Chấp nhận lời mời
+export const acceptInvitation = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const groupId = String(req.params.groupId || "");
+    const userId = String(req.headers["x-user-id"] || "");
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    const invitation = group.invitations?.find((inv) => inv.userId === userId);
+    if (!invitation) {
+      res.status(400).json({ error: "Không tìm thấy lời mời" });
+      return;
+    }
+
+    // Xóa lời mời
+    group.invitations = group.invitations.filter(
+      (inv) => inv.userId !== userId,
+    );
+
+    // Thêm thành viên
+    group.members.push({
+      userId,
+      role: "MEMBER",
+      joinedAt: new Date(),
+    });
+
+    await group.save();
+
+    // Thông báo cho mọi người
+    rabbitMQProducer.publishConversationCreated(group).catch(console.error);
+    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
+
+    // Bắn tin nhắn hệ thống
+    const userName = await getUserFullName(userId, req.headers.authorization);
+    await postSystemMessage(
+      groupId,
+      userId,
+      `${userName} đã chấp nhận lời mời tham gia nhóm`,
+      req.headers.authorization,
+    );
+
+    res
+      .status(200)
+      .json({ message: "Đã tham gia nhóm thành công", data: group });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 26. Từ chối lời mời
+export const declineInvitation = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const groupId = String(req.params.groupId || "");
+    const userId = String(req.headers["x-user-id"] || "");
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    group.invitations = group.invitations.filter(
+      (inv) => inv.userId !== userId,
+    );
+    await group.save();
+
+    res.status(200).json({ message: "Đã từ chối lời mời" });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+// 27. Lấy danh sách yêu cầu tham gia đã gửi
+export const getMySentJoinRequests = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = String(req.headers["x-user-id"] || "");
+    const requests = await Conversation.find({
+      "joinRequests.userId": userId,
+    });
+    res.status(200).json({ data: requests });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * Lấy danh sách các lời mời vào nhóm mà TÔI ĐÃ GỬI cho người khác
+ */
+export const getMySentInvitations = async (req: Request, res: Response) => {
+  try {
+    const requesterId = String(req.headers["x-user-id"] || "");
+    if (!requesterId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    // Tìm các conversation mà trong mảng invitations có invitedBy là requesterId
+    const conversations = await Conversation.find({
+      "invitations.invitedBy": requesterId,
+    }).select("name groupAvatar invitations");
+
+    const sentInvitations: any[] = [];
+
+    conversations.forEach((conv) => {
+      const pendingInvites = conv.invitations.filter(
+        (inv) => String(inv.invitedBy) === requesterId,
+      );
+      pendingInvites.forEach((inv) => {
+        sentInvitations.push({
+          groupId: conv._id,
+          groupName: conv.name,
+          groupAvatar: conv.groupAvatar,
+          invitedUserId: inv.userId,
+          invitedAt: inv.invitedAt,
+        });
+      });
+    });
+
+    res.status(200).json({ data: sentInvitations });
+  } catch (error) {
+    console.error("Lỗi getMySentInvitations:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 };

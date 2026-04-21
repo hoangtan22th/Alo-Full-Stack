@@ -8,6 +8,14 @@ export interface IMember {
   joinedAt: Date;
 }
 
+export interface IRemovedMember {
+  userId: string;
+  removedAt: Date;
+  reason: "LEAVE" | "KICK";
+  isBanned: boolean; // Set by admin/leader when kicking
+  preventReinvite: boolean; // Set by user when leaving
+}
+
 // 2. Định nghĩa Interface cho Cuộc trò chuyện (Document chính)
 // Kế thừa Document của mongoose để có sẵn các hàm như .save(), ._id
 export interface IConversation extends Document {
@@ -18,9 +26,11 @@ export interface IConversation extends Document {
   lastMessageAt?: Date;
   lastMessageContent?: string;
   members: IMember[];
+  removedMembers: IRemovedMember[];
   mutedBy: string[];
   hiddenBy: string[];
   joinRequests: { userId: string; requestedAt: Date; answer?: string }[];
+  invitations: { userId: string; invitedBy: string; invitedAt: Date }[];
   isBanned: boolean;
   isApprovalRequired: boolean;
   isLinkEnabled: boolean; // Add isLinkEnabled field
@@ -67,6 +77,16 @@ const conversationSchema = new Schema<IConversation>(
       },
     ],
 
+    removedMembers: [
+      {
+        userId: { type: String, required: true },
+        removedAt: { type: Date, default: Date.now },
+        reason: { type: String, enum: ["LEAVE", "KICK"] },
+        isBanned: { type: Boolean, default: false },
+        preventReinvite: { type: Boolean, default: false },
+      },
+    ],
+
     mutedBy: [{ type: String }],
     hiddenBy: [{ type: String }],
     joinRequests: [
@@ -74,6 +94,13 @@ const conversationSchema = new Schema<IConversation>(
         userId: { type: String, required: true },
         requestedAt: { type: Date, default: Date.now },
         answer: { type: String, default: "" },
+      },
+    ],
+    invitations: [
+      {
+        userId: { type: String, required: true },
+        invitedBy: { type: String, required: true },
+        invitedAt: { type: Date, default: Date.now },
       },
     ],
     membershipQuestion: { type: String, default: "" },
