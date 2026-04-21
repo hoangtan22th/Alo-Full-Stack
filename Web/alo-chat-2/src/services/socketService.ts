@@ -192,6 +192,10 @@ class SocketService {
     return this.subscribe("GROUP_UPDATED", callback);
   }
 
+  onNewJoinRequest(callback: (data: any) => void) {
+    return this.subscribe("NEW_JOIN_REQUEST", callback);
+  }
+
   // --- Messaging ---
   joinRoom(conversationId: string) {
     if (this.socket?.connected) {

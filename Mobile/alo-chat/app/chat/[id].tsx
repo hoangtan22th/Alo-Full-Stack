@@ -451,7 +451,9 @@ export default function GlobalChatScreen() {
 
     const handleGroupUpdated = (data: any) => {
       const updatedGroup = data.group ? data.group : data;
-      if (updatedGroup._id === resolvedConversationId) {
+      const updatedId = updatedGroup._id || updatedGroup.id || updatedGroup.conversationId;
+      
+      if (String(updatedId) === String(resolvedConversationId)) {
         setGroupDetails(updatedGroup);
         if (updatedGroup.members) {
           const admins = new Set<string>(
@@ -807,6 +809,19 @@ export default function GlobalChatScreen() {
             onBack={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))}
             onSearchToggle={() => setIsSearchMode(true)}
             onInfo={() => {
+              router.push({
+                pathname: "/chat/info",
+                params: {
+                  id: resolvedConversationId || id,
+                  name: realtimeGroupName,
+                  avatar: realtimeAvatar,
+                  membersCount: realtimeMembersCount,
+                  isGroup: isGroupChat ? "true" : "false",
+                  targetUserId,
+                },
+              });
+            }}
+            onHeaderClick={() => {
               if (isGroupChat) {
                 router.push({
                   pathname: "/chat/info",
