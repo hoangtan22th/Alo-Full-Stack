@@ -58,7 +58,7 @@ spring:
             - id: report-service
               uri: lb://REPORT-SERVICE
               predicates:
-                - Path=/api/v1/report/**
+                - Path=/api/v1/reports/**, /api/v1/admin/reports/**
                 
             - id: realtime-service
               uri: lb://REALTIME-SERVICE
