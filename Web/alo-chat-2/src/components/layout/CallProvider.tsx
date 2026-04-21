@@ -180,10 +180,10 @@ export default function CallProvider({ children }: { children: React.ReactNode }
     socketService.onCallBusy(handleCallBusy);
 
     return () => {
-      socketService.off("INCOMING_CALL");
-      socketService.off("CALL_CANCELED");
-      socketService.off("CALL_DECLINED");
-      socketService.off("CALL_BUSY");
+      socketService.removeListener("INCOMING_CALL", handleIncomingCall);
+      socketService.removeListener("CALL_CANCELED", handleCallCanceled);
+      socketService.removeListener("CALL_DECLINED", handleCallDeclined);
+      socketService.removeListener("CALL_BUSY", handleCallBusy);
     };
   }, [myId, incomingCall, playRingtone, stopRingtone]);
 
