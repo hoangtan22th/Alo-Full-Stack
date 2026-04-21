@@ -10,6 +10,8 @@ import {
   ExclamationTriangleIcon,
   ChevronRightIcon,
   ArrowPathIcon,
+  ChatBubbleLeftRightIcon,
+  PhoneIcon,
 } from "@heroicons/react/24/outline";
 import { useState, useEffect } from "react";
 import axiosClient from "@/services/api";
@@ -369,16 +371,26 @@ export default function FriendProfileModal({
                   </button>
                 </div>
               ) : currentRelation.status === "I_SENT_REQUEST" || currentRelation.status === "YOU_SENT_REQUEST" ? (
-                <button
-                  onClick={handleRevoke}
-                  disabled={actionLoading}
-                  className="w-full bg-red-50 text-red-600 py-3 rounded-xl font-bold text-xs border border-red-100 flex justify-center items-center gap-2 hover:bg-red-100 transition shadow-sm"
-                >
-                  <ArrowPathIcon
-                    className={`w-4 h-4 ${actionLoading ? "animate-spin" : ""}`}
-                  />{" "}
-                  Thu hồi lời mời kết bạn
-                </button>
+                <div className="space-y-2">
+                  <button
+                    onClick={handleRevoke}
+                    disabled={actionLoading}
+                    className="w-full bg-red-50 text-red-600 py-3 rounded-xl font-bold text-xs border border-red-100 flex justify-center items-center gap-2 hover:bg-red-100 transition shadow-sm"
+                  >
+                    <ArrowPathIcon
+                      className={`w-4 h-4 ${actionLoading ? "animate-spin" : ""}`}
+                    />{" "}
+                    Thu hồi lời mời kết bạn
+                  </button>
+                  <button
+                    onClick={handleMessage}
+                    disabled={actionLoading}
+                    className="w-full bg-gray-50 text-gray-600 py-3 rounded-xl font-bold text-xs border border-gray-100 flex justify-center items-center gap-2 hover:bg-gray-100 transition"
+                  >
+                    <ChatBubbleLeftRightIcon className="w-4 h-4" />
+                    Nhắn tin
+                  </button>
+                </div>
               ) : currentRelation.status === "THEY_SENT_REQUEST" ? (
                 // ✅ HIỆN CHẤP NHẬN/TỪ CHỐI KHI HỌ GỬI TỚI
                 <div className="flex gap-2">
@@ -397,6 +409,13 @@ export default function FriendProfileModal({
                   >
                     {actionLoading && <ArrowPathIcon className="w-4 h-4 animate-spin" />}
                     Từ chối
+                  </button>
+                  <button
+                    onClick={handleMessage}
+                    disabled={actionLoading}
+                    className="flex-1 bg-blue-50 text-blue-600 py-2.5 rounded-xl font-bold text-xs hover:bg-blue-100 transition flex items-center justify-center gap-2"
+                  >
+                    Nhắn tin
                   </button>
                 </div>
               ) : (
@@ -438,6 +457,15 @@ export default function FriendProfileModal({
                       )}
                       {isAdding ? "Gửi lời mời" : "Kết bạn"}
                     </button>
+                    {!isAdding && (
+                      <button
+                        onClick={handleMessage}
+                        disabled={actionLoading}
+                        className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-200 transition"
+                      >
+                        Nhắn tin
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
