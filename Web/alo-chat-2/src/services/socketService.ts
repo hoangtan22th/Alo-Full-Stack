@@ -286,6 +286,10 @@ class SocketService {
   onUserStatusResult(callback: (data: any) => void) {
     this.addListener("USER_STATUS_RESULT", callback);
   }
+
+  onReminderDue(callback: (data: { title: string; conversationId: string }) => void) {
+    this.addListener("REMINDER_DUE", callback);
+  }
 }
 
 export const socketService = new SocketService();

@@ -72,6 +72,32 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     window.dispatchEvent(new CustomEvent("friend_list_updated", { detail: data }));
   }, []);
 
+  const handleReminderDue = useCallback((data: { title: string; conversationId: string }) => {
+    toast("⏰ Nhắc hẹn!", {
+      description: `Đã đến giờ: ${data.title}`,
+      action: {
+        label: "Đến xem",
+        onClick: () => router.push(`/chat/${data.conversationId}`),
+      },
+      duration: 10000,
+    });
+  }, [router]);
+
+  const handleMessageReceived = useCallback((data: any) => {
+    const msg = data.message || data;
+    // Nhắc hẹn nhóm (System message)
+    if (msg.type === "system" && msg.metadata?.isReminder) {
+      toast("📢 Nhắc hẹn nhóm!", {
+        description: msg.metadata.title || msg.content,
+        action: {
+          label: "Đến xem",
+          onClick: () => router.push(`/chat/${msg.conversationId}`),
+        },
+        duration: 10000,
+      });
+    }
+  }, [router]);
+
   // 5. Gắn listener
   useEffect(() => {
     const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
@@ -80,8 +106,10 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     socketService.onFriendRequestReceived(handleFriendRequestReceived);
     socketService.onFriendRequestAccepted(handleFriendRequestAccepted);
     socketService.onFriendListUpdated(handleFriendListUpdated);
+    socketService.onReminderDue(handleReminderDue);
+    socketService.onMessageReceived(handleMessageReceived);
     listenersAttached.current = true;
-  }, [mounted, isAuthenticated, handleFriendRequestReceived, handleFriendRequestAccepted, handleFriendListUpdated]);
+  }, [mounted, isAuthenticated, handleFriendRequestReceived, handleFriendRequestAccepted, handleFriendListUpdated, handleReminderDue, handleMessageReceived]);
 
   // Luôn render children để tránh lệch Hydration giữa Server và Client
   return <>{children}</>;
