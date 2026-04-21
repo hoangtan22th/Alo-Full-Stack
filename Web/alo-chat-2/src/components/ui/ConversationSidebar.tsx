@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import axiosClient from "@/services/api";
 import { groupService } from "@/services/groupService";
@@ -27,6 +27,7 @@ import {
 } from "@heroicons/react/24/outline";
 import CreateGroupModal from "@/components/ui/group/CreateGroupModal";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 
 // --- Sub-component: ManageLabelsModal ---
 function ManageLabelsModal({ 
@@ -591,6 +592,26 @@ export default function ConversationSidebar() {
     return true;
   });
 
+  const { priorityUnreadCount, otherUnreadCount } = useMemo(() => {
+    let pCount = 0;
+    let oCount = 0;
+
+    conversations.forEach(chat => {
+      if (chat.unreadCount > 0) {
+        const folder = chat.folder;
+        const isStrangerConvo = !chat.isGroup && chat.id !== BOT_ID && chat.otherMemberUserId && !friendIds.has(chat.otherMemberUserId);
+        
+        const isPriority = folder === "priority" || (!folder && !isStrangerConvo);
+        const isOther = folder === "other" || folder === "stranger" || (!folder && isStrangerConvo);
+
+        if (isPriority) pCount++;
+        else if (isOther) oCount++;
+      }
+    });
+
+    return { priorityUnreadCount: pCount, otherUnreadCount: oCount };
+  }, [conversations, friendIds, currentUser]);
+
   return (
     <>
       <div className="w-full md:w-[320px] lg:w-85 flex flex-col border-r border-gray-100 shrink-0 h-full">
@@ -653,20 +674,31 @@ export default function ConversationSidebar() {
 
           <div className="flex items-center justify-between border-b border-gray-100 pb-2">
             <div className="flex gap-5">
-              {["Ưu tiên", "Khác"].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`text-[13px] font-bold relative ${
-                    activeTab === tab ? "text-black" : "text-gray-400 hover:text-gray-600"
-                  }`}
-                >
-                  {tab}
-                  {activeTab === tab && (
-                    <span className="absolute -bottom-2.25 left-0 right-0 h-0.5 bg-black rounded-t-full" />
-                  )}
-                </button>
-              ))}
+              {["Ưu tiên", "Khác"].map((tab) => {
+                const count = tab === "Ưu tiên" ? priorityUnreadCount : otherUnreadCount;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`text-[13px] font-bold relative flex items-center gap-1.5 transition-all ${
+                      activeTab === tab ? "text-black" : "text-gray-400 hover:text-gray-600"
+                    }`}
+                  >
+                    {tab}
+                    {count > 0 && (
+                      <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-black rounded-full shadow-sm shadow-red-200 animate-in fade-in zoom-in duration-300">
+                        {count > 99 ? "99+" : count}
+                      </span>
+                    )}
+                    {activeTab === tab && (
+                      <motion.span 
+                        layoutId="activeTab"
+                        className="absolute -bottom-2.25 left-0 right-0 h-0.5 bg-black rounded-t-full" 
+                      />
+                    )}
+                  </button>
+                );
+              })}
             </div>
             <div className="relative group/filter pb-4 -mb-4">
               <button className={`p-1.5 rounded-lg transition-colors ${selectedLabelId ? "bg-blue-50 text-blue-500" : "text-gray-400 hover:text-black"}`}>
