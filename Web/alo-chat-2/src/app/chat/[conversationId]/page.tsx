@@ -220,7 +220,7 @@ export default function ChatPage() {
             String(m._id) === String(userId),
         );
         if (member) {
-          const name = member.fullName || member.displayName || member.name;
+          const name = member.fullName || member.displayName || (member as any).name;
           if (name) return name;
         }
       }
@@ -440,6 +440,7 @@ export default function ChatPage() {
             if (u) {
               displayName =
                 u.fullName ||
+                (u as any).displayName ||
                 (u as any).username ||
                 (u as any).name ||
                 "Người dùng";
@@ -564,6 +565,47 @@ export default function ChatPage() {
       }
     });
 
+    // --- REALTIME INFO PANEL & CONVERSATION SYNC ---
+    // Lắng nghe cập nhật thông tin nhóm/cuộc trò chuyện
+    socketService.off("GROUP_UPDATED");
+    socketService.onGroupUpdated((data: any) => {
+      const activeConvoId = conversationIdRef.current;
+      const updatedConvoId = data._id || data.conversationId || data.id;
+      if (String(updatedConvoId) === String(activeConvoId)) {
+        console.log("🔄 [Realtime] Group updated, refreshing info...");
+        fetchConversationInfo();
+      }
+    });
+
+    socketService.off("CONVERSATION_UPDATED");
+    socketService.onConversationUpdated((data: any) => {
+      const activeConvoId = conversationIdRef.current;
+      const updatedConvoId = data._id || data.conversationId || data.id;
+      if (String(updatedConvoId) === String(activeConvoId)) {
+        console.log("🔄 [Realtime] Conversation updated, refreshing info...");
+        fetchConversationInfo();
+      }
+    });
+
+    // Lắng nghe giải tán nhóm hoặc bị mời ra khỏi nhóm
+    socketService.off("CONVERSATION_REMOVED");
+    socketService.onConversationRemoved((data: any) => {
+      const activeConvoId = conversationIdRef.current;
+      if (String(data.conversationId) === String(activeConvoId)) {
+        const reason = data.reason || "removed";
+        const groupName = data.groupName || "cuộc trò chuyện";
+
+        if (reason === "leave") return; // Tự rời thì đã handle ở button click
+
+        toast.info(
+          reason === "delete"
+            ? `Nhóm "${groupName}" đã được giải tán`
+            : `Bạn đã không còn là thành viên của nhóm "${groupName}"`,
+        );
+        router.replace("/chat");
+      }
+    });
+
     return () => {
       socketService.off("message-received");
       socketService.off("messages-read");
@@ -571,6 +613,9 @@ export default function ChatPage() {
       socketService.off("message-revoked");
       socketService.off("message-pinned");
       socketService.off("message-updated");
+      socketService.off("GROUP_UPDATED");
+      socketService.off("CONVERSATION_UPDATED");
+      socketService.off("CONVERSATION_REMOVED");
     };
   }, [conversationId, currentUser]);
 
@@ -1208,8 +1253,6 @@ export default function ChatPage() {
       senderId: myId,
       senderName:
         currentUser?.fullName ||
-        currentUser?.name ||
-        currentUser?.username ||
         "Tôi",
       type: "image",
       content: stickerUrl,
@@ -1241,8 +1284,6 @@ export default function ChatPage() {
         type: "image",
         senderName:
           currentUser?.fullName ||
-          currentUser?.name ||
-          currentUser?.username ||
           "Tôi",
         metadata: { isSticker: true },
         replyTo: currentReply
