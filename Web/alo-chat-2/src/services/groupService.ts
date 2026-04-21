@@ -211,6 +211,19 @@ export const groupService = {
     }
   },
 
+  updateHistorySetting: async (groupId: string, isHistoryVisible: boolean) => {
+    try {
+      const data = await api.put<any, any>(
+        `/groups/${groupId}/history-setting`,
+        { isHistoryVisible },
+      );
+      return data;
+    } catch (error) {
+      console.error("Lỗi cập nhật cấu hình lịch sử:", error);
+      throw error;
+    }
+  },
+
   // Lấy hoặc tạo cuộc hội thoại 1-1
   createDirectConversation: async (targetUserId: string) => {
     try {
@@ -307,6 +320,34 @@ export const groupService = {
       return data;
     } catch (error) {
       console.error("Lỗi xoá lịch sử trò chuyện:", error);
+      throw error;
+    }
+  },
+
+  updateGroupSettings: async (
+    groupId: string,
+    settings: {
+      isHighlightEnabled?: boolean;
+      membershipQuestion?: string;
+      isQuestionEnabled?: boolean;
+      permissions?: {
+        editGroupInfo?: "EVERYONE" | "ADMIN";
+        createNotes?: "EVERYONE" | "ADMIN";
+        createPolls?: "EVERYONE" | "ADMIN";
+        pinMessages?: "EVERYONE" | "ADMIN";
+        sendMessage?: "EVERYONE" | "ADMIN";
+        createReminders?: "EVERYONE" | "ADMIN";
+      };
+    },
+  ) => {
+    try {
+      const data = await api.put<any, any>(
+        `/groups/${groupId}/settings`,
+        settings,
+      );
+      return data;
+    } catch (error) {
+      console.error("Lỗi cập nhật cấu hình nhóm:", error);
       throw error;
     }
   },

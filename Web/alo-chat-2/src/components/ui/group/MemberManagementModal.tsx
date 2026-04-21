@@ -10,8 +10,11 @@ import {
   ChevronUpIcon,
   ChevronDownIcon,
   UserIcon,
+  BellIcon,
 } from "@heroicons/react/24/outline";
+import MemberApprovalModal from "./MemberApprovalModal";
 import { groupService } from "@/services/groupService";
+import { socketService } from "@/services/socketService";
 import { toast } from "sonner";
 import { getMediaUrl } from "../../../utils/media";
 
@@ -39,6 +42,8 @@ export default function MemberManagementModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "managers">("all");
   const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [hasPendingRequests, setHasPendingRequests] = useState(false);
 
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const myMember = members.find(m => m.userId === myId);
@@ -58,6 +63,39 @@ export default function MemberManagementModal({
       return matchesSearch;
     });
   }, [members, searchQuery, activeTab, userCache]);
+
+  React.useEffect(() => {
+    if (!conversationId || !isManager) return;
+
+    // Check for pending requests initially
+    const checkRequests = async () => {
+      try {
+        const reqs = await groupService.getJoinRequests(conversationId);
+        setHasPendingRequests(Array.isArray(reqs) && reqs.length > 0);
+      } catch (err) {
+        console.error("Error checking join requests:", err);
+      }
+    };
+    checkRequests();
+
+    const unsubJoin = socketService.onNewJoinRequest((data: { groupId: string }) => {
+      if (String(data.groupId) === String(conversationId)) {
+        setHasPendingRequests(true);
+      }
+    });
+
+    const unsubUpdate = socketService.onGroupUpdated((data: any) => {
+       const updatedId = data._id || data.conversationId || data.id;
+       if (String(updatedId) === String(conversationId)) {
+         checkRequests();
+       }
+    });
+
+    return () => {
+      unsubJoin();
+      unsubUpdate();
+    };
+  }, [conversationId, isManager]);
 
   const handleUpdateRole = async (userId: string, newRole: string) => {
     try {
@@ -112,6 +150,21 @@ export default function MemberManagementModal({
             >
               <UserPlusIcon className="w-6 h-6" />
             </button>
+            {isManager && (
+              <button
+                onClick={() => {
+                  setShowApprovalModal(true);
+                  setHasPendingRequests(false);
+                }}
+                className="p-2 hover:bg-gray-50 text-gray-700 rounded-full transition-all relative"
+                title="Duyệt thành viên"
+              >
+                <ShieldCheckIcon className="w-6 h-6" />
+                {hasPendingRequests && (
+                  <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 border-2 border-white rounded-full animate-pulse" />
+                )}
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-2 hover:bg-white hover:shadow-sm rounded-full transition-all text-gray-400 hover:text-gray-600"
@@ -283,6 +336,13 @@ export default function MemberManagementModal({
            </button>
         </div>
       </div>
+
+      {showApprovalModal && (
+        <MemberApprovalModal
+          groupId={conversationId}
+          onClose={() => setShowApprovalModal(false)}
+        />
+      )}
     </div>
   );
 }
