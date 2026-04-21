@@ -803,6 +803,19 @@ export default function ChatPage() {
           router.replace("/chat");
         }
       }),
+
+      // Khi có thay đổi bình chọn, di chuyển message poll xuống cuối (như tin nhắn mới)
+      socketService.onPollUpdated((data: any) => {
+        setMessages((prev) => {
+          const pollMsgIdx = prev.findIndex(
+            (m) => m.type === "poll" && m.metadata?.pollId === data.pollId
+          );
+          if (pollMsgIdx === -1) return prev;
+          const pollMsg = { ...prev[pollMsgIdx], updatedAt: new Date().toISOString() };
+          const filtered = prev.filter((_, i) => i !== pollMsgIdx);
+          return [...filtered, pollMsg];
+        });
+      }),
     ];
 
     return () => {
@@ -3492,6 +3505,7 @@ export default function ChatPage() {
             onAssignLeader={handleAssignLeader}
             onRefreshData={handleRefreshData}
             userCache={userCache}
+            onOpenPollDetails={(id) => setActivePollId(id)}
           />
 
           {/* ALBUM PREVIEW MODAL */}

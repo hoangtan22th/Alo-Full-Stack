@@ -16,6 +16,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { useSocket } from "../../contexts/SocketContext";
 import { useRouter } from "expo-router";
+import { userService } from "../../services/userService";
 
 interface PollMessagePreviewProps {
   pollId: string;
@@ -36,8 +37,8 @@ export const PollMessagePreview = ({
   const currentUserId = user?.id || user?._id || user?.userId;
   const router = useRouter();
 
-  // Selected options directly on the bubble
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const [creatorName, setCreatorName] = useState<string>("");
 
   const fetchPollData = async () => {
     try {
@@ -45,7 +46,13 @@ export const PollMessagePreview = ({
         pollService.getPollDetails(pollId),
         pollService.getPollResults(pollId),
       ]);
-      if (pollData) setPoll(pollData);
+      if (pollData) {
+        setPoll(pollData);
+        try {
+          const profile = await userService.getUserById(pollData.creatorId);
+          setCreatorName(profile?.fullName || profile?.username || "Người dùng");
+        } catch { setCreatorName("Người dùng"); }
+      }
       if (resultsData) setResults(resultsData);
 
       // Khôi phục trạng thái đã chọn trước đó của user
@@ -209,6 +216,9 @@ export const PollMessagePreview = ({
           >
             {poll.question}
           </Text>
+          {creatorName ? (
+            <Text style={{ fontSize: 11, color: "#9ca3af", marginBottom: 2 }}>Tạo bởi: {creatorName}</Text>
+          ) : null}
           {isPollEnded && (
             <Text style={{ fontSize: 12, color: "#ef4444", fontWeight: "500" }}>
               Đã kết thúc

@@ -57,6 +57,7 @@ interface ChatInfoPanelProps {
   onAssignLeader: (userId: string) => void;
   onRefreshData?: () => void;
   userCache?: Record<string, { name: string; avatar: string }>;
+  onOpenPollDetails?: (pollId: string) => void;
 }
 
 const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
@@ -76,6 +77,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   onAssignLeader,
   onRefreshData,
   userCache = {},
+  onOpenPollDetails,
 }) => {
   const [showMembers, setShowMembers] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
@@ -526,6 +528,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           conversationId={conversationId}
           canCreate={canCreatePoll}
           onClose={() => setShowPollModal(false)}
+          onOpenDetails={onOpenPollDetails}
         />
       )}
 

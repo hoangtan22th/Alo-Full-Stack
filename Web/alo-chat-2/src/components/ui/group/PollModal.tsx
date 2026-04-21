@@ -12,12 +12,14 @@ interface PollModalProps {
   conversationId: string;
   canCreate?: boolean;
   onClose: () => void;
+  onOpenDetails?: (pollId: string) => void;
 }
 
-export default function PollModal({ conversationId, canCreate = true, onClose }: PollModalProps) {
+export default function PollModal({ conversationId, canCreate = true, onClose, onOpenDetails }: PollModalProps) {
   const [polls, setPolls] = useState<PollDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [displayCount, setDisplayCount] = useState(5);
   
   // Create Poll State
   const [question, setQuestion] = useState("");
@@ -237,19 +239,36 @@ export default function PollModal({ conversationId, canCreate = true, onClose }:
                     <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mb-3" />
                   </div>
                 ) : polls.length > 0 ? (
-                  polls.map((poll) => (
-                    <div key={poll._id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-blue-200 transition cursor-pointer group">
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="text-[14px] font-bold text-gray-900 group-hover:text-blue-600 transition">{poll.question}</h3>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase ${poll.status === 'OPEN' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
-                          {poll.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}
-                        </span>
+                  <>
+                    {polls.slice(0, displayCount).map((poll) => (
+                      <div 
+                        key={poll._id} 
+                        onClick={() => {
+                          onClose();
+                          if (onOpenDetails && poll._id) onOpenDetails(poll._id);
+                        }}
+                        className="p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-blue-200 transition cursor-pointer group"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <h3 className="text-[14px] font-bold text-gray-900 group-hover:text-blue-600 transition">{poll.question}</h3>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase shrink-0 ml-3 ${poll.status === 'OPEN' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
+                            {poll.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] font-medium text-gray-400">
+                          {poll.options.length} lựa chọn • {new Date(poll.createdAt).toLocaleDateString('vi-VN')}
+                        </p>
                       </div>
-                      <p className="text-[11px] font-medium text-gray-400">
-                        {poll.options.length} lựa chọn • {new Date(poll.createdAt).toLocaleDateString('vi-VN')}
-                      </p>
-                    </div>
-                  ))
+                    ))}
+                    {displayCount < polls.length && (
+                      <button 
+                        onClick={() => setDisplayCount(prev => prev + 5)}
+                        className="w-full py-3 mt-2 text-[13px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition"
+                      >
+                        Xem thêm ({polls.length - displayCount} bình chọn cũ hơn)
+                      </button>
+                    )}
+                  </>
                 ) : (
                   <div className="flex flex-col items-center py-10 opacity-40">
                     <ChartBarIcon className="w-12 h-12 mb-3" />
