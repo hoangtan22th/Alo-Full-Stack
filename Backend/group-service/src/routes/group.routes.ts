@@ -83,7 +83,25 @@ router.put(
 );
 router.delete("/api/v1/groups/:groupId", groupController.deleteGroup);
 
-// Join requests
+// Invitations
+router.get("/api/v1/groups/invitations/me", groupController.getMyInvitations);
+router.post("/api/v1/groups/:groupId/invitations", groupController.inviteToGroup);
+router.post(
+  "/api/v1/groups/:groupId/invitations/accept",
+  groupController.acceptInvitation,
+);
+router.post(
+  "/api/v1/groups/:groupId/invitations/decline",
+  groupController.declineInvitation,
+);
+router.get(
+  "/api/v1/groups/join-requests/me",
+  groupController.getMySentJoinRequests,
+);
+router.get(
+  "/api/v1/groups/invitations/sent",
+  groupController.getMySentInvitations,
+);
 router.post(
   "/api/v1/groups/:groupId/join-requests",
   groupController.requestJoinGroup,
