@@ -253,6 +253,92 @@ export default function ChatPage() {
   const [forwardingMessage, setForwardingMessage] = useState<MessageDTO | null>(
     null,
   );
+  const [forwardingMessages, setForwardingMessages] = useState<MessageDTO[]>([]);
+
+  /* ---------- multi-select state ---------- */
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
+
+  const selectedMessages = useMemo(() => {
+    return messages.filter((m) => selectedMessageIds.has(m._id));
+  }, [messages, selectedMessageIds]);
+
+  const canBulkRevoke = useMemo(() => {
+    if (selectedMessages.length === 0) return false;
+    return selectedMessages.every((msg) => {
+      const isMine = String(msg.senderId) === String(myId);
+      const isWithinTime =
+        new Date().getTime() - new Date(msg.createdAt).getTime() < 86400000;
+      return isMine && isWithinTime && !msg.isRevoked;
+    });
+  }, [selectedMessages, myId]);
+
+  const toggleMessageSelection = (msg: MessageDTO) => {
+    setSelectedMessageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(msg._id)) {
+        next.delete(msg._id);
+      } else {
+        next.add(msg._id);
+      }
+      return next;
+    });
+  };
+
+  const handleBulkCopy = () => {
+    if (selectedMessages.length === 0) return;
+    const text = selectedMessages
+      .map((m) => {
+        if (m.isRevoked) return "[Tin nhắn đã được thu hồi]";
+        if (m.type === "text") return m.content;
+        if (m.type === "image") {
+          return m.metadata?.isSticker ? "[Sticker]" : "[Hình ảnh]";
+        }
+        if (m.type === "file") {
+          return `[Tập tin: ${m.metadata?.fileName || "không xác định"}]`;
+        }
+        return `[${m.type}]`;
+      })
+      .join("\n");
+
+    if (text) {
+      navigator.clipboard.writeText(text);
+      toast.success("Đã sao chép tin nhắn");
+    } else {
+      toast.error("Không có gì để sao chép");
+    }
+  };
+  const handleBulkForward = () => {
+    if (selectedMessages.length === 0) return;
+    setForwardingMessages(selectedMessages);
+  };
+
+  const handleBulkRevoke = async () => {
+    if (selectedMessages.length === 0) return;
+    const ids = selectedMessages.map((m) => m._id);
+    const success = await messageService.bulkRevokeMessages(ids);
+    if (success) {
+      toast.success("Đã thu hồi các tin nhắn được chọn");
+      setIsMultiSelectMode(false);
+      setSelectedMessageIds(new Set());
+    } else {
+      toast.error("Có lỗi xảy ra khi thu hồi tin nhắn");
+    }
+  };
+
+  const handleBulkDeleteForMe = async () => {
+    if (selectedMessages.length === 0) return;
+    const ids = selectedMessages.map((m) => m._id);
+    const success = await messageService.bulkDeleteMessagesForMe(ids);
+    if (success) {
+      toast.success("Đã xóa tin nhắn ở phía bạn");
+      setMessages((prev) => prev.filter((m) => !selectedMessageIds.has(m._id)));
+      setIsMultiSelectMode(false);
+      setSelectedMessageIds(new Set());
+    } else {
+      toast.error("Có lỗi xảy ra khi xóa tin nhắn");
+    }
+  };
 
   // Reaction viewers
 
@@ -2071,9 +2157,14 @@ export default function ChatPage() {
                             <div
                               key={msg._id}
                               id={`msg-${msg._id}`}
+                              onClick={() => {
+                                if (isMultiSelectMode) {
+                                  toggleMessageSelection(msg);
+                                }
+                              }}
                               className={`flex items-center gap-1.5 transition-colors duration-500 ${
                                 isMine ? "flex-row-reverse" : "flex-row"
-                              }`}
+                              } ${isMultiSelectMode ? "cursor-pointer" : ""}`}
                               onMouseEnter={(e) => {
                                 setHoveredMsgId(msg._id);
                                 setMousePos({ x: e.clientX, y: e.clientY });
@@ -2107,7 +2198,11 @@ export default function ChatPage() {
                                   ))}
                               </div>
                               {/* Bubble */}
-                              <div className="relative max-w-[75%] flex flex-col items-start">
+                              <div className={`relative max-w-[75%] flex flex-col ${isMine ? "items-end" : "items-start"} transition-all duration-300 ${
+                                isMultiSelectMode ? "p-1 rounded-2xl" : ""
+                              } ${
+                                selectedMessageIds.has(msg._id) ? "bg-black/10 shadow-inner" : isMultiSelectMode ? "hover:bg-black/5" : ""
+                              }`}>
                                 {/* System messages (General & Call) */}
                                 {(msg.type as any) === "system" ? (
                                   msg.metadata?.callType ? (
@@ -2369,6 +2464,7 @@ export default function ChatPage() {
                                                             itemAspect,
                                                         }}
                                                         onClick={() =>
+                                                          !isMultiSelectMode &&
                                                           !shouldShowPlaceholder &&
                                                           setActiveAlbumIndex({
                                                             messageId: msg._id,
@@ -2571,6 +2667,7 @@ export default function ChatPage() {
                                             className="object-cover max-h-[420px] rounded-lg cursor-pointer"
                                             onLoad={handleImageLoad}
                                             onClick={() => {
+                                              if (isMultiSelectMode) return;
                                               // For legacy single images, we can also use the album preview logic if we want
                                               // but let's keep it simple for now or set a dummy album
                                               setActiveAlbumIndex({
@@ -2596,12 +2693,13 @@ export default function ChatPage() {
                                       >
                                         <div
                                           className="flex items-center gap-3 flex-1 min-w-0"
-                                          onClick={() =>
+                                          onClick={() => {
+                                            if (isMultiSelectMode) return;
                                             window.open(
                                               getMediaUrl(msg.content),
                                               "_blank",
-                                            )
-                                          }
+                                            );
+                                          }}
                                         >
                                           <div className="w-10 h-12 bg-blue-500 rounded-lg flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
                                             <DocumentIcon className="w-6 h-6 text-white" />
@@ -2712,7 +2810,7 @@ export default function ChatPage() {
 
                                         return (
                                           <div
-                                            className={`px-2 py-1 text-[15px] font-medium leading-relaxed text-gray-900 break-words whitespace-pre-wrap ${isMine ? "text-right" : "text-left"}`}
+                                            className={`px-2 py-1 text-[15px] font-medium leading-relaxed text-gray-900 break-words whitespace-pre-wrap text-justify`}
                                           >
                                             {msg.content}
                                           </div>
@@ -2724,7 +2822,7 @@ export default function ChatPage() {
                                     {/* Hover Controls (Reaction & Menu & Redo) */}
                                     <div
                                       className={`absolute bottom-0 ${isMine ? "right-full pr-2" : "left-full pl-2"} flex items-center gap-1 z-[1000] ${
-                                        hoveredMsgId === msg._id
+                                        hoveredMsgId === msg._id && !isMultiSelectMode
                                           ? "opacity-100 translate-y-0"
                                           : "opacity-0 translate-y-2 pointer-events-none"
                                       } transition-all duration-200`}
@@ -2892,6 +2990,17 @@ export default function ChatPage() {
                                                   : "Ghim tin nhắn"}
                                               </button>
                                             )}
+                                            <button
+                                              onClick={() => {
+                                                setActiveMenu(null);
+                                                setIsMultiSelectMode(true);
+                                                setSelectedMessageIds(new Set([msg._id]));
+                                              }}
+                                              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
+                                            >
+                                              <CheckCircleIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                                              Chọn nhiều tin nhắn
+                                            </button>
                                             {!msg.isRevoked &&
                                               (msg.type === "image" ||
                                                 msg.type === "file") && (
@@ -3885,6 +3994,91 @@ export default function ChatPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Multi-Select Toolbar */}
+      {isMultiSelectMode && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[110] animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="bg-white/90 backdrop-blur-xl border border-gray-100 shadow-2xl rounded-[32px] py-3.5 px-7 flex items-center gap-8 ring-1 ring-black/5">
+            <div className="flex flex-col">
+              <span className={`text-[13px] font-black ${selectedMessageIds.size > 30 ? "text-red-500" : "text-black"}`}>
+                Đã chọn {selectedMessageIds.size}
+              </span>
+              <span className="text-[10px] text-gray-500 font-bold">
+                Tối đa 30 tin nhắn
+              </span>
+            </div>
+
+            <div className="w-[1px] h-8 bg-gray-100" />
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleBulkCopy}
+                disabled={selectedMessageIds.size === 0 || selectedMessageIds.size > 30}
+                className="flex flex-col items-center gap-1 p-2 min-w-[72px] hover:bg-gray-50 rounded-2xl transition group disabled:opacity-30"
+              >
+                <ClipboardDocumentIcon className="w-5 h-5 text-gray-700 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold text-gray-600">Sao chép</span>
+              </button>
+
+              <button
+                onClick={handleBulkForward}
+                disabled={selectedMessageIds.size === 0 || selectedMessageIds.size > 30}
+                className="flex flex-col items-center gap-1 p-2 min-w-[72px] hover:bg-gray-50 rounded-2xl transition group disabled:opacity-30"
+              >
+                <PaperAirplaneIcon className="w-5 h-5 text-blue-600 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold text-gray-600">Chia sẻ</span>
+              </button>
+
+              <button
+                onClick={handleBulkRevoke}
+                disabled={!canBulkRevoke || selectedMessageIds.size > 30}
+                className={`flex flex-col items-center gap-1 p-2 min-w-[72px] hover:bg-orange-50 rounded-2xl transition group ${!canBulkRevoke ? "opacity-30 grayscale cursor-not-allowed" : ""}`}
+              >
+                <ArrowUturnLeftIcon className="w-5 h-5 text-orange-500 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold text-gray-600">Thu hồi</span>
+              </button>
+
+              <button
+                onClick={handleBulkDeleteForMe}
+                disabled={selectedMessageIds.size === 0 || selectedMessageIds.size > 30}
+                className="flex flex-col items-center gap-1 p-2 min-w-[72px] hover:bg-red-50 rounded-2xl transition group disabled:opacity-30"
+              >
+                <TrashIcon className="w-5 h-5 text-red-500 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold text-gray-600">Xóa</span>
+              </button>
+            </div>
+
+            <div className="w-[1px] h-8 bg-gray-100" />
+
+            <button
+              onClick={() => {
+                setIsMultiSelectMode(false);
+                setSelectedMessageIds(new Set());
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-2xl text-[13px] font-black transition active:scale-95"
+            >
+              Hủy
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Forward Modals */}
+      {(forwardingMessage || forwardingMessages.length > 0) && (
+        <ForwardMessageModal
+          isOpen={!!forwardingMessage || forwardingMessages.length > 0}
+          onClose={() => {
+            setForwardingMessage(null);
+            setForwardingMessages([]);
+            if (isMultiSelectMode) {
+              setIsMultiSelectMode(false);
+              setSelectedMessageIds(new Set());
+            }
+          }}
+          messages={forwardingMessage ? [forwardingMessage] : forwardingMessages}
+          currentUser={currentUser}
+        />
       )}
     </>
   );
