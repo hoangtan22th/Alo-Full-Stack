@@ -43,6 +43,8 @@ import {
   PhotoIcon,
 } from "@heroicons/react/24/outline";
 import BotChatArea from "@/components/ui/BotChatArea";
+import StickerPicker from "@/components/ui/StickerPicker";
+import ForwardMessageModal from "@/components/ui/ForwardMessageModal";
 import { useAuthStore } from "@/store/useAuthStore";
 import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
 
@@ -87,6 +89,7 @@ export default function ChatPage() {
 
   // File upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
 
   // Audio state for ringtone
@@ -116,6 +119,7 @@ export default function ChatPage() {
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [replyingTo, setReplyingTo] = useState<MessageDTO | null>(null);
+  const [forwardingMessage, setForwardingMessage] = useState<MessageDTO | null>(null);
 
   // Reaction viewers
 
@@ -249,7 +253,10 @@ export default function ChatPage() {
           },
         }));
       }
-    } catch {}
+    } catch (error) {
+      console.error("Lỗi lấy thông tin user " + userId, error);
+      fetchingUsersRef.current.delete(userId); // remove from fetching so it can retry
+    }
   };
 
   // Đảm bảo userCache luôn có thông tin user cho các tin nhắn ghim (bao gồm cả chính mình)
@@ -404,6 +411,7 @@ export default function ChatPage() {
       const filtered = msgs.filter(
         (m) => m.type === "image" || m.type === "file",
       );
+      console.log("[DEBUG] msgs directly from API:", msgs.length, "filtered:", filtered.length);
       setMediaMessages(filtered);
     } catch (err) {
       console.error("Lỗi lấy lịch sử media cho InfoPanel:", err);
@@ -437,7 +445,9 @@ export default function ChatPage() {
                 "Người dùng";
               displayAvatar = u.avatar || displayAvatar;
             }
-          } catch {}
+          } catch (error) {
+            console.error("Lỗi lấy thông tin other user trong 1-1 chat", error);
+          }
         }
       }
 
@@ -522,10 +532,10 @@ export default function ChatPage() {
         prev.map((m) =>
           m._id === data.messageId
             ? {
-                ...m,
-                isRevoked: true,
-                revokedAt: data.revokedAt || new Date().toISOString(),
-              }
+              ...m,
+              isRevoked: true,
+              revokedAt: data.revokedAt || new Date().toISOString(),
+            }
             : m,
         ),
       );
@@ -954,18 +964,18 @@ export default function ChatPage() {
       isRead: false,
       replyTo: currentReply
         ? {
-            messageId: currentReply._id,
-            senderId: currentReply.senderId,
-            senderName: getSenderDisplayName(
-              currentReply.senderId,
-              currentReply,
-            ),
-            content:
-              currentReply.type === "file"
-                ? currentReply.metadata?.fileName || currentReply.content
-                : currentReply.content,
-            type: currentReply.type,
-          }
+          messageId: currentReply._id,
+          senderId: currentReply.senderId,
+          senderName: getSenderDisplayName(
+            currentReply.senderId,
+            currentReply,
+          ),
+          content:
+            currentReply.type === "file"
+              ? currentReply.metadata?.fileName || currentReply.content
+              : currentReply.content,
+          type: currentReply.type,
+        }
         : undefined,
       createdAt: new Date().toISOString(),
     };
@@ -979,18 +989,18 @@ export default function ChatPage() {
         senderName: currentUser?.fullName || "Tôi",
         replyTo: currentReply
           ? {
-              messageId: currentReply._id,
-              senderId: currentReply.senderId,
-              senderName: getSenderDisplayName(
-                currentReply.senderId,
-                currentReply,
-              ),
-              content:
-                currentReply.type === "file"
-                  ? currentReply.metadata?.fileName || currentReply.content
-                  : currentReply.content,
-              type: currentReply.type,
-            }
+            messageId: currentReply._id,
+            senderId: currentReply.senderId,
+            senderName: getSenderDisplayName(
+              currentReply.senderId,
+              currentReply,
+            ),
+            content:
+              currentReply.type === "file"
+                ? currentReply.metadata?.fileName || currentReply.content
+                : currentReply.content,
+            type: currentReply.type,
+          }
           : undefined,
       });
     } catch (err) {
@@ -1010,6 +1020,11 @@ export default function ChatPage() {
   const handleFileButtonClick = () => {
     if (fileInputRef.current) fileInputRef.current.value = "";
     fileInputRef.current?.click();
+  };
+
+  const handleImageButtonClick = () => {
+    if (imageInputRef.current) imageInputRef.current.value = "";
+    imageInputRef.current?.click();
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1077,18 +1092,18 @@ export default function ChatPage() {
           },
           replyTo: currentReply
             ? {
-                messageId: currentReply._id,
-                senderId: currentReply.senderId,
-                senderName: getSenderDisplayName(
-                  currentReply.senderId,
-                  currentReply,
-                ),
-                content:
-                  currentReply.type === "file"
-                    ? currentReply.metadata?.fileName || currentReply.content
-                    : currentReply.content,
-                type: currentReply.type,
-              }
+              messageId: currentReply._id,
+              senderId: currentReply.senderId,
+              senderName: getSenderDisplayName(
+                currentReply.senderId,
+                currentReply,
+              ),
+              content:
+                currentReply.type === "file"
+                  ? currentReply.metadata?.fileName || currentReply.content
+                  : currentReply.content,
+              type: currentReply.type,
+            }
             : undefined,
           createdAt: new Date().toISOString(),
         };
@@ -1123,22 +1138,22 @@ export default function ChatPage() {
           senderId: myId,
           senderName: currentUser?.fullName || "Tôi",
           type: file.type.startsWith("image/") ? "image" : "file",
-          content: "",
+          content: file.type.startsWith("image/") ? URL.createObjectURL(file) : "",
           isRead: false,
           replyTo: currentReply
             ? {
-                messageId: currentReply._id,
-                senderId: currentReply.senderId,
-                senderName: getSenderDisplayName(
-                  currentReply.senderId,
-                  currentReply,
-                ),
-                content:
-                  currentReply.type === "file"
-                    ? currentReply.metadata?.fileName || currentReply.content
-                    : currentReply.content,
-                type: currentReply.type,
-              }
+              messageId: currentReply._id,
+              senderId: currentReply.senderId,
+              senderName: getSenderDisplayName(
+                currentReply.senderId,
+                currentReply,
+              ),
+              content:
+                currentReply.type === "file"
+                  ? currentReply.metadata?.fileName || currentReply.content
+                  : currentReply.content,
+              type: currentReply.type,
+            }
             : undefined,
           createdAt: new Date().toISOString(),
           metadata: {
@@ -1173,6 +1188,87 @@ export default function ChatPage() {
     }
   };
 
+
+  /* ─── Send sticker ─── */
+  const handleSendSticker = async (stickerUrl: string) => {
+    if (!stickerUrl || !conversationId || sending) return;
+
+    const myId =
+      currentUser?.id || currentUser?._id || currentUser?.userId || "me";
+
+    setSending(true);
+    const currentReply = replyingTo;
+    setReplyingTo(null);
+
+    // Optimistic UI
+    const tempId = `temp_sticker_${Date.now()}`;
+    const tempMsg: MessageDTO = {
+      _id: tempId,
+      conversationId,
+      senderId: myId,
+      senderName:
+        currentUser?.fullName ||
+        currentUser?.name ||
+        currentUser?.username ||
+        "Tôi",
+      type: "image",
+      content: stickerUrl,
+      isRead: false,
+      metadata: { isSticker: true },
+      replyTo: currentReply
+        ? {
+          messageId: currentReply._id,
+          senderId: currentReply.senderId,
+          senderName: getSenderDisplayName(
+            currentReply.senderId,
+            currentReply,
+          ),
+          content:
+            currentReply.type === "file"
+              ? currentReply.metadata?.fileName || currentReply.content
+              : currentReply.content,
+          type: currentReply.type,
+        }
+        : undefined,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+
+    try {
+      await messageService.sendMessage({
+        conversationId,
+        content: stickerUrl,
+        type: "image",
+        senderName:
+          currentUser?.fullName ||
+          currentUser?.name ||
+          currentUser?.username ||
+          "Tôi",
+        metadata: { isSticker: true },
+        replyTo: currentReply
+          ? {
+            messageId: currentReply._id,
+            senderId: currentReply.senderId,
+            senderName: getSenderDisplayName(
+              currentReply.senderId,
+              currentReply,
+            ),
+            content:
+              currentReply.type === "file"
+                ? currentReply.metadata?.fileName || currentReply.content
+                : currentReply.content,
+            type: currentReply.type,
+          }
+          : undefined,
+      });
+    } catch (err) {
+      console.error("Lỗi gửi sticker:", err);
+      setMessages((prev) => prev.filter((m) => m._id !== tempId));
+    } finally {
+      setSending(false);
+    }
+  };
+
   // ─── Group messages: cùng sender + cách nhau < 5 phút = 1 group ───
   interface MsgGroup {
     isMine: boolean;
@@ -1188,7 +1284,7 @@ export default function ChatPage() {
       const lastMsg = last?.messages[last.messages.length - 1];
       const gap = lastMsg
         ? new Date(msg.createdAt).getTime() -
-          new Date(lastMsg.createdAt).getTime()
+        new Date(lastMsg.createdAt).getTime()
         : Infinity;
 
       const isSystem = (msg.type as any) === "system";
@@ -1332,7 +1428,7 @@ export default function ChatPage() {
                         ? pinnedMessages[0].content
                         : pinnedMessages[0].type === "file"
                           ? pinnedMessages[0].metadata?.fileName ||
-                            "Tệp đính kèm"
+                          "Tệp đính kèm"
                           : pinnedMessages[0].type === "image"
                             ? "[Ảnh]"
                             : "[Tin nhắn hệ thống]"}
@@ -1362,7 +1458,7 @@ export default function ChatPage() {
                         ? pinnedMessages[0].content
                         : pinnedMessages[0].type === "file"
                           ? pinnedMessages[0].metadata?.fileName ||
-                            "Tệp đính kèm"
+                          "Tệp đính kèm"
                           : pinnedMessages[0].type === "image"
                             ? "[Ảnh]"
                             : "[Tin nhắn hệ thống]"}
@@ -1532,25 +1628,24 @@ export default function ChatPage() {
                           // Bo góc bubble
                           const bubbleRadius = isMine
                             ? [
-                                "rounded-2xl",
-                                isFirst && !isLast ? "rounded-br-md" : "",
-                                !isFirst && !isLast ? "rounded-r-md" : "",
-                                !isFirst && isLast ? "rounded-br-sm" : "",
-                              ].join(" ")
+                              "rounded-2xl",
+                              isFirst && !isLast ? "rounded-br-md" : "",
+                              !isFirst && !isLast ? "rounded-r-md" : "",
+                              !isFirst && isLast ? "rounded-br-sm" : "",
+                            ].join(" ")
                             : [
-                                "rounded-2xl",
-                                isFirst && !isLast ? "rounded-bl-md" : "",
-                                !isFirst && !isLast ? "rounded-l-md" : "",
-                                !isFirst && isLast ? "rounded-bl-sm" : "",
-                              ].join(" ");
+                              "rounded-2xl",
+                              isFirst && !isLast ? "rounded-bl-md" : "",
+                              !isFirst && !isLast ? "rounded-l-md" : "",
+                              !isFirst && isLast ? "rounded-bl-sm" : "",
+                            ].join(" ");
 
                           return (
                             <div
                               key={msg._id}
                               id={`msg-${msg._id}`}
-                              className={`flex items-center gap-1.5 transition-colors duration-500 ${
-                                isMine ? "flex-row-reverse" : "flex-row"
-                              }`}
+                              className={`flex items-center gap-1.5 transition-colors duration-500 ${isMine ? "flex-row-reverse" : "flex-row"
+                                }`}
                               onMouseEnter={(e) => {
                                 setHoveredMsgId(msg._id);
                                 setMousePos({ x: e.clientX, y: e.clientY });
@@ -1607,22 +1702,20 @@ export default function ChatPage() {
                                   )
                                 ) : (
                                   <div
-                                    className={`relative max-w-full overflow-hidden flex flex-col p-1.5 px-2 border shadow-sm ${
-                                      isMine
-                                        ? "bg-blue-50/80 border-blue-100 shadow-blue-900/5 items-end"
-                                        : "bg-white border-gray-100 shadow-gray-900/5 items-start"
-                                    } ${bubbleRadius}`}
+                                    className={`relative max-w-full flex flex-col p-1.5 px-2 border shadow-sm ${isMine
+                                      ? "bg-blue-50/80 border-blue-100 shadow-blue-900/5 items-end"
+                                      : "bg-white border-gray-100 shadow-gray-900/5 items-start"
+                                      } ${bubbleRadius}`}
                                   >
                                     {/* Reply Quote Box */}
                                     {msg.replyTo &&
                                       msg.replyTo.messageId &&
                                       !isRevoked && (
                                         <div
-                                          className={`mb-2 px-3 py-2 border-l-[3px] border-blue-600 ${
-                                            isMine
-                                              ? "bg-white/50"
-                                              : "bg-blue-50/50"
-                                          } rounded-r-lg text-left cursor-pointer hover:bg-white/80 transition-colors w-full min-w-[150px] max-w-full overflow-hidden`}
+                                          className={`mb-2 px-3 py-2 border-l-[3px] border-blue-600 ${isMine
+                                            ? "bg-white/50"
+                                            : "bg-blue-50/50"
+                                            } rounded-r-lg text-left cursor-pointer hover:bg-white/80 transition-colors w-full min-w-[150px] max-w-full overflow-hidden`}
                                           onClick={() => {
                                             const targetMsg =
                                               document.getElementById(
@@ -1663,8 +1756,8 @@ export default function ChatPage() {
                                                   ? "[Hình ảnh]"
                                                   : msg.replyTo.type === "file"
                                                     ? msg.replyTo.content.startsWith(
-                                                        "http",
-                                                      )
+                                                      "http",
+                                                    )
                                                       ? "[Tệp tin]"
                                                       : msg.replyTo.content
                                                     : msg.replyTo.content}
@@ -1674,8 +1767,18 @@ export default function ChatPage() {
                                         </div>
                                       )}
 
-                                    {msg.type === "image" ? (
+                                    {msg.type === "image" && msg.metadata?.isSticker ? (
+                                      /* RENDER STICKER */
+                                      <div className="p-1">
+                                        <img
+                                          src={msg.content}
+                                          alt="sticker"
+                                          className="w-[150px] h-[150px] object-contain"
+                                        />
+                                      </div>
+                                    ) : msg.type === "image" ? (
                                       <div className="w-full">
+
                                         {msg.metadata?.imageGroup ? (
                                           (() => {
                                             // 1. Lọc ra danh sách ảnh thực sự đang được hiển thị
@@ -1776,16 +1879,16 @@ export default function ChatPage() {
                                                 style={{
                                                   ...(allRevoked
                                                     ? {
-                                                        width: `${computedGridWidth}px`,
-                                                        maxWidth: "100%",
-                                                      }
+                                                      width: `${computedGridWidth}px`,
+                                                      maxWidth: "100%",
+                                                    }
                                                     : {
-                                                        maxWidth:
-                                                          count === 1 &&
+                                                      maxWidth:
+                                                        count === 1 &&
                                                           isPortrait
-                                                            ? "280px"
-                                                            : "100%",
-                                                      }),
+                                                          ? "280px"
+                                                          : "100%",
+                                                    }),
                                                   maxHeight: "420px",
                                                   overflow: "hidden",
                                                 }}
@@ -1870,30 +1973,30 @@ export default function ChatPage() {
                                                                                 m,
                                                                               ) =>
                                                                                 m._id ===
-                                                                                msg._id
+                                                                                  msg._id
                                                                                   ? {
-                                                                                      ...m,
-                                                                                      metadata:
-                                                                                        {
-                                                                                          ...m.metadata,
-                                                                                          imageGroup:
-                                                                                            m.metadata?.imageGroup?.map(
-                                                                                              (
-                                                                                                ig: any,
-                                                                                                i: number,
-                                                                                              ) =>
-                                                                                                i ===
-                                                                                                originalIdx
-                                                                                                  ? {
-                                                                                                      ...ig,
-                                                                                                      isRevoked: true,
-                                                                                                      revokedAt:
-                                                                                                        new Date().toISOString(),
-                                                                                                    }
-                                                                                                  : ig,
-                                                                                            ),
-                                                                                        },
-                                                                                    }
+                                                                                    ...m,
+                                                                                    metadata:
+                                                                                    {
+                                                                                      ...m.metadata,
+                                                                                      imageGroup:
+                                                                                        m.metadata?.imageGroup?.map(
+                                                                                          (
+                                                                                            ig: any,
+                                                                                            i: number,
+                                                                                          ) =>
+                                                                                            i ===
+                                                                                              originalIdx
+                                                                                              ? {
+                                                                                                ...ig,
+                                                                                                isRevoked: true,
+                                                                                                revokedAt:
+                                                                                                  new Date().toISOString(),
+                                                                                              }
+                                                                                              : ig,
+                                                                                        ),
+                                                                                    },
+                                                                                  }
                                                                                   : m,
                                                                             ),
                                                                         );
@@ -1901,7 +2004,7 @@ export default function ChatPage() {
                                                                         await messageService.revokeImageInGroup(
                                                                           msg._id,
                                                                           originalIdx ??
-                                                                            0,
+                                                                          0,
                                                                         );
                                                                       }
                                                                     }}
@@ -1924,7 +2027,7 @@ export default function ChatPage() {
                                                                     await messageService.deleteImageInGroupForMe(
                                                                       msg._id,
                                                                       originalIdx ??
-                                                                        0,
+                                                                      0,
                                                                     );
                                                                     // Local update
                                                                     setMessages(
@@ -1934,33 +2037,33 @@ export default function ChatPage() {
                                                                             m,
                                                                           ) =>
                                                                             m._id ===
-                                                                            msg._id
+                                                                              msg._id
                                                                               ? {
-                                                                                  ...m,
-                                                                                  metadata:
-                                                                                    {
-                                                                                      ...m.metadata,
-                                                                                      imageGroup:
-                                                                                        m.metadata?.imageGroup?.map(
-                                                                                          (
-                                                                                            ig: any,
-                                                                                            i: number,
-                                                                                          ) =>
-                                                                                            i ===
-                                                                                            originalIdx
-                                                                                              ? {
-                                                                                                  ...ig,
-                                                                                                  deletedByUsers:
-                                                                                                    [
-                                                                                                      ...(ig.deletedByUsers ||
-                                                                                                        []),
-                                                                                                      myId,
-                                                                                                    ],
-                                                                                                }
-                                                                                              : ig,
-                                                                                        ),
-                                                                                    },
-                                                                                }
+                                                                                ...m,
+                                                                                metadata:
+                                                                                {
+                                                                                  ...m.metadata,
+                                                                                  imageGroup:
+                                                                                    m.metadata?.imageGroup?.map(
+                                                                                      (
+                                                                                        ig: any,
+                                                                                        i: number,
+                                                                                      ) =>
+                                                                                        i ===
+                                                                                          originalIdx
+                                                                                          ? {
+                                                                                            ...ig,
+                                                                                            deletedByUsers:
+                                                                                              [
+                                                                                                ...(ig.deletedByUsers ||
+                                                                                                  []),
+                                                                                                myId,
+                                                                                              ],
+                                                                                          }
+                                                                                          : ig,
+                                                                                    ),
+                                                                                },
+                                                                              }
                                                                               : m,
                                                                         ),
                                                                     );
@@ -1982,54 +2085,54 @@ export default function ChatPage() {
                                             );
                                           })()
                                         ) : /* RENDER SINGLE IMAGE */
-                                        isRevoked ? (
-                                          (() => {
-                                            const imgW =
-                                              msg.metadata?.width || 300;
-                                            const imgH =
-                                              msg.metadata?.height || 200;
-                                            const displayH = Math.min(
-                                              420,
-                                              imgH,
-                                            );
-                                            const displayW =
-                                              displayH * (imgW / imgH);
-                                            const isPortraitSingle =
-                                              imgH > imgW;
-                                            return (
-                                              <div
-                                                className="bg-gray-200 rounded-lg flex items-center justify-center"
-                                                style={{
-                                                  width: `${Math.min(displayW, isPortraitSingle ? 280 : 420)}px`,
-                                                  maxWidth: "100%",
-                                                  aspectRatio: `${imgW}/${imgH}`,
-                                                }}
-                                              >
-                                                <div className="text-center text-gray-400">
-                                                  <PhotoIcon className="w-8 h-8 mx-auto mb-1 opacity-50" />
-                                                  <span className="text-xs font-medium">
-                                                    Đã thu hồi
-                                                  </span>
+                                          isRevoked ? (
+                                            (() => {
+                                              const imgW =
+                                                msg.metadata?.width || 300;
+                                              const imgH =
+                                                msg.metadata?.height || 200;
+                                              const displayH = Math.min(
+                                                420,
+                                                imgH,
+                                              );
+                                              const displayW =
+                                                displayH * (imgW / imgH);
+                                              const isPortraitSingle =
+                                                imgH > imgW;
+                                              return (
+                                                <div
+                                                  className="bg-gray-200 rounded-lg flex items-center justify-center"
+                                                  style={{
+                                                    width: `${Math.min(displayW, isPortraitSingle ? 280 : 420)}px`,
+                                                    maxWidth: "100%",
+                                                    aspectRatio: `${imgW}/${imgH}`,
+                                                  }}
+                                                >
+                                                  <div className="text-center text-gray-400">
+                                                    <PhotoIcon className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                                                    <span className="text-xs font-medium">
+                                                      Đã thu hồi
+                                                    </span>
+                                                  </div>
                                                 </div>
-                                              </div>
-                                            );
-                                          })()
-                                        ) : (
-                                          <img
-                                            src={getMediaUrl(msg.content)}
-                                            alt="img"
-                                            className="object-cover max-h-[420px] rounded-lg cursor-pointer"
-                                            onLoad={handleImageLoad}
-                                            onClick={() => {
-                                              // For legacy single images, we can also use the album preview logic if we want
-                                              // but let's keep it simple for now or set a dummy album
-                                              setActiveAlbumIndex({
-                                                messageId: msg._id,
-                                                index: 0,
-                                              });
-                                            }}
-                                          />
-                                        )}
+                                              );
+                                            })()
+                                          ) : (
+                                            <img
+                                              src={getMediaUrl(msg.content)}
+                                              alt="img"
+                                              className="object-cover max-h-[420px] rounded-lg cursor-pointer"
+                                              onLoad={handleImageLoad}
+                                              onClick={() => {
+                                                // For legacy single images, we can also use the album preview logic if we want
+                                                // but let's keep it simple for now or set a dummy album
+                                                setActiveAlbumIndex({
+                                                  messageId: msg._id,
+                                                  index: 0,
+                                                });
+                                              }}
+                                            />
+                                          )}
                                       </div>
                                     ) : isRevoked ? (
                                       <div className="flex items-center gap-2 group/revoked px-2 py-1">
@@ -2040,7 +2143,7 @@ export default function ChatPage() {
                                     ) : (msg.type as any) === "system" &&
                                       msg.metadata
                                         ?.callType ? null /* Rendered outside bubble wrapper above */ : msg.type ===
-                                      "file" ? (
+                                          "file" ? (
                                       <div
                                         className={`flex items-center justify-between gap-4 px-2 py-1 transition w-80 max-w-full group`}
                                       >
@@ -2083,330 +2186,338 @@ export default function ChatPage() {
                                         {msg.content}
                                       </div>
                                     )}
-                                  </div>
-                                )}{" "}
-                                {/* end: system call bypasses bubble wrapper */}
-                                {/* Hover Controls (Reaction & Menu & Redo) */}
-                                <div
-                                  className={`absolute bottom-0 ${isMine ? "right-full pr-2" : "left-full pl-2"} flex items-center gap-1 z-[1000] ${
-                                    hoveredMsgId === msg._id
-                                      ? "opacity-100 translate-y-0"
-                                      : "opacity-0 translate-y-2 pointer-events-none"
-                                  } transition-all duration-200`}
-                                >
-                                  {/* 1. Reaction Button */}
-                                  {!msg.isRevoked && (
-                                    <div className="relative">
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setActiveMenu(null);
-                                          const rect =
-                                            e.currentTarget.getBoundingClientRect();
-                                          setMenuPosition(
-                                            rect.top < window.innerHeight / 2
-                                              ? "bottom"
-                                              : "top",
-                                          );
-                                          setActiveReactionMenu(
-                                            activeReactionMenu === msg._id
-                                              ? null
-                                              : msg._id,
-                                          );
-                                        }}
-                                        className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
-                                      >
-                                        <FaceSmileIcon className="w-4 h-4" />
-                                      </button>
 
-                                      {activeReactionMenu === msg._id && (
-                                        <div
-                                          className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
-                                          onMouseLeave={() =>
-                                            setActiveReactionMenu(null)
-                                          }
-                                        >
-                                          {msg.reactions?.some(
-                                            (r: any) =>
-                                              String(r.userId) ===
-                                              String(
-                                                currentUser?.id ||
-                                                  currentUser?._id ||
-                                                  currentUser?.userId,
-                                              ),
-                                          ) && (
-                                            <button
-                                              onClick={async () => {
-                                                setActiveReactionMenu(null);
-                                                await messageService.clearReactions(
-                                                  msg._id,
-                                                );
-                                              }}
-                                              className="w-8 h-8 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all rounded-full text-gray-400"
+                                    {/* end: system call bypasses bubble wrapper */}
+                                    {/* Hover Controls (Reaction & Menu & Redo) */}
+                                    <div
+                                      className={`absolute bottom-0 ${isMine ? "right-full pr-2" : "left-full pl-2"} flex items-center gap-1 z-[1000] ${hoveredMsgId === msg._id
+                                        ? "opacity-100 translate-y-0"
+                                        : "opacity-0 translate-y-2 pointer-events-none"
+                                        } transition-all duration-200`}
+                                    >
+                                      {/* 1. Reaction Button */}
+                                      {!msg.isRevoked && (
+                                        <div className="relative">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setActiveMenu(null);
+                                              const rect =
+                                                e.currentTarget.getBoundingClientRect();
+                                              setMenuPosition(
+                                                rect.top < window.innerHeight / 2
+                                                  ? "bottom"
+                                                  : "top",
+                                              );
+                                              setActiveReactionMenu(
+                                                activeReactionMenu === msg._id
+                                                  ? null
+                                                  : msg._id,
+                                              );
+                                            }}
+                                            className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
+                                          >
+                                            <FaceSmileIcon className="w-4 h-4" />
+                                          </button>
+
+                                          {activeReactionMenu === msg._id && (
+                                            <div
+                                              className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                                              onMouseLeave={() =>
+                                                setActiveReactionMenu(null)
+                                              }
                                             >
-                                              <XMarkIcon className="w-5 h-5" />
-                                            </button>
-                                          )}
-                                          {Object.entries(EMOJI_MAP).map(
-                                            ([key, icon]) => (
-                                              <button
-                                                key={key}
-                                                onClick={() =>
-                                                  handleToggleReaction(
-                                                    msg._id,
-                                                    key,
-                                                  )
-                                                }
-                                                className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 hover:scale-125 transition-all rounded-full text-lg"
-                                              >
-                                                {icon}
-                                              </button>
-                                            ),
+                                              {msg.reactions?.some(
+                                                (r: any) =>
+                                                  String(r.userId) ===
+                                                  String(
+                                                    currentUser?.id ||
+                                                    currentUser?._id ||
+                                                    currentUser?.userId,
+                                                  ),
+                                              ) && (
+                                                  <button
+                                                    onClick={async () => {
+                                                      setActiveReactionMenu(null);
+                                                      await messageService.clearReactions(
+                                                        msg._id,
+                                                      );
+                                                    }}
+                                                    className="w-8 h-8 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all rounded-full text-gray-400"
+                                                  >
+                                                    <XMarkIcon className="w-5 h-5" />
+                                                  </button>
+                                                )}
+                                              {Object.entries(EMOJI_MAP).map(
+                                                ([key, icon]) => (
+                                                  <button
+                                                    key={key}
+                                                    onClick={() =>
+                                                      handleToggleReaction(
+                                                        msg._id,
+                                                        key,
+                                                      )
+                                                    }
+                                                    className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 hover:scale-125 transition-all rounded-full text-lg"
+                                                  >
+                                                    {icon}
+                                                  </button>
+                                                ),
+                                              )}
+                                            </div>
                                           )}
                                         </div>
                                       )}
-                                    </div>
-                                  )}
 
-                                  {/* 2. Reply Button */}
-                                  {!msg.isRevoked && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setReplyingTo(msg);
-                                        inputRef.current?.focus();
-                                      }}
-                                      className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
-                                      title="Trả lời"
-                                    >
-                                      <ArrowUturnLeftIcon className="w-4 h-4" />
-                                    </button>
-                                  )}
+                                      {/* 2. Reply Button */}
+                                      {!msg.isRevoked && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setReplyingTo(msg);
+                                            inputRef.current?.focus();
+                                          }}
+                                          className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
+                                          title="Trả lời"
+                                        >
+                                          <ArrowUturnLeftIcon className="w-4 h-4" />
+                                        </button>
+                                      )}
 
-                                  {/* 3. Context Menu Button */}
-                                  <div className="relative">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setActiveReactionMenu(null);
-                                        const rect =
-                                          e.currentTarget.getBoundingClientRect();
-                                        setMenuPosition(
-                                          rect.top < window.innerHeight / 2
-                                            ? "bottom"
-                                            : "top",
-                                        );
-                                        setActiveMenu(
-                                          activeMenu === msg._id
-                                            ? null
-                                            : msg._id,
-                                        );
-                                      }}
-                                      className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
-                                    >
-                                      <EllipsisHorizontalIcon className="w-4 h-4" />
-                                    </button>
+                                      {/* 3. Context Menu Button */}
+                                      <div className="relative">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveReactionMenu(null);
+                                            const rect =
+                                              e.currentTarget.getBoundingClientRect();
+                                            setMenuPosition(
+                                              rect.top < window.innerHeight / 2
+                                                ? "bottom"
+                                                : "top",
+                                            );
+                                            setActiveMenu(
+                                              activeMenu === msg._id
+                                                ? null
+                                                : msg._id,
+                                            );
+                                          }}
+                                          className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition"
+                                        >
+                                          <EllipsisHorizontalIcon className="w-4 h-4" />
+                                        </button>
 
-                                    {activeMenu === msg._id && (
-                                      <div
-                                        className={`absolute z-50 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 overflow-hidden right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
-                                        onMouseLeave={() => setActiveMenu(null)}
-                                      >
-                                        {!msg.isRevoked &&
-                                          msg.type === "text" && (
-                                            <button
-                                              onClick={() => {
-                                                navigator.clipboard.writeText(
-                                                  msg.content,
-                                                );
-                                                setActiveMenu(null);
-                                              }}
-                                              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
-                                            >
-                                              <ClipboardDocumentIcon className="w-4 h-4 text-gray-400 shrink-0" />
-                                              Copy tin nhắn
-                                            </button>
-                                          )}
-                                        {!msg.isRevoked && (
-                                          <button
-                                            onClick={() =>
-                                              handlePinMessage(msg)
-                                            }
-                                            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-yellow-700 hover:bg-yellow-50 transition text-left"
+                                        {activeMenu === msg._id && (
+                                          <div
+                                            className={`absolute z-50 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 overflow-hidden right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                                            onMouseLeave={() => setActiveMenu(null)}
                                           >
-                                            <MapPinIcon
-                                              className={`w-4 h-4 shrink-0 ${msg.isPinned ? "text-yellow-500" : "text-gray-400"}`}
-                                            />
-                                            {msg.isPinned
-                                              ? "Bỏ ghim tin nhắn"
-                                              : "Ghim tin nhắn"}
-                                          </button>
-                                        )}
-                                        {!msg.isRevoked &&
-                                          (msg.type === "image" ||
-                                            msg.type === "file") && (
-                                            <button
-                                              onClick={() => {
-                                                setActiveMenu(null);
-                                                if (msg.metadata?.imageGroup) {
-                                                  // Tải toàn bộ album ảnh (chỉ ảnh chưa bị thu hồi/xóa)
-                                                  handleDownloadAlbum(msg);
-                                                } else {
-                                                  handleDownload(
-                                                    msg.content,
-                                                    msg.metadata?.fileName ||
-                                                      (msg.type === "image"
-                                                        ? "image.png"
-                                                        : "file"),
-                                                  );
+                                            {!msg.isRevoked && msg.type === "text" && (
+                                              <button
+                                                onClick={() => {
+                                                  navigator.clipboard.writeText(msg.content);
+                                                  setActiveMenu(null);
+                                                }}
+                                                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition text-left"
+                                              >
+                                                <ClipboardDocumentIcon className="w-4 h-4 text-gray-400 shrink-0" />
+                                                Copy tin nhắn
+                                              </button>
+                                            )}
+                                            {!msg.isRevoked && (
+                                              <button
+                                                onClick={() => {
+                                                  setActiveMenu(null);
+                                                  setForwardingMessage(msg);
+                                                }}
+                                                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-green-600 hover:bg-green-50 transition text-left"
+                                              >
+                                                <PaperAirplaneIcon className="w-4 h-4 shrink-0" />
+                                                Chuyển tiếp
+                                              </button>
+                                            )}
+                                            {!msg.isRevoked && (
+                                              <button
+                                                onClick={() =>
+                                                  handlePinMessage(msg)
                                                 }
-                                              }}
-                                              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-blue-600 hover:bg-blue-50 transition text-left"
-                                            >
-                                              <ArrowDownTrayIcon className="w-4 h-4 shrink-0" />
-                                              {msg.metadata?.imageGroup
-                                                ? `Lưu tất cả ảnh`
-                                                : "Lưu về máy"}
-                                            </button>
-                                          )}
-                                        {isMine &&
-                                          !msg.isRevoked &&
-                                          new Date().getTime() -
-                                            new Date(msg.createdAt).getTime() <
-                                            86400000 && (
+                                                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-yellow-700 hover:bg-yellow-50 transition text-left"
+                                              >
+                                                <MapPinIcon
+                                                  className={`w-4 h-4 shrink-0 ${msg.isPinned ? "text-yellow-500" : "text-gray-400"}`}
+                                                />
+                                                {msg.isPinned
+                                                  ? "Bỏ ghim tin nhắn"
+                                                  : "Ghim tin nhắn"}
+                                              </button>
+                                            )}
+                                            {!msg.isRevoked &&
+                                              (msg.type === "image" ||
+                                                msg.type === "file") && (
+                                                <button
+                                                  onClick={() => {
+                                                    setActiveMenu(null);
+                                                    if (msg.metadata?.imageGroup) {
+                                                      // Tải toàn bộ album ảnh (chỉ ảnh chưa bị thu hồi/xóa)
+                                                      handleDownloadAlbum(msg);
+                                                    } else {
+                                                      handleDownload(
+                                                        msg.content,
+                                                        msg.metadata?.fileName ||
+                                                        (msg.type === "image"
+                                                          ? "image.png"
+                                                          : "file"),
+                                                      );
+                                                    }
+                                                  }}
+                                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-blue-600 hover:bg-blue-50 transition text-left"
+                                                >
+                                                  <ArrowDownTrayIcon className="w-4 h-4 shrink-0" />
+                                                  {msg.metadata?.imageGroup
+                                                    ? `Lưu tất cả ảnh`
+                                                    : "Lưu về máy"}
+                                                </button>
+                                              )}
+                                            {isMine &&
+                                              !msg.isRevoked &&
+                                              new Date().getTime() -
+                                              new Date(msg.createdAt).getTime() <
+                                              86400000 && (
+                                                <button
+                                                  onClick={() =>
+                                                    handleRevoke(msg._id)
+                                                  }
+                                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-orange-500 hover:bg-orange-50 transition text-left"
+                                                >
+                                                  <ArrowUturnLeftIcon className="w-4 h-4 shrink-0" />
+                                                  Thu hồi tin nhắn
+                                                </button>
+                                              )}
                                             <button
                                               onClick={() =>
-                                                handleRevoke(msg._id)
+                                                handleDeleteForMe(msg._id)
                                               }
-                                              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-orange-500 hover:bg-orange-50 transition text-left"
+                                              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition text-left"
                                             >
-                                              <ArrowUturnLeftIcon className="w-4 h-4 shrink-0" />
-                                              Thu hồi tin nhắn
+                                              <TrashIcon className="w-4 h-4 shrink-0" />
+                                              Xóa chỉ ở phía tôi
                                             </button>
-                                          )}
-                                        <button
-                                          onClick={() =>
-                                            handleDeleteForMe(msg._id)
-                                          }
-                                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition text-left"
-                                        >
-                                          <TrashIcon className="w-4 h-4 shrink-0" />
-                                          Xóa chỉ ở phía tôi
-                                        </button>
+                                          </div>
+                                        )}
                                       </div>
-                                    )}
-                                  </div>
 
-                                  {/* 4. Redo Button */}
-                                  {isMounted &&
-                                    isMine &&
-                                    msg.isRevoked &&
-                                    msg.revokedAt &&
-                                    new Date().getTime() -
-                                      new Date(msg.revokedAt).getTime() <
-                                      60000 && (
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setMessageText(msg.content);
-                                        }}
-                                        className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-blue-500 hover:bg-blue-50 transition"
-                                        title="Sửa nhanh (Hoàn tác)"
-                                      >
-                                        <PencilIcon className="w-4 h-4" />
-                                      </button>
-                                    )}
-                                </div>
-                                {/* Hiển thị các cảm xúc đã thả */}
-                                {(() => {
-                                  if (
-                                    msg.type === "image" &&
-                                    msg.metadata?.imageGroup
-                                  ) {
-                                    // Cả nhóm bị thu hồi → ẩn
-                                    if (isRevoked) return false;
-                                    // Tất cả ảnh lẻ đều bị thu hồi → ẩn
-                                    const allImgsRevoked = (
-                                      msg.metadata!.imageGroup as any[]
-                                    ).every(
-                                      (img: any) => img.isRevoked === true,
-                                    );
-                                    if (allImgsRevoked) return false;
-                                    // Còn ít nhất 1 ảnh chưa thu hồi → hiện
-                                    return true;
-                                  }
-                                  return !isRevoked;
-                                })() &&
-                                  msg.reactions &&
-                                  msg.reactions.length > 0 && (
-                                    <div
-                                      className={`flex flex-wrap gap-1 mt-1 ${isMine ? "justify-end" : "justify-start"}`}
-                                    >
-                                      {Array.from(
-                                        new Set(
-                                          msg.reactions.map(
-                                            (r: any) => r.emoji,
-                                          ),
-                                        ),
-                                      ).map((emojiKey: any) => {
-                                        const peopleReacted =
-                                          msg.reactions!.filter(
-                                            (r: any) => r.emoji === emojiKey,
-                                          );
-                                        return (
-                                          <div
-                                            key={emojiKey}
-                                            onClick={() => {
-                                              setViewingReactions({
-                                                messageId: msg._id,
-                                                reactions: msg.reactions!,
-                                                activeTab: "all",
-                                              });
-                                              msg.reactions!.forEach((r: any) =>
-                                                fetchUserInfo(r.userId),
-                                              );
+                                      {/* 4. Redo Button */}
+                                      {isMounted &&
+                                        isMine &&
+                                        msg.isRevoked &&
+                                        msg.revokedAt &&
+                                        new Date().getTime() -
+                                        new Date(msg.revokedAt).getTime() <
+                                        60000 && (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setMessageText(msg.content);
                                             }}
-                                            onMouseEnter={() => {
-                                              peopleReacted.forEach((r: any) =>
-                                                fetchUserInfo(r.userId),
+                                            className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-blue-500 hover:bg-blue-50 transition"
+                                            title="Sửa nhanh (Hoàn tác)"
+                                          >
+                                            <PencilIcon className="w-4 h-4" />
+                                          </button>
+                                        )}
+                                    </div>
+                                    {/* Hiển thị các cảm xúc đã thả */}
+                                    {(() => {
+                                      if (
+                                        msg.type === "image" &&
+                                        msg.metadata?.imageGroup
+                                      ) {
+                                        // Cả nhóm bị thu hồi → ẩn
+                                        if (isRevoked) return false;
+                                        // Tất cả ảnh lẻ đều bị thu hồi → ẩn
+                                        const allImgsRevoked = (
+                                          msg.metadata!.imageGroup as any[]
+                                        ).every(
+                                          (img: any) => img.isRevoked === true,
+                                        );
+                                        if (allImgsRevoked) return false;
+                                        // Còn ít nhất 1 ảnh chưa thu hồi → hiện
+                                        return true;
+                                      }
+                                      return !isRevoked;
+                                    })() &&
+                                      msg.reactions &&
+                                      msg.reactions.length > 0 && (
+                                        <div
+                                          className={`flex flex-wrap gap-1 mt-1 ${isMine ? "justify-end" : "justify-start"}`}
+                                        >
+                                          {Array.from(
+                                            new Set(
+                                              msg.reactions.map(
+                                                (r: any) => r.emoji,
+                                              ),
+                                            ),
+                                          ).map((emojiKey: any) => {
+                                            const peopleReacted =
+                                              msg.reactions!.filter(
+                                                (r: any) => r.emoji === emojiKey,
                                               );
-                                            }}
-                                            title={peopleReacted
-                                              .map((r) =>
-                                                getSenderDisplayName(r.userId),
-                                              )
-                                              .join(", ")}
-                                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] cursor-pointer transition ${
-                                              msg.reactions!.some(
-                                                (r: any) =>
-                                                  r.emoji === emojiKey &&
-                                                  String(r.userId) ===
+                                            return (
+                                              <div
+                                                key={emojiKey}
+                                                onClick={() => {
+                                                  setViewingReactions({
+                                                    messageId: msg._id,
+                                                    reactions: msg.reactions!,
+                                                    activeTab: "all",
+                                                  });
+                                                  msg.reactions!.forEach((r: any) =>
+                                                    fetchUserInfo(r.userId),
+                                                  );
+                                                }}
+                                                onMouseEnter={() => {
+                                                  peopleReacted.forEach((r: any) =>
+                                                    fetchUserInfo(r.userId),
+                                                  );
+                                                }}
+                                                title={peopleReacted
+                                                  .map((r) =>
+                                                    getSenderDisplayName(r.userId),
+                                                  )
+                                                  .join(", ")}
+                                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] cursor-pointer transition ${msg.reactions!.some(
+                                                  (r: any) =>
+                                                    r.emoji === emojiKey &&
+                                                    String(r.userId) ===
                                                     String(
                                                       currentUser?.id ||
-                                                        currentUser?._id ||
-                                                        currentUser?.userId,
+                                                      currentUser?._id ||
+                                                      currentUser?.userId,
                                                     ),
-                                              )
-                                                ? "bg-blue-100 text-blue-600 border border-blue-200"
-                                                : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
-                                            }`}
-                                          >
-                                            <span>
-                                              {EMOJI_MAP[emojiKey as string] ||
-                                                emojiKey}
-                                            </span>
-                                            <span className="font-bold">
-                                              {peopleReacted.reduce(
-                                                (acc, r: any) =>
-                                                  acc + (r.count || 1),
-                                                0,
-                                              )}
-                                            </span>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
+                                                )
+                                                  ? "bg-blue-100 text-blue-600 border border-blue-200"
+                                                  : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
+                                                  }`}
+                                              >
+                                                <span>
+                                                  {EMOJI_MAP[emojiKey as string] ||
+                                                    emojiKey}
+                                                </span>
+                                                <span className="font-bold">
+                                                  {peopleReacted.reduce(
+                                                    (acc, r: any) =>
+                                                      acc + (r.count || 1),
+                                                    0,
+                                                  )}
+                                                </span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -2414,20 +2525,18 @@ export default function ChatPage() {
 
                         {/* Footer: timestamp + trạng thái của nhóm — hiện 1 lần */}
                         <div
-                          className={`flex items-center gap-1 mt-0.5 ${
-                            isMine ? "justify-end pr-10" : "pl-10"
-                          }`}
+                          className={`flex items-center gap-1 mt-0.5 ${isMine ? "justify-end pr-10" : "pl-10"
+                            }`}
                         >
                           <span className="text-[10px] font-bold text-gray-400">
                             {formatTime(lastMsg.createdAt)}
                           </span>
                           {isMine && (
                             <span
-                              className={`text-[10px] font-bold ${
-                                lastMsg.isRead
-                                  ? "text-blue-500"
-                                  : "text-gray-400"
-                              }`}
+                              className={`text-[10px] font-bold ${lastMsg.isRead
+                                ? "text-blue-500"
+                                : "text-gray-400"
+                                }`}
                             >
                               {lastMsg.isRead ? "✓✓" : "✓"}
                             </span>
@@ -2438,7 +2547,8 @@ export default function ChatPage() {
                   })}
                   <div ref={messagesEndRef} />
                 </div>
-              )}
+              )
+              }
             </div>
 
             {/* Floating tooltip ─ hiện gần con trỏ khi hover tin nhắn */}
@@ -2463,15 +2573,44 @@ export default function ChatPage() {
 
             {/* Message Input Container */}
             <div className="bg-white border-t border-gray-200 shrink-0">
+              {/* Hidden file input — chỉ chọn file (không phải ảnh) */}
               <input
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 className="hidden"
                 multiple
+                accept="application/*,text/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.mp3,.mp4,.avi,.mov,.mkv"
+              />
+              {/* Hidden image input — chỉ chọn ảnh */}
+              <input
+                type="file"
+                ref={imageInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                multiple
+                accept="image/*"
               />
               {/* Toolbar Section */}
               <div className="flex items-center gap-1 px-4 py-2">
+                {/* 1. Sticker placeholder — giữ icon cũ, chưa có sự kiện */}
+                {/* <button
+                  className="p-2 text-gray-500 rounded-md transition cursor-default"
+                  title="Sticker (sắp ra mắt)"
+                >
+                  <FaceSmileIcon className="w-5 h-5" />
+                </button> */}
+                {/* 2. Sticker picker — gửi sticker thật */}
+                <StickerPicker onStickerSelect={handleSendSticker} />
+                {/* 3. Đính kèm ảnh */}
+                <button
+                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition"
+                  onClick={handleImageButtonClick}
+                  title="Gửi ảnh"
+                >
+                  <PhotoIcon className="w-5 h-5" />
+                </button>
+                {/* 4. Đính kèm file */}
                 <button
                   className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition"
                   onClick={handleFileButtonClick}
@@ -2479,10 +2618,6 @@ export default function ChatPage() {
                 >
                   <PaperClipIcon className="w-5 h-5" />
                 </button>
-                {/* 
-                  Note: The user image shows more icons like Emoji, Photo, etc.
-                  We keep only existing PaperClipIcon as per "đừng thêm gì" instruction.
-                */}
               </div>
 
               {/* Reply Preview Section */}
@@ -2553,9 +2688,6 @@ export default function ChatPage() {
                     className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
                   />
                   <div className="flex items-center gap-1">
-                    <button className="p-2 text-gray-500 hover:text-black transition">
-                      <FaceSmileIcon className="w-6 h-6" />
-                    </button>
                     {messageText.trim() ? (
                       <button
                         onClick={handleSend}
@@ -2616,8 +2748,8 @@ export default function ChatPage() {
                         viewingReactions.activeTab === "all"
                           ? rList
                           : rList.filter(
-                              (r) => r.emoji === viewingReactions.activeTab,
-                            );
+                            (r) => r.emoji === viewingReactions.activeTab,
+                          );
 
                       // Group by user for the right column
                       const userEmoteMap = activeFilters.reduce(
@@ -2892,6 +3024,15 @@ export default function ChatPage() {
             </div>
           )}
         </>
+      )}
+      {/* Forward Message Modal */}
+      {forwardingMessage && (
+        <ForwardMessageModal
+          isOpen={true}
+          onClose={() => setForwardingMessage(null)}
+          message={forwardingMessage}
+          currentUser={currentUser}
+        />
       )}
     </>
   );
