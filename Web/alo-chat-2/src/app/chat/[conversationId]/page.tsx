@@ -51,6 +51,8 @@ import ForwardMessageModal from "@/components/ui/ForwardMessageModal";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useChatStore } from "@/store/useChatStore";
 import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
+import PollMessagePreview from "@/components/chat/PollMessagePreview";
+import PollDetailsModal from "@/components/ui/group/PollDetailsModal";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -116,6 +118,7 @@ export default function ChatPage() {
   // State cho tin nhắn ghim
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
   const [showPinnedModal, setShowPinnedModal] = useState(false);
+  const [activePollId, setActivePollId] = useState<string | null>(null);
   const [showCallMemberSelector, setShowCallMemberSelector] = useState<{
     isVideo: boolean;
   } | null>(null);
@@ -1421,15 +1424,19 @@ export default function ChatPage() {
 
       const isSystem = (msg.type as any) === "system";
       const lastIsSystem = (lastMsg?.type as any) === "system";
+      const isPoll = msg.type === "poll";
+      const lastIsPoll = lastMsg?.type === "poll";
 
       // Nhóm theo SENDER ID để tránh gộp nhiều người khác vào 1 khối trong group chat
-      // Không gộp nếu là tin nhắn hệ thống hoặc tin nhắn trước đó là hệ thống
+      // Không gộp nếu là tin nhắn hệ thống hoặc tin nhắn trước đó là hệ thống, không gộp bình chọn
       if (
         last &&
         last.senderId === msg.senderId &&
         gap < FIVE_MIN &&
         !isSystem &&
-        !lastIsSystem
+        !lastIsSystem &&
+        !isPoll &&
+        !lastIsPoll
       ) {
         last.messages.push(msg);
       } else {
@@ -1655,6 +1662,14 @@ export default function ChatPage() {
               </div>
             )}
 
+            {/* Modal chi tiết bình chọn */}
+            {activePollId && (
+              <PollDetailsModal 
+                pollId={activePollId} 
+                onClose={() => setActivePollId(null)} 
+              />
+            )}
+
             {/* Modal chọn thành viên gọi nhóm */}
             <GroupCallSelector
               isOpen={!!showCallMemberSelector}
@@ -1736,6 +1751,21 @@ export default function ChatPage() {
                               </div>
                             ))}
                           </div>
+                        </div>
+                      );
+                    }
+
+                    if (lastMsg.type === "poll") {
+                      return (
+                        <div
+                          key={`group-${groupIdx}`}
+                          className="flex justify-center my-6 w-full px-4"
+                        >
+                          <PollMessagePreview 
+                            pollId={lastMsg.metadata?.pollId as string} 
+                            isSender={false} 
+                            onOpenDetails={(id) => setActivePollId(id)} 
+                          />
                         </div>
                       );
                     }
