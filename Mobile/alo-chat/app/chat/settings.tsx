@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import React, { useState, useCallback, useEffect } from "react";
 import { groupService } from "../../services/groupService";
 import { userService } from "../../services/userService";
+import { messageService } from "../../services/messageService";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSocket } from "../../contexts/SocketContext";
 import {
@@ -132,6 +133,19 @@ export default function GroupSettingsScreen() {
     }
   };
 
+  const sendSystemMsg = async (content: string) => {
+    try {
+      if (!id) return;
+      await messageService.sendMessage({
+        conversationId: id as string,
+        type: "system",
+        content: `${user?.fullName || "Quản trị viên"} ${content}`,
+      });
+    } catch (error) {
+      console.error("Lỗi gửi tin nhắn hệ thống:", error);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchGroupDetails();
@@ -199,6 +213,7 @@ export default function GroupSettingsScreen() {
             try {
               await groupService.updateGroup(id as string, trimmedName);
               Alert.alert("Thành công", "Đã cập nhật tên nhóm");
+              sendSystemMsg(`đã đổi tên nhóm thành "${trimmedName}"`);
               fetchGroupDetails();
             } catch (error) {
               Alert.alert("Lỗi", "Không thể cập nhật tên nhóm.");
@@ -224,6 +239,7 @@ export default function GroupSettingsScreen() {
         const imageUri = result.assets[0].uri;
         await groupService.updateGroup(id as string, undefined, imageUri);
         Alert.alert("Thành công", "Đã cập nhật ảnh đại diện nhóm");
+        sendSystemMsg("đã đổi ảnh đại diện nhóm");
         fetchGroupDetails();
       }
     } catch (error) {
@@ -237,6 +253,7 @@ export default function GroupSettingsScreen() {
       await groupService.updateGroupSettings(id as string, {
         isHighlightEnabled: value,
       });
+      sendSystemMsg(`đã ${value ? "bật" : "tắt"} chế độ làm nổi bật tin nhắn Quản trị viên`);
     } catch (error) {
       setIsHighlightEnabled(!value);
       Alert.alert("Lỗi", "Không thể cập nhật thiết lập nổi bật.");
@@ -247,6 +264,7 @@ export default function GroupSettingsScreen() {
     try {
       setIsHistoryVisible(value);
       await groupService.updateHistorySetting(id as string, value);
+      sendSystemMsg(`đã ${value ? "cho phép" : "chặn"} thành viên mới xem lại tin nhắn cũ`);
     } catch (error) {
       setIsHistoryVisible(!value);
       Alert.alert("Lỗi", "Không thể cập nhật cấu hình lịch sử tin nhắn.");
@@ -266,6 +284,16 @@ export default function GroupSettingsScreen() {
       await groupService.updateGroupSettings(id as string, {
         permissions: newPermissions,
       });
+      
+      const fieldNames: Record<string, string> = {
+        editGroupInfo: "Đổi thông tin nhóm",
+        createNotes: "Tạo ghi chú",
+        createPolls: "Tạo bình chọn",
+        pinMessages: "Ghim tin nhắn",
+        sendMessage: "Gửi tin nhắn",
+        createReminders: "Tạo nhắc hẹn"
+      };
+      sendSystemMsg(`đã cập nhật quyền "${fieldNames[field as string] || field}" thành ${value === "EVERYONE" ? "Tất cả mọi người" : "Chỉ trưởng/phó nhóm"}`);
       setIsPermissionModalVisible(false);
     } catch (error) {
       Alert.alert("Lỗi", "Không thể cập nhật quyền.");
@@ -304,6 +332,7 @@ export default function GroupSettingsScreen() {
       await groupService.assignLeader(id as string, selectedNewLeaderId);
       setIsTransferLeaderModalVisible(false);
       Alert.alert("Thành công", "Đã chuyển quyền trưởng nhóm.");
+      sendSystemMsg("đã chuyển quyền trưởng nhóm");
       fetchGroupDetails();
     } catch (error) {
       Alert.alert("Lỗi", "Không thể thực hiện tao tác.");

@@ -45,7 +45,7 @@ export interface MessageDTO {
 
 export interface SendMessagePayload {
   conversationId: string;
-  type?: "text" | "image" | "file" | "poll";
+  type?: "text" | "image" | "file" | "poll" | "system";
   content: string;
   senderName?: string;
   metadata?: Record<string, any>;
