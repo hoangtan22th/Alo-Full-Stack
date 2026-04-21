@@ -273,6 +273,19 @@ class SocketService {
   onCallBusy(callback: (data: any) => void) {
     this.addListener("CALL_BUSY", callback);
   }
+
+  // --- User Status ---
+  onUserOnline(callback: (data: any) => void) {
+    this.addListener("USER_ONLINE", callback);
+  }
+
+  onUserOffline(callback: (data: any) => void) {
+    this.addListener("USER_OFFLINE", callback);
+  }
+
+  onUserStatusResult(callback: (data: any) => void) {
+    this.addListener("USER_STATUS_RESULT", callback);
+  }
 }
 
 export const socketService = new SocketService();

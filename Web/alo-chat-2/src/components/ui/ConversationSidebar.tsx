@@ -189,6 +189,8 @@ export default function ConversationSidebar() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [menuView, setMenuView] = useState<"main" | "labels">("main");
   const [showManageLabelsModal, setShowManageLabelsModal] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<Record<string, boolean>>({});
+  const [typingStatus, setTypingStatus] = useState<Record<string, string>>({}); // convId -> "Someone is typing..."
   const menuRef = useRef<HTMLDivElement>(null);
   const conversationIdRef = useRef(conversationId);
   const userFetchCache = useRef<Record<string, any>>({});
@@ -271,6 +273,8 @@ export default function ConversationSidebar() {
               }
             }
 
+            const otherMember = g.isGroup ? null : g.members?.find((m: any) => m.userId !== currentUserId);
+
             return {
               id: g._id || g.id,
               name: chatName || "Nhóm trò chuyện",
@@ -281,7 +285,7 @@ export default function ConversationSidebar() {
               time: timeString,
               unreadCount: (currentUserId && g.unreadCount?.[currentUserId]) || 0,
               updatedAt: g.updatedAt,
-              online: false,
+              otherMemberUserId: otherMember?.userId,
             };
           }),
         );
@@ -350,12 +354,99 @@ export default function ConversationSidebar() {
       fetchGroups();
     });
 
+    socketService.onMessageReceived((msg: any) => {
+      const convoId = msg.conversationId || msg.roomId;
+      if (!convoId) return;
+
+      setConversations((prev) => {
+        const index = prev.findIndex((c) => (c.id || c._id) === convoId);
+        if (index === -1) {
+          // Nếu conversation chưa có trong list, fetch lại list
+          fetchGroups();
+          return prev;
+        }
+
+        const next = [...prev];
+        const convo = { ...next[index] };
+        
+        // Update last message & unread count
+        convo.message = msg.type === "file" ? `[File] ${msg.metadata?.fileName || msg.content}` : msg.content;
+        convo.updatedAt = msg.createdAt || new Date().toISOString();
+        convo.time = new Date(convo.updatedAt).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        // Chỉ tăng unread nếu không phải mình gửi và không đang mở chat đó
+        const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
+        if (msg.senderId !== currentUserId && conversationIdRef.current !== convoId) {
+          convo.unreadCount = (convo.unreadCount || 0) + 1;
+        }
+
+        next.splice(index, 1);
+        return [convo, ...next];
+      });
+    });
+
+    socketService.onMessagesRead((data: { conversationId: string; userId: string }) => {
+      const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
+      if (data.userId === currentUserId) {
+        setConversations((prev) => 
+          prev.map((c) => 
+            (c.id || c._id) === data.conversationId 
+              ? { ...c, unreadCount: 0 } 
+              : c
+          )
+        );
+      }
+    });
+
+    socketService.onTyping((data: { conversationId: string; userId: string; fullName?: string }) => {
+      const currentUserId = currentUser?.id || currentUser?._id || currentUser?.userId;
+      if (data.userId === currentUserId) return;
+
+      setTypingStatus((prev) => ({
+        ...prev,
+        [data.conversationId]: `${data.fullName || "Ai đó"} đang soạn tin...`,
+      }));
+    });
+
+    socketService.onStopTyping((data: { conversationId: string; userId: string }) => {
+      setTypingStatus((prev) => {
+        const next = { ...prev };
+        delete next[data.conversationId];
+        return next;
+      });
+    });
+
+    socketService.onUserOnline((data: { userId: string }) => {
+      setOnlineUsers((prev) => ({ ...prev, [data.userId]: true }));
+    });
+
+    socketService.onUserOffline((data: { userId: string }) => {
+      setOnlineUsers((prev) => ({ ...prev, [data.userId]: false }));
+    });
+
+    socketService.onUserStatusResult((data: { userId: string; status: string }) => {
+      setOnlineUsers((prev) => ({
+        ...prev,
+        [data.userId]: data.status === "online",
+      }));
+    });
+
     return () => {
       socketService.off("CONVERSATION_PIN_UPDATED");
       socketService.off("CONVERSATION_LABEL_UPDATED");
       socketService.off("CONVERSATION_CREATED");
       socketService.off("CONVERSATION_REMOVED");
       socketService.off("CONVERSATION_UPDATED");
+      socketService.off("message-received");
+      socketService.off("messages-read");
+      socketService.off("TYPING");
+      socketService.off("STOP_TYPING");
+      socketService.off("USER_ONLINE");
+      socketService.off("USER_OFFLINE");
+      socketService.off("USER_STATUS_RESULT");
     };
   }, [fetchData, router, currentUser]);
 
@@ -532,7 +623,10 @@ export default function ConversationSidebar() {
                       {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
                     </span>
                   )}
-                  {chat.online && (
+                  {(chat.otherMemberUserId && onlineUsers[chat.otherMemberUserId]) && (
+                    <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
+                  )}
+                  {chat.id === BOT_ID && (
                     <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
                   )}
                 </div>
@@ -555,7 +649,9 @@ export default function ConversationSidebar() {
                     <span className="text-[10px] font-bold text-gray-400 shrink-0">{chat.time}</span>
                   </div>
                   <div className="flex justify-between items-center h-5">
-                    <p className="text-[13px] text-gray-500 truncate font-medium flex-1">{chat.message}</p>
+                    <p className={`text-[13px] truncate font-medium flex-1 ${typingStatus[chat.id] ? "text-green-500 italic" : "text-gray-500"}`}>
+                      {typingStatus[chat.id] || chat.message}
+                    </p>
                     <button
                       onClick={(e) => toggleMenu(e, chat.id)}
                       className="md:opacity-0 group-hover:opacity-100 p-1 hover:bg-white hover:shadow-sm rounded-full transition-all text-gray-400 hover:text-black"
