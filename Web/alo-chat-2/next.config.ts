@@ -16,10 +16,6 @@ export default nextConfig;
 //     // dự án của bạn đang có lỗi TypeScript.
 //     ignoreBuildErrors: true,
 //   },
-//   eslint: {
-//     // Tương tự, bỏ qua luôn cả kiểm tra chuẩn code ESLint
-//     ignoreDuringBuilds: true,
-//   },
 // };
 
 // module.exports = nextConfig;
