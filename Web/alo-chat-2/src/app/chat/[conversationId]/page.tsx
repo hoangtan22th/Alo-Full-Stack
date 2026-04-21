@@ -49,6 +49,7 @@ import BotChatArea from "@/components/ui/BotChatArea";
 import StickerPicker from "@/components/ui/StickerPicker";
 import ForwardMessageModal from "@/components/ui/ForwardMessageModal";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useChatStore } from "@/store/useChatStore";
 import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
 
 /* ─────────────────────────────────────────
@@ -82,6 +83,7 @@ const getMediaUrl = (url: string | undefined): string => {
 };
 
 const BOT_ID = "alo-bot";
+const EMPTY_ARRAY: any[] = [];
 const BOT_INFO = {
   id: BOT_ID,
   name: "Trợ lý Alo Chat",
@@ -122,9 +124,48 @@ export default function ChatPage() {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [mediaMessages, setMediaMessages] = useState<MessageDTO[]>([]);
   const [messageText, setMessageText] = useState("");
+  const [conversationInfo, setConversationInfo] = useState<any>(null);
+  // Optimized selector with stable empty array to avoid infinite loop
+  const typingForThisConvo = useChatStore((state) => state.typingUsers[conversationId] || EMPTY_ARRAY);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isTypingRef = useRef(false);
+
+  useEffect(() => {
+    const hasText = messageText.trim().length > 0;
+    
+    // Only emit if state changed to reduce socket spam/lag
+    if (hasText && !isTypingRef.current && conversationId && conversationId !== BOT_ID) {
+      isTypingRef.current = true;
+      socketService.emitTyping({ 
+        target: conversationId, 
+        conversationId: conversationId, 
+        isGroup: !!conversationInfo?.isGroup 
+      });
+    } else if (!hasText && isTypingRef.current && conversationId && conversationId !== BOT_ID) {
+      isTypingRef.current = false;
+      socketService.emitStopTyping({ 
+        target: conversationId, 
+        conversationId: conversationId, 
+        isGroup: !!conversationInfo?.isGroup 
+      });
+    }
+
+    if (hasText) {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        if (isTypingRef.current) {
+          isTypingRef.current = false;
+          socketService.emitStopTyping({ 
+            target: conversationId, 
+            conversationId: conversationId,
+            isGroup: !!conversationInfo?.isGroup 
+          });
+        }
+      }, 3000);
+    }
+  }, [messageText, conversationId, conversationInfo?.isGroup]);
   const [sending, setSending] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
-  const [conversationInfo, setConversationInfo] = useState<any>(null);
   // Hover tooltip & context menu & reactions
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [activeReactionMenu, setActiveReactionMenu] = useState<string | null>(
@@ -1682,7 +1723,7 @@ export default function ChatPage() {
                     return (
                       <div
                         key={`group-${groupIdx}`}
-                        className={`flex flex-col gap-0.5 ${isMine ? "items-end" : "items-start"} mb-3`}
+                        className={`flex flex-col gap-0.5 w-full ${isMine ? "items-end" : "items-start"} mb-3`}
                       >
                         {gMsgs.map((msg, msgIdx) => {
                           const isLast = msgIdx === gMsgs.length - 1;
@@ -1744,7 +1785,7 @@ export default function ChatPage() {
                               </div>
                               {/* Bubble */}
                               <div
-                                className={`relative max-w-[75%] flex flex-col ${isMine ? "items-end" : "items-start"}`}
+                                className="relative max-w-[75%] flex flex-col items-start"
                               >
                                 {/* System messages (General & Call) */}
                                 {(msg.type as any) === "system" ? (
@@ -2609,6 +2650,16 @@ export default function ChatPage() {
                       </div>
                     );
                   })}
+                  {typingForThisConvo.length > 0 && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-100 rounded-2xl w-fit ml-12 mb-6 shadow-sm animate-in fade-in slide-in-from-left-2 duration-300">
+                      <div className="flex gap-1">
+                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" />
+                      </div>
+                      <span className="text-[12px] font-bold text-gray-500 italic">Đang soạn tin...</span>
+                    </div>
+                  )}
                   <div ref={messagesEndRef} />
                 </div>
               )

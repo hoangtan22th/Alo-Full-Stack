@@ -9,7 +9,13 @@ import {
   useLocalParticipant,
   useRoomContext,
 } from '@livekit/components-react';
-import { Track, RoomEvent, RemoteParticipant, DataPacket_Kind } from 'livekit-client';
+import { 
+  Track, 
+  RoomEvent, 
+  RemoteParticipant, 
+  DataPacket_Kind,
+  VideoPresets 
+} from 'livekit-client';
 import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -19,6 +25,32 @@ import {
 import { toast } from 'sonner';
 import { socketService } from '@/services/socketService';
 import { useAuthStore } from '@/store/useAuthStore';
+
+// Sub-component for the timer to avoid re-rendering the whole call room
+function DurationTimer({ hasJoined }: { hasJoined: boolean }) {
+  const [duration, setDuration] = useState(0);
+  const startTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    let interval: any;
+    if (hasJoined) {
+      if (!startTimeRef.current) startTimeRef.current = Date.now();
+      interval = setInterval(() => {
+        setDuration(Math.floor((Date.now() - (startTimeRef.current || 0)) / 1000));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [hasJoined]);
+
+  const formatDuration = (s: number) => {
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  if (!hasJoined) return null;
+  return <span className="text-xs font-mono font-bold mt-1">{formatDuration(duration)}</span>;
+}
 
 interface Props {
   roomId: string;
@@ -78,6 +110,18 @@ export default function LiveKitCallRoom(props: Props) {
         serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
         onDisconnected={() => onLeaveRoom()}
         connect={true}
+        options={{
+          adaptiveStream: true,
+          dynacast: true,
+          publishDefaults: {
+            simulcast: true,
+            videoCodec: 'h264',
+          },
+          videoCaptureDefaults: {
+            resolution: VideoPresets.h720,
+            frameRate: 20,
+          }
+        }}
         className={isMinimized 
           ? "w-80 h-48 rounded-3xl overflow-hidden shadow-2xl border border-white/20 bg-[#0a0a0a] relative"
           : isFullscreen
@@ -119,11 +163,8 @@ function CallContent(internalProps: InternalProps) {
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(!isVideoCall);
   const [hasJoinedTriggered, setHasJoinedTriggered] = useState(false);
-  
-  // Duration tracking
   const startTimeRef = useRef<number | null>(null);
-  const [duration, setDuration] = useState(0);
-
+  
   // Video Upgrade state
   const [upgradeRequest, setUpgradeRequest] = useState<{from: string, identity: string} | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -133,31 +174,14 @@ function CallContent(internalProps: InternalProps) {
       { source: Track.Source.Camera, name: 'camera' },
       { source: Track.Source.ScreenShare, name: 'screen_share' },
     ],
-    { onlySubscribed: false },
+    { onlySubscribed: true },
   );
-
-  // Duration Timer
-  useEffect(() => {
-    let interval: any;
-    if (hasJoinedTriggered) {
-      if (!startTimeRef.current) startTimeRef.current = Date.now();
-      interval = setInterval(() => {
-        setDuration(Math.floor((Date.now() - (startTimeRef.current || 0)) / 1000));
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [hasJoinedTriggered]);
-
-  const formatDuration = (s: number) => {
-    const mins = Math.floor(s / 60);
-    const secs = s % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   // Auto-end call if everyone left
   useEffect(() => {
     if (participants.length > 1) {
       setHasJoinedTriggered(true);
+      if (!startTimeRef.current) startTimeRef.current = Date.now();
     }
     
     if (hasJoinedTriggered && participants.length <= 1) {
@@ -248,7 +272,7 @@ function CallContent(internalProps: InternalProps) {
         <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
           <img 
             src={targetAvatar || myAvatar} 
-            className="w-full h-full object-cover blur-[80px] scale-110 opacity-60 transition-all duration-700" 
+            className="w-full h-full object-cover blur-[40px] scale-105 opacity-40 transition-all duration-700" 
             alt="" 
           />
           <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/40 to-black/80" />
@@ -264,9 +288,7 @@ function CallContent(internalProps: InternalProps) {
               <span className="text-[10px] font-black tracking-widest uppercase opacity-40 leading-none">
                 {participants.length > 1 ? 'Secured Session' : 'Waiting for others'}
               </span>
-              {hasJoinedTriggered && (
-                <span className="text-xs font-mono font-bold mt-1">{formatDuration(duration)}</span>
-              )}
+              <DurationTimer hasJoined={hasJoinedTriggered} />
             </div>
           </div>
         </div>
