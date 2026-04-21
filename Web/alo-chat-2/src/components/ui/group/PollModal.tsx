@@ -127,7 +127,7 @@ export default function PollModal({ conversationId, canCreate = true, onClose, o
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
                   placeholder="Bạn muốn hỏi gì?"
-                  className="w-full bg-gray-50 border-none rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 transition resize-none"
+                  className="w-full bg-gray-50 border-none rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-black/10 transition resize-none"
                   rows={3}
                 />
               </div>
@@ -141,12 +141,12 @@ export default function PollModal({ conversationId, canCreate = true, onClose, o
                       value={opt}
                       onChange={(e) => handleOptionChange(idx, e.target.value)}
                       placeholder={`Lựa chọn ${idx + 1}`}
-                      className="w-full bg-gray-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 transition"
+                      className="w-full bg-gray-50 border-none rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 focus:ring-black/10 transition"
                     />
                   ))}
                   <button 
                     onClick={handleAddOption}
-                    className="flex items-center gap-2 text-blue-600 text-[13px] font-bold mt-2 hover:translate-x-1 transition"
+                    className="text-black font-black uppercase tracking-tighter hover:translate-x-1 transition text-[11px] flex items-center gap-2 mt-2 bg-gray-100 px-3 py-1.5 rounded-lg w-fit"
                   >
                     <PlusIcon className="w-4 h-4" />
                     Thêm lựa chọn
@@ -215,7 +215,7 @@ export default function PollModal({ conversationId, canCreate = true, onClose, o
                 </button>
                 <button 
                   onClick={handleCreatePoll}
-                  className="flex-1 py-3 rounded-xl font-bold text-[13px] bg-blue-600 text-white shadow-lg hover:shadow-blue-500/20 hover:-translate-y-0.5 active:translate-y-0 transition"
+                  className="flex-1 py-3 rounded-xl font-bold text-[13px] bg-black text-white shadow-lg hover:shadow-black/20 hover:-translate-y-0.5 active:translate-y-0 transition"
                 >
                   TẠO BÌNH CHỌN
                 </button>
@@ -226,7 +226,7 @@ export default function PollModal({ conversationId, canCreate = true, onClose, o
               {canCreate && (
                 <button 
                   onClick={() => setShowCreate(true)}
-                  className="w-full mb-6 py-4 flex items-center justify-center gap-3 bg-blue-50 text-blue-600 rounded-2xl border-2 border-dashed border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition group"
+                  className="w-full mb-6 py-4 flex items-center justify-center gap-3 bg-gray-50 text-black rounded-2xl border-2 border-dashed border-gray-200 hover:bg-gray-100 hover:border-black transition group"
                 >
                   <PlusIcon className="w-5 h-5 group-hover:scale-110 transition" />
                   <span className="text-[14px] font-black uppercase tracking-tight">Tạo cuộc bình chọn mới</span>
@@ -236,7 +236,7 @@ export default function PollModal({ conversationId, canCreate = true, onClose, o
               <div className="space-y-4">
                 {loading ? (
                   <div className="flex flex-col items-center py-10">
-                    <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mb-3" />
+                    <div className="w-8 h-8 border-4 border-gray-200 border-t-black rounded-full animate-spin mb-3" />
                   </div>
                 ) : polls.length > 0 ? (
                   <>
@@ -247,11 +247,11 @@ export default function PollModal({ conversationId, canCreate = true, onClose, o
                           onClose();
                           if (onOpenDetails && poll._id) onOpenDetails(poll._id);
                         }}
-                        className="p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:border-blue-200 transition cursor-pointer group"
+                        className="hover:border-black/20 transition cursor-pointer group relative bg-gray-50 p-4 rounded-2xl border border-gray-100"
                       >
                         <div className="flex items-start justify-between mb-2">
-                          <h3 className="text-[14px] font-bold text-gray-900 group-hover:text-blue-600 transition">{poll.question}</h3>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase shrink-0 ml-3 ${poll.status === 'OPEN' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
+                          <h3 className="group-hover:text-black transition text-[14px] font-black text-gray-900 pr-4">{poll.question}</h3>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase shrink-0 ml-3 ${poll.status === 'OPEN' ? 'bg-black text-white' : 'bg-gray-100 text-gray-400'}`}>
                             {poll.status === 'OPEN' ? 'Đang mở' : 'Đã đóng'}
                           </span>
                         </div>

@@ -204,7 +204,7 @@ export default function MemberManagementModal({
           <div className="flex items-center gap-2">
             <button
               onClick={onOpenAddMember}
-              className="p-2 hover:bg-blue-50 text-blue-600 rounded-full transition-all"
+              className="p-2 hover:bg-gray-100 text-black rounded-full transition-all"
               title="Thêm thành viên"
             >
               <UserPlusIcon className="w-6 h-6" />
@@ -242,7 +242,7 @@ export default function MemberManagementModal({
               placeholder="Tìm kiếm thành viên..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500/20 transition"
+              className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-black/10 transition"
             />
           </div>
         </div>
@@ -252,20 +252,20 @@ export default function MemberManagementModal({
           <button
             onClick={() => setActiveTab("all")}
             className={`px-4 py-3 text-[13px] font-black tracking-tight transition-all relative ${
-              activeTab === "all" ? "text-blue-600" : "text-gray-400 hover:text-gray-600"
+              activeTab === "all" ? "text-black" : "text-gray-400 hover:text-gray-600"
             }`}
           >
             Tất cả
-            {activeTab === "all" && <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-600 rounded-t-full" />}
+            {activeTab === "all" && <div className="absolute bottom-0 left-0 right-0 h-1 bg-black rounded-t-full" />}
           </button>
           <button
             onClick={() => setActiveTab("managers")}
             className={`px-4 py-3 text-[13px] font-black tracking-tight transition-all relative ${
-              activeTab === "managers" ? "text-blue-600" : "text-gray-400 hover:text-gray-600"
+              activeTab === "managers" ? "text-black" : "text-gray-400 hover:text-gray-600"
             }`}
           >
             Trưởng & Phó nhóm
-            {activeTab === "managers" && <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-600 rounded-t-full" />}
+            {activeTab === "managers" && <div className="absolute bottom-0 left-0 right-0 h-1 bg-black rounded-t-full" />}
           </button>
         </div>
 
@@ -300,12 +300,12 @@ export default function MemberManagementModal({
                         {name} {isMe && "(Bạn)"}
                       </span>
                       {role === 'leader' && (
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-black uppercase rounded-lg border border-blue-100 ring-1 ring-blue-500/10">
+                        <span className="px-2 py-0.5 bg-gray-100 text-black text-[10px] font-black uppercase rounded-lg border border-gray-200 ring-1 ring-black/10">
                           Trưởng nhóm
                         </span>
                       )}
                       {role === 'deputy' && (
-                        <span className="px-2 py-0.5 bg-green-50 text-green-600 text-[10px] font-black uppercase rounded-lg border border-green-100 ring-1 ring-green-500/10">
+                        <span className="px-2 py-0.5 bg-gray-100 text-black text-[10px] font-black uppercase rounded-lg border border-gray-200 ring-1 ring-black/10">
                           Phó nhóm
                         </span>
                       )}
@@ -322,7 +322,7 @@ export default function MemberManagementModal({
                         e.stopPropagation();
                         handleAddFriend(m.userId);
                       }}
-                      className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors mr-1"
+                      className="p-2 bg-gray-100 text-black rounded-xl hover:bg-gray-200 transition-colors mr-1"
                       title="Kết bạn"
                     >
                       <UserPlusIcon className="w-5 h-5" />
@@ -330,7 +330,7 @@ export default function MemberManagementModal({
                   )}
 
                   {!isMe && getRelationStatus(m.userId) === "I_SENT_REQUEST" && (
-                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-tight bg-blue-50 px-2 py-1 rounded-lg mr-1">
+                    <span className="text-[10px] font-black text-black uppercase tracking-tight bg-gray-100 px-2 py-1 rounded-lg mr-1">
                       Đã gửi
                     </span>
                   )}
@@ -342,7 +342,7 @@ export default function MemberManagementModal({
                         // Mở profile để họ nhấn Accept hoặc có thể thêm handleAccept nhanh ở đây
                         setSelectedProfileId(m.userId);
                       }}
-                      className="p-2 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-colors mr-1"
+                      className="p-2 bg-gray-100 text-black rounded-xl hover:bg-gray-200 transition-colors mr-1"
                       title="Chấp nhận kết bạn"
                     >
                       <UserPlusIcon className="w-5 h-5 text-green-600" />
@@ -372,7 +372,7 @@ export default function MemberManagementModal({
                                   onClick={() => { handleAssignLeader(m.userId); setActiveMemberMenu(null); }}
                                   className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50 transition-colors"
                                 >
-                                  <UserIcon className="w-4 h-4 text-blue-500" />
+                                  <UserIcon className="w-4 h-4 text-black" />
                                   Chuyển trưởng nhóm
                                 </button>
                                 <button
@@ -381,12 +381,12 @@ export default function MemberManagementModal({
                                 >
                                   {role === 'deputy' ? (
                                     <>
-                                      <ChevronDownIcon className="w-4 h-4 text-orange-500" />
+                                      <ChevronDownIcon className="w-4 h-4 text-black" />
                                       Gỡ phó nhóm
                                     </>
                                   ) : (
                                     <>
-                                      <ChevronUpIcon className="w-4 h-4 text-green-500" />
+                                      <ChevronUpIcon className="w-4 h-4 text-black" />
                                       Thêm phó nhóm
                                     </>
                                   )}

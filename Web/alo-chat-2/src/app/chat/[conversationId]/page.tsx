@@ -167,6 +167,7 @@ export default function ChatPage() {
     question: string;
     needApproval: boolean;
   } | null>(null);
+  const [groupInfoModal, setGroupInfoModal] = useState<any>(null);
   const [joinGroupAnswer, setJoinGroupAnswer] = useState("");
   const [joiningGroup, setJoiningGroup] = useState(false);
 
@@ -181,14 +182,17 @@ export default function ChatPage() {
     async (groupId: string) => {
       if (!groupId || groupLinkCache[groupId]) return;
       try {
-        const res = await groupService.getGroupById(groupId);
+        const res = await groupService.getGroupInfoForLink(groupId);
         if (res) {
           // axios interceptor might have already unwrapped res.data
           const groupInfo = res.data || res;
           setGroupLinkCache((prev) => ({ ...prev, [groupId]: groupInfo }));
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Lỗi lấy thông tin nhóm từ link:", err);
+        if (err.response?.status === 404) {
+          setGroupLinkCache((prev) => ({ ...prev, [groupId]: { notFound: true } }));
+        }
       }
     },
     [groupLinkCache],
@@ -2649,84 +2653,71 @@ export default function ChatPage() {
                                             fetchGroupLinkInfo(linkGroupId);
                                           }
 
+                                          const handleLinkClick = () => {
+                                            if (groupInfo?.notFound) return;
+                                            setGroupInfoModal({
+                                              ...groupInfo,
+                                              groupId: linkGroupId,
+                                            });
+                                          };
+
                                           return (
-                                            <div className="mt-2 mb-1">
-                                              <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm w-64 max-w-full">
-                                                <div className="flex gap-3 mb-4">
-                                                  <img
-                                                    src={
-                                                      groupInfo?.groupAvatar
-                                                        ? getMediaUrl(
-                                                            groupInfo.groupAvatar,
-                                                          )
-                                                        : "/avt-mac-dinh.jpg"
-                                                    }
-                                                    className="w-12 h-12 rounded-2xl object-cover ring-2 ring-gray-50"
-                                                  />
-                                                  <div className="flex-1 min-w-0">
-                                                    <h4 className="text-sm font-black text-gray-900 truncate">
-                                                      {groupInfo?.name ||
-                                                        "Đang tải..."}
-                                                    </h4>
-                                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
-                                                      Nhóm trò chuyện
-                                                    </p>
+                                            <div className="mt-2 mb-1 group cursor-pointer" onClick={handleLinkClick}>
+                                              <div className="bg-white border border-gray-100 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all w-72 max-w-full border-b-[3px] border-b-gray-200">
+                                                {/* Header Link */}
+                                                <div className="px-3 py-1.5 border-b border-gray-50 flex items-center gap-1.5 overflow-hidden">
+                                                  <div className="w-1 h-1 rounded-full bg-gray-300" />
+                                                  <span className="text-[10px] text-gray-400 font-medium truncate opacity-80">
+                                                    {window.location.origin}/g/{linkGroupId}
+                                                  </span>
+                                                </div>
+
+                                                {/* Banner Section */}
+                                                <div className="relative h-32 bg-gradient-to-br from-gray-900 to-black p-4 flex flex-col justify-end">
+                                                  {/* Abstract background patterns */}
+                                                  <div className="absolute inset-0 opacity-10 pointer-events-none overflow-hidden">
+                                                    <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full border-[10px] border-white" />
+                                                    <div className="absolute left-1/4 top-1/2 w-32 h-32 rounded-full border-[1px] border-white" />
+                                                  </div>
+
+                                                  <div className="relative flex items-center gap-3">
+                                                    <div className="relative">
+                                                      <img
+                                                        src={groupInfo?.groupAvatar ? getMediaUrl(groupInfo.groupAvatar) : "/avt-mac-dinh.jpg"}
+                                                        className="w-14 h-14 rounded-2xl object-cover border-2 border-white/20 shadow-lg"
+                                                      />
+                                                      {groupInfo?.notFound && (
+                                                        <div className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center">
+                                                          <span className="text-[8px] text-white font-black">404</span>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                      <p className="text-[10px] text-white/60 font-black uppercase tracking-[2px] mb-0.5">Nhóm</p>
+                                                      <h4 className="text-base font-black text-white truncate leading-tight">
+                                                        {groupInfo?.notFound ? "Liên kết không tồn tại" : (groupInfo?.name || "Đang tải...")}
+                                                      </h4>
+                                                    </div>
                                                   </div>
                                                 </div>
-                                                <button
-                                                  onClick={async () => {
-                                                    const info = groupInfo;
-                                                    if (
-                                                      info?.isApprovalRequired
-                                                    ) {
-                                                      // Cần phê duyệt: kiểm tra có câu hỏi không
-                                                      setJoinGroupAnswer("");
-                                                      setJoinGroupModal({
-                                                        groupId: linkGroupId,
-                                                        question:
-                                                          info?.isQuestionEnabled
-                                                            ? info?.membershipQuestion ||
-                                                              ""
-                                                            : "",
-                                                        needApproval: true,
-                                                      });
-                                                    } else {
-                                                      // Tham gia trực tiếp
-                                                      try {
-                                                        const res =
-                                                          await groupService.requestJoinGroup(
-                                                            linkGroupId,
-                                                          );
-                                                        if (res.joined) {
-                                                          toast.success(
-                                                            "Đã tham gia nhóm thành công!",
-                                                          );
-                                                          router.push(
-                                                            `/chat/${linkGroupId}`,
-                                                          );
-                                                        } else {
-                                                          toast.success(
-                                                            "Đã gửi yêu cầu tham gia",
-                                                          );
-                                                        }
-                                                      } catch (err: any) {
-                                                        toast.error(
-                                                          err.response?.data
-                                                            ?.error ||
-                                                            "Lỗi khi tham gia",
-                                                        );
-                                                      }
-                                                    }
-                                                  }}
-                                                  className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-[11px] font-black hover:bg-blue-700 transition shadow-lg shadow-blue-100"
-                                                >
-                                                  {groupInfo?.isApprovalRequired
-                                                    ? "Gửi yêu cầu tham gia"
-                                                    : "THAM GIA NHÓM"}
-                                                </button>
-                                              </div>
-                                              <div className="mt-2 text-[13px] font-medium leading-relaxed text-gray-400 break-all opacity-50">
-                                                {msg.content}
+
+                                                {/* Footer Info */}
+                                                <div className="p-3 bg-white">
+                                                  <h5 className="text-[13px] font-black text-gray-900 truncate mb-1">
+                                                    {groupInfo?.notFound ? "Liên kết đã hết hạn" : (groupInfo?.name || "Đang tải nhóm...")}
+                                                  </h5>
+                                                  <p className="text-[11px] text-gray-500 font-medium mb-2">
+                                                    {groupInfo?.notFound 
+                                                      ? "Không tìm thấy thông tin nhóm này"
+                                                      : "Bấm vào đây để xem thông tin và tham gia nhóm"}
+                                                  </p>
+                                                  <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+                                                    <span className="text-[10px] font-black text-gray-300 tracking-wider">ALO.ME</span>
+                                                    <span className="text-[10px] text-gray-400 font-bold">
+                                                      {formatTime(msg.createdAt)}
+                                                    </span>
+                                                  </div>
+                                                </div>
                                               </div>
                                             </div>
                                           );
@@ -3726,110 +3717,182 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* === Modal tham gia nhóm cần phê duyệt / câu hỏi === */}
-      {joinGroupModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md p-8 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="p-3 bg-blue-50 rounded-2xl">
-                <svg
-                  className="w-6 h-6 text-blue-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={2}
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"
+      {/* Group Info Modal (Zalo Style) */}
+      {groupInfoModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[32px] w-full max-w-sm overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100">
+            {/* Modal Header */}
+            <div className="px-6 py-5 flex items-center justify-between border-b border-gray-50">
+              <h3 className="text-base font-black text-gray-900 tracking-tight">Thông tin nhóm</h3>
+              <button 
+                onClick={() => setGroupInfoModal(null)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-8 flex flex-col items-center text-center">
+              {/* Stacked Avatars */}
+              <div className="relative mb-6 flex justify-center">
+                <div className="relative w-24 h-24">
+                  <img 
+                    src={groupInfoModal.groupAvatar ? getMediaUrl(groupInfoModal.groupAvatar) : "/avt-mac-dinh.jpg"} 
+                    className="w-24 h-24 rounded-[32px] object-cover ring-4 ring-white shadow-xl relative z-10"
                   />
-                </svg>
+                  <div className="absolute -right-2 -bottom-2 w-16 h-16 rounded-[24px] bg-gray-100 ring-4 ring-white shadow-lg overflow-hidden opacity-40">
+                    <img 
+                      src={groupInfoModal.groupAvatar ? getMediaUrl(groupInfoModal.groupAvatar) : "/avt-mac-dinh.jpg"} 
+                      className="w-full h-full object-cover grayscale"
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <h2 className="text-xl font-black text-gray-900">
-                  Yêu cầu tham gia nhóm
-                </h2>
-                <p className="text-[12px] text-gray-400 font-bold mt-0.5 uppercase tracking-widest">
-                  Cần phê duyệt từ nhóm trưởng
-                </p>
+
+              <h2 className="text-xl font-black text-gray-900 mb-2 px-4 leading-tight">
+                {groupInfoModal.name}
+              </h2>
+              
+              <div className="flex items-center gap-2 text-sm text-gray-500 font-bold mb-8">
+                <span>{groupInfoModal.members?.length || 0} thành viên</span>
+                <span className="w-1 h-1 rounded-full bg-gray-300" />
+                <span>Tạo bởi <span className="text-black">{groupInfoModal.members?.find((m: any) => m.role === 'LEADER')?.name || 'Quản trị viên'}</span></span>
+              </div>
+
+              <div className="w-full h-[1px] bg-gray-50 mb-8" />
+
+              <p className="text-sm text-gray-600 font-medium leading-relaxed mb-8 px-2">
+                Bạn đang ở phòng chờ. Hãy tham gia chat để cùng trò chuyện với mọi người trong nhóm.
+              </p>
+
+              {/* Small Member Avatars List */}
+              <div className="flex -space-x-3 mb-4">
+                {groupInfoModal.members?.slice(0, 5).map((member: any, idx: number) => (
+                  <div key={idx} className="w-10 h-10 rounded-2xl ring-4 ring-white overflow-hidden bg-gray-100 shadow-sm">
+                    <img 
+                      src={member.avatar ? getMediaUrl(member.avatar) : "/avt-mac-dinh.jpg"} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ))}
+                {groupInfoModal.members?.length > 5 && (
+                  <div className="w-10 h-10 rounded-2xl ring-4 ring-white bg-gray-900 flex items-center justify-center text-[10px] text-white font-black z-10">
+                    +{groupInfoModal.members.length - 5}
+                  </div>
+                )}
               </div>
             </div>
 
-            {joinGroupModal.question ? (
-              <>
-                <div className="mb-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                  <p className="text-[11px] font-black text-blue-500 uppercase tracking-widest mb-2">
-                    Câu hỏi từ nhóm trưởng
-                  </p>
-                  <p className="text-sm font-bold text-gray-800 leading-relaxed">
-                    {joinGroupModal.question}
-                  </p>
-                </div>
-                <div className="mb-6">
-                  <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest mb-2">
-                    Câu trả lời của bạn *
-                  </label>
-                  <textarea
-                    value={joinGroupAnswer}
-                    onChange={(e) => setJoinGroupAnswer(e.target.value)}
-                    placeholder="Nhập câu trả lời của bạn..."
-                    rows={3}
-                    className="w-full px-4 py-3 text-sm font-medium border border-gray-200 rounded-2xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 resize-none transition"
-                  />
-                </div>
-              </>
-            ) : (
-              <div className="mb-6 p-4 bg-gray-50 rounded-2xl">
-                <p className="text-sm text-gray-600 font-medium leading-relaxed">
-                  Yêu cầu tham gia của bạn sẽ được gửi đến nhóm trưởng để xét
-                  duyệt. Vui lòng chờ phê duyệt.
-                </p>
+            {/* Modal Footer */}
+            <div className="p-6 bg-gray-50/50 flex gap-3">
+              <button
+                onClick={() => setGroupInfoModal(null)}
+                className="flex-1 py-4 rounded-[20px] font-black text-gray-900 bg-gray-100 hover:bg-gray-200 transition-all border border-gray-200 shadow-sm active:scale-95"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={async () => {
+                  const info = groupInfoModal;
+                  const gid = groupInfoModal.groupId;
+                  setGroupInfoModal(null);
+
+                  if (info?.isApprovalRequired) {
+                    setJoinGroupAnswer("");
+                    setJoinGroupModal({
+                      groupId: gid,
+                      question: info?.isQuestionEnabled ? info?.membershipQuestion || "" : "",
+                      needApproval: true,
+                    });
+                  } else {
+                    setJoiningGroup(true);
+                    try {
+                      const res = await groupService.requestJoinGroup(gid);
+                      if (res.joined) {
+                        toast.success("Đã tham gia nhóm thành công!");
+                        router.push(`/chat/${gid}`);
+                      } else {
+                        toast.success("Đã gửi yêu cầu tham gia");
+                      }
+                    } catch (err: any) {
+                      toast.error(err.response?.data?.error || "Lỗi khi tham gia");
+                    } finally {
+                      setJoiningGroup(false);
+                    }
+                  }
+                }}
+                className="flex-1 py-4 rounded-[20px] font-black bg-black text-white hover:bg-gray-800 transition-all shadow-xl shadow-black/10 active:scale-95"
+              >
+                Tham gia
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Join Request Modal (Approval/Question) */}
+      {joinGroupModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-[32px] w-full max-w-sm p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="mb-8">
+              <h3 className="text-xl font-black text-gray-900 mb-3">Yêu cầu tham gia</h3>
+              <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                {joinGroupModal.question 
+                  ? "Nhóm này yêu cầu bạn trả lời câu hỏi trước khi tham gia." 
+                  : "Yêu cầu của bạn sẽ được gửi đến quản trị viên để xét duyệt."}
+              </p>
+            </div>
+
+            {joinGroupModal.question && (
+              <div className="mb-8">
+                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3">
+                  Câu hỏi: {joinGroupModal.question}
+                </label>
+                <textarea
+                  value={joinGroupAnswer}
+                  onChange={(e) => setJoinGroupAnswer(e.target.value)}
+                  placeholder="Nhập câu trả lời của bạn..."
+                  className="w-full p-5 bg-gray-50 border-2 border-gray-100 rounded-2xl text-sm focus:ring-0 focus:border-black transition-all resize-none h-32"
+                />
               </div>
             )}
 
             <div className="flex gap-3">
               <button
-                onClick={() => {
-                  setJoinGroupModal(null);
-                  setJoinGroupAnswer("");
-                }}
-                className="flex-1 py-3 rounded-xl font-black text-gray-500 bg-gray-50 hover:bg-gray-100 transition-colors"
+                onClick={() => { setJoinGroupModal(null); setJoinGroupAnswer(""); }}
+                className="flex-1 py-4 rounded-[20px] font-black text-gray-500 bg-gray-50 hover:bg-gray-100 transition-colors"
               >
                 Hủy
               </button>
               <button
                 onClick={async () => {
                   if (joinGroupModal.question && !joinGroupAnswer.trim()) {
-                    toast.error("Vui lòng trả lời câu hỏi của nhóm trưởng");
+                    toast.error("Vui lòng trả lời câu hỏi");
                     return;
                   }
                   setJoiningGroup(true);
                   try {
                     const res = await groupService.requestJoinGroup(
                       joinGroupModal.groupId,
-                      joinGroupAnswer.trim() || undefined,
+                      joinGroupAnswer.trim() || undefined
                     );
                     setJoinGroupModal(null);
                     setJoinGroupAnswer("");
                     if (res.joined) {
-                      toast.success("Đã tham gia nhóm thành công!");
+                      toast.success("Đã tham gia nhóm!");
                       router.push(`/chat/${joinGroupModal.groupId}`);
                     } else {
-                      toast.success(
-                        "Đã gửi yêu cầu tham gia! Vui lòng chờ nhóm trưởng phê duyệt.",
-                      );
+                      toast.success("Đã gửi yêu cầu tham gia!");
                     }
                   } catch (err: any) {
-                    toast.error(
-                      err.response?.data?.error || "Gửi yêu cầu thất bại",
-                    );
+                    toast.error(err.response?.data?.error || "Gửi thất bại");
                   } finally {
                     setJoiningGroup(false);
                   }
                 }}
                 disabled={joiningGroup}
-                className="flex-1 py-3 rounded-xl font-black bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-1 py-4 rounded-[20px] font-black bg-black text-white hover:bg-gray-800 transition-all disabled:opacity-50"
               >
                 {joiningGroup ? "Đang gửi..." : "Gửi yêu cầu"}
               </button>
