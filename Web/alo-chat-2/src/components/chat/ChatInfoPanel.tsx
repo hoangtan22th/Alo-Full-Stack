@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo } from "react";
 import {
   UserIcon,
   BellIcon,
@@ -26,17 +26,17 @@ import {
   PhotoIcon,
   ChartBarIcon,
   Cog6ToothIcon,
-} from '@heroicons/react/24/outline';
-import { MessageDTO } from '@/services/messageService';
-import AddMemberModal from '../ui/group/AddMemberModal';
-import PollModal from '../ui/group/PollModal';
-import NoteModal from '../ui/group/NoteModal';
+} from "@heroicons/react/24/outline";
+import { MessageDTO } from "@/services/messageService";
+import AddMemberModal from "../ui/group/AddMemberModal";
+import PollModal from "../ui/group/PollModal";
+import NoteModal from "../ui/group/NoteModal";
 import ReminderModal from "../ui/group/ReminderModal";
 import JoinLinkModal from "../ui/group/JoinLinkModal";
 import MemberManagementModal from "../ui/group/MemberManagementModal";
 import { groupService } from "@/services/groupService";
-import { toast } from 'sonner';
-import { getMediaUrl } from '../../utils/media';
+import { toast } from "sonner";
+import { getMediaUrl } from "../../utils/media";
 
 interface ChatInfoPanelProps {
   show: boolean;
@@ -81,7 +81,8 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   const [showNoteModal, setShowNoteModal] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [showJoinLinkModal, setShowJoinLinkModal] = useState(false);
-  const [showMemberManagementModal, setShowMemberManagementModal] = useState(false);
+  const [showMemberManagementModal, setShowMemberManagementModal] =
+    useState(false);
   const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
 
   // Group Info Editing State
@@ -95,19 +96,25 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   // Lấy role của user hiện tại trong nhóm
   const currentUserRole = useMemo(() => {
     if (!isGroup) return null;
-    return conversationInfo?.members?.find((m: any) => m.userId === myId)?.role?.toLowerCase();
+    return conversationInfo?.members
+      ?.find((m: any) => m.userId === myId)
+      ?.role?.toLowerCase();
   }, [isGroup, conversationInfo, myId]);
 
-  const isAdmin = currentUserRole === 'leader';
-  const isDeputy = currentUserRole === 'deputy';
+  const isAdmin = currentUserRole === "leader";
+  const isDeputy = currentUserRole === "deputy";
   const isManager = isAdmin || isDeputy;
 
   // Quyền hạn giống mobile
   const permissions = conversationInfo?.permissions;
-  const canEdit = isGroup && (isManager || permissions?.editGroupInfo === "EVERYONE");
-  const canCreatePoll = isGroup && (isManager || permissions?.createPolls === "EVERYONE");
-  const canCreateNote = isGroup && (isManager || permissions?.createNotes === "EVERYONE");
-  const canCreateReminder = isGroup && (isManager || permissions?.createReminders === "EVERYONE");
+  const canEdit =
+    isGroup && (isManager || permissions?.editGroupInfo === "EVERYONE");
+  const canCreatePoll =
+    isGroup && (isManager || permissions?.createPolls === "EVERYONE");
+  const canCreateNote =
+    isGroup && (isManager || permissions?.createNotes === "EVERYONE");
+  const canCreateReminder =
+    isGroup && (isManager || permissions?.createReminders === "EVERYONE");
 
   const handleUpdateName = async () => {
     if (!tempName.trim() || tempName === conversationInfo?.displayName) {
@@ -147,23 +154,36 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   // Lọc media (ảnh/video)
   const mediaList = useMemo(() => {
     const list: any[] = [];
-    messages.forEach(m => {
-      if (m.type === 'image') {
+    messages.forEach((m) => {
+      if (m.type === "image") {
         if (m.metadata?.imageGroup) {
-          list.push(...m.metadata.imageGroup.filter((img: any) => !img.isRevoked).map((img: any) => ({ ...img, createdAt: m.createdAt })));
+          list.push(
+            ...m.metadata.imageGroup
+              .filter((img: any) => !img.isRevoked)
+              .map((img: any) => ({ ...img, createdAt: m.createdAt })),
+          );
         } else {
-          list.push({ url: m.content, fileName: m.metadata?.fileName, createdAt: m.createdAt });
+          list.push({
+            url: m.content,
+            fileName: m.metadata?.fileName,
+            createdAt: m.createdAt,
+          });
         }
       }
     });
     // Sắp xếp mới nhất lên đầu và lấy 5 cái
-    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5);
+    return list
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      )
+      .slice(0, 5);
   }, [messages]);
 
   // Lọc file
   const fileList = useMemo(() => {
     return messages
-      .filter(m => m.type === 'file')
+      .filter((m) => m.type === "file")
       .slice(-4)
       .reverse();
   }, [messages]);
@@ -172,13 +192,14 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
   return (
     <div
-      className={`flex flex-col shrink-0 bg-white h-full transition-all duration-300 ease-in-out border-l border-gray-100 shadow-xl z-20 overflow-hidden ${show ? "w-[340px] xl:w-90 opacity-100" : "w-0 opacity-0"
-        }`}
+      className={`flex flex-col shrink-0 bg-white h-full transition-all duration-300 ease-in-out border-l border-gray-100 shadow-xl z-20 overflow-hidden ${
+        show ? "w-[340px] xl:w-90 opacity-100" : "w-0 opacity-0"
+      }`}
     >
       <div className="flex h-full flex-col">
         {/* Header */}
-        <div className="px-5 py-4 flex items-center justify-between border-b border-gray-50">
-          <h2 className="text-[16px] font-black text-gray-900 tracking-tight">Thông tin (Debug: {messages.length})</h2>
+        <div className="px-5 py-4 flex justify-end border-b border-gray-50">
+          {/* <h2 className="text-[16px] font-black text-gray-900 tracking-tight">Thông tin (Debug: {messages.length})</h2> */}
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-full transition text-gray-400 hover:text-gray-600"
@@ -200,7 +221,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
               />
               <div
                 onClick={handleAvatarClick}
-                className={`relative cursor-pointer transition-transform duration-300 ${isGroup && canEdit ? 'hover:scale-105 active:scale-95' : ''}`}
+                className={`relative cursor-pointer transition-transform duration-300 ${isGroup && canEdit ? "hover:scale-105 active:scale-95" : ""}`}
               >
                 {conversationInfo?.displayAvatar ? (
                   <img
@@ -210,7 +231,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                   />
                 ) : (
                   <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-3xl border-4 border-white shadow-xl">
-                    {(conversationInfo?.displayName || "?").charAt(0).toUpperCase()}
+                    {(conversationInfo?.displayName || "?")
+                      .charAt(0)
+                      .toUpperCase()}
                   </div>
                 )}
                 {isGroup && canEdit && (
@@ -231,7 +254,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                     autoFocus
                     value={tempName}
                     onChange={(e) => setTempName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleUpdateName()}
+                    onKeyDown={(e) => e.key === "Enter" && handleUpdateName()}
                     onBlur={handleUpdateName}
                     className="w-full bg-gray-50 border-none rounded-lg px-3 py-1 text-[18px] font-black text-gray-900 focus:ring-2 focus:ring-blue-500/20"
                   />
@@ -243,7 +266,10 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                   </h2>
                   {isGroup && canEdit && (
                     <button
-                      onClick={() => { setTempName(conversationInfo?.displayName || ""); setIsEditingName(true); }}
+                      onClick={() => {
+                        setTempName(conversationInfo?.displayName || "");
+                        setIsEditingName(true);
+                      }}
                       className="p-1 hover:bg-gray-100 rounded-full transition text-gray-300 hover:text-blue-500 flex-shrink-0"
                     >
                       <PencilIcon className="w-3.5 h-3.5" />
@@ -271,27 +297,33 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                   onClick={() => setShowMemberManagementModal(true)}
                 />
               ) : (
-                <ActionButton
-                  icon={<UserGroupIcon />}
-                  label="Nhóm chung"
-                />
+                <ActionButton icon={<UserGroupIcon />} label="Nhóm chung" />
               )}
             </div>
           </div>
 
-
           {/* Media / Video Section */}
           <div className="p-6 border-b border-gray-50">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Ảnh / Video</h3>
-              <button onClick={onViewAllMedia} className="text-[12px] font-black text-blue-600 hover:underline">Xem tất cả</button>
+              <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                Ảnh / Video
+              </h3>
+              <button
+                onClick={onViewAllMedia}
+                className="text-[12px] font-black text-blue-600 hover:underline"
+              >
+                Xem tất cả
+              </button>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
               {mediaList.length > 0 ? (
                 <>
                   {mediaList.slice(0, 5).map((img, idx) => (
-                    <div key={idx} className="aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-50 group cursor-pointer shadow-sm">
+                    <div
+                      key={idx}
+                      className="aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-50 group cursor-pointer shadow-sm"
+                    >
                       <img
                         src={getMediaUrl(img.url)}
                         className="w-full h-full object-cover group-hover:scale-110 transition duration-300"
@@ -318,7 +350,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
               ) : (
                 <div className="col-span-3 py-10 text-center bg-gray-50 rounded-2xl border-2 border-dashed border-gray-100">
                   <PhotoIcon className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                  <p className="text-[12px] text-gray-400 font-bold italic">Chưa có ảnh/video</p>
+                  <p className="text-[12px] text-gray-400 font-bold italic">
+                    Chưa có ảnh/video
+                  </p>
                 </div>
               )}
             </div>
@@ -327,8 +361,15 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           {/* Shared Files */}
           <div className="p-6 border-b border-gray-50">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest">File đã chia sẻ</h3>
-              <button onClick={onViewAllFiles} className="text-[12px] font-black text-blue-600 hover:underline">Xem tất cả</button>
+              <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
+                File đã chia sẻ
+              </h3>
+              <button
+                onClick={onViewAllFiles}
+                className="text-[12px] font-black text-blue-600 hover:underline"
+              >
+                Xem tất cả
+              </button>
             </div>
             <div className="space-y-3">
               {fileList.length > 0 ? (
@@ -341,21 +382,34 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                     className="flex items-center gap-3 p-3 rounded-2xl bg-gray-50 border border-gray-100 hover:border-blue-200 hover:bg-white transition group shadow-sm active:scale-[0.98]"
                   >
                     <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-blue-500 group-hover:text-white group-hover:bg-blue-600 transition shadow-sm">
-                      {m.metadata?.fileType?.includes('pdf') ? <DocumentTextIcon className="w-5 h-5" /> : <TableCellsIcon className="w-5 h-5" />}
+                      {m.metadata?.fileType?.includes("pdf") ? (
+                        <DocumentTextIcon className="w-5 h-5" />
+                      ) : (
+                        <TableCellsIcon className="w-5 h-5" />
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-black text-gray-900 truncate tracking-tight">
                         {m.metadata?.fileName || "File"}
                       </p>
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-                        {m.metadata?.fileSize ? (m.metadata.fileSize / (1024 * 1024)).toFixed(1) + ' MB' : '0 MB'} • {new Date(m.createdAt || "").toLocaleDateString('vi-VN')}
+                        {m.metadata?.fileSize
+                          ? (m.metadata.fileSize / (1024 * 1024)).toFixed(1) +
+                            " MB"
+                          : "0 MB"}{" "}
+                        •{" "}
+                        {new Date(m.createdAt || "").toLocaleDateString(
+                          "vi-VN",
+                        )}
                       </p>
                     </div>
                   </a>
                 ))
               ) : (
                 <div className="py-6 text-center bg-gray-50 rounded-2xl border-2 border-dashed border-gray-100">
-                  <p className="text-[12px] text-gray-400 font-bold italic">Chưa có file nào</p>
+                  <p className="text-[12px] text-gray-400 font-bold italic">
+                    Chưa có file nào
+                  </p>
                 </div>
               )}
             </div>
@@ -364,7 +418,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           {/* SECTION: TIỆN ÍCH NHÓM */}
           {isGroup && (
             <div className="p-6 border-b border-gray-50">
-              <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4">Tiện ích nhóm</h3>
+              <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4">
+                Tiện ích nhóm
+              </h3>
               <div className="space-y-1">
                 <SettingItem
                   icon={<ChartBarIcon />}
@@ -388,13 +444,12 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           {/* SECTION: THÔNG TIN KHÁC */}
           {isGroup && (
             <div className="p-6 border-b border-gray-50">
-              <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4">Thông tin khác</h3>
+              <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4">
+                Thông tin khác
+              </h3>
               <div className="space-y-1">
                 {isManager && (
-                  <SettingItem
-                    icon={<Cog6ToothIcon />}
-                    label="Cài đặt nhóm"
-                  />
+                  <SettingItem icon={<Cog6ToothIcon />} label="Cài đặt nhóm" />
                 )}
                 <SettingItem
                   icon={<LinkIcon />}
@@ -407,17 +462,16 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
           {/* Settings & Danger Zone */}
           <div className="p-6 pb-12 space-y-1">
-            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4">Cài đặt & Bảo mật</h3>
+            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4">
+              Cài đặt & Bảo mật
+            </h3>
 
             <SettingItem
               icon={<ClockIcon />}
               label="Tin nhắn tự xóa"
               value="Tắt"
             />
-            <SettingItem
-              icon={<EyeSlashIcon />}
-              label="Ẩn trò chuyện"
-            />
+            <SettingItem icon={<EyeSlashIcon />} label="Ẩn trò chuyện" />
             <div className="pt-4 mt-4 border-t border-gray-50 space-y-1">
               <SettingItem
                 icon={<TrashIcon />}
@@ -511,29 +565,62 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
 /* --- Sub-components --- */
 
-const ActionButton: React.FC<{ icon: React.ReactNode; label: string; onClick?: () => void }> = ({ icon, label, onClick }) => (
-  <div className="flex flex-col items-center gap-1.5 cursor-pointer group" onClick={onClick}>
+const ActionButton: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+}> = ({ icon, label, onClick }) => (
+  <div
+    className="flex flex-col items-center gap-1.5 cursor-pointer group"
+    onClick={onClick}
+  >
     <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition shadow-sm ring-1 ring-gray-100">
-      {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { className: "w-5 h-5" }) : icon}
+      {React.isValidElement(icon)
+        ? React.cloneElement(icon as React.ReactElement<any>, {
+            className: "w-5 h-5",
+          })
+        : icon}
     </div>
-    <span className="text-[10px] font-bold text-gray-400 group-hover:text-gray-600">{label}</span>
+    <span className="text-[10px] font-bold text-gray-400 group-hover:text-gray-600">
+      {label}
+    </span>
   </div>
 );
 
-const SettingItem: React.FC<{ icon: React.ReactNode; label: string; value?: string; isDanger?: boolean; onClick?: () => void }> = ({ icon, label, value, isDanger, onClick }) => (
+const SettingItem: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  value?: string;
+  isDanger?: boolean;
+  onClick?: () => void;
+}> = ({ icon, label, value, isDanger, onClick }) => (
   <button
     onClick={onClick}
     className="w-full flex items-center justify-between p-3 -mx-3 rounded-2xl hover:bg-gray-50 transition group active:scale-[0.98]"
   >
     <div className="flex items-center gap-3">
-      <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition shadow-sm ${isDanger ? 'bg-red-50 text-red-500 group-hover:bg-red-600 group-hover:text-white' : 'bg-white text-gray-500 group-hover:bg-blue-600 group-hover:text-white border border-gray-100'}`}>
-        {React.isValidElement(icon) ? React.cloneElement(icon as React.ReactElement<any>, { className: "w-5 h-5" }) : icon}
+      <div
+        className={`w-9 h-9 rounded-xl flex items-center justify-center transition shadow-sm ${isDanger ? "bg-red-50 text-red-500 group-hover:bg-red-600 group-hover:text-white" : "bg-white text-gray-500 group-hover:bg-blue-600 group-hover:text-white border border-gray-100"}`}
+      >
+        {React.isValidElement(icon)
+          ? React.cloneElement(icon as React.ReactElement<any>, {
+              className: "w-5 h-5",
+            })
+          : icon}
       </div>
-      <span className={`text-[13px] font-black tracking-tight ${isDanger ? 'text-red-500 group-hover:text-red-600' : 'text-gray-700 group-hover:text-blue-600'}`}>{label}</span>
+      <span
+        className={`text-[13px] font-black tracking-tight ${isDanger ? "text-red-500 group-hover:text-red-600" : "text-gray-700 group-hover:text-blue-600"}`}
+      >
+        {label}
+      </span>
     </div>
     <div className="flex items-center gap-2">
-      {value && <span className="text-[12px] font-bold text-gray-400">{value}</span>}
-      <ChevronRightIcon className={`w-4 h-4 ${isDanger ? 'text-red-300' : 'text-gray-300 group-hover:text-blue-300'}`} />
+      {value && (
+        <span className="text-[12px] font-bold text-gray-400">{value}</span>
+      )}
+      <ChevronRightIcon
+        className={`w-4 h-4 ${isDanger ? "text-red-300" : "text-gray-300 group-hover:text-blue-300"}`}
+      />
     </div>
   </button>
 );
