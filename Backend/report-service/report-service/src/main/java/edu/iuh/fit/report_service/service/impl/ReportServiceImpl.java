@@ -1,0 +1,136 @@
+package edu.iuh.fit.report_service.service.impl;
+
+import edu.iuh.fit.common_service.dto.response.ApiResponse;
+import edu.iuh.fit.report_service.client.UserClient;
+import edu.iuh.fit.report_service.dto.request.AdminActionRequest;
+import edu.iuh.fit.report_service.dto.request.ReportCreationRequest;
+import edu.iuh.fit.report_service.dto.response.ReportAdminResponse;
+import edu.iuh.fit.report_service.dto.response.ReportResponse;
+import edu.iuh.fit.report_service.dto.response.UserResponse;
+import edu.iuh.fit.report_service.entity.Report;
+import edu.iuh.fit.report_service.entity.ReportStatus;
+import edu.iuh.fit.report_service.entity.TargetType;
+import edu.iuh.fit.report_service.repository.ReportRepository;
+import edu.iuh.fit.report_service.service.ReportService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class ReportServiceImpl implements ReportService {
+
+    private final ReportRepository reportRepository;
+    private final UserClient userClient;
+
+    @Override
+    public ReportResponse createReport(ReportCreationRequest request) {
+        log.info("Creating new report from reporter {} targeting {}", request.getReporterId(), request.getTargetId());
+
+        Report report = Report.builder()
+                .reporterId(request.getReporterId())
+                .targetId(request.getTargetId())
+                .targetType(request.getTargetType())
+                .reason(request.getReason())
+                .description(request.getDescription())
+                .imageUrls(request.getImageUrls())
+                .messageIds(request.getMessageIds())
+                .status(ReportStatus.PENDING) // By default it is set in Entity
+                .build();
+
+        Report savedReport = reportRepository.save(report);
+
+        log.info("Report created successfully with ID: {}", savedReport.getId());
+
+        return ReportResponse.builder()
+                .id(savedReport.getId())
+                .reporterId(savedReport.getReporterId())
+                .targetId(savedReport.getTargetId())
+                .targetType(savedReport.getTargetType())
+                .reason(savedReport.getReason())
+                .status(savedReport.getStatus())
+                .createdAt(savedReport.getCreatedAt())
+                .build();
+    }
+
+    @Override
+    public Page<ReportAdminResponse> getAdminReports(ReportStatus status, Pageable pageable) {
+        Page<Report> reports;
+        if (status != null) {
+            reports = reportRepository.findByStatus(status, pageable);
+        } else {
+            reports = reportRepository.findAll(pageable);
+        }
+
+        return reports.map(this::mapToAdminResponse);
+    }
+
+    @Override
+    public ReportAdminResponse resolveReport(String reportId, AdminActionRequest actionRequest) {
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new RuntimeException("Report not found with ID: " + reportId));
+
+        report.setAdminNotes(actionRequest.getAdminNotes());
+        report.setResolvedBy(actionRequest.getAdminId());
+
+        switch (actionRequest.getAction()) {
+            case DISMISS:
+                report.setStatus(ReportStatus.REJECTED);
+                break;
+            case WARN:
+            case BAN:
+                report.setStatus(ReportStatus.RESOLVED);
+                // Event publishing for BAN will go here in Phase 5
+                break;
+        }
+
+        Report savedReport = reportRepository.save(report);
+        return mapToAdminResponse(savedReport);
+    }
+
+    private ReportAdminResponse mapToAdminResponse(Report report) {
+        
+        // Fetch reporter info
+        UserResponse reporter = fetchUserSafe(report.getReporterId());
+        
+        // Fetch target info ONLY if targetType is USER
+        UserResponse targetUser = null;
+        if (report.getTargetType() == TargetType.USER) {
+            targetUser = fetchUserSafe(report.getTargetId());
+        }
+        
+        return ReportAdminResponse.builder()
+                .id(report.getId())
+                .reporter(reporter)
+                .targetId(report.getTargetId())
+                .targetUser(targetUser)
+                .targetType(report.getTargetType())
+                .reason(report.getReason())
+                .status(report.getStatus())
+                .description(report.getDescription())
+                .imageUrls(report.getImageUrls())
+                .messageIds(report.getMessageIds())
+                .adminNotes(report.getAdminNotes())
+                .resolvedBy(report.getResolvedBy())
+                .createdAt(report.getCreatedAt())
+                .updatedAt(report.getUpdatedAt())
+                .build();
+    }
+
+    private UserResponse fetchUserSafe(Long userId) {
+        try {
+            ApiResponse<UserResponse> response = userClient.getUserById(userId);
+            if (response != null && response.getData() != null) {
+                return response.getData();
+            }
+        } catch (Exception e) {
+            log.error("Failed to fetch user {}, assigning fallback", userId, e);
+        }
+        return UserResponse.builder().id(userId).name("Unknown User").build();
+    }
+}
