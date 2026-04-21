@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import axiosClient from "@/services/api";
 import { groupService } from "@/services/groupService";
@@ -8,6 +8,7 @@ import { socketService } from "@/services/socketService";
 import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useChatStore } from "@/store/useChatStore";
+import { contactService } from "@/services/contactService";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -25,6 +26,8 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import CreateGroupModal from "@/components/ui/group/CreateGroupModal";
+import { toast } from "sonner";
+import { motion } from "framer-motion";
 
 // --- Sub-component: ManageLabelsModal ---
 function ManageLabelsModal({ 
@@ -197,7 +200,8 @@ export default function ConversationSidebar() {
   const [menuView, setMenuView] = useState<"main" | "labels">("main");
   const [showManageLabelsModal, setShowManageLabelsModal] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Record<string, boolean>>({});
-  const { typingUsers } = useChatStore();
+  const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+  const { typingUsers, friendIds, setFriendIds } = useChatStore();
   const menuRef = useRef<HTMLDivElement>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const conversationIdRef = useRef(conversationId);
@@ -310,6 +314,7 @@ export default function ConversationSidebar() {
               unreadCount: (currentUserId && g.unreadCount?.[currentUserId]) || 0,
               updatedAt: g.updatedAt,
               otherMemberUserId: otherMember?.userId,
+              folder: g.folders?.[currentUserId] || "priority",
             };
           }),
         );
@@ -328,13 +333,17 @@ export default function ConversationSidebar() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      const friends = await contactService.getFriendsList();
+      const fIds = new Set(friends.map(f => f.requesterId === currentUser?.id ? f.recipientId : f.requesterId));
+      setFriendIds(fIds);
+      
       await Promise.all([fetchGroups(), fetchLabelsInfo(), fetchPinnedInfo()]);
     } catch (error) {
       console.error("Lỗi tải dữ liệu:", error);
     } finally {
       setLoading(false);
     }
-  }, [fetchGroups, fetchLabelsInfo, fetchPinnedInfo]);
+  }, [fetchGroups, fetchLabelsInfo, fetchPinnedInfo, currentUser]);
 
   useEffect(() => {
     fetchData();
@@ -505,6 +514,21 @@ export default function ConversationSidebar() {
     }
   };
 
+  const handleMoveFolder = async (e: React.MouseEvent, id: string, folder: "priority" | "other") => {
+    e.stopPropagation();
+    try {
+      await groupService.updateConversationFolder(id, folder);
+      setConversations(prev => prev.map(c => 
+        (c.id || c._id) === id ? { ...c, folder } : c
+      ));
+      setOpenMenuId(null);
+      toast.success(folder === "other" ? "Đã chuyển vào tab Khác" : "Đã chuyển vào tab Ưu tiên");
+    } catch (err) {
+      console.error("Lỗi chuyển danh mục:", err);
+      toast.error("Không thể chuyển danh mục");
+    }
+  };
+
   const toggleMenu = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (openMenuId === id) {
@@ -521,12 +545,72 @@ export default function ConversationSidebar() {
     const bPinned = pinnedIds.has(b.id);
     if (aPinned && !bPinned) return -1;
     if (!aPinned && bPinned) return 1;
+
+    // Nếu ở tab Khác, ưu tiên đưa tin nhắn người lạ lên đầu
+    if (activeTab === "Khác") {
+      const aIsStranger = !a.isGroup && a.id !== BOT_ID && a.otherMemberUserId && !friendIds.has(a.otherMemberUserId);
+      const bIsStranger = !b.isGroup && b.id !== BOT_ID && b.otherMemberUserId && !friendIds.has(b.otherMemberUserId);
+      if (aIsStranger && !bIsStranger) return -1;
+      if (!aIsStranger && bIsStranger) return 1;
+    }
+
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   });
 
-  const filteredConversations = sortedConversations.filter((chat) =>
-    chat.name?.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredConversations = sortedConversations.filter((chat) => {
+    // Filter by Search Query
+    const matchesSearch = chat.name?.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+
+    // Filter by Tab (Priority / Other)
+    const folder = chat.folder;
+    const isStrangerConvo = !chat.isGroup && chat.id !== BOT_ID && chat.otherMemberUserId && !friendIds.has(chat.otherMemberUserId);
+    
+    let tabMatch = false;
+    if (activeTab === "Ưu tiên") {
+      // Ưu tiên: Folder là priority HOẶC (Chưa có folder VÀ không phải người lạ)
+      tabMatch = folder === "priority" || (!folder && !isStrangerConvo);
+    } else if (activeTab === "Khác") {
+      // Khác: Folder là other HOẶC Folder là stranger HOẶC (Chưa có folder VÀ là người lạ)
+      tabMatch = folder === "other" || folder === "stranger" || (!folder && isStrangerConvo);
+    }
+    
+    if (!tabMatch) return false;
+
+    // Filter by Label / Category
+    if (selectedLabelId) {
+      if (selectedLabelId === "none") {
+        return !labelAssignments[chat.id];
+      }
+      if (selectedLabelId === "stranger") {
+        return isStrangerConvo;
+      }
+      const chatLabelId = labelAssignments[chat.id]?._id || labelAssignments[chat.id]?.id;
+      return chatLabelId === selectedLabelId;
+    }
+
+    return true;
+  });
+
+  const { priorityUnreadCount, otherUnreadCount } = useMemo(() => {
+    let pCount = 0;
+    let oCount = 0;
+
+    conversations.forEach(chat => {
+      if (chat.unreadCount > 0) {
+        const folder = chat.folder;
+        const isStrangerConvo = !chat.isGroup && chat.id !== BOT_ID && chat.otherMemberUserId && !friendIds.has(chat.otherMemberUserId);
+        
+        const isPriority = folder === "priority" || (!folder && !isStrangerConvo);
+        const isOther = folder === "other" || folder === "stranger" || (!folder && isStrangerConvo);
+
+        if (isPriority) pCount++;
+        else if (isOther) oCount++;
+      }
+    });
+
+    return { priorityUnreadCount: pCount, otherUnreadCount: oCount };
+  }, [conversations, friendIds, currentUser]);
 
   return (
     <>
@@ -590,24 +674,92 @@ export default function ConversationSidebar() {
 
           <div className="flex items-center justify-between border-b border-gray-100 pb-2">
             <div className="flex gap-5">
-              {["Ưu tiên", "Khác"].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`text-[13px] font-bold relative ${
-                    activeTab === tab ? "text-black" : "text-gray-400 hover:text-gray-600"
-                  }`}
-                >
-                  {tab}
-                  {activeTab === tab && (
-                    <span className="absolute -bottom-2.25 left-0 right-0 h-0.5 bg-black rounded-t-full" />
-                  )}
-                </button>
-              ))}
+              {["Ưu tiên", "Khác"].map((tab) => {
+                const count = tab === "Ưu tiên" ? priorityUnreadCount : otherUnreadCount;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`text-[13px] font-bold relative flex items-center gap-1.5 transition-all ${
+                      activeTab === tab ? "text-black" : "text-gray-400 hover:text-gray-600"
+                    }`}
+                  >
+                    {tab}
+                    {count > 0 && (
+                      <span className="flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-black rounded-full shadow-sm shadow-red-200 animate-in fade-in zoom-in duration-300">
+                        {count > 99 ? "99+" : count}
+                      </span>
+                    )}
+                    {activeTab === tab && (
+                      <motion.span 
+                        layoutId="activeTab"
+                        className="absolute -bottom-2.25 left-0 right-0 h-0.5 bg-black rounded-t-full" 
+                      />
+                    )}
+                  </button>
+                );
+              })}
             </div>
-            <button className="text-gray-400 hover:text-black">
-              <Bars3BottomRightIcon className="w-4 h-4" />
-            </button>
+            <div className="relative group/filter pb-4 -mb-4">
+              <button className={`p-1.5 rounded-lg transition-colors ${selectedLabelId ? "bg-blue-50 text-blue-500" : "text-gray-400 hover:text-black"}`}>
+                <Bars3BottomRightIcon className="w-4 h-4" />
+              </button>
+              
+              {/* Label Filter Dropdown Wrapper with bridge */}
+              <div className="absolute right-0 top-[100%] pt-2 w-64 hidden group-hover/filter:block z-[90] animate-in fade-in zoom-in-95 duration-150">
+                {/* Bridge to extend hover area */}
+                <div className="absolute -top-4 left-[-20%] right-[-10%] h-6 bg-transparent" />
+                
+                <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl p-1 overflow-hidden relative">
+                  <p className="px-3 py-2.5 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 mb-1">Lọc theo danh mục</p>
+                  <div className="flex flex-col gap-0.5">
+                    <button 
+                      onClick={() => setSelectedLabelId(null)}
+                      className={`flex items-center gap-3 w-full px-3 py-2.5 text-[12px] font-bold rounded-xl transition-colors ${!selectedLabelId ? "bg-gray-50 text-black" : "text-gray-500 hover:bg-gray-50"}`}
+                    >
+                      <div className="w-5 h-5 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full ring-2 ring-gray-200" />
+                      </div>
+                      Tất cả tin nhắn
+                    </button>
+                    <button 
+                      onClick={() => setSelectedLabelId("stranger")}
+                      className={`flex items-center gap-3 w-full px-3 py-2.5 text-[12px] font-bold rounded-xl transition-colors ${selectedLabelId === "stranger" ? "bg-gray-50 text-black" : "text-gray-500 hover:bg-gray-50"}`}
+                    >
+                      <div className="w-5 h-5 flex items-center justify-center">
+                        <UserIcon className="w-4 h-4 text-gray-400" />
+                      </div>
+                      Tin nhắn từ người lạ
+                    </button>
+                    <button 
+                      onClick={() => setSelectedLabelId("none")}
+                      className={`flex items-center gap-3 w-full px-3 py-2.5 text-[12px] font-bold rounded-xl transition-colors ${selectedLabelId === "none" ? "bg-gray-50 text-black" : "text-gray-500 hover:bg-gray-50"}`}
+                    >
+                      <div className="w-5 h-5 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-gray-100 border border-gray-200" />
+                      </div>
+                      Chưa gắn thẻ phân loại
+                    </button>
+                    <div className="h-px bg-gray-50 my-1 mx-2" />
+                    {labels.length > 0 && (
+                      <p className="px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest opacity-50">Thẻ phân loại</p>
+                    )}
+                    {labels.map(l => (
+                      <button 
+                        key={l._id || l.id}
+                        onClick={() => setSelectedLabelId(l._id || l.id)}
+                        className={`flex items-center gap-3 w-full px-3 py-2.5 text-[12px] font-bold rounded-xl transition-colors ${selectedLabelId === (l._id || l.id) ? "bg-gray-50 text-black" : "text-gray-700 hover:bg-gray-50"}`}
+                      >
+                        <div className="w-5 h-5 flex items-center justify-center">
+                          <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: l.color }} />
+                        </div>
+                        {l.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -715,6 +867,23 @@ export default function ConversationSidebar() {
                             Phân loại
                           </div>
                           <ChevronRightIcon className="w-4 h-4 text-gray-300" />
+                        </button>
+
+                        <button 
+                          onClick={(e) => handleMoveFolder(e, chat.id, chat.folder === "other" ? "priority" : "other")}
+                          className="flex items-center gap-3 w-full px-3 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group/item"
+                        >
+                          {chat.folder === "other" ? (
+                            <>
+                              <ChatBubbleLeftRightIcon className="w-5 h-5 text-gray-400 group-hover/item:text-black" />
+                              Chuyển sang Ưu tiên
+                            </>
+                          ) : (
+                            <>
+                              <ChatBubbleLeftRightIcon className="w-5 h-5 text-gray-400 group-hover/item:text-black" />
+                              Chuyển sang Khác
+                            </>
+                          )}
                         </button>
 
                         <button 
