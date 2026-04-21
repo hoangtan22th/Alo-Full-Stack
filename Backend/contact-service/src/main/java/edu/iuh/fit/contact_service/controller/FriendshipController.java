@@ -144,6 +144,7 @@ public class FriendshipController {
         contactService.revokeRequest(requesterId, recipientId);
         return ResponseEntity.ok(ApiResponse.success("Đã thu hồi lời mời kết bạn thành công"));
     }
+
     @DeleteMapping("/friend/{friendId}")
     public ResponseEntity<ApiResponse<String>> removeFriend(
             @PathVariable String friendId,
@@ -151,5 +152,12 @@ public class FriendshipController {
         // Tấn dùng chung logic xóa record trong DB giống như decline/revoke nhé
         contactService.removeFriend(userId, friendId);
         return ResponseEntity.ok(ApiResponse.success("Đã xóa bạn bè thành công"));
+    }
+
+    @GetMapping("/relation-status")
+    public ResponseEntity<ApiResponse<edu.iuh.fit.contact_service.dto.response.RelationStatusResponseDTO>> getRelationStatus(
+            @RequestParam String targetUserId,
+            @RequestHeader("X-User-Id") String currentUserId) {
+        return ResponseEntity.ok(ApiResponse.success(contactService.getRelationStatus(currentUserId, targetUserId)));
     }
 }

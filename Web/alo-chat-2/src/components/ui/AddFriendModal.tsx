@@ -11,8 +11,12 @@ import {
 } from "@heroicons/react/24/outline";
 import FriendProfileModal from "./FriendProfileModal";
 import { toast } from "sonner";
+import { useAuthStore } from "@/store/useAuthStore";
 
 const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
+  const { user: currentUser } = useAuthStore();
+  const currentUserId =
+    currentUser?.id || currentUser?._id || currentUser?.userId;
   const [phone, setPhone] = useState("");
   const [foundUser, setFoundUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
@@ -91,17 +95,21 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
                 <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Nhập số điện thoại..."
+                  placeholder="Nhập đủ 10 số điện thoại..."
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  onChange={(e) =>
+                    setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+                  }
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && phone.length === 10 && handleSearch()
+                  }
                   className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-3 text-[14px] font-bold outline-none focus:ring-1 focus:ring-black transition-all"
                 />
               </div>
               <button
                 onClick={() => handleSearch()}
-                disabled={loading}
-                className="w-full bg-black text-white py-3 rounded-xl font-bold text-[14px] hover:bg-neutral-800 transition active:scale-95 shadow-md"
+                disabled={loading || phone.length !== 10}
+                className="w-full bg-black text-white py-3 rounded-xl font-bold text-[14px] hover:bg-neutral-800 transition active:scale-95 shadow-md disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none disabled:cursor-not-allowed"
               >
                 {loading ? "Đang tìm..." : "Tìm kiếm"}
               </button>
@@ -147,26 +155,102 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
                 onClick={() => setShowProfile(true)}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-full overflow-hidden border border-white/10 bg-neutral-800 shrink-0">
-                    <img
-                      src={foundUser.avatarUrl || "/avt-mac-dinh.jpg"}
-                      onError={(e) =>
-                        (e.currentTarget.src = "/avt-mac-dinh.jpg")
-                      }
-                      className="w-full h-full object-cover"
-                      alt=""
-                    />
+                  <div className="relative">
+                    <div className="w-11 h-11 rounded-full overflow-hidden border border-white/10 bg-neutral-800 shrink-0">
+                      <img
+                        src={foundUser.avatarUrl || "/avt-mac-dinh.jpg"}
+                        onError={(e) =>
+                          (e.currentTarget.src = "/avt-mac-dinh.jpg")
+                        }
+                        className="w-full h-full object-cover"
+                        alt=""
+                      />
+                    </div>
+                    {foundUser.userId === currentUserId && (
+                      <div className="absolute -top-1 -right-1 bg-blue-500 text-[8px] font-black px-1.5 py-0.5 rounded-full border border-black shadow-sm">
+                        TÔI
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col min-w-0">
                     <span className="font-bold text-[14px] truncate">
-                      {foundUser.fullName}
+                      {foundUser.fullName}{" "}
+                      {foundUser.userId === currentUserId && "(Bạn)"}
                     </span>
                     <span className="text-[11px] text-gray-400 font-bold">
                       {foundUser.phone}
                     </span>
                   </div>
                 </div>
-                <ArrowRightIcon className="w-4 h-4 text-white/50" />
+
+                <div
+                  className="flex items-center gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {foundUser.userId === currentUserId ? (
+                    <ArrowRightIcon className="w-4 h-4 text-white/50" />
+                  ) : foundUser.relationStatus === "YOU_SENT_REQUEST" ? (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await axiosClient.delete(
+                            `/contacts/request/revoke/${foundUser.userId}`,
+                          );
+                          toast.success("Đã thu hồi lời mời");
+                          handleSearch();
+                        } catch (err) {
+                          toast.error("Lỗi khi thu hồi");
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-red-500/10 text-red-400 text-[10px] font-black rounded-lg border border-red-500/20 hover:bg-red-500/20 transition"
+                    >
+                      Thu hồi
+                    </button>
+                  ) : foundUser.relationStatus === "THEY_SENT_REQUEST" ? (
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={async () => {
+                          try {
+                            if (!foundUser.friendshipId) throw new Error();
+                            await axiosClient.put(
+                              `/contacts/${foundUser.friendshipId}/accept`,
+                            );
+                            toast.success("Đã trở thành bạn bè!");
+                            handleSearch();
+                          } catch (err) {
+                            toast.error("Lỗi khi chấp nhận");
+                          }
+                        }}
+                        className="px-2.5 py-1.5 bg-blue-500 text-white text-[10px] font-black rounded-lg hover:bg-blue-600 transition shadow-sm"
+                      >
+                        Chấp nhận
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            if (!foundUser.friendshipId) throw new Error();
+                            await axiosClient.delete(
+                              `/contacts/${foundUser.friendshipId}/decline`,
+                            );
+                            toast.success("Đã từ chối");
+                            handleSearch();
+                          } catch (err) {
+                            toast.error("Lỗi khi từ chối");
+                          }
+                        }}
+                        className="px-2.5 py-1.5 bg-white/10 text-white text-[10px] font-black rounded-lg hover:bg-white/20 transition"
+                      >
+                        Từ chối
+                      </button>
+                    </div>
+                  ) : foundUser.relationStatus === "ACCEPTED" ? (
+                    <span className="px-3 py-1.5 bg-green-500/20 text-green-400 text-[11px] font-black rounded-full border border-green-500/20">
+                      BẠN BÈ
+                    </span>
+                  ) : (
+                    <ArrowRightIcon className="w-4 h-4 text-white/50" />
+                  )}
+                </div>
               </div>
             ) : (
               !searchHistory.length && (

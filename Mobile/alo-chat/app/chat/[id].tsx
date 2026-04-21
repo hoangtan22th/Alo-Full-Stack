@@ -451,7 +451,9 @@ export default function GlobalChatScreen() {
 
     const handleGroupUpdated = (data: any) => {
       const updatedGroup = data.group ? data.group : data;
-      if (updatedGroup._id === resolvedConversationId) {
+      const updatedId = updatedGroup._id || updatedGroup.id || updatedGroup.conversationId;
+      
+      if (String(updatedId) === String(resolvedConversationId)) {
         setGroupDetails(updatedGroup);
         if (updatedGroup.members) {
           const admins = new Set<string>(
@@ -716,7 +718,9 @@ export default function GlobalChatScreen() {
       const gap = lastMsg ? new Date(msg.createdAt).getTime() - new Date(lastMsg.createdAt).getTime() : Infinity;
       const isSystem = msg.type === "system";
       const lastIsSystem = lastMsg?.type === "system";
-      if (last && last.senderId === msg.senderId && gap < FIVE_MIN && !isSystem && !lastIsSystem) {
+      const isPoll = msg.type === "poll";
+      const lastIsPoll = lastMsg?.type === "poll";
+      if (last && last.senderId === msg.senderId && gap < FIVE_MIN && !isSystem && !lastIsSystem && !isPoll && !lastIsPoll) {
         last.messages.push(msg);
       } else {
         groups.push({ isSender, senderId: msg.senderId, messages: [msg] });
@@ -805,6 +809,19 @@ export default function GlobalChatScreen() {
             onBack={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))}
             onSearchToggle={() => setIsSearchMode(true)}
             onInfo={() => {
+              router.push({
+                pathname: "/chat/info",
+                params: {
+                  id: resolvedConversationId || id,
+                  name: realtimeGroupName,
+                  avatar: realtimeAvatar,
+                  membersCount: realtimeMembersCount,
+                  isGroup: isGroupChat ? "true" : "false",
+                  targetUserId,
+                },
+              });
+            }}
+            onHeaderClick={() => {
               if (isGroupChat) {
                 router.push({
                   pathname: "/chat/info",
@@ -867,6 +884,30 @@ export default function GlobalChatScreen() {
                         <Text className="text-[12px] text-gray-600 font-medium text-center">{msg.content}</Text>
                       </View>
                     ))}
+                  </View>
+                );
+              }
+              if (group.messages[0].type === "poll") {
+                return (
+                  <View className="items-center my-3 w-full">
+                    <MessageItem
+                      msg={group.messages[0]}
+                      isSender={group.isSender}
+                      isLastInBlock={true}
+                      onLongPress={() => onLongPressMessage(group.messages[0]._id)}
+                      openReactionDetails={() => setReactionDetailMsgId(group.messages[0]._id)}
+                      chatImages={chatImages}
+                      setViewerIndex={setViewerIndex}
+                      messageRefs={messageRefs}
+                      expandedTimeMsgId={expandedTimeMsgId}
+                      setExpandedTimeMsgId={setExpandedTimeMsgId}
+                      onReplyClick={scrollToMessage}
+                      isHighlighted={group.messages[0]._id === highlightedMsgId}
+                      isAdminHighlighted={
+                        groupDetails?.isHighlightEnabled &&
+                        adminIds.has(String(group.messages[0].senderId))
+                      }
+                    />
                   </View>
                 );
               }

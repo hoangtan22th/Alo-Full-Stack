@@ -10,10 +10,15 @@ import {
   ChevronUpIcon,
   ChevronDownIcon,
   UserIcon,
+  BellIcon,
 } from "@heroicons/react/24/outline";
+import MemberApprovalModal from "./MemberApprovalModal";
 import { groupService } from "@/services/groupService";
+import { socketService } from "@/services/socketService";
+import { contactService } from "@/services/contactService";
 import { toast } from "sonner";
 import { getMediaUrl } from "../../../utils/media";
+import FriendProfileModal from "../FriendProfileModal";
 
 interface MemberManagementModalProps {
   isOpen: boolean;
@@ -39,6 +44,15 @@ export default function MemberManagementModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "managers">("all");
   const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [hasPendingRequests, setHasPendingRequests] = useState(false);
+  
+  // Friendship state
+  const [friendsList, setFriendsList] = useState<any[]>([]);
+  const [sentRequests, setSentRequests] = useState<any[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [friendshipLoading, setFriendshipLoading] = useState(false);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
 
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const myMember = members.find(m => m.userId === myId);
@@ -58,6 +72,89 @@ export default function MemberManagementModal({
       return matchesSearch;
     });
   }, [members, searchQuery, activeTab, userCache]);
+
+  React.useEffect(() => {
+    if (!conversationId || !isManager) return;
+
+    // Check for pending requests initially
+    const checkRequests = async () => {
+      try {
+        const reqs = await groupService.getJoinRequests(conversationId);
+        setHasPendingRequests(Array.isArray(reqs) && reqs.length > 0);
+      } catch (err) {
+        console.error("Error checking join requests:", err);
+      }
+    };
+    checkRequests();
+
+    const unsubJoin = socketService.onNewJoinRequest((data: { groupId: string }) => {
+      if (String(data.groupId) === String(conversationId)) {
+        setHasPendingRequests(true);
+      }
+    });
+
+    const unsubUpdate = socketService.onGroupUpdated((data: any) => {
+       const updatedId = data._id || data.conversationId || data.id;
+       if (String(updatedId) === String(conversationId)) {
+         checkRequests();
+       }
+    });
+
+    return () => {
+      unsubJoin();
+      unsubUpdate();
+    };
+  }, [conversationId, isManager]);
+
+  // Fetch friendship data when modal opens
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchFriendshipData = async () => {
+      setFriendshipLoading(true);
+      try {
+        const [friends, sent, pending] = await Promise.all([
+          contactService.getFriendsList(),
+          contactService.getSentRequests(),
+          contactService.getPendingRequests()
+        ]);
+        setFriendsList(friends);
+        setSentRequests(sent);
+        setPendingRequests(pending);
+      } catch (err) {
+        console.error("Error fetching friendship data:", err);
+      } finally {
+        setFriendshipLoading(false);
+      }
+    };
+
+    fetchFriendshipData();
+  }, [isOpen]);
+
+  const getRelationStatus = (userId: string) => {
+    if (friendsList.some(f => f.requesterId === userId || f.recipientId === userId)) return "ACCEPTED";
+    if (sentRequests.some(r => r.recipientId === userId)) return "I_SENT_REQUEST";
+    if (pendingRequests.some(r => r.requesterId === userId)) return "THEY_SENT_REQUEST";
+    return "NOT_FRIEND";
+  };
+
+  const handleAddFriend = async (userId: string) => {
+    try {
+      await contactService.sendFriendRequest(userId);
+      toast.success("Đã gửi lời mời kết bạn");
+      // Cập nhật local state để UI thay đổi ngay
+      setSentRequests(prev => [...prev, { recipientId: userId, status: 'PENDING' }]);
+      
+      // [REALTIME]
+      socketService.emitFriendRequestSent({
+        recipientId: userId,
+        requesterName: currentUser?.fullName || "Ai đó",
+        requesterAvatar: currentUser?.avatar
+      });
+    } catch (err) {
+      toast.error("Không thể gửi lời mời kết bạn");
+    }
+  };
 
   const handleUpdateRole = async (userId: string, newRole: string) => {
     try {
@@ -112,6 +209,21 @@ export default function MemberManagementModal({
             >
               <UserPlusIcon className="w-6 h-6" />
             </button>
+            {isManager && (
+              <button
+                onClick={() => {
+                  setShowApprovalModal(true);
+                  setHasPendingRequests(false);
+                }}
+                className="p-2 hover:bg-gray-50 text-gray-700 rounded-full transition-all relative"
+                title="Duyệt thành viên"
+              >
+                <ShieldCheckIcon className="w-6 h-6" />
+                {hasPendingRequests && (
+                  <span className="absolute top-2 right-2 w-3 h-3 bg-red-500 border-2 border-white rounded-full animate-pulse" />
+                )}
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-2 hover:bg-white hover:shadow-sm rounded-full transition-all text-gray-400 hover:text-gray-600"
@@ -169,7 +281,8 @@ export default function MemberManagementModal({
               return (
                 <div
                   key={m.userId}
-                  className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-2xl transition group relative"
+                  className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-2xl transition group relative cursor-pointer"
+                  onClick={() => setSelectedProfileId(m.userId)}
                 >
                   <div className="w-12 h-12 rounded-2xl bg-gray-100 flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-100 shadow-sm">
                     {avatar ? (
@@ -202,9 +315,43 @@ export default function MemberManagementModal({
                     </p>
                   </div>
 
+                  {/* Add Friend Quick Action */}
+                  {!isMe && !friendshipLoading && getRelationStatus(m.userId) === "NOT_FRIEND" && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddFriend(m.userId);
+                      }}
+                      className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors mr-1"
+                      title="Kết bạn"
+                    >
+                      <UserPlusIcon className="w-5 h-5" />
+                    </button>
+                  )}
+
+                  {!isMe && getRelationStatus(m.userId) === "I_SENT_REQUEST" && (
+                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-tight bg-blue-50 px-2 py-1 rounded-lg mr-1">
+                      Đã gửi
+                    </span>
+                  )}
+
+                  {!isMe && getRelationStatus(m.userId) === "THEY_SENT_REQUEST" && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Mở profile để họ nhấn Accept hoặc có thể thêm handleAccept nhanh ở đây
+                        setSelectedProfileId(m.userId);
+                      }}
+                      className="p-2 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-colors mr-1"
+                      title="Chấp nhận kết bạn"
+                    >
+                      <UserPlusIcon className="w-5 h-5 text-green-600" />
+                    </button>
+                  )}
+
                   {/* Actions Ellipsis */}
                   {!isMe && (isAdmin || (isDeputy && role === 'member')) && (
-                    <div className="relative">
+                    <div className="relative" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => setActiveMemberMenu(activeMemberMenu === m.userId ? null : m.userId)}
                         className="p-2 hover:bg-white hover:shadow-sm rounded-xl transition text-gray-400 hover:text-gray-600"
@@ -283,6 +430,38 @@ export default function MemberManagementModal({
            </button>
         </div>
       </div>
+
+      {showApprovalModal && (
+        <MemberApprovalModal
+          groupId={conversationId}
+          onClose={() => setShowApprovalModal(false)}
+        />
+      )}
+
+      {selectedProfileId && (
+        <FriendProfileModal
+          isOpen={!!selectedProfileId}
+          userId={selectedProfileId}
+          relationStatus={getRelationStatus(selectedProfileId)}
+          onClose={() => setSelectedProfileId(null)}
+          onActionSuccess={() => {
+            // Refresh friendship data
+            const fetchFriendshipData = async () => {
+              try {
+                const [friends, sent, pending] = await Promise.all([
+                  contactService.getFriendsList(),
+                  contactService.getSentRequests(),
+                  contactService.getPendingRequests()
+                ]);
+                setFriendsList(friends);
+                setSentRequests(sent);
+                setPendingRequests(pending);
+              } catch (err) {}
+            };
+            fetchFriendshipData();
+          }}
+        />
+      )}
     </div>
   );
 }
