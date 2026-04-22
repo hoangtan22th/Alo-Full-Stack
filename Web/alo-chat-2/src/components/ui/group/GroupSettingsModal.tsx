@@ -322,7 +322,7 @@ export default function GroupSettingsModal({
     try {
       setLoadingBlocked(true);
       const res = await groupService.getBlockedMembers(groupId);
-      setBlockedMembers(res.data || []);
+      setBlockedMembers(res || []);
     } catch (err) {
       toast.error("Không thể tải danh sách bị chặn");
     } finally {
