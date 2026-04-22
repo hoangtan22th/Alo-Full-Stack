@@ -453,25 +453,8 @@ export default function ConversationSidebar() {
           });
         },
       ),
-      socketService.onConversationCreated(async (newConvo: any) => {
-        setConversations((prev) => {
-          const convoId = newConvo._id || newConvo.id;
-          const exists = prev.some((c) => (c.id || c._id) === convoId);
-          if (exists) return prev;
-
-          const formatted = {
-            ...newConvo,
-            id: convoId,
-            time: new Date(newConvo.updatedAt || new Date()).toLocaleTimeString(
-              [],
-              {
-                hour: "2-digit",
-                minute: "2-digit",
-              },
-            ),
-          };
-          return [formatted, ...prev];
-        });
+      socketService.onConversationCreated(async () => {
+        fetchGroups();
       }),
       socketService.onConversationRemoved(
         (data: { conversationId: string }) => {

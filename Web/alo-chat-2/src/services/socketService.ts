@@ -196,6 +196,26 @@ class SocketService {
     return this.subscribe("NEW_JOIN_REQUEST", callback);
   }
 
+  onJoinRequestApproved(callback: (data: any) => void) {
+    return this.subscribe("JOIN_REQUEST_APPROVED", callback);
+  }
+
+  onJoinRequestRejected(callback: (data: any) => void) {
+    return this.subscribe("JOIN_REQUEST_REJECTED", callback);
+  }
+
+  onNewInvitation(callback: (data: any) => void) {
+    return this.subscribe("NEW_INVITATION", callback);
+  }
+
+  onAddedToGroup(callback: (data: any) => void) {
+    return this.subscribe("ADDED_TO_GROUP", callback);
+  }
+
+  onInvitationAccepted(callback: (data: any) => void) {
+    return this.subscribe("INVITATION_ACCEPTED", callback);
+  }
+
   // --- Messaging ---
   joinRoom(conversationId: string) {
     if (this.socket?.connected) {
