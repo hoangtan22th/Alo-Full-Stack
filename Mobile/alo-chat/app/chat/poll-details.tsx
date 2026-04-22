@@ -55,7 +55,7 @@ export default function PollDetailsScreen() {
         setPoll(pollData);
         try {
           const profile = await userService.getUserById(pollData.creatorId);
-          setCreatorName(profile?.fullName || profile?.username || "Người dùng");
+          setCreatorName(profile?.fullName || "Người dùng");
         } catch { setCreatorName("Người dùng"); }
       }
       if (resultsData) setResults(resultsData);
@@ -163,41 +163,43 @@ export default function PollDetailsScreen() {
   };
 
   const handleAddOption = async () => {
-     if (!newOptionText.trim()) return;
-     setIsAddingOption(true);
-     try {
-        const res = await pollService.addPollOption(pollId as string, newOptionText.trim());
-        if (res) {
-           setNewOptionText("");
-           fetchPollData();
-        } else {
-           Alert.alert("Lỗi", "Không thể thêm phương án.");
-        }
-     } catch(e) {
-        // ignore
-     } finally {
-        setIsAddingOption(false);
-     }
+    if (!newOptionText.trim()) return;
+    setIsAddingOption(true);
+    try {
+      const res = await pollService.addPollOption(pollId as string, newOptionText.trim());
+      if (res) {
+        setNewOptionText("");
+        fetchPollData();
+        Alert.alert("Thành công", "Đã thêm phương án mới.");
+      } else {
+        Alert.alert("Lỗi", "Không thể thêm phương án.");
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsAddingOption(false);
+    }
   };
 
   const handleClosePoll = () => {
-      Alert.alert(
-        "Khóa bình chọn",
-        "Bạn có chắc muốn khóa bình chọn này? Người khác sẽ không thể tiếp tục bình chọn.",
-        [
-          { text: "Hủy", style: "cancel" },
-          { 
-            text: "Khóa", 
-            style: "destructive",
-            onPress: async () => {
-               const ok = await pollService.closePoll(pollId as string);
-               if (ok) {
-                  fetchPollData();
-               }
+    Alert.alert(
+      "Khóa bình chọn",
+      "Bạn có chắc muốn khóa bình chọn này? Người khác sẽ không thể tiếp tục bình chọn.",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Khóa",
+          style: "destructive",
+          onPress: async () => {
+            const ok = await pollService.closePoll(pollId as string);
+            if (ok) {
+              fetchPollData();
+              Alert.alert("Thành công", "Bình chọn đã được khóa.");
             }
-          }
-        ]
-      )
+          },
+        },
+      ],
+    );
   };
 
   const handleCreateGroupFromOption = (voterIds: string[], optionText: string) => {
@@ -474,7 +476,7 @@ export default function PollDetailsScreen() {
                      <View style={{ marginBottom: 12 }}>
                        {voters.map(v => {
                          const profile = userCache[v.userId];
-                         const name = profile?.fullName || profile?.username || "Người dùng";
+                         const name = profile?.fullName || "Người dùng";
                          const avatarUri = profile?.avatar;
 
                          return (
