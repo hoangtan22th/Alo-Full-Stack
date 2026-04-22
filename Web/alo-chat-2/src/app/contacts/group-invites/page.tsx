@@ -8,7 +8,8 @@ import {
   PaperAirplaneIcon, 
   PlusIcon,
   BellIcon,
-  ClockIcon
+  ClockIcon,
+  MagnifyingGlassIcon
 } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
 import { groupService } from "@/services/groupService";
@@ -21,6 +22,10 @@ export default function GroupInvitePage() {
   const [sentJoinRequests, setSentJoinRequests] = useState<any[]>([]);
   const [sentMemberInvites, setSentMemberInvites] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchLink, setSearchLink] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [foundGroup, setFoundGroup] = useState<any>(null);
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const { user: currentUser } = useAuthStore();
 
   const fetchAllData = useCallback(async () => {
@@ -92,6 +97,58 @@ export default function GroupInvitePage() {
       fetchAllData();
     } catch (err) {
       toast.error("Thao tác thất bại");
+    }
+  };
+
+  const handleSearchLink = async () => {
+    const input = searchLink.trim();
+    if (!input) return;
+    
+    setSearching(true);
+    try {
+      // Robust extraction: find 24-char hex ID anywhere in the input
+      const match = input.match(/[0-9a-fA-F]{24}/);
+      const groupId = match ? match[0] : input;
+      
+      if (groupId.length !== 24) {
+        toast.error("Link hoặc mã nhóm không hợp lệ (Phải có ID 24 ký tự)");
+        setSearching(false);
+        return;
+      }
+
+      console.log("🔍 [SearchLink] Extracted GroupID:", groupId);
+      const res = await groupService.getGroupInfoForLink(groupId);
+      
+      // Because of axios interceptor unwrapping in api.ts, 
+      // res is directly the group object (if backend returns { data: { ... } })
+      // or res is the whole object. Let's handle both.
+      const groupData = (res && res._id) ? res : (res?.data || res);
+
+      if (groupData && groupData._id) {
+        setFoundGroup(groupData);
+        setIsJoinModalOpen(true);
+        setSearchLink(""); // Clear input on success
+      } else {
+        toast.error("Không tìm thấy thông tin nhóm");
+      }
+    } catch (err: any) {
+      console.error("❌ [SearchLink] Error:", err);
+      const errMsg = err.response?.data?.error || err.response?.data?.message || "Không thể tìm thấy nhóm";
+      toast.error(errMsg);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleRequestJoin = async () => {
+    if (!foundGroup) return;
+    try {
+      await groupService.requestJoinGroup(foundGroup._id);
+      toast.success("Đã gửi yêu cầu tham gia thành công!");
+      setIsJoinModalOpen(false);
+      fetchAllData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Không thể gửi yêu cầu");
     }
   };
 
@@ -233,18 +290,108 @@ export default function GroupInvitePage() {
             </div>
 
             <div className="bg-gradient-to-br from-black to-neutral-800 rounded-[32px] p-8 text-white shadow-2xl shadow-black/20">
-              <h3 className="text-lg font-black mb-3">Tìm kiếm nhóm?</h3>
-              <p className="text-xs font-medium text-white/60 leading-relaxed mb-6">Bạn có thể sử dụng link gia nhập hoặc mã QR để tham gia vào các nhóm cộng đồng nhanh hơn.</p>
+              <h3 className="text-lg font-black mb-3 text-white">Tìm kiếm nhóm?</h3>
+              <p className="text-xs font-medium text-white/60 leading-relaxed mb-6">Nhập link gia nhập hoặc mã ID nhóm để tham gia ngay.</p>
+              
+              <div className="relative mb-4">
+                <input 
+                  type="text" 
+                  value={searchLink}
+                  onChange={(e) => setSearchLink(e.target.value)}
+                  placeholder="https://alo.chat/g/..."
+                  className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-white/50 transition-all"
+                  onKeyDown={(e) => e.key === "Enter" && handleSearchLink()}
+                />
+                <button 
+                  onClick={handleSearchLink}
+                  disabled={searching}
+                  className="absolute right-2 top-1.5 p-1.5 bg-white text-black rounded-lg hover:bg-gray-200 transition disabled:opacity-50"
+                >
+                  <MagnifyingGlassIcon className={`w-5 h-5 ${searching ? "animate-pulse" : ""}`} />
+                </button>
+              </div>
+
               <button 
                 onClick={() => toast.info("Tính năng khám phá nhóm đang phát triển")}
-                className="w-full py-3 bg-white/10 hover:bg-white/20 rounded-xl text-[11px] font-black uppercase tracking-widest transition-colors backdrop-blur-md"
+                className="w-full py-3 bg-white/5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors border border-white/10"
               >
-                Khám phá ngay
+                Khám phá cộng đồng
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Modal Join Group */}
+      {isJoinModalOpen && foundGroup && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsJoinModalOpen(false)} />
+          <div className="relative bg-white w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-8">
+              <div className="flex flex-col items-center text-center">
+                <div className="w-24 h-24 rounded-[32px] bg-gray-50 border border-gray-100 overflow-hidden mb-6 shadow-xl">
+                  <img src={getMediaUrl(foundGroup.groupAvatar)} className="w-full h-full object-cover" alt="" />
+                </div>
+                <h2 className="text-2xl font-black text-gray-900 mb-2">{foundGroup.name}</h2>
+                <p className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-6">
+                  {foundGroup.membersCount || foundGroup.members?.length || 0} Thành viên
+                </p>
+                
+                <div className="w-full p-6 bg-gray-50 rounded-2xl mb-8">
+                  <p className="text-sm text-gray-500 font-medium leading-relaxed italic">
+                    "{foundGroup.description || "Nhóm trò chuyện cộng đồng trên Alo Chat"}"
+                  </p>
+                </div>
+
+                <div className="flex w-full gap-3">
+                  <button 
+                    onClick={() => setIsJoinModalOpen(false)}
+                    className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-2xl text-[12px] font-black uppercase tracking-widest hover:bg-gray-200 transition"
+                  >
+                    Đóng
+                  </button>
+                  {(() => {
+                    const currentId = currentUser?.id || currentUser?._id;
+                    const isMember = foundGroup.members?.some((m: any) => String(m.userId || m) === String(currentId));
+                    const hasRequested = sentJoinRequests.some((r: any) => String(r._id) === String(foundGroup._id));
+
+                    if (isMember) {
+                      return (
+                        <button 
+                          disabled
+                          className="flex-1 py-4 bg-gray-50 text-black/40 rounded-2xl text-[12px] font-black uppercase tracking-widest border border-gray-100 flex items-center justify-center gap-2"
+                        >
+                          <CheckIcon className="w-4 h-4" />
+                          Đã tham gia
+                        </button>
+                      );
+                    }
+                    if (hasRequested) {
+                      return (
+                        <button 
+                          disabled
+                          className="flex-1 py-4 bg-gray-50 text-black/40 rounded-2xl text-[12px] font-black uppercase tracking-widest border border-gray-100 flex items-center justify-center gap-2"
+                        >
+                          <ClockIcon className="w-4 h-4" />
+                          Đã gửi yêu cầu
+                        </button>
+                      );
+                    }
+                    return (
+                      <button 
+                        onClick={handleRequestJoin}
+                        className="flex-1 py-4 bg-black text-white rounded-2xl text-[12px] font-black uppercase tracking-widest hover:bg-neutral-800 transition shadow-lg shadow-black/20"
+                      >
+                        Tham gia nhóm
+                      </button>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
