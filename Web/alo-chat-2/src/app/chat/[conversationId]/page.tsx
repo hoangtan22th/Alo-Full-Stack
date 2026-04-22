@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import axiosClient from "@/services/api";
 import { messageService, MessageDTO } from "@/services/messageService";
@@ -120,7 +120,7 @@ function renderContentWithMentions(content: string, members: any[], userCache: a
   const parts = content.split(regex);
   if (parts.length === 1) return content;
 
-  const result: (string | JSX.Element)[] = [];
+  const result: (string | React.JSX.Element)[] = [];
   let lastIndex = 0;
   
   // Splitting with capture group returns the match in the array
@@ -446,7 +446,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!messages || messages.length === 0 || !currentUser) return;
 
-    const myName = currentUser.fullName || currentUser.name || "";
+    const myName = currentUser.fullName || "";
     // Tìm tin nhắn mới nhất có nhắc tên mình hoặc nhắc cả nhóm
     const mentionMsg = [...messages]
       .reverse()
@@ -3946,7 +3946,7 @@ export default function ChatPage() {
         <ForwardMessageModal
           isOpen={true}
           onClose={() => setForwardingMessage(null)}
-          message={forwardingMessage}
+          messages={[forwardingMessage]}
           currentUser={currentUser}
         />
       )}
