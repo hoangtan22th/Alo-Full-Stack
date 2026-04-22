@@ -27,6 +27,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import CreateGroupModal from "@/components/ui/group/CreateGroupModal";
 import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
 import { messageService, MessageDTO } from "@/services/messageService";
+import { socketService } from "@/services/socketService";
 
 // ===========================
 // API FUNCTIONS (KHÔNG DÙNG ZUSTAND)
@@ -354,6 +355,25 @@ export default function GroupListPage() {
 
   useEffect(() => {
     loadGroups();
+
+    const unsubs = [
+      socketService.onConversationCreated(() => {
+        console.log("Realtime: New group created or added, refetching...");
+        loadGroups();
+      }),
+      socketService.onConversationRemoved(() => {
+        console.log("Realtime: Group removed, refetching...");
+        loadGroups();
+      }),
+      socketService.onGroupUpdated(() => {
+        console.log("Realtime: Group info updated, refetching...");
+        loadGroups();
+      })
+    ];
+
+    return () => {
+      unsubs.forEach(unsub => unsub());
+    };
   }, [loadGroups]);
 
   useEffect(() => {

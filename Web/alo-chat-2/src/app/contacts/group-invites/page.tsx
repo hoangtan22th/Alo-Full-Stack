@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { groupService } from "@/services/groupService";
 import { getMediaUrl } from "@/utils/media";
 import { useAuthStore } from "@/store/useAuthStore";
+import { socketService } from "@/services/socketService";
 
 export default function GroupInvitePage() {
   const [receivedInvites, setReceivedInvites] = useState<any[]>([]);
@@ -44,6 +45,34 @@ export default function GroupInvitePage() {
 
   useEffect(() => {
     fetchAllData();
+
+    // Lắng nghe realtime để cập nhật danh sách ngay lập tức
+    const unsubs = [
+      socketService.onNewInvitation(() => {
+        console.log("Realtime: New invitation received, refetching...");
+        fetchAllData();
+      }),
+      socketService.onJoinRequestApproved(() => {
+        console.log("Realtime: Join request approved, refetching...");
+        fetchAllData();
+      }),
+      socketService.onJoinRequestRejected(() => {
+        console.log("Realtime: Join request rejected, refetching...");
+        fetchAllData();
+      }),
+      socketService.onNewJoinRequest(() => {
+        console.log("Realtime: New join request for your group, refetching...");
+        fetchAllData();
+      }),
+      socketService.onInvitationAccepted(() => {
+        console.log("Realtime: Someone accepted your invitation, refetching...");
+        fetchAllData();
+      })
+    ];
+
+    return () => {
+      unsubs.forEach(unsub => unsub());
+    };
   }, [fetchAllData]);
 
   const handleAcceptInvite = async (groupId: string) => {
