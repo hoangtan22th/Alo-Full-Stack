@@ -65,6 +65,38 @@ export default function GroupMembersScreen() {
 
   const [blockedMembers, setBlockedMembers] = useState<any[]>([]);
 
+  // Friendship states
+  const [friendshipStatuses, setFriendshipStatuses] = useState<Record<string, "friend" | "sent" | "received" | "none">>({});
+
+  const fetchFriendshipData = async () => {
+    try {
+      const [friendsList, sentRequests, pendingRequests] = await Promise.all([
+        contactService.getFriendsList(),
+        contactService.getSentRequests(),
+        contactService.getPendingRequests(),
+      ]);
+
+      const statuses: Record<string, "friend" | "sent" | "received" | "none"> = {};
+
+      friendsList.forEach((f: any) => {
+        const friendId = f.requesterId === currentUserId ? f.recipientId : f.requesterId;
+        statuses[friendId] = "friend";
+      });
+
+      sentRequests.forEach((r: any) => {
+        statuses[r.recipientId] = "sent";
+      });
+
+      pendingRequests.forEach((r: any) => {
+        statuses[r.requesterId] = "received";
+      });
+
+      setFriendshipStatuses(statuses);
+    } catch (error) {
+      console.error("Lỗi lấy thông tin bạn bè:", error);
+    }
+  };
+
   const fetchGroupDetails = async () => {
     try {
       if (!id) return;
@@ -123,7 +155,8 @@ export default function GroupMembersScreen() {
 
   useEffect(() => {
     fetchGroupDetails();
-  }, [id]);
+    fetchFriendshipData();
+  }, [id, currentUserId]);
 
   useEffect(() => {
     if (!socket || !id) return;
@@ -349,6 +382,20 @@ export default function GroupMembersScreen() {
     }
   };
 
+  const handleSendFriendRequest = async (memberId: string, name: string) => {
+    try {
+      const res = await contactService.sendFriendRequest(memberId, `Mình là ${user?.fullName}, từ nhóm chat.`);
+      if (res) {
+        Alert.alert("Thành công", `Đã gửi lời mời kết bạn tới ${name}`);
+        fetchFriendshipData();
+      } else {
+        Alert.alert("Lỗi", "Không thể gửi lời mời kết bạn.");
+      }
+    } catch (error) {
+      Alert.alert("Lỗi", "Đã có lỗi xảy ra khi gửi lời mời.");
+    }
+  };
+
   const filteredMembers = members.filter((m) =>
     m.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
@@ -504,7 +551,26 @@ export default function GroupMembersScreen() {
                   <Text className="text-blue-600 text-[13px] font-bold">Gỡ chặn</Text>
                 </TouchableOpacity>
               ) : (
-                isManager && <EllipsisVerticalIcon size={24} color="#9ca3af" />
+                <View className="flex-row items-center">
+                  {member.id !== currentUserId && !friendshipStatuses[member.id] && (
+                    <TouchableOpacity
+                      onPress={() => handleSendFriendRequest(member.id, member.name)}
+                      className="p-2 mr-1"
+                    >
+                      <UserPlusIcon size={24} color="#3b82f6" />
+                    </TouchableOpacity>
+                  )}
+                  {friendshipStatuses[member.id] === "sent" && (
+                    <View className="bg-gray-100 px-2 py-1 rounded-md mr-2">
+                      <Text className="text-[11px] text-gray-500 font-medium">Đã mời</Text>
+                    </View>
+                  )}
+                  {isManager && (
+                    <TouchableOpacity onPress={() => handleMemberAction(member)} className="p-2">
+                       <EllipsisVerticalIcon size={24} color="#9ca3af" />
+                    </TouchableOpacity>
+                  )}
+                </View>
               )}
             </TouchableOpacity>
           ))}
