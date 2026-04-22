@@ -696,6 +696,33 @@ export const getMyGroups = async (
   }
 };
 
+// 6.1 Lấy danh sách nhóm chung với một user khác
+export const getCommonGroups = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const currentUserId = String(req.headers["x-user-id"] || "");
+    const otherUserId = String(req.params.otherUserId || "");
+
+    if (!otherUserId) {
+      res.status(400).json({ error: "Thiếu thông tin người dùng" });
+      return;
+    }
+
+    // Tìm các conversation là nhóm (isGroup: true) 
+    // và có cả 2 user trong danh sách members
+    const groups = await Conversation.find({
+      isGroup: true,
+      "members.userId": { $all: [currentUserId, otherUserId] }
+    }).sort({ updatedAt: -1 });
+
+    res.status(200).json({ data: groups });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 export const getGroupById = async (
   req: Request,
   res: Response,
