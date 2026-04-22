@@ -382,18 +382,17 @@ export default function GroupMembersScreen() {
     }
   };
 
-  const handleSendFriendRequest = async (memberId: string, name: string) => {
-    try {
-      const res = await contactService.sendFriendRequest(memberId, `Mình là ${user?.fullName}, từ nhóm chat.`);
-      if (res) {
-        Alert.alert("Thành công", `Đã gửi lời mời kết bạn tới ${name}`);
-        fetchFriendshipData();
-      } else {
-        Alert.alert("Lỗi", "Không thể gửi lời mời kết bạn.");
-      }
-    } catch (error) {
-      Alert.alert("Lỗi", "Đã có lỗi xảy ra khi gửi lời mời.");
-    }
+  const handleSendFriendRequest = (member: any) => {
+    router.push({
+      pathname: "/(tabs)/contacts/send-request",
+      params: {
+        userId: member.id,
+        fullName: member.name,
+        avatarUrl: member.avatar,
+        from: "chat",
+        chatId: id as string,
+      },
+    });
   };
 
   const filteredMembers = members.filter((m) =>
@@ -554,7 +553,7 @@ export default function GroupMembersScreen() {
                 <View className="flex-row items-center">
                   {member.id !== currentUserId && !friendshipStatuses[member.id] && (
                     <TouchableOpacity
-                      onPress={() => handleSendFriendRequest(member.id, member.name)}
+                      onPress={() => handleSendFriendRequest(member)}
                       className="p-2 mr-1"
                     >
                       <UserPlusIcon size={24} color="#3b82f6" />
