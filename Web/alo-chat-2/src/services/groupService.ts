@@ -448,4 +448,22 @@ export const groupService = {
       throw error;
     }
   },
+
+  getBlockedMembers: async (groupId: string) => {
+    try {
+      return await api.get<any, any>(`/groups/${groupId}/blocked`);
+    } catch (error) {
+      console.error("Lỗi lấy danh sách thành viên bị chặn:", error);
+      throw error;
+    }
+  },
+
+  unblockMember: async (groupId: string, userId: string) => {
+    try {
+      return await api.delete<any, any>(`/groups/${groupId}/members/${userId}/unblock`);
+    } catch (error) {
+      console.error("Lỗi gỡ chặn thành viên:", error);
+      throw error;
+    }
+  },
 };

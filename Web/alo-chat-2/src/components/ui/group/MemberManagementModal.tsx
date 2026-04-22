@@ -11,6 +11,7 @@ import {
   ChevronDownIcon,
   UserIcon,
   BellIcon,
+  NoSymbolIcon,
 } from "@heroicons/react/24/outline";
 import MemberApprovalModal from "./MemberApprovalModal";
 import { groupService } from "@/services/groupService";
@@ -166,14 +167,18 @@ export default function MemberManagementModal({
     }
   };
 
-  const handleRemoveMember = async (userId: string) => {
-    if (!confirm("Bạn có chắc chắn muốn mời thành viên này ra khỏi nhóm?")) return;
+  const handleRemoveMember = async (userId: string, isBanned: boolean = false) => {
+    const confirmMsg = isBanned 
+      ? "Bạn có chắc chắn muốn mời thành viên này ra khỏi nhóm và CHẶN không cho tham gia lại?" 
+      : "Bạn có chắc chắn muốn mời thành viên này ra khỏi nhóm?";
+      
+    if (!confirm(confirmMsg)) return;
     try {
-      await groupService.removeMember(conversationId, userId);
-      toast.success("Đã xóa thành viên khỏi nhóm");
+      await groupService.removeMember(conversationId, userId, { isBanned });
+      toast.success(isBanned ? "Đã mời ra và chặn thành viên" : "Đã mời thành viên ra khỏi nhóm");
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      toast.error("Không thể xóa thành viên");
+      toast.error(isBanned ? "Không thể chặn thành viên" : "Không thể xóa thành viên");
     }
   };
 
@@ -400,6 +405,14 @@ export default function MemberManagementModal({
                             >
                               <TrashIcon className="w-4 h-4" />
                               Mời ra khỏi nhóm
+                            </button>
+
+                            <button
+                              onClick={() => { handleRemoveMember(m.userId, true); setActiveMemberMenu(null); }}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-bold text-red-700 hover:bg-red-100 transition-colors"
+                            >
+                              <NoSymbolIcon className="w-4 h-4" />
+                              Mời ra & Chặn
                             </button>
                           </div>
                         </>

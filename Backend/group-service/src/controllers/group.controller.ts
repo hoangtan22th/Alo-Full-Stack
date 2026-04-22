@@ -392,8 +392,12 @@ export const removeMember = async (
       return;
     }
 
-    const requester = group.members.find((m) => m.userId === requesterId);
-    const target = group.members.find((m) => m.userId === userId);
+    const requester = group.members.find(
+      (m) => m.userId.toString().trim() === requesterId.toString().trim(),
+    );
+    const target = group.members.find(
+      (m) => m.userId.toString().trim() === userId.toString().trim(),
+    );
 
     if (!requester || !target) {
       res.status(400).json({ error: "Thành viên không hợp lệ" });
@@ -434,7 +438,7 @@ export const removeMember = async (
 
     // Xóa thông tin cũ nếu có
     group.removedMembers = group.removedMembers.filter(
-      (rm) => rm.userId !== userId,
+      (rm) => rm.userId.toString().trim() !== userId.toString().trim(),
     );
 
     group.removedMembers.push({
@@ -446,7 +450,9 @@ export const removeMember = async (
     });
 
     // Thực hiện xóa khỏi members
-    group.members = group.members.filter((m) => m.userId !== userId);
+    group.members = group.members.filter(
+      (m) => m.userId.toString().trim() !== userId.toString().trim(),
+    );
     await group.save();
 
     // Real-time Sync
@@ -1715,16 +1721,31 @@ export const inviteToGroup = async (
 
     // 2. Kiểm tra ban/block
     const removedInfo = group.removedMembers?.find(
-      (rm) => rm.userId === finalTargetUserId,
+      (rm) => rm.userId.toString().trim() === finalTargetUserId.toString().trim(),
     );
+
+    const requester = group.members.find(
+      (m) => m.userId === requesterId,
+    );
+    const requesterRole = requester?.role;
+    const isRequesterAdmin =
+      requesterRole === "LEADER" || requesterRole === "DEPUTY";
+
     if (removedInfo) {
       if (removedInfo.isBanned) {
-        res
-          .status(403)
-          .json({ error: "Người dùng này đã bị cấm tham gia nhóm" });
-        return;
-      }
-      if (removedInfo.preventReinvite) {
+        if (!isRequesterAdmin) {
+          res
+            .status(403)
+            .json({ error: "Người dùng này đã bị cấm tham gia nhóm" });
+          return;
+        } else {
+          // Admin mời lại -> Tự động gỡ chặn
+          group.removedMembers = group.removedMembers.filter(
+            (rm) => rm.userId.toString().trim() !== finalTargetUserId.toString().trim(),
+          );
+          // Không return, tiếp tục để thêm vào invitations
+        }
+      } else if (removedInfo.preventReinvite) {
         res
           .status(403)
           .json({ error: "Người dùng này đã chặn lời mời vào nhóm này" });
@@ -1957,6 +1978,56 @@ export const unblockMember = async (
     rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
 
     res.status(200).json({ message: "Đã gỡ chặn thành viên", data: group });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+/**
+ * Lấy danh sách các thành viên bị chặn trong nhóm
+ */
+export const getBlockedMembers = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const groupId = String(req.params.groupId || "").trim();
+    const requesterId = String(req.headers["x-user-id"] || "");
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    // Kiểm tra quyền (Chỉ Admin mới có quyền xem)
+    const requester = group.members.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (
+      !requester ||
+      (requester.role !== "LEADER" && requester.role !== "DEPUTY")
+    ) {
+      res.status(403).json({ error: "Bạn không có quyền xem danh sách này" });
+      return;
+    }
+
+    const blockedMembers = group.removedMembers?.filter((rm) => rm.isBanned) || [];
+
+    // Làm giàu dữ liệu profile người dùng
+    const enrichedBlockedMembers = await Promise.all(
+      blockedMembers.map(async (rm) => {
+        const profile = await getUserProfile(rm.userId, req.headers.authorization);
+        return {
+          userId: rm.userId,
+          removedAt: rm.removedAt,
+          reason: rm.reason,
+          name: profile.fullName,
+          avatar: profile.avatar,
+        };
+      }),
+    );
+
+    res.status(200).json({ data: enrichedBlockedMembers });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

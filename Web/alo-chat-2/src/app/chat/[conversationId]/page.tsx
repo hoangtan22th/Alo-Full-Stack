@@ -1404,10 +1404,13 @@ export default function ChatPage() {
     }
   };
 
-  const handleRemoveMember = async (userId: string) => {
-    const isBanned = confirm(
-      "Xác nhận mời thành viên này ra khỏi nhóm? \n\nBạn có muốn chặn người này tham gia lại nhóm không?",
-    );
+  const handleRemoveMember = async (userId: string, isBanned: boolean = false) => {
+    const confirmMsg = isBanned 
+      ? "Bạn có chắc chắn muốn mời thành viên này ra khỏi nhóm và CHẶN không cho tham gia lại?" 
+      : "Bạn có chắc chắn muốn mời thành viên này ra khỏi nhóm?";
+
+    if (!confirm(confirmMsg)) return;
+
     try {
       await groupService.removeMember(conversationId, userId, { isBanned });
       toast.success(

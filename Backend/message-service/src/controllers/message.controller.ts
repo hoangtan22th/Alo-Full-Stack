@@ -14,14 +14,13 @@ function getUserIdFromHeader(req: Request): string | null {
 }
 
 /**
- * Helper to check if a user has permission to perform an action in a conversation
+ * Helper to fetch conversation info from group-service
  */
-async function hasGroupPermission(
+async function getConversation(
   req: Request,
   conversationId: string,
   userId: string,
-  action: "pinMessages" | "sendMessage" | "createPolls" | "createNotes" | "createReminders" | "editGroupInfo",
-): Promise<boolean> {
+): Promise<any> {
   try {
     const gatewayUrl = process.env.GATEWAY_URL || "http://127.0.0.1:8888";
     const response = await fetch(
@@ -34,28 +33,40 @@ async function hasGroupPermission(
       },
     );
 
-    if (!response.ok) return false;
+    if (!response.ok) return null;
     const result = await response.json();
-    const conversation = result.data;
-
-    if (!conversation) return false;
-    // Direct matches (1-1) always allow all actions
-    if (!conversation.isGroup) return true;
-
-    // Permissions check
-    const permission = conversation.permissions?.[action] || "EVERYONE";
-    if (permission === "EVERYONE") return true;
-
-    // For ADMIN only, check if the user is LEADER or DEPUTY
-    const member = conversation.members?.find(
-      (m: any) => String(m.userId) === userId,
-    );
-    const role = member?.role?.toUpperCase();
-    return role === "LEADER" || role === "DEPUTY";
+    return result.data;
   } catch (error) {
-    console.error(`[hasGroupPermission] Error checking ${action}:`, error);
-    return false;
+    console.error(`[getConversation] Error fetching conversation ${conversationId}:`, error);
+    return null;
   }
+}
+
+/**
+ * Helper to check if a user has permission to perform an action in a conversation
+ */
+async function hasGroupPermission(
+  req: Request,
+  conversationId: string,
+  userId: string,
+  action: "pinMessages" | "sendMessage" | "createPolls" | "createNotes" | "createReminders" | "editGroupInfo",
+): Promise<boolean> {
+  const conversation = await getConversation(req, conversationId, userId);
+  if (!conversation) return false;
+
+  // Direct matches (1-1) always allow all actions
+  if (!conversation.isGroup) return true;
+
+  // Permissions check
+  const permission = conversation.permissions?.[action] || "EVERYONE";
+  if (permission === "EVERYONE") return true;
+
+  // For ADMIN only, check if the user is LEADER or DEPUTY
+  const member = conversation.members?.find(
+    (m: any) => String(m.userId) === userId,
+  );
+  const role = member?.role?.toUpperCase();
+  return role === "LEADER" || role === "DEPUTY";
 }
 
 /**
@@ -516,13 +527,21 @@ export async function sendMessage(
       return;
     }
 
-    // 0. Kiểm tra quyền nhắn tin
-    const allowed = await hasGroupPermission(
-      req,
-      String(conversationId),
-      userId,
-      "sendMessage",
-    );
+    // 0. Kiểm tra quyền nhắn tin & Lấy info conversation
+    const conversation = await getConversation(req, String(conversationId), userId);
+    if (!conversation) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+
+    const permission = conversation.isGroup ? (conversation.permissions?.sendMessage || "EVERYONE") : "EVERYONE";
+    let allowed = true;
+    if (conversation.isGroup && permission !== "EVERYONE") {
+      const member = conversation.members?.find((m: any) => String(m.userId) === userId);
+      const role = member?.role?.toUpperCase();
+      allowed = role === "LEADER" || role === "DEPUTY";
+    }
+
     if (!allowed) {
       res.status(403).json({
         error: "Chỉ trưởng/phó nhóm mới có thể gửi tin nhắn trong nhóm này",
@@ -550,6 +569,7 @@ export async function sendMessage(
       content: messageDoc.content,
       isRead: false,
       createdAt: messageDoc.createdAt,
+      isGroup: conversation.isGroup,
       ...(messageDoc.senderName && { senderName: messageDoc.senderName }),
       ...(messageDoc.metadata && { metadata: messageDoc.metadata }),
       ...(messageDoc.replyTo && { replyTo: messageDoc.replyTo as any }),
@@ -592,13 +612,21 @@ export async function uploadFile(
       return;
     }
 
-    // 0. Kiểm tra quyền nhắn tin
-    const allowed = await hasGroupPermission(
-      req,
-      String(conversationId),
-      userId,
-      "sendMessage",
-    );
+    // 0. Kiểm tra quyền nhắn tin & Lấy info
+    const conversation = await getConversation(req, String(conversationId), userId);
+    if (!conversation) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+
+    const permission = conversation.isGroup ? (conversation.permissions?.sendMessage || "EVERYONE") : "EVERYONE";
+    let allowed = true;
+    if (conversation.isGroup && permission !== "EVERYONE") {
+      const member = conversation.members?.find((m: any) => String(m.userId) === userId);
+      const role = member?.role?.toUpperCase();
+      allowed = role === "LEADER" || role === "DEPUTY";
+    }
+
     if (!allowed) {
       res.status(403).json({
         error: "Chỉ trưởng/phó nhóm mới có thể gửi tin nhắn trong nhóm này",
@@ -646,6 +674,7 @@ export async function uploadFile(
       content: messageDoc.content,
       isRead: false,
       createdAt: messageDoc.createdAt,
+      isGroup: conversation.isGroup,
       ...(messageDoc.senderName && { senderName: messageDoc.senderName }),
       ...(messageDoc.metadata && { metadata: messageDoc.metadata }),
       ...(messageDoc.replyTo && { replyTo: messageDoc.replyTo as any }),
@@ -845,13 +874,21 @@ export async function uploadImages(
       return;
     }
 
-    // 0. Kiểm tra quyền nhắn tin
-    const allowed = await hasGroupPermission(
-      req,
-      String(conversationId),
-      userId,
-      "sendMessage",
-    );
+    // 0. Kiểm tra quyền nhắn tin & Lấy info
+    const conversation = await getConversation(req, String(conversationId), userId);
+    if (!conversation) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+
+    const permission = conversation.isGroup ? (conversation.permissions?.sendMessage || "EVERYONE") : "EVERYONE";
+    let allowed = true;
+    if (conversation.isGroup && permission !== "EVERYONE") {
+      const member = conversation.members?.find((m: any) => String(m.userId) === userId);
+      const role = member?.role?.toUpperCase();
+      allowed = role === "LEADER" || role === "DEPUTY";
+    }
+
     if (!allowed) {
       res.status(403).json({
         error: "Chỉ trưởng/phó nhóm mới có thể gửi tin nhắn trong nhóm này",
@@ -911,6 +948,7 @@ export async function uploadImages(
       content: messageDoc.content,
       isRead: false,
       createdAt: messageDoc.createdAt,
+      isGroup: conversation.isGroup,
       ...(messageDoc.metadata && { metadata: messageDoc.metadata }),
       ...(messageDoc.replyTo && { replyTo: messageDoc.replyTo as any }),
     };

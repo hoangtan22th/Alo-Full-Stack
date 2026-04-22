@@ -18,8 +18,9 @@ export default function GlobalNotificationHandler() {
   useEffect(() => {
     if (currentUser && friendIds.size === 0) {
       contactService.getFriendsList().then(friends => {
+        const myId = String(currentUser.id || currentUser._id || currentUser.userId);
         const fIds = new Set(friends.map(f => 
-          f.requesterId === currentUser.id ? f.recipientId : f.requesterId
+          String(f.requesterId) === myId ? String(f.recipientId) : String(f.requesterId)
         ));
         setFriendIds(fIds);
       }).catch(console.error);
@@ -85,6 +86,7 @@ export default function GlobalNotificationHandler() {
       console.log(`🔍 [GlobalNotification] Comparing: ActiveRoom=${currentConvoId}, IncomingMsgRoom=${msgConvoId}`);
 
       if (currentConvoId !== msgConvoId) {
+        // If it's a group, it's NOT a stranger conversation
         const isStranger = !msg.isGroup && !friendIds.has(String(msg.senderId)) && String(msg.senderId) !== "alo-bot";
         
         console.log("🔔 [GlobalNotification] Conditions met. Showing toast...", { isStranger });
