@@ -13,9 +13,18 @@ public class RabbitMQConfig {
     public static final String QUEUE_REGISTRATION = "user.registration.queue";
     public static final String ROUTING_KEY_UPDATE = "user.updated";
 
+    public static final String EXCHANGE_ADMIN = "admin.exchange";
+    public static final String ROUTING_KEY_USER_BANNED = "user.banned";
+    public static final String ROUTING_KEY_USER_UNBANNED = "user.unbanned";
+
     @Bean
     public TopicExchange userExchange() {
         return new TopicExchange(EXCHANGE_NAME);
+    }
+
+    @Bean
+    public TopicExchange adminExchange() {
+        return new TopicExchange(EXCHANGE_ADMIN);
     }
 
     @Bean

@@ -50,6 +50,11 @@ public class AuthenticationFilter implements GlobalFilter {
                 String sessionId = jwtUtils.extractSessionId(token);
                 String roles = jwtUtils.extractRoles(token);
 
+                // Admin route authorization check
+                if (request.getURI().getPath().startsWith("/api/v1/admin/") && (roles == null || !roles.contains("ADMIN"))) {
+                    return forbiddenResponse(exchange, "Forbidden: Bạn không có quyền truy cập chức năng này.");
+                }
+
                 // Kiểm tra xem sessionId có nằm trong Blacklist của Redis không
                 if (sessionId != null) {
                     return redisTemplate.hasKey("BLACKLIST_SESSION:" + sessionId)
@@ -96,6 +101,19 @@ public class AuthenticationFilter implements GlobalFilter {
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
 
         String body = "{\"status\":401,\"message\":\"" + message + "\"}";
+        DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
+        return response.writeWith(Mono.just(buffer));
+    }
+
+    /**
+     * Trả về response 403 Forbidden
+     */
+    private Mono<Void> forbiddenResponse(ServerWebExchange exchange, String message) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(HttpStatus.FORBIDDEN);
+        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+
+        String body = "{\"status\":403,\"message\":\"" + message + "\"}";
         DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
         return response.writeWith(Mono.just(buffer));
     }

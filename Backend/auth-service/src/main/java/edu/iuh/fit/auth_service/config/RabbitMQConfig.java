@@ -16,6 +16,14 @@ public class RabbitMQConfig {
     public static final String ROUTING_KEY_UPDATE = "user.updated";
     public static final String QUEUE_REALTIME_EVENTS = "realtime_events";
 
+    // ADMIN EVENTS (FROM REPORT SERVICE)
+    public static final String EXCHANGE_ADMIN = "admin.exchange";
+    public static final String QUEUE_AUTH_USER_BANNED = "auth.user.banned.queue";
+    public static final String ROUTING_KEY_USER_BANNED = "user.banned";
+    
+    public static final String QUEUE_AUTH_USER_UNBANNED = "auth.user.unbanned.queue";
+    public static final String ROUTING_KEY_USER_UNBANNED = "user.unbanned";
+
     @Bean
     public TopicExchange userExchange() {
         return new TopicExchange(EXCHANGE_NAME);
@@ -39,6 +47,31 @@ public class RabbitMQConfig {
     @Bean
     public Binding bindingUserUpdate(Queue authUserUpdateQueue, TopicExchange userExchange) {
         return BindingBuilder.bind(authUserUpdateQueue).to(userExchange).with(ROUTING_KEY_UPDATE);
+    }
+
+    @Bean
+    public TopicExchange adminExchange() {
+        return new TopicExchange(EXCHANGE_ADMIN);
+    }
+
+    @Bean
+    public Queue authUserBannedQueue() {
+        return new Queue(QUEUE_AUTH_USER_BANNED, true);
+    }
+
+    @Bean
+    public Binding bindingUserBanned(Queue authUserBannedQueue, TopicExchange adminExchange) {
+        return BindingBuilder.bind(authUserBannedQueue).to(adminExchange).with(ROUTING_KEY_USER_BANNED);
+    }
+    
+    @Bean
+    public Queue authUserUnbannedQueue() {
+        return new Queue(QUEUE_AUTH_USER_UNBANNED, true);
+    }
+
+    @Bean
+    public Binding bindingUserUnbanned(Queue authUserUnbannedQueue, TopicExchange adminExchange) {
+        return BindingBuilder.bind(authUserUnbannedQueue).to(adminExchange).with(ROUTING_KEY_USER_UNBANNED);
     }
 
     @Bean

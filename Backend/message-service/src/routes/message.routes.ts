@@ -13,6 +13,9 @@ const upload = multer({
   },
 });
 
+// Admin: Bulk fetch messages by IDs — must be BEFORE /:conversationId to avoid collision
+router.post("/bulk", messageController.getBulkMessages);
+
 router.get("/:conversationId", messageController.getMessageHistory);
 router.get("/:conversationId/search", messageController.searchMessages);
 router.get("/:conversationId/pinned", messageController.getPinnedMessages);
