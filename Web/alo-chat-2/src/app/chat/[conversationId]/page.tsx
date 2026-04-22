@@ -47,12 +47,15 @@ import {
   CheckIcon,
   PhotoIcon,
 } from "@heroicons/react/24/outline";
+import ReportSelectionToolbar from "@/components/ui/report/ReportSelectionToolbar";
+import ReportModal from "@/components/ui/report/ReportModal";
 import { motion } from "framer-motion";
 import BotChatArea from "@/components/ui/BotChatArea";
 import StickerPicker from "@/components/ui/StickerPicker";
 import ForwardMessageModal from "@/components/ui/ForwardMessageModal";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useChatStore } from "@/store/useChatStore";
+import { useShallow } from "zustand/react/shallow";
 import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
 import PollMessagePreview from "@/components/chat/PollMessagePreview";
 import PollDetailsModal from "@/components/ui/group/PollDetailsModal";
@@ -122,12 +125,12 @@ function renderContentWithMentions(content: string, members: any[], userCache: a
 
   const result: (string | React.JSX.Element)[] = [];
   let lastIndex = 0;
-  
+
   // Splitting with capture group returns the match in the array
   // content: "Hello @Hoàng Tân how are you"
   // sortedNames: ["Hoàng Tân"]
   // parts: ["Hello ", "Hoàng Tân", " how are you"]
-  
+
   for (let i = 0; i < parts.length; i++) {
     if (i % 2 === 1) {
       // Đây là phần match (tên được nhắc)
@@ -219,6 +222,13 @@ export default function ChatPage() {
   // Optimized selector with stable empty array to avoid infinite loop
   const typingForThisConvo = useChatStore(
     (state) => state.typingUsers[conversationId] || EMPTY_ARRAY,
+  );
+  const { isReportSelectionMode, selectedMessagesForReport, toggleMessageForReport } = useChatStore(
+    useShallow((s) => ({
+      isReportSelectionMode: s.isReportSelectionMode,
+      selectedMessagesForReport: s.selectedMessagesForReport,
+      toggleMessageForReport: s.toggleMessageForReport,
+    }))
   );
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isTypingRef = useRef(false);
@@ -404,7 +414,7 @@ export default function ChatPage() {
   // Filter members for mention list
   const filteredMentions = useMemo(() => {
     if (!conversationInfo?.isGroup || mentionSearch === null) return [];
-    
+
     const allOption = { id: "all", name: "Tất cả", avatar: "" };
     const members = (conversationInfo.members || [])
       .map((m: any) => ({
@@ -415,9 +425,9 @@ export default function ChatPage() {
       .filter((m: any) => m.id !== String(myId)); // Không tự mention mình
 
     const combined = [allOption, ...members];
-    
+
     if (mentionSearch === "") return combined;
-    return combined.filter((m) => 
+    return combined.filter((m) =>
       m.name.toLowerCase().includes(mentionSearch.toLowerCase())
     );
   }, [conversationInfo, mentionSearch, userCache, myId]);
@@ -845,9 +855,9 @@ export default function ChatPage() {
             });
             setIsStranger(
               !isFriend &&
-                currentStatus !== "I_SENT_REQUEST" &&
-                currentStatus !== "YOU_SENT_REQUEST" &&
-                currentStatus !== "THEY_SENT_REQUEST",
+              currentStatus !== "I_SENT_REQUEST" &&
+              currentStatus !== "YOU_SENT_REQUEST" &&
+              currentStatus !== "THEY_SENT_REQUEST",
             );
           } catch (error) {
             console.error(
@@ -939,10 +949,10 @@ export default function ChatPage() {
           prev.map((m) =>
             m._id === data.messageId
               ? {
-                  ...m,
-                  isRevoked: true,
-                  revokedAt: data.revokedAt || new Date().toISOString(),
-                }
+                ...m,
+                isRevoked: true,
+                revokedAt: data.revokedAt || new Date().toISOString(),
+              }
               : m,
           ),
         );
@@ -1405,8 +1415,8 @@ export default function ChatPage() {
   };
 
   const handleRemoveMember = async (userId: string, isBanned: boolean = false) => {
-    const confirmMsg = isBanned 
-      ? "Bạn có chắc chắn muốn mời thành viên này ra khỏi nhóm và CHẶN không cho tham gia lại?" 
+    const confirmMsg = isBanned
+      ? "Bạn có chắc chắn muốn mời thành viên này ra khỏi nhóm và CHẶN không cho tham gia lại?"
       : "Bạn có chắc chắn muốn mời thành viên này ra khỏi nhóm?";
 
     if (!confirm(confirmMsg)) return;
@@ -1482,18 +1492,18 @@ export default function ChatPage() {
       isRead: false,
       replyTo: currentReply
         ? {
-            messageId: currentReply._id,
-            senderId: currentReply.senderId,
-            senderName: getSenderDisplayName(
-              currentReply.senderId,
-              currentReply,
-            ),
-            content:
-              currentReply.type === "file"
-                ? currentReply.metadata?.fileName || currentReply.content
-                : currentReply.content,
-            type: currentReply.type,
-          }
+          messageId: currentReply._id,
+          senderId: currentReply.senderId,
+          senderName: getSenderDisplayName(
+            currentReply.senderId,
+            currentReply,
+          ),
+          content:
+            currentReply.type === "file"
+              ? currentReply.metadata?.fileName || currentReply.content
+              : currentReply.content,
+          type: currentReply.type,
+        }
         : undefined,
       createdAt: new Date().toISOString(),
     };
@@ -1507,18 +1517,18 @@ export default function ChatPage() {
         senderName: currentUser?.fullName || "Tôi",
         replyTo: currentReply
           ? {
-              messageId: currentReply._id,
-              senderId: currentReply.senderId,
-              senderName: getSenderDisplayName(
-                currentReply.senderId,
-                currentReply,
-              ),
-              content:
-                currentReply.type === "file"
-                  ? currentReply.metadata?.fileName || currentReply.content
-                  : currentReply.content,
-              type: currentReply.type,
-            }
+            messageId: currentReply._id,
+            senderId: currentReply.senderId,
+            senderName: getSenderDisplayName(
+              currentReply.senderId,
+              currentReply,
+            ),
+            content:
+              currentReply.type === "file"
+                ? currentReply.metadata?.fileName || currentReply.content
+                : currentReply.content,
+            type: currentReply.type,
+          }
           : undefined,
       });
 
@@ -1617,18 +1627,18 @@ export default function ChatPage() {
           },
           replyTo: currentReply
             ? {
-                messageId: currentReply._id,
-                senderId: currentReply.senderId,
-                senderName: getSenderDisplayName(
-                  currentReply.senderId,
-                  currentReply,
-                ),
-                content:
-                  currentReply.type === "file"
-                    ? currentReply.metadata?.fileName || currentReply.content
-                    : currentReply.content,
-                type: currentReply.type,
-              }
+              messageId: currentReply._id,
+              senderId: currentReply.senderId,
+              senderName: getSenderDisplayName(
+                currentReply.senderId,
+                currentReply,
+              ),
+              content:
+                currentReply.type === "file"
+                  ? currentReply.metadata?.fileName || currentReply.content
+                  : currentReply.content,
+              type: currentReply.type,
+            }
             : undefined,
           createdAt: new Date().toISOString(),
         };
@@ -1669,18 +1679,18 @@ export default function ChatPage() {
           isRead: false,
           replyTo: currentReply
             ? {
-                messageId: currentReply._id,
-                senderId: currentReply.senderId,
-                senderName: getSenderDisplayName(
-                  currentReply.senderId,
-                  currentReply,
-                ),
-                content:
-                  currentReply.type === "file"
-                    ? currentReply.metadata?.fileName || currentReply.content
-                    : currentReply.content,
-                type: currentReply.type,
-              }
+              messageId: currentReply._id,
+              senderId: currentReply.senderId,
+              senderName: getSenderDisplayName(
+                currentReply.senderId,
+                currentReply,
+              ),
+              content:
+                currentReply.type === "file"
+                  ? currentReply.metadata?.fileName || currentReply.content
+                  : currentReply.content,
+              type: currentReply.type,
+            }
             : undefined,
           createdAt: new Date().toISOString(),
           metadata: {
@@ -1790,18 +1800,18 @@ export default function ChatPage() {
       metadata: { isSticker: true },
       replyTo: currentReply
         ? {
-            messageId: currentReply._id,
-            senderId: currentReply.senderId,
-            senderName: getSenderDisplayName(
-              currentReply.senderId,
-              currentReply,
-            ),
-            content:
-              currentReply.type === "file"
-                ? currentReply.metadata?.fileName || currentReply.content
-                : currentReply.content,
-            type: currentReply.type,
-          }
+          messageId: currentReply._id,
+          senderId: currentReply.senderId,
+          senderName: getSenderDisplayName(
+            currentReply.senderId,
+            currentReply,
+          ),
+          content:
+            currentReply.type === "file"
+              ? currentReply.metadata?.fileName || currentReply.content
+              : currentReply.content,
+          type: currentReply.type,
+        }
         : undefined,
       createdAt: new Date().toISOString(),
     };
@@ -1816,18 +1826,18 @@ export default function ChatPage() {
         metadata: { isSticker: true },
         replyTo: currentReply
           ? {
-              messageId: currentReply._id,
-              senderId: currentReply.senderId,
-              senderName: getSenderDisplayName(
-                currentReply.senderId,
-                currentReply,
-              ),
-              content:
-                currentReply.type === "file"
-                  ? currentReply.metadata?.fileName || currentReply.content
-                  : currentReply.content,
-              type: currentReply.type,
-            }
+            messageId: currentReply._id,
+            senderId: currentReply.senderId,
+            senderName: getSenderDisplayName(
+              currentReply.senderId,
+              currentReply,
+            ),
+            content:
+              currentReply.type === "file"
+                ? currentReply.metadata?.fileName || currentReply.content
+                : currentReply.content,
+            type: currentReply.type,
+          }
           : undefined,
       });
 
@@ -1860,7 +1870,7 @@ export default function ChatPage() {
       const lastMsg = last?.messages[last.messages.length - 1];
       const gap = lastMsg
         ? new Date(msg.createdAt).getTime() -
-          new Date(lastMsg.createdAt).getTime()
+        new Date(lastMsg.createdAt).getTime()
         : Infinity;
 
       const isSystem = (msg.type as any) === "system";
@@ -2033,15 +2043,14 @@ export default function ChatPage() {
                       relationStatus === "I_SENT_REQUEST" ||
                       relationStatus === "YOU_SENT_REQUEST"
                     }
-                    className={`px-3 py-1.5 text-white text-[11px] font-black rounded-lg transition active:scale-95 shadow-sm ${
-                      relationStatus === "I_SENT_REQUEST" ||
-                      relationStatus === "YOU_SENT_REQUEST"
+                    className={`px-3 py-1.5 text-white text-[11px] font-black rounded-lg transition active:scale-95 shadow-sm ${relationStatus === "I_SENT_REQUEST" ||
+                        relationStatus === "YOU_SENT_REQUEST"
                         ? "bg-gray-400 cursor-not-allowed"
                         : "bg-red-600 hover:bg-red-700"
-                    }`}
+                      }`}
                   >
                     {relationStatus === "I_SENT_REQUEST" ||
-                    relationStatus === "YOU_SENT_REQUEST"
+                      relationStatus === "YOU_SENT_REQUEST"
                       ? "Đã gửi yêu cầu"
                       : "Kết bạn"}
                   </button>
@@ -2066,7 +2075,7 @@ export default function ChatPage() {
                         ? pinnedMessages[0].content
                         : pinnedMessages[0].type === "file"
                           ? pinnedMessages[0].metadata?.fileName ||
-                            "Tệp đính kèm"
+                          "Tệp đính kèm"
                           : pinnedMessages[0].type === "image"
                             ? "[Ảnh]"
                             : "[Tin nhắn hệ thống]"}
@@ -2096,7 +2105,7 @@ export default function ChatPage() {
                         ? pinnedMessages[0].content
                         : pinnedMessages[0].type === "file"
                           ? pinnedMessages[0].metadata?.fileName ||
-                            "Tệp đính kèm"
+                          "Tệp đính kèm"
                           : pinnedMessages[0].type === "image"
                             ? "[Ảnh]"
                             : "[Tin nhắn hệ thống]"}
@@ -2174,9 +2183,9 @@ export default function ChatPage() {
 
             {/* Modal chi tiết bình chọn */}
             {activePollId && (
-              <PollDetailsModal 
-                pollId={activePollId} 
-                onClose={() => setActivePollId(null)} 
+              <PollDetailsModal
+                pollId={activePollId}
+                onClose={() => setActivePollId(null)}
               />
             )}
 
@@ -2279,10 +2288,10 @@ export default function ChatPage() {
                           key={`group-${groupIdx}`}
                           className="flex justify-center my-6 w-full px-4"
                         >
-                          <PollMessagePreview 
-                            pollId={lastMsg.metadata?.pollId as string} 
-                            isSender={false} 
-                            onOpenDetails={(id) => setActivePollId(id)} 
+                          <PollMessagePreview
+                            pollId={lastMsg.metadata?.pollId as string}
+                            isSender={false}
+                            onOpenDetails={(id) => setActivePollId(id)}
                           />
                         </div>
                       );
@@ -2310,17 +2319,17 @@ export default function ChatPage() {
                           // Bo góc bubble
                           const bubbleRadius = isMine
                             ? [
-                                "rounded-2xl",
-                                isFirst && !isLast ? "rounded-br-md" : "",
-                                !isFirst && !isLast ? "rounded-r-md" : "",
-                                !isFirst && isLast ? "rounded-br-sm" : "",
-                              ].join(" ")
+                              "rounded-2xl",
+                              isFirst && !isLast ? "rounded-br-md" : "",
+                              !isFirst && !isLast ? "rounded-r-md" : "",
+                              !isFirst && isLast ? "rounded-br-sm" : "",
+                            ].join(" ")
                             : [
-                                "rounded-2xl",
-                                isFirst && !isLast ? "rounded-bl-md" : "",
-                                !isFirst && !isLast ? "rounded-l-md" : "",
-                                !isFirst && isLast ? "rounded-bl-sm" : "",
-                              ].join(" ");
+                              "rounded-2xl",
+                              isFirst && !isLast ? "rounded-bl-md" : "",
+                              !isFirst && !isLast ? "rounded-l-md" : "",
+                              !isFirst && isLast ? "rounded-bl-sm" : "",
+                            ].join(" ");
 
                           return (
                             <div
@@ -2331,9 +2340,8 @@ export default function ChatPage() {
                                   toggleMessageSelection(msg);
                                 }
                               }}
-                              className={`flex items-center gap-1.5 transition-colors duration-500 ${
-                                isMine ? "flex-row-reverse" : "flex-row"
-                              } ${isMultiSelectMode ? "cursor-pointer" : ""}`}
+                              className={`flex items-center gap-1.5 transition-colors duration-500 ${isMine ? "flex-row-reverse" : "flex-row"
+                                } ${isMultiSelectMode ? "cursor-pointer" : ""}`}
                               onMouseEnter={(e) => {
                                 setHoveredMsgId(msg._id);
                                 setMousePos({ x: e.clientX, y: e.clientY });
@@ -2366,12 +2374,30 @@ export default function ChatPage() {
                                     </div>
                                   ))}
                               </div>
+                              {/* Selection checkbox (report mode) */}
+                              {isReportSelectionMode && (
+                                <div className="flex items-center ml-2 mr-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleMessageForReport(msg._id);
+                                    }}
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${selectedMessagesForReport.includes(msg._id)
+                                        ? "bg-blue-600 text-white ring-2 ring-blue-300"
+                                        : "bg-white border-gray-200 hover:bg-gray-50"
+                                      }`}
+                                    title={selectedMessagesForReport.includes(msg._id) ? "Unselect" : "Select"}
+                                  >
+                                    {selectedMessagesForReport.includes(msg._id) ? (
+                                      <svg className="w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 00-1.414-1.414L8 11.172 4.707 7.879a1 1 0 10-1.414 1.414l4 4a1 1 0 001.414 0l8-8z" clipRule="evenodd" /></svg>
+                                    ) : null}
+                                  </button>
+                                </div>
+                              )}
                               {/* Bubble */}
-                              <div className={`relative max-w-[75%] flex flex-col ${isMine ? "items-end" : "items-start"} transition-all duration-300 ${
-                                isMultiSelectMode ? "p-1 rounded-2xl" : ""
-                              } ${
-                                selectedMessageIds.has(msg._id) ? "bg-black/10 shadow-inner" : isMultiSelectMode ? "hover:bg-black/5" : ""
-                              }`}>
+                              <div className={`relative max-w-[75%] flex flex-col ${isMine ? "items-end" : "items-start"} transition-all duration-300 ${isMultiSelectMode ? "p-1 rounded-2xl" : ""
+                                } ${selectedMessageIds.has(msg._id) ? "bg-black/10 shadow-inner" : isMultiSelectMode ? "hover:bg-black/5" : ""
+                                }`}>
                                 {/* System messages (General & Call) */}
                                 {(msg.type as any) === "system" ? (
                                   msg.metadata?.callType ? (
@@ -2402,29 +2428,30 @@ export default function ChatPage() {
                                   )
                                 ) : (
                                   <div
-                                    className={`relative max-w-full flex flex-col p-1.5 px-2 border shadow-sm ${
-                                      isMine
+                                    className={`relative max-w-full flex flex-col p-1.5 px-2 border shadow-sm ${isMine
                                         ? "bg-blue-50/80 shadow-blue-900/5 items-end"
                                         : "bg-white shadow-gray-900/5 items-start"
-                                    } ${
-                                      conversationInfo?.isHighlightEnabled &&
-                                      adminIds.has(String(msg.senderId))
+                                      } ${conversationInfo?.isHighlightEnabled &&
+                                        adminIds.has(String(msg.senderId))
                                         ? "border-amber-300 ring-2 ring-amber-200/50"
                                         : isMine
                                           ? "border-blue-100"
                                           : "border-gray-100"
-                                    } ${bubbleRadius}`}
+                                      } ${bubbleRadius} ${isReportSelectionMode && !selectedMessagesForReport.includes(msg._id)
+                                        ? "opacity-50 filter grayscale"
+                                        : ""
+                                      } ${selectedMessagesForReport.includes(msg._id) ? "ring-2 ring-blue-300" : ""
+                                      }`}
                                   >
                                     {/* Reply Quote Box */}
                                     {msg.replyTo &&
                                       msg.replyTo.messageId &&
                                       !isRevoked && (
                                         <div
-                                          className={`mb-2 px-3 py-2 border-l-[3px] border-blue-600 ${
-                                            isMine
+                                          className={`mb-2 px-3 py-2 border-l-[3px] border-blue-600 ${isMine
                                               ? "bg-white/50"
                                               : "bg-blue-50/50"
-                                          } rounded-r-lg text-left cursor-pointer hover:bg-white/80 transition-colors w-full min-w-[150px] max-w-full overflow-hidden`}
+                                            } rounded-r-lg text-left cursor-pointer hover:bg-white/80 transition-colors w-full min-w-[150px] max-w-full overflow-hidden`}
                                           onClick={() => {
                                             const targetMsg =
                                               document.getElementById(
@@ -2465,8 +2492,8 @@ export default function ChatPage() {
                                                   ? "[Hình ảnh]"
                                                   : msg.replyTo.type === "file"
                                                     ? msg.replyTo.content.startsWith(
-                                                        "http",
-                                                      )
+                                                      "http",
+                                                    )
                                                       ? "[Tệp tin]"
                                                       : msg.replyTo.content
                                                     : msg.replyTo.content}
@@ -2477,7 +2504,7 @@ export default function ChatPage() {
                                       )}
 
                                     {msg.type === "image" &&
-                                    msg.metadata?.isSticker ? (
+                                      msg.metadata?.isSticker ? (
                                       /* RENDER STICKER */
                                       <div className="p-1">
                                         <img
@@ -2588,16 +2615,16 @@ export default function ChatPage() {
                                                 style={{
                                                   ...(allRevoked
                                                     ? {
-                                                        width: `${computedGridWidth}px`,
-                                                        maxWidth: "100%",
-                                                      }
+                                                      width: `${computedGridWidth}px`,
+                                                      maxWidth: "100%",
+                                                    }
                                                     : {
-                                                        maxWidth:
-                                                          count === 1 &&
+                                                      maxWidth:
+                                                        count === 1 &&
                                                           isPortrait
-                                                            ? "280px"
-                                                            : "100%",
-                                                      }),
+                                                          ? "280px"
+                                                          : "100%",
+                                                    }),
                                                   maxHeight: "420px",
                                                   overflow: "hidden",
                                                 }}
@@ -2685,30 +2712,30 @@ export default function ChatPage() {
                                                                                 m,
                                                                               ) =>
                                                                                 m._id ===
-                                                                                msg._id
+                                                                                  msg._id
                                                                                   ? {
-                                                                                      ...m,
-                                                                                      metadata:
-                                                                                        {
-                                                                                          ...m.metadata,
-                                                                                          imageGroup:
-                                                                                            m.metadata?.imageGroup?.map(
-                                                                                              (
-                                                                                                ig: any,
-                                                                                                i: number,
-                                                                                              ) =>
-                                                                                                i ===
-                                                                                                originalIdx
-                                                                                                  ? {
-                                                                                                      ...ig,
-                                                                                                      isRevoked: true,
-                                                                                                      revokedAt:
-                                                                                                        new Date().toISOString(),
-                                                                                                    }
-                                                                                                  : ig,
-                                                                                            ),
-                                                                                        },
-                                                                                    }
+                                                                                    ...m,
+                                                                                    metadata:
+                                                                                    {
+                                                                                      ...m.metadata,
+                                                                                      imageGroup:
+                                                                                        m.metadata?.imageGroup?.map(
+                                                                                          (
+                                                                                            ig: any,
+                                                                                            i: number,
+                                                                                          ) =>
+                                                                                            i ===
+                                                                                              originalIdx
+                                                                                              ? {
+                                                                                                ...ig,
+                                                                                                isRevoked: true,
+                                                                                                revokedAt:
+                                                                                                  new Date().toISOString(),
+                                                                                              }
+                                                                                              : ig,
+                                                                                        ),
+                                                                                    },
+                                                                                  }
                                                                                   : m,
                                                                             ),
                                                                         );
@@ -2716,7 +2743,7 @@ export default function ChatPage() {
                                                                         await messageService.revokeImageInGroup(
                                                                           msg._id,
                                                                           originalIdx ??
-                                                                            0,
+                                                                          0,
                                                                         );
                                                                       }
                                                                     }}
@@ -2739,7 +2766,7 @@ export default function ChatPage() {
                                                                     await messageService.deleteImageInGroupForMe(
                                                                       msg._id,
                                                                       originalIdx ??
-                                                                        0,
+                                                                      0,
                                                                     );
                                                                     // Local update
                                                                     setMessages(
@@ -2749,33 +2776,33 @@ export default function ChatPage() {
                                                                             m,
                                                                           ) =>
                                                                             m._id ===
-                                                                            msg._id
+                                                                              msg._id
                                                                               ? {
-                                                                                  ...m,
-                                                                                  metadata:
-                                                                                    {
-                                                                                      ...m.metadata,
-                                                                                      imageGroup:
-                                                                                        m.metadata?.imageGroup?.map(
-                                                                                          (
-                                                                                            ig: any,
-                                                                                            i: number,
-                                                                                          ) =>
-                                                                                            i ===
-                                                                                            originalIdx
-                                                                                              ? {
-                                                                                                  ...ig,
-                                                                                                  deletedByUsers:
-                                                                                                    [
-                                                                                                      ...(ig.deletedByUsers ||
-                                                                                                        []),
-                                                                                                      myId,
-                                                                                                    ],
-                                                                                                }
-                                                                                              : ig,
-                                                                                        ),
-                                                                                    },
-                                                                                }
+                                                                                ...m,
+                                                                                metadata:
+                                                                                {
+                                                                                  ...m.metadata,
+                                                                                  imageGroup:
+                                                                                    m.metadata?.imageGroup?.map(
+                                                                                      (
+                                                                                        ig: any,
+                                                                                        i: number,
+                                                                                      ) =>
+                                                                                        i ===
+                                                                                          originalIdx
+                                                                                          ? {
+                                                                                            ...ig,
+                                                                                            deletedByUsers:
+                                                                                              [
+                                                                                                ...(ig.deletedByUsers ||
+                                                                                                  []),
+                                                                                                myId,
+                                                                                              ],
+                                                                                          }
+                                                                                          : ig,
+                                                                                    ),
+                                                                                },
+                                                                              }
                                                                               : m,
                                                                         ),
                                                                     );
@@ -2797,55 +2824,55 @@ export default function ChatPage() {
                                             );
                                           })()
                                         ) : /* RENDER SINGLE IMAGE */
-                                        isRevoked ? (
-                                          (() => {
-                                            const imgW =
-                                              msg.metadata?.width || 300;
-                                            const imgH =
-                                              msg.metadata?.height || 200;
-                                            const displayH = Math.min(
-                                              420,
-                                              imgH,
-                                            );
-                                            const displayW =
-                                              displayH * (imgW / imgH);
-                                            const isPortraitSingle =
-                                              imgH > imgW;
-                                            return (
-                                              <div
-                                                className="bg-gray-200 rounded-lg flex items-center justify-center"
-                                                style={{
-                                                  width: `${Math.min(displayW, isPortraitSingle ? 280 : 420)}px`,
-                                                  maxWidth: "100%",
-                                                  aspectRatio: `${imgW}/${imgH}`,
-                                                }}
-                                              >
-                                                <div className="text-center text-gray-400">
-                                                  <PhotoIcon className="w-8 h-8 mx-auto mb-1 opacity-50" />
-                                                  <span className="text-xs font-medium">
-                                                    Đã thu hồi
-                                                  </span>
+                                          isRevoked ? (
+                                            (() => {
+                                              const imgW =
+                                                msg.metadata?.width || 300;
+                                              const imgH =
+                                                msg.metadata?.height || 200;
+                                              const displayH = Math.min(
+                                                420,
+                                                imgH,
+                                              );
+                                              const displayW =
+                                                displayH * (imgW / imgH);
+                                              const isPortraitSingle =
+                                                imgH > imgW;
+                                              return (
+                                                <div
+                                                  className="bg-gray-200 rounded-lg flex items-center justify-center"
+                                                  style={{
+                                                    width: `${Math.min(displayW, isPortraitSingle ? 280 : 420)}px`,
+                                                    maxWidth: "100%",
+                                                    aspectRatio: `${imgW}/${imgH}`,
+                                                  }}
+                                                >
+                                                  <div className="text-center text-gray-400">
+                                                    <PhotoIcon className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                                                    <span className="text-xs font-medium">
+                                                      Đã thu hồi
+                                                    </span>
+                                                  </div>
                                                 </div>
-                                              </div>
-                                            );
-                                          })()
-                                        ) : (
-                                          <img
-                                            src={getMediaUrl(msg.content)}
-                                            alt="img"
-                                            className="object-cover max-h-[420px] rounded-lg cursor-pointer"
-                                            onLoad={handleImageLoad}
-                                            onClick={() => {
-                                              if (isMultiSelectMode) return;
-                                              // For legacy single images, we can also use the album preview logic if we want
-                                              // but let's keep it simple for now or set a dummy album
-                                              setActiveAlbumIndex({
-                                                messageId: msg._id,
-                                                index: 0,
-                                              });
-                                            }}
-                                          />
-                                        )}
+                                              );
+                                            })()
+                                          ) : (
+                                            <img
+                                              src={getMediaUrl(msg.content)}
+                                              alt="img"
+                                              className="object-cover max-h-[420px] rounded-lg cursor-pointer"
+                                              onLoad={handleImageLoad}
+                                              onClick={() => {
+                                                if (isMultiSelectMode) return;
+                                                // For legacy single images, we can also use the album preview logic if we want
+                                                // but let's keep it simple for now or set a dummy album
+                                                setActiveAlbumIndex({
+                                                  messageId: msg._id,
+                                                  index: 0,
+                                                });
+                                              }}
+                                            />
+                                          )}
                                       </div>
                                     ) : isRevoked ? (
                                       <div className="flex items-center gap-2 group/revoked px-2 py-1">
@@ -2856,7 +2883,7 @@ export default function ChatPage() {
                                     ) : (msg.type as any) === "system" &&
                                       msg.metadata
                                         ?.callType ? null /* Rendered outside bubble wrapper above */ : msg.type ===
-                                      "file" ? (
+                                          "file" ? (
                                       <div
                                         className={`flex items-center justify-between gap-4 px-2 py-1 transition w-80 max-w-full group`}
                                       >
@@ -2961,7 +2988,7 @@ export default function ChatPage() {
                                                     {groupInfo?.notFound ? "Liên kết đã hết hạn" : (groupInfo?.name || "Đang tải nhóm...")}
                                                   </h5>
                                                   <p className="text-[11px] text-gray-500 font-medium mb-2">
-                                                    {groupInfo?.notFound 
+                                                    {groupInfo?.notFound
                                                       ? "Không tìm thấy thông tin nhóm này"
                                                       : "Bấm vào đây để xem thông tin và tham gia nhóm"}
                                                   </p>
@@ -2990,11 +3017,10 @@ export default function ChatPage() {
                                     {/* end: system call bypasses bubble wrapper */}
                                     {/* Hover Controls (Reaction & Menu & Redo) */}
                                     <div
-                                      className={`absolute bottom-0 ${isMine ? "right-full pr-2" : "left-full pl-2"} flex items-center gap-1 z-[1000] ${
-                                        hoveredMsgId === msg._id && !isMultiSelectMode
+                                      className={`absolute bottom-0 ${isMine ? "right-full pr-2" : "left-full pl-2"} flex items-center gap-1 z-[1000] ${hoveredMsgId === msg._id && !isMultiSelectMode
                                           ? "opacity-100 translate-y-0"
                                           : "opacity-0 translate-y-2 pointer-events-none"
-                                      } transition-all duration-200`}
+                                        } transition-all duration-200`}
                                     >
                                       {/* 1. Reaction Button */}
                                       {!msg.isRevoked && (
@@ -3034,22 +3060,22 @@ export default function ChatPage() {
                                                   String(r.userId) ===
                                                   String(
                                                     currentUser?.id ||
-                                                      currentUser?._id ||
-                                                      currentUser?.userId,
+                                                    currentUser?._id ||
+                                                    currentUser?.userId,
                                                   ),
                                               ) && (
-                                                <button
-                                                  onClick={async () => {
-                                                    setActiveReactionMenu(null);
-                                                    await messageService.clearReactions(
-                                                      msg._id,
-                                                    );
-                                                  }}
-                                                  className="w-8 h-8 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all rounded-full text-gray-400"
-                                                >
-                                                  <XMarkIcon className="w-5 h-5" />
-                                                </button>
-                                              )}
+                                                  <button
+                                                    onClick={async () => {
+                                                      setActiveReactionMenu(null);
+                                                      await messageService.clearReactions(
+                                                        msg._id,
+                                                      );
+                                                    }}
+                                                    className="w-8 h-8 flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all rounded-full text-gray-400"
+                                                  >
+                                                    <XMarkIcon className="w-5 h-5" />
+                                                  </button>
+                                                )}
                                               {Object.entries(EMOJI_MAP).map(
                                                 ([key, icon]) => (
                                                   <button
@@ -3186,9 +3212,9 @@ export default function ChatPage() {
                                                         msg.content,
                                                         msg.metadata
                                                           ?.fileName ||
-                                                          (msg.type === "image"
-                                                            ? "image.png"
-                                                            : "file"),
+                                                        (msg.type === "image"
+                                                          ? "image.png"
+                                                          : "file"),
                                                       );
                                                     }
                                                   }}
@@ -3203,10 +3229,10 @@ export default function ChatPage() {
                                             {isMine &&
                                               !msg.isRevoked &&
                                               new Date().getTime() -
-                                                new Date(
-                                                  msg.createdAt,
-                                                ).getTime() <
-                                                86400000 && (
+                                              new Date(
+                                                msg.createdAt,
+                                              ).getTime() <
+                                              86400000 && (
                                                 <button
                                                   onClick={() =>
                                                     handleRevoke(msg._id)
@@ -3236,8 +3262,8 @@ export default function ChatPage() {
                                         msg.isRevoked &&
                                         msg.revokedAt &&
                                         new Date().getTime() -
-                                          new Date(msg.revokedAt).getTime() <
-                                          60000 && (
+                                        new Date(msg.revokedAt).getTime() <
+                                        60000 && (
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
@@ -3314,20 +3340,19 @@ export default function ChatPage() {
                                                     ),
                                                   )
                                                   .join(", ")}
-                                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] cursor-pointer transition ${
-                                                  msg.reactions!.some(
-                                                    (r: any) =>
-                                                      r.emoji === emojiKey &&
-                                                      String(r.userId) ===
-                                                        String(
-                                                          currentUser?.id ||
-                                                            currentUser?._id ||
-                                                            currentUser?.userId,
-                                                        ),
-                                                  )
+                                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] cursor-pointer transition ${msg.reactions!.some(
+                                                  (r: any) =>
+                                                    r.emoji === emojiKey &&
+                                                    String(r.userId) ===
+                                                    String(
+                                                      currentUser?.id ||
+                                                      currentUser?._id ||
+                                                      currentUser?.userId,
+                                                    ),
+                                                )
                                                     ? "bg-blue-100 text-blue-600 border border-blue-200"
                                                     : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
-                                                }`}
+                                                  }`}
                                               >
                                                 <span>
                                                   {EMOJI_MAP[
@@ -3355,20 +3380,18 @@ export default function ChatPage() {
 
                         {/* Footer: timestamp + trạng thái của nhóm — hiện 1 lần */}
                         <div
-                          className={`flex items-center gap-1 mt-0.5 ${
-                            isMine ? "justify-end pr-10" : "pl-10"
-                          }`}
+                          className={`flex items-center gap-1 mt-0.5 ${isMine ? "justify-end pr-10" : "pl-10"
+                            }`}
                         >
                           <span className="text-[10px] font-bold text-gray-400">
                             {formatTime(lastMsg.createdAt)}
                           </span>
                           {isMine && (
                             <span
-                              className={`text-[10px] font-bold ${
-                                lastMsg.isRead
+                              className={`text-[10px] font-bold ${lastMsg.isRead
                                   ? "text-blue-500"
                                   : "text-gray-400"
-                              }`}
+                                }`}
                             >
                               {lastMsg.isRead ? "✓✓" : "✓"}
                             </span>
@@ -3431,7 +3454,7 @@ export default function ChatPage() {
                 >
                   <span className="bg-white/20 w-5 h-5 rounded-full flex items-center justify-center italic text-[10px]">@</span>
                   Nhắc đến bạn
-                  <div 
+                  <div
                     className="ml-1 p-0.5 hover:bg-white/20 rounded-full transition-colors"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -3555,9 +3578,8 @@ export default function ChatPage() {
                     {filteredMentions.map((item: any, idx: number) => (
                       <div
                         key={item.id}
-                        className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
-                          idx === mentionIndex ? "bg-blue-50" : "hover:bg-gray-50"
-                        }`}
+                        className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${idx === mentionIndex ? "bg-blue-50" : "hover:bg-gray-50"
+                          }`}
                         onMouseEnter={() => setMentionIndex(idx)}
                         onClick={() => handleSelectMention(item)}
                       >
@@ -3666,8 +3688,8 @@ export default function ChatPage() {
                         viewingReactions.activeTab === "all"
                           ? rList
                           : rList.filter(
-                              (r) => r.emoji === viewingReactions.activeTab,
-                            );
+                            (r) => r.emoji === viewingReactions.activeTab,
+                          );
 
                       // Group by user for the right column
                       const userEmoteMap = activeFilters.reduce(
@@ -3819,7 +3841,7 @@ export default function ChatPage() {
             show={showInfoPanel}
             conversationId={conversationId}
             conversationInfo={conversationInfo}
-            messages={mediaMessages}
+            messages={messages}
             currentUser={currentUser}
             onClose={() => setShowInfoPanel(false)}
             onClearHistory={handleClearHistory}
@@ -3836,6 +3858,7 @@ export default function ChatPage() {
             onAssignLeader={handleAssignLeader}
             onRefreshData={handleRefreshData}
             userCache={userCache}
+            otherUserId={otherUserId}
             onOpenPollDetails={(id) => setActivePollId(id)}
           />
 
@@ -4064,7 +4087,7 @@ export default function ChatPage() {
             {/* Modal Header */}
             <div className="px-6 py-5 flex items-center justify-between border-b border-gray-50">
               <h3 className="text-base font-black text-gray-900 tracking-tight">Thông tin nhóm</h3>
-              <button 
+              <button
                 onClick={() => setGroupInfoModal(null)}
                 className="p-2 hover:bg-gray-100 rounded-full transition-colors"
               >
@@ -4077,13 +4100,13 @@ export default function ChatPage() {
               {/* Stacked Avatars */}
               <div className="relative mb-6 flex justify-center">
                 <div className="relative w-24 h-24">
-                  <img 
-                    src={groupInfoModal.groupAvatar ? getMediaUrl(groupInfoModal.groupAvatar) : "/avt-mac-dinh.jpg"} 
+                  <img
+                    src={groupInfoModal.groupAvatar ? getMediaUrl(groupInfoModal.groupAvatar) : "/avt-mac-dinh.jpg"}
                     className="w-24 h-24 rounded-[32px] object-cover ring-4 ring-white shadow-xl relative z-10"
                   />
                   <div className="absolute -right-2 -bottom-2 w-16 h-16 rounded-[24px] bg-gray-100 ring-4 ring-white shadow-lg overflow-hidden opacity-40">
-                    <img 
-                      src={groupInfoModal.groupAvatar ? getMediaUrl(groupInfoModal.groupAvatar) : "/avt-mac-dinh.jpg"} 
+                    <img
+                      src={groupInfoModal.groupAvatar ? getMediaUrl(groupInfoModal.groupAvatar) : "/avt-mac-dinh.jpg"}
                       className="w-full h-full object-cover grayscale"
                     />
                   </div>
@@ -4093,7 +4116,7 @@ export default function ChatPage() {
               <h2 className="text-xl font-black text-gray-900 mb-2 px-4 leading-tight">
                 {groupInfoModal.name}
               </h2>
-              
+
               <div className="flex items-center gap-2 text-sm text-gray-500 font-bold mb-8">
                 <span>{groupInfoModal.members?.length || 0} thành viên</span>
                 <span className="w-1 h-1 rounded-full bg-gray-300" />
@@ -4110,8 +4133,8 @@ export default function ChatPage() {
               <div className="flex -space-x-3 mb-4">
                 {groupInfoModal.members?.slice(0, 5).map((member: any, idx: number) => (
                   <div key={idx} className="w-10 h-10 rounded-2xl ring-4 ring-white overflow-hidden bg-gray-100 shadow-sm">
-                    <img 
-                      src={member.avatar ? getMediaUrl(member.avatar) : "/avt-mac-dinh.jpg"} 
+                    <img
+                      src={member.avatar ? getMediaUrl(member.avatar) : "/avt-mac-dinh.jpg"}
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -4178,8 +4201,8 @@ export default function ChatPage() {
             <div className="mb-8">
               <h3 className="text-xl font-black text-gray-900 mb-3">Yêu cầu tham gia</h3>
               <p className="text-sm text-gray-500 font-medium leading-relaxed">
-                {joinGroupModal.question 
-                  ? "Nhóm này yêu cầu bạn trả lời câu hỏi trước khi tham gia." 
+                {joinGroupModal.question
+                  ? "Nhóm này yêu cầu bạn trả lời câu hỏi trước khi tham gia."
                   : "Yêu cầu của bạn sẽ được gửi đến quản trị viên để xét duyệt."}
               </p>
             </div>
@@ -4240,6 +4263,10 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+      {/* Global Report Selection Toolbar (message selection mode) */}
+      <ReportSelectionToolbar />
+      {/* Global store-driven ReportModal for 1-1 user reports */}
+      <StoreReportModal />
 
       {/* Multi-Select Toolbar */}
       {isMultiSelectMode && (
@@ -4326,5 +4353,52 @@ export default function ChatPage() {
         />
       )}
     </>
+  );
+}
+
+/**
+ * Reads modal state from useChatStore and renders the ReportModal globally.
+ * This is needed because the modal is triggered from ChatInfoPanel but
+ * must survive outside the panel's render tree for the full customize flow.
+ */
+function StoreReportModal() {
+  const {
+    isReportModalOpen,
+    reportTargetId,
+    reportTargetName,
+    selectedMessagesForReport,
+    isCustomizeMode,
+    closeReportModal,
+    enterCustomizeMode,
+    clearReportSelection,
+  } = useChatStore(
+    useShallow((s) => ({
+      isReportModalOpen: s.isReportModalOpen,
+      reportTargetId: s.reportTargetId,
+      reportTargetName: s.reportTargetName,
+      selectedMessagesForReport: s.selectedMessagesForReport,
+      isCustomizeMode: s.isCustomizeMode,
+      closeReportModal: s.closeReportModal,
+      enterCustomizeMode: s.enterCustomizeMode,
+      clearReportSelection: s.clearReportSelection,
+    }))
+  );
+
+  if (!isReportModalOpen || !reportTargetId) return null;
+
+  return (
+    <ReportModal
+      isOpen={isReportModalOpen}
+      onClose={closeReportModal}
+      targetId={reportTargetId}
+      targetType="USER"
+      targetName={reportTargetName ?? undefined}
+      selectedMessageIds={selectedMessagesForReport}
+      isCustomizeMode={isCustomizeMode}
+      onCustomizeEvidence={enterCustomizeMode}
+      onSuccess={() => {
+        clearReportSelection();
+      }}
+    />
   );
 }

@@ -38,8 +38,11 @@ import ReminderModal from "../ui/group/ReminderModal";
 import JoinLinkModal from "../ui/group/JoinLinkModal";
 import MemberManagementModal from "../ui/group/MemberManagementModal";
 import GroupSettingsModal from "../ui/group/GroupSettingsModal";
+import ReportModal from "@/components/ui/report/ReportModal";
 import CreateGroupModal from "../ui/group/CreateGroupModal";
 import { groupService } from "@/services/groupService";
+import { useChatStore } from "@/store/useChatStore";
+import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
 import { getMediaUrl } from "../../utils/media";
 
@@ -60,6 +63,7 @@ interface ChatInfoPanelProps {
   onAssignLeader: (userId: string) => void;
   onRefreshData?: () => void;
   userCache?: Record<string, { name: string; avatar: string }>;
+  otherUserId?: string | null;
   onOpenPollDetails?: (pollId: string) => void;
 }
 
@@ -80,6 +84,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   onAssignLeader,
   onRefreshData,
   userCache = {},
+  otherUserId,
   onOpenPollDetails,
 }) => {
   const [showMembers, setShowMembers] = useState(false);
@@ -91,6 +96,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   const [showMemberManagementModal, setShowMemberManagementModal] =
     useState(false);
   const [showGroupSettingsModal, setShowGroupSettingsModal] = useState(false);
+  const [showReportGroupModal, setShowReportGroupModal] = useState(false);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [showCommonGroupsModal, setShowCommonGroupsModal] = useState(false);
   const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
@@ -194,6 +200,23 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
       )
       .slice(0, 5);
   }, [messages]);
+
+  const {
+    autoSelectEvidence,
+    enterCustomizeMode,
+    openReportModal,
+  } = useChatStore(
+    useShallow((s) => ({
+      autoSelectEvidence: s.autoSelectEvidence,
+      enterCustomizeMode: s.enterCustomizeMode,
+      openReportModal: s.openReportModal,
+    }))
+  );
+
+  const handleReportUser = () => {
+    autoSelectEvidence(messages);
+    openReportModal(otherUserId!, conversationInfo?.displayName);
+  };
 
   // Lọc file
   const fileList = useMemo(() => {
@@ -511,6 +534,11 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
               />
               {isGroup && (
                 <>
+                    <SettingItem
+                      icon={<ExclamationCircleIcon />}
+                      label="Báo xấu nhóm"
+                      onClick={() => setShowReportGroupModal(true)}
+                    />
                   <SettingItem
                     icon={<ArrowRightOnRectangleIcon />}
                     label="Rời khỏi nhóm"
@@ -526,6 +554,13 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                     />
                   )}
                 </>
+              )}
+              {!isGroup && otherUserId && (
+                <SettingItem
+                  icon={<ExclamationCircleIcon />}
+                  label="Báo xấu người dùng"
+                  onClick={handleReportUser}
+                />
               )}
             </div>
           </div>
@@ -600,6 +635,24 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
         />
       )}
 
+      {showReportGroupModal && (
+        <ReportModal
+          isOpen={showReportGroupModal}
+          onClose={() => setShowReportGroupModal(false)}
+          targetId={conversationId}
+          targetType="GROUP"
+          targetName={conversationInfo?.displayName}
+          onSuccess={() => {
+            toast.success("Báo cáo nhóm đã gửi");
+            setShowReportGroupModal(false);
+            // Ask to leave
+            if (confirm("Bạn muốn rời nhóm này sau khi báo cáo không?")) {
+              onLeaveGroup();
+            }
+          }}
+        />
+      )}
+      {/* User Report Modal - driven by store state; rendered in page.tsx */}
       {showGroupSettingsModal && (
         <GroupSettingsModal
           groupId={conversationId}

@@ -54,6 +54,11 @@ spring:
               uri: lb://VOTING-SERVICE
               predicates:
                 - Path=/api/v1/polls/**, /api/v1/polls
+
+            - id: report-service
+              uri: lb://REPORT-SERVICE
+              predicates:
+                - Path=/api/v1/reports/**, /api/v1/admin/reports/**
                 
             - id: realtime-service
               uri: lb://REALTIME-SERVICE
