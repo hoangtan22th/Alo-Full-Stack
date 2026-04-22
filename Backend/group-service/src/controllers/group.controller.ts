@@ -1961,3 +1961,53 @@ export const unblockMember = async (
     res.status(500).json({ error: error.message });
   }
 };
+/**
+ * Lấy danh sách các thành viên bị chặn trong nhóm
+ */
+export const getBlockedMembers = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const groupId = String(req.params.groupId || "").trim();
+    const requesterId = String(req.headers["x-user-id"] || "");
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    // Kiểm tra quyền (Chỉ Admin mới có quyền xem)
+    const requester = group.members.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (
+      !requester ||
+      (requester.role !== "LEADER" && requester.role !== "DEPUTY")
+    ) {
+      res.status(403).json({ error: "Bạn không có quyền xem danh sách này" });
+      return;
+    }
+
+    const blockedMembers = group.removedMembers?.filter((rm) => rm.isBanned) || [];
+
+    // Làm giàu dữ liệu profile người dùng
+    const enrichedBlockedMembers = await Promise.all(
+      blockedMembers.map(async (rm) => {
+        const profile = await getUserProfile(rm.userId, req.headers.authorization);
+        return {
+          userId: rm.userId,
+          removedAt: rm.removedAt,
+          reason: rm.reason,
+          name: profile.fullName,
+          avatar: profile.avatar,
+        };
+      }),
+    );
+
+    res.status(200).json({ data: enrichedBlockedMembers });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
