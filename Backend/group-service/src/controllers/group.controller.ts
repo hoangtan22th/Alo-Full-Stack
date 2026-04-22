@@ -1865,6 +1865,17 @@ export const acceptInvitation = async (
     rabbitMQProducer.publishConversationCreated(group).catch(console.error);
     rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
 
+    // Thông báo cho người mời
+    if (invitation.invitedBy) {
+      getUserFullName(userId, req.headers.authorization).then(accepterName => {
+        rabbitMQProducer.publishInvitationAccepted(
+          String(invitation.invitedBy),
+          group.name || "Nhóm",
+          accepterName
+        );
+      }).catch(console.error);
+    }
+
     // Bắn tin nhắn hệ thống
     const userName = await getUserFullName(userId, req.headers.authorization);
     await postSystemMessage(
