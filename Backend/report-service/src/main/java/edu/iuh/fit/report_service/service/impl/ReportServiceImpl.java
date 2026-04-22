@@ -4,6 +4,7 @@ import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import edu.iuh.fit.report_service.client.UserClient;
 import edu.iuh.fit.report_service.config.RabbitMQConfig;
 import edu.iuh.fit.report_service.dto.event.UserBannedEvent;
+import edu.iuh.fit.report_service.dto.event.UserWarnedEvent;
 import edu.iuh.fit.report_service.dto.request.AdminActionRequest;
 import edu.iuh.fit.report_service.dto.request.ReportCreationRequest;
 import edu.iuh.fit.report_service.dto.response.ReportAdminResponse;
@@ -110,6 +111,9 @@ public class ReportServiceImpl implements ReportService {
                 break;
             case WARN:
                 report.setStatus(ReportStatus.RESOLVED);
+                if (report.getTargetType() == TargetType.USER) {
+                    publishWarnEvent(report);
+                }
                 break;
             case BAN:
                 report.setStatus(ReportStatus.RESOLVED);
@@ -136,6 +140,22 @@ public class ReportServiceImpl implements ReportService {
             log.info("Published USER_BANNED_EVENT to RabbitMQ for TargetId: {}", report.getTargetId());
         } catch (Exception e) {
             log.error("Failed to publish BANNED event for TargetId: {}", report.getTargetId(), e);
+        }
+    }
+
+    private void publishWarnEvent(Report report) {
+        try {
+            UserWarnedEvent event = UserWarnedEvent.builder()
+                    .targetId(report.getTargetId())
+                    .adminNotes(report.getAdminNotes())
+                    .resolvedBy(report.getResolvedBy())
+                    .timestamp(LocalDateTime.now())
+                    .build();
+            
+            rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY_USER_WARNED, event);
+            log.info("Published USER_WARNED_EVENT to RabbitMQ for TargetId: {}", report.getTargetId());
+        } catch (Exception e) {
+            log.error("Failed to publish WARNED event for TargetId: {}", report.getTargetId(), e);
         }
     }
 
