@@ -307,4 +307,26 @@ export const messageService = {
       return false;
     }
   },
+
+  // Thu hồi nhiều tin nhắn cùng lúc
+  bulkRevokeMessages: async (messageIds: string[]): Promise<boolean> => {
+    try {
+      await api.patch(`/messages/bulk/revoke`, { messageIds });
+      return true;
+    } catch (error) {
+      console.error("Lỗi thu hồi nhiều tin nhắn:", error);
+      return false;
+    }
+  },
+
+  // Xóa nhiều tin nhắn chỉ ở phía tôi
+  bulkDeleteMessagesForMe: async (messageIds: string[]): Promise<boolean> => {
+    try {
+      await api.delete(`/messages/bulk/me`, { data: { messageIds } });
+      return true;
+    } catch (error) {
+      console.error("Lỗi xóa nhiều tin nhắn:", error);
+      return false;
+    }
+  },
 };

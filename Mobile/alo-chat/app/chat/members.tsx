@@ -26,6 +26,7 @@ import {
   NoSymbolIcon,
   ChevronRightIcon,
   XMarkIcon,
+  DocumentDuplicateIcon,
 } from "react-native-heroicons/outline";
 import { PaperAirplaneIcon } from "react-native-heroicons/solid";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -64,6 +65,39 @@ export default function GroupMembersScreen() {
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
 
   const [blockedMembers, setBlockedMembers] = useState<any[]>([]);
+  const [groupName, setGroupName] = useState("");
+
+  // Friendship states
+  const [friendshipStatuses, setFriendshipStatuses] = useState<Record<string, "friend" | "sent" | "received" | "none">>({});
+
+  const fetchFriendshipData = async () => {
+    try {
+      const [friendsList, sentRequests, pendingRequests] = await Promise.all([
+        contactService.getFriendsList(),
+        contactService.getSentRequests(),
+        contactService.getPendingRequests(),
+      ]);
+
+      const statuses: Record<string, "friend" | "sent" | "received" | "none"> = {};
+
+      friendsList.forEach((f: any) => {
+        const friendId = f.requesterId === currentUserId ? f.recipientId : f.requesterId;
+        statuses[friendId] = "friend";
+      });
+
+      sentRequests.forEach((r: any) => {
+        statuses[r.recipientId] = "sent";
+      });
+
+      pendingRequests.forEach((r: any) => {
+        statuses[r.requesterId] = "received";
+      });
+
+      setFriendshipStatuses(statuses);
+    } catch (error) {
+      console.error("Lỗi lấy thông tin bạn bè:", error);
+    }
+  };
 
   const fetchGroupDetails = async () => {
     try {
@@ -78,6 +112,7 @@ export default function GroupMembersScreen() {
       }
 
       if (groupData && groupData.members) {
+        setGroupName(groupData.name || "");
         setPendingCount(groupData.joinRequests?.length || 0);
         if (typeof groupData.isHistoryVisible === "boolean") {
           setCanViewHistory(groupData.isHistoryVisible);
@@ -123,7 +158,8 @@ export default function GroupMembersScreen() {
 
   useEffect(() => {
     fetchGroupDetails();
-  }, [id]);
+    fetchFriendshipData();
+  }, [id, currentUserId]);
 
   useEffect(() => {
     if (!socket || !id) return;
@@ -349,6 +385,30 @@ export default function GroupMembersScreen() {
     }
   };
 
+  const handleSendFriendRequest = (member: any) => {
+    router.push({
+      pathname: "/(tabs)/contacts/send-request",
+      params: {
+        userId: member.id,
+        fullName: member.name,
+        avatarUrl: member.avatar,
+        from: "chat",
+        chatId: id as string,
+      },
+    });
+  };
+
+  const handleCopyGroup = () => {
+    const memberIds = members.map((m) => m.id).join(",");
+    router.push({
+      pathname: "/groups/create-group",
+      params: {
+        initialMemberIds: memberIds,
+        initialGroupName: `${groupName} (Copy)`,
+      },
+    });
+  };
+
   const filteredMembers = members.filter((m) =>
     m.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
@@ -377,6 +437,9 @@ export default function GroupMembersScreen() {
           <Text className="text-lg font-bold text-gray-900">Thành viên</Text>
         </View>
         <View className="flex-row">
+          <TouchableOpacity className="p-2 mr-2" onPress={handleCopyGroup}>
+            <DocumentDuplicateIcon size={24} color="#000" />
+          </TouchableOpacity>
           <TouchableOpacity className="p-2 mr-2" onPress={handleAddMember}>
             <UserPlusIcon size={24} color="#000" />
           </TouchableOpacity>
@@ -504,7 +567,26 @@ export default function GroupMembersScreen() {
                   <Text className="text-blue-600 text-[13px] font-bold">Gỡ chặn</Text>
                 </TouchableOpacity>
               ) : (
-                isManager && <EllipsisVerticalIcon size={24} color="#9ca3af" />
+                <View className="flex-row items-center">
+                  {member.id !== currentUserId && !friendshipStatuses[member.id] && (
+                    <TouchableOpacity
+                      onPress={() => handleSendFriendRequest(member)}
+                      className="p-2 mr-1"
+                    >
+                      <UserPlusIcon size={24} color="#3b82f6" />
+                    </TouchableOpacity>
+                  )}
+                  {friendshipStatuses[member.id] === "sent" && (
+                    <View className="bg-gray-100 px-2 py-1 rounded-md mr-2">
+                      <Text className="text-[11px] text-gray-500 font-medium">Đã mời</Text>
+                    </View>
+                  )}
+                  {isManager && (
+                    <TouchableOpacity onPress={() => handleMemberAction(member)} className="p-2">
+                       <EllipsisVerticalIcon size={24} color="#9ca3af" />
+                    </TouchableOpacity>
+                  )}
+                </View>
               )}
             </TouchableOpacity>
           ))}

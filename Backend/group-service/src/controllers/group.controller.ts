@@ -169,25 +169,31 @@ export const createGroup = async (
     }
 
     // Lấy danh sách bạn bè của người tạo nhóm
-    console.log(`[CreateGroup] Check danh sách userIds truyền vào:`, userIds);
-    // Bổ sung truyền header Authorization JWT qua Request Fetch nội bộ
+    // Nếu tạo nhóm từ bình chọn (fromPoll), bỏ qua kiểm tra bạn bè vì voters đều là thành viên cùng nhóm chat
+    const fromPoll = req.body.fromPoll === true || req.body.fromPoll === "true";
+    const isCopy = req.body.isCopy === true || req.body.isCopy === "true";
     const authHeader = req.headers.authorization;
-    const friendIds = await getFriendIds(creatorId, authHeader);
+    console.log(`[CreateGroup] Check danh sách userIds truyền vào:`, userIds, (fromPoll || isCopy) ? `(${fromPoll ? "fromPoll" : "isCopy"} - skip friend check)` : "");
+    
+    if (!fromPoll && !isCopy) {
+      // Bổ sung truyền header Authorization JWT qua Request Fetch nội bộ
+      const friendIds = await getFriendIds(creatorId, authHeader);
 
-    // So sánh dạng string thuần tuý do Node & Java có thể chênh lệch Object ID
-    const normalizedFriendIds = friendIds.map((f) => f.toString());
-    const nonFriends = userIds.filter(
-      (id) => !normalizedFriendIds.includes(id.toString()),
-    );
-
-    if (nonFriends.length > 0) {
-      console.log(
-        `[CreateGroup] Từ chối! Phát hiện users chưa kết bạn: ${nonFriends.join(", ")}`,
+      // So sánh dạng string thuần tuý do Node & Java có thể chênh lệch Object ID
+      const normalizedFriendIds = friendIds.map((f) => f.toString());
+      const nonFriends = userIds.filter(
+        (id) => !normalizedFriendIds.includes(id.toString()),
       );
-      res.status(403).json({
-        error: "Chỉ được phép mời người đã kết bạn vào nhóm",
-      });
-      return;
+
+      if (nonFriends.length > 0) {
+        console.log(
+          `[CreateGroup] Từ chối! Phát hiện users chưa kết bạn: ${nonFriends.join(", ")}`,
+        );
+        res.status(403).json({
+          error: "Chỉ được phép mời người đã kết bạn vào nhóm",
+        });
+        return;
+      }
     }
     // Handle Image Upload (Nếu có)
     if (req.file) {
@@ -387,8 +393,12 @@ export const removeMember = async (
       return;
     }
 
-    const requester = group.members.find((m) => m.userId === requesterId);
-    const target = group.members.find((m) => m.userId === userId);
+    const requester = group.members.find(
+      (m) => m.userId.toString().trim() === requesterId.toString().trim(),
+    );
+    const target = group.members.find(
+      (m) => m.userId.toString().trim() === userId.toString().trim(),
+    );
 
     if (!requester || !target) {
       res.status(400).json({ error: "Thành viên không hợp lệ" });
@@ -429,7 +439,7 @@ export const removeMember = async (
 
     // Xóa thông tin cũ nếu có
     group.removedMembers = group.removedMembers.filter(
-      (rm) => rm.userId !== userId,
+      (rm) => rm.userId.toString().trim() !== userId.toString().trim(),
     );
 
     group.removedMembers.push({
@@ -441,7 +451,9 @@ export const removeMember = async (
     });
 
     // Thực hiện xóa khỏi members
-    group.members = group.members.filter((m) => m.userId !== userId);
+    group.members = group.members.filter(
+      (m) => m.userId.toString().trim() !== userId.toString().trim(),
+    );
     await group.save();
 
     // Real-time Sync
@@ -680,6 +692,33 @@ export const getMyGroups = async (
     });
 
     res.status(200).json({ data: filteredGroups });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 6.1 Lấy danh sách nhóm chung với một user khác
+export const getCommonGroups = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const currentUserId = String(req.headers["x-user-id"] || "");
+    const otherUserId = String(req.params.otherUserId || "");
+
+    if (!otherUserId) {
+      res.status(400).json({ error: "Thiếu thông tin người dùng" });
+      return;
+    }
+
+    // Tìm các conversation là nhóm (isGroup: true) 
+    // và có cả 2 user trong danh sách members
+    const groups = await Conversation.find({
+      isGroup: true,
+      "members.userId": { $all: [currentUserId, otherUserId] }
+    }).sort({ updatedAt: -1 });
+
+    res.status(200).json({ data: groups });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -1710,16 +1749,31 @@ export const inviteToGroup = async (
 
     // 2. Kiểm tra ban/block
     const removedInfo = group.removedMembers?.find(
-      (rm) => rm.userId === finalTargetUserId,
+      (rm) => rm.userId.toString().trim() === finalTargetUserId.toString().trim(),
     );
+
+    const requester = group.members.find(
+      (m) => m.userId === requesterId,
+    );
+    const requesterRole = requester?.role;
+    const isRequesterAdmin =
+      requesterRole === "LEADER" || requesterRole === "DEPUTY";
+
     if (removedInfo) {
       if (removedInfo.isBanned) {
-        res
-          .status(403)
-          .json({ error: "Người dùng này đã bị cấm tham gia nhóm" });
-        return;
-      }
-      if (removedInfo.preventReinvite) {
+        if (!isRequesterAdmin) {
+          res
+            .status(403)
+            .json({ error: "Người dùng này đã bị cấm tham gia nhóm" });
+          return;
+        } else {
+          // Admin mời lại -> Tự động gỡ chặn
+          group.removedMembers = group.removedMembers.filter(
+            (rm) => rm.userId.toString().trim() !== finalTargetUserId.toString().trim(),
+          );
+          // Không return, tiếp tục để thêm vào invitations
+        }
+      } else if (removedInfo.preventReinvite) {
         res
           .status(403)
           .json({ error: "Người dùng này đã chặn lời mời vào nhóm này" });
@@ -1810,6 +1864,17 @@ export const acceptInvitation = async (
     // Thông báo cho mọi người
     rabbitMQProducer.publishConversationCreated(group).catch(console.error);
     rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
+
+    // Thông báo cho người mời
+    if (invitation.invitedBy) {
+      getUserFullName(userId, req.headers.authorization).then(accepterName => {
+        rabbitMQProducer.publishInvitationAccepted(
+          String(invitation.invitedBy),
+          group.name || "Nhóm",
+          accepterName
+        );
+      }).catch(console.error);
+    }
 
     // Bắn tin nhắn hệ thống
     const userName = await getUserFullName(userId, req.headers.authorization);
@@ -1952,6 +2017,56 @@ export const unblockMember = async (
     rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
 
     res.status(200).json({ message: "Đã gỡ chặn thành viên", data: group });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+/**
+ * Lấy danh sách các thành viên bị chặn trong nhóm
+ */
+export const getBlockedMembers = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const groupId = String(req.params.groupId || "").trim();
+    const requesterId = String(req.headers["x-user-id"] || "");
+
+    const group = await Conversation.findById(groupId);
+    if (!group) {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
+
+    // Kiểm tra quyền (Chỉ Admin mới có quyền xem)
+    const requester = group.members.find(
+      (m) => m.userId.toString() === requesterId,
+    );
+    if (
+      !requester ||
+      (requester.role !== "LEADER" && requester.role !== "DEPUTY")
+    ) {
+      res.status(403).json({ error: "Bạn không có quyền xem danh sách này" });
+      return;
+    }
+
+    const blockedMembers = group.removedMembers?.filter((rm) => rm.isBanned) || [];
+
+    // Làm giàu dữ liệu profile người dùng
+    const enrichedBlockedMembers = await Promise.all(
+      blockedMembers.map(async (rm) => {
+        const profile = await getUserProfile(rm.userId, req.headers.authorization);
+        return {
+          userId: rm.userId,
+          removedAt: rm.removedAt,
+          reason: rm.reason,
+          name: profile.fullName,
+          avatar: profile.avatar,
+        };
+      }),
+    );
+
+    res.status(200).json({ data: enrichedBlockedMembers });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

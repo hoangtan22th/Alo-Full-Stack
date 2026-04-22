@@ -407,9 +407,10 @@ export default function ConversationSidebar() {
     try {
       setLoading(true);
       const friends = await contactService.getFriendsList();
+      const myId = String(currentUser?.id || currentUser?._id || currentUser?.userId);
       const fIds = new Set(
         friends.map((f) =>
-          f.requesterId === currentUser?.id ? f.recipientId : f.requesterId,
+          String(f.requesterId) === myId ? String(f.recipientId) : String(f.requesterId),
         ),
       );
       setFriendIds(fIds);
@@ -452,25 +453,8 @@ export default function ConversationSidebar() {
           });
         },
       ),
-      socketService.onConversationCreated(async (newConvo: any) => {
-        setConversations((prev) => {
-          const convoId = newConvo._id || newConvo.id;
-          const exists = prev.some((c) => (c.id || c._id) === convoId);
-          if (exists) return prev;
-
-          const formatted = {
-            ...newConvo,
-            id: convoId,
-            time: new Date(newConvo.updatedAt || new Date()).toLocaleTimeString(
-              [],
-              {
-                hour: "2-digit",
-                minute: "2-digit",
-              },
-            ),
-          };
-          return [formatted, ...prev];
-        });
+      socketService.onConversationCreated(async () => {
+        fetchGroups();
       }),
       socketService.onConversationRemoved(
         (data: { conversationId: string }) => {
@@ -732,11 +716,16 @@ export default function ConversationSidebar() {
           !friendIds.has(chat.otherMemberUserId);
 
         const isPriority =
-          folder === "priority" || (!folder && !isStrangerConvo);
+          folder === "priority" ||
+          (!folder && !isStrangerConvo) ||
+          chat.isGroup === true ||
+          chat.id === BOT_ID;
         const isOther =
-          folder === "other" ||
-          folder === "stranger" ||
-          (!folder && isStrangerConvo);
+          (folder === "other" ||
+            folder === "stranger" ||
+            (!folder && isStrangerConvo)) &&
+          chat.isGroup !== true &&
+          chat.id !== BOT_ID;
 
         if (isPriority) pCount++;
         else if (isOther) oCount++;

@@ -18,8 +18,9 @@ export default function GlobalNotificationHandler() {
   useEffect(() => {
     if (currentUser && friendIds.size === 0) {
       contactService.getFriendsList().then(friends => {
+        const myId = String(currentUser.id || currentUser._id || currentUser.userId);
         const fIds = new Set(friends.map(f => 
-          f.requesterId === currentUser.id ? f.recipientId : f.requesterId
+          String(f.requesterId) === myId ? String(f.recipientId) : String(f.requesterId)
         ));
         setFriendIds(fIds);
       }).catch(console.error);
@@ -85,6 +86,7 @@ export default function GlobalNotificationHandler() {
       console.log(`🔍 [GlobalNotification] Comparing: ActiveRoom=${currentConvoId}, IncomingMsgRoom=${msgConvoId}`);
 
       if (currentConvoId !== msgConvoId) {
+        // If it's a group, it's NOT a stranger conversation
         const isStranger = !msg.isGroup && !friendIds.has(String(msg.senderId)) && String(msg.senderId) !== "alo-bot";
         
         console.log("🔔 [GlobalNotification] Conditions met. Showing toast...", { isStranger });
@@ -131,14 +133,86 @@ export default function GlobalNotificationHandler() {
       if (convoId) setTyping(String(convoId), String(senderId), false);
     };
 
+    const onNewJoinRequest = (data: any) => {
+      console.log("🔔 [GlobalNotification] New Join Request:", data);
+      toast.info(`Yêu cầu tham gia nhóm`, {
+        description: `${data.requesterName} muốn tham gia nhóm ${data.groupName}`,
+        duration: 5000,
+      });
+    };
+
+    const onJoinRequestApproved = (data: any) => {
+      console.log("🔔 [GlobalNotification] Join Request Approved:", data);
+      toast.success(`Yêu cầu tham gia được duyệt`, {
+        description: `Bạn đã trở thành thành viên của nhóm ${data.groupName}`,
+        duration: 5000,
+        action: {
+          label: "Vào nhóm",
+          onClick: () => router.push(`/chat/${data.groupId}`),
+        },
+      });
+    };
+
+    const onJoinRequestRejected = (data: any) => {
+      console.log("🔔 [GlobalNotification] Join Request Rejected:", data);
+      toast.error(`Yêu cầu tham gia bị từ chối`, {
+        description: `Yêu cầu tham gia nhóm ${data.groupName} của bạn không được chấp nhận`,
+        duration: 5000,
+      });
+    };
+
+    const onNewInvitation = (data: any) => {
+      console.log("🔔 [GlobalNotification] New Invitation:", data);
+      toast.info(`Lời mời vào nhóm`, {
+        description: `Bạn nhận được lời mời tham gia nhóm ${data.groupName}`,
+        duration: 6000,
+        action: {
+          label: "Xem ngay",
+          onClick: () => router.push("/chat?tab=invitations"),
+        },
+      });
+    };
+
+    const onAddedToGroup = (data: any) => {
+      console.log("🔔 [GlobalNotification] Added To Group:", data);
+      toast.success(`Bạn đã được thêm vào nhóm`, {
+        description: `Bạn đã là thành viên của nhóm ${data.groupName}`,
+        duration: 5000,
+        action: {
+          label: "Vào nhóm",
+          onClick: () => router.push(`/chat/${data.groupId}`),
+        },
+      });
+    };
+
+    const onInvitationAccepted = (data: any) => {
+      console.log("🔔 [GlobalNotification] Invitation Accepted:", data);
+      toast.success(`Lời mời được chấp nhận`, {
+        description: `${data.accepterName} đã chấp nhận lời mời vào nhóm ${data.groupName}`,
+        duration: 5000,
+      });
+    };
+
     socketService.onMessageReceived(onMessage);
     socketService.onTyping(onTyping);
     socketService.onStopTyping(onStopTyping);
+    socketService.onNewJoinRequest(onNewJoinRequest);
+    socketService.onJoinRequestApproved(onJoinRequestApproved);
+    socketService.onJoinRequestRejected(onJoinRequestRejected);
+    socketService.onNewInvitation(onNewInvitation);
+    socketService.onAddedToGroup(onAddedToGroup);
+    socketService.onInvitationAccepted(onInvitationAccepted);
 
     return () => {
       socketService.removeListener("message-received", onMessage);
       socketService.removeListener("TYPING", onTyping);
       socketService.removeListener("STOP_TYPING", onStopTyping);
+      socketService.removeListener("NEW_JOIN_REQUEST", onNewJoinRequest);
+      socketService.removeListener("JOIN_REQUEST_APPROVED", onJoinRequestApproved);
+      socketService.removeListener("JOIN_REQUEST_REJECTED", onJoinRequestRejected);
+      socketService.removeListener("NEW_INVITATION", onNewInvitation);
+      socketService.removeListener("ADDED_TO_GROUP", onAddedToGroup);
+      socketService.removeListener("INVITATION_ACCEPTED", onInvitationAccepted);
     };
   }, [currentUser, pathname, router, setTyping]);
 

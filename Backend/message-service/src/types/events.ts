@@ -20,6 +20,7 @@ export interface MessageEvent {
   };
   createdAt: Date;
   updatedAt?: Date;
+  isGroup?: boolean;
 }
 
 export interface PresenceEvent {
