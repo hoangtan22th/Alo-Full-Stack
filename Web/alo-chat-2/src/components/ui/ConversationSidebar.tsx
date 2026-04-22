@@ -407,9 +407,10 @@ export default function ConversationSidebar() {
     try {
       setLoading(true);
       const friends = await contactService.getFriendsList();
+      const myId = String(currentUser?.id || currentUser?._id || currentUser?.userId);
       const fIds = new Set(
         friends.map((f) =>
-          f.requesterId === currentUser?.id ? f.recipientId : f.requesterId,
+          String(f.requesterId) === myId ? String(f.recipientId) : String(f.requesterId),
         ),
       );
       setFriendIds(fIds);
@@ -732,11 +733,16 @@ export default function ConversationSidebar() {
           !friendIds.has(chat.otherMemberUserId);
 
         const isPriority =
-          folder === "priority" || (!folder && !isStrangerConvo);
+          folder === "priority" ||
+          (!folder && !isStrangerConvo) ||
+          chat.isGroup === true ||
+          chat.id === BOT_ID;
         const isOther =
-          folder === "other" ||
-          folder === "stranger" ||
-          (!folder && isStrangerConvo);
+          (folder === "other" ||
+            folder === "stranger" ||
+            (!folder && isStrangerConvo)) &&
+          chat.isGroup !== true &&
+          chat.id !== BOT_ID;
 
         if (isPriority) pCount++;
         else if (isOther) oCount++;
