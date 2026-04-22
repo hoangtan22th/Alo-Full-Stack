@@ -28,7 +28,7 @@ interface ReportActionModalProps {
     reportId: string,
     action: "DISMISS" | "WARN" | "BAN",
     notes: string,
-  ) => void;
+  ) => Promise<void> | void;
 }
 
 const REASON_LABELS: Record<string, string> = {
@@ -51,6 +51,7 @@ export function ReportActionModal({
   const [loadingEvidence, setLoadingEvidence] = useState(false);
   const [groupInfo, setGroupInfo] = useState<{name?: string, avatar?: string | null} | null>(null);
   const [loadingGroup, setLoadingGroup] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -142,12 +143,20 @@ export function ReportActionModal({
   const isUser = report.targetType === "USER";
   const isGroup = report.targetType === "GROUP";
 
-  const handleSubmit = (action: "DISMISS" | "WARN" | "BAN") => {
+  const handleSubmit = async (action: "DISMISS" | "WARN" | "BAN") => {
     if ((action === "WARN" || action === "BAN") && !adminNotes.trim()) {
       toast.error("Vui lòng nhập Admin Notes trước khi Cảnh cáo hoặc Cấm!");
       return;
     }
-    onSubmit(report.id, action, adminNotes);
+    
+    try {
+      setIsSubmitting(true);
+      await onSubmit(report.id, action, adminNotes);
+    } catch (error) {
+      console.error("Failed to submit report action", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -395,35 +404,39 @@ export function ReportActionModal({
             ⚖️ Quyết định xử lý
           </h4>
           <textarea
-            className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-3 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary min-h-[100px] transition-all resize-y placeholder:text-on-surface-variant/50"
+            className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-3 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary min-h-[100px] transition-all resize-y placeholder:text-on-surface-variant/50 disabled:opacity-50"
             placeholder="Nhập ghi chú cho quyết định (Bắt buộc nếu chọn Warn/Ban)..."
             value={adminNotes}
             onChange={(e) => setAdminNotes(e.target.value)}
+            disabled={isSubmitting}
           />
         </section>
 
         <DialogFooter className="mt-6 flex sm:justify-between items-center gap-3">
-          <Button variant="ghost" onClick={onClose} className="text-on-surface-variant hover:bg-surface-variant">
+          <Button variant="ghost" onClick={onClose} disabled={isSubmitting} className="text-on-surface-variant hover:bg-surface-variant">
             Hủy bỏ
           </Button>
           <div className="flex items-center justify-end gap-3 flex-wrap">
             <Button
               variant="outline"
               onClick={() => handleSubmit("DISMISS")}
-              className="border-outline-variant text-on-surface-variant hover:bg-surface-container-highest"
+              disabled={isSubmitting}
+              className="border-outline-variant text-on-surface-variant hover:bg-surface-container-highest flex items-center gap-2"
             >
-              Bỏ qua
+              {isSubmitting ? "Đang xử lý..." : "Bỏ qua"}
             </Button>
             <Button
               variant="outline"
               onClick={() => handleSubmit("WARN")}
-              className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
+              disabled={isSubmitting}
+              className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 flex items-center gap-2"
             >
               ⚠️ Cảnh cáo
             </Button>
             <Button
               onClick={() => handleSubmit("BAN")}
-              className="bg-red-600 text-white hover:bg-red-700 font-bold shadow-sm"
+              disabled={isSubmitting}
+              className="bg-red-600 text-white hover:bg-red-700 font-bold shadow-sm flex items-center gap-2"
             >
               🚫 Cấm (Ban)
             </Button>

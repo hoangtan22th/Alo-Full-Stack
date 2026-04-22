@@ -11,6 +11,7 @@ public class RabbitMQConfig {
 
     public static final String EXCHANGE_NAME = "admin.exchange";
     public static final String ROUTING_KEY_USER_BANNED = "user.banned";
+    public static final String ROUTING_KEY_USER_WARNED = "user.warned";
 
     @Bean
     public TopicExchange adminExchange() {
