@@ -454,4 +454,13 @@ export const groupService = {
       throw error;
     }
   },
+  getCommonGroups: async (otherUserId: string) => {
+    try {
+      const res = await api.get<any, any>(`/groups/common/${otherUserId}`);
+      return res?.data?.data ? res.data.data : res?.data ? res.data : res;
+    } catch (error) {
+      console.error("Lỗi lấy danh sách nhóm chung:", error);
+      throw error;
+    }
+  },
 };
