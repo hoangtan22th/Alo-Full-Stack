@@ -28,12 +28,15 @@ export const groupService = {
     }
   },
 
-  createGroup: async (name: string, userIds: string[], imageUri?: string) => {
+  createGroup: async (name: string, userIds: string[], imageUri?: string, isCopy?: boolean) => {
     try {
       if (imageUri) {
         const formData = new FormData();
         formData.append("name", name);
         formData.append("userIds", JSON.stringify(userIds));
+        if (isCopy) {
+          formData.append("isCopy", "true");
+        }
 
         const filename = imageUri.split("/").pop() || "avatar.jpg";
         const match = /\.(\w+)$/.exec(filename);
@@ -56,6 +59,7 @@ export const groupService = {
       const data = await api.post<any, any>(`/groups`, {
         name,
         userIds,
+        isCopy,
       });
       return data;
     } catch (error) {

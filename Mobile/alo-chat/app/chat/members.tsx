@@ -26,6 +26,7 @@ import {
   NoSymbolIcon,
   ChevronRightIcon,
   XMarkIcon,
+  DocumentDuplicateIcon,
 } from "react-native-heroicons/outline";
 import { PaperAirplaneIcon } from "react-native-heroicons/solid";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -64,6 +65,7 @@ export default function GroupMembersScreen() {
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
 
   const [blockedMembers, setBlockedMembers] = useState<any[]>([]);
+  const [groupName, setGroupName] = useState("");
 
   // Friendship states
   const [friendshipStatuses, setFriendshipStatuses] = useState<Record<string, "friend" | "sent" | "received" | "none">>({});
@@ -110,6 +112,7 @@ export default function GroupMembersScreen() {
       }
 
       if (groupData && groupData.members) {
+        setGroupName(groupData.name || "");
         setPendingCount(groupData.joinRequests?.length || 0);
         if (typeof groupData.isHistoryVisible === "boolean") {
           setCanViewHistory(groupData.isHistoryVisible);
@@ -395,6 +398,17 @@ export default function GroupMembersScreen() {
     });
   };
 
+  const handleCopyGroup = () => {
+    const memberIds = members.map((m) => m.id).join(",");
+    router.push({
+      pathname: "/groups/create-group",
+      params: {
+        initialMemberIds: memberIds,
+        initialGroupName: `${groupName} (Copy)`,
+      },
+    });
+  };
+
   const filteredMembers = members.filter((m) =>
     m.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
@@ -423,6 +437,9 @@ export default function GroupMembersScreen() {
           <Text className="text-lg font-bold text-gray-900">Thành viên</Text>
         </View>
         <View className="flex-row">
+          <TouchableOpacity className="p-2 mr-2" onPress={handleCopyGroup}>
+            <DocumentDuplicateIcon size={24} color="#000" />
+          </TouchableOpacity>
           <TouchableOpacity className="p-2 mr-2" onPress={handleAddMember}>
             <UserPlusIcon size={24} color="#000" />
           </TouchableOpacity>
