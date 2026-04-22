@@ -39,6 +39,7 @@ import {
   ChartBarIcon,
   PencilSquareIcon,
   CalendarDaysIcon,
+  PlusCircleIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -87,9 +88,15 @@ export default function ChatInfoScreen() {
   const [isSilentLeave, setIsSilentLeave] = useState(false);
   const [blockReinvite, setBlockReinvite] = useState(false);
 
+  // States cho Nhóm chung
+  const [otherUserId, setOtherUserId] = useState<string | null>(null);
+  const [commonGroups, setCommonGroups] = useState<any[]>([]);
+  const [isCommonGroupsModalVisible, setIsCommonGroupsModalVisible] = useState(false);
+  const [isFetchingCommon, setIsFetchingCommon] = useState(false);
+
   const fetchGroupDetails = async () => {
     try {
-      if (!isGroup || !id) return;
+      if (!id) return;
       const res = await groupService.getGroupById(id as string);
 
       let groupData = res;
@@ -98,6 +105,17 @@ export default function ChatInfoScreen() {
       } else if (res?.data) {
         groupData = res.data;
       }
+
+      if (!isGroup && groupData && groupData.members) {
+        const otherMember = groupData.members.find(
+          (m: any) => m.userId !== currentUserId,
+        );
+        if (otherMember) {
+          setOtherUserId(otherMember.userId);
+        }
+      }
+
+      if (!isGroup) return; // Các xử lý bên dưới dành riêng cho Group
 
       if (groupData?.name) {
         setGroupName(groupData.name);
@@ -443,6 +461,24 @@ export default function ChatInfoScreen() {
     );
   };
 
+  const handleViewCommonGroups = async () => {
+    if (!otherUserId) {
+      Alert.alert("Thông báo", "Không tìm thấy thông tin người dùng");
+      return;
+    }
+    try {
+      setIsFetchingCommon(true);
+      const res = await groupService.getCommonGroups(otherUserId);
+      setCommonGroups(res || []);
+      setIsCommonGroupsModalVisible(true);
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Lỗi", "Không thể lấy danh sách nhóm chung");
+    } finally {
+      setIsFetchingCommon(false);
+    }
+  };
+
   return (
     <View className="flex-1 bg-[#fcfcfc]" style={{ paddingTop: insets.top }}>
       {/* Header */}
@@ -563,6 +599,7 @@ export default function ChatInfoScreen() {
                 <UserGroupIcon size={24} color="#374151" strokeWidth={1.5} />
               }
               label="Nhóm chung"
+              onPress={handleViewCommonGroups}
             />
           )}
         </View>
@@ -776,6 +813,31 @@ export default function ChatInfoScreen() {
           </View>
         </View>
 
+        {!isGroup && (
+          <View className="mt-10 px-5 pb-8">
+            <Text className="text-[11px] font-bold text-gray-500 uppercase tracking-[1px] mb-4">
+              Tiện ích khác
+            </Text>
+
+            <View className="bg-[#f5f6f8] rounded-[24px]">
+              <SettingItem
+                icon={<PlusCircleIcon size={24} color="#4b5563" />}
+                title={`Tạo nhóm với ${groupName}`}
+                onPress={() => {
+                  if (otherUserId) {
+                    router.push({
+                      pathname: "/groups/create-group",
+                      params: {
+                        initialMemberIds: otherUserId,
+                      },
+                    } as any);
+                  }
+                }}
+              />
+            </View>
+          </View>
+        )}
+
         {isGroup && (
           <>
             {/* SECTION: RỜI / GIẢI TÁN NHÓM */}
@@ -964,6 +1026,89 @@ export default function ChatInfoScreen() {
         onClose={() => setViewerIndex(null)}
         onIndexChange={(idx) => setViewerIndex(idx)}
       />
+
+      {/* Modal Nhóm chung */}
+      <Modal
+        visible={isCommonGroupsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsCommonGroupsModalVisible(false)}
+      >
+        <View className="flex-1 justify-end bg-black/40">
+          <View className="bg-white rounded-t-[32px] min-h-[45%] max-h-[85%] p-6 pt-2">
+            <View className="w-10 h-1 bg-gray-200 rounded-full self-center my-3" />
+            <View className="flex-row justify-between items-center mb-6">
+              <View>
+                <Text className="text-xl font-bold text-gray-900">Nhóm chung</Text>
+                <Text className="text-gray-500 text-sm">{commonGroups.length} nhóm chung</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsCommonGroupsModalVisible(false)}
+                className="bg-gray-100 p-2 rounded-full"
+              >
+                <XMarkIcon size={20} color="#4b5563" />
+              </TouchableOpacity>
+            </View>
+
+            {isFetchingCommon ? (
+              <View className="flex-1 items-center justify-center">
+                <Text className="text-gray-400">Đang tải...</Text>
+              </View>
+            ) : commonGroups.length > 0 ? (
+              <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
+                {commonGroups.map((g) => (
+                  <TouchableOpacity
+                    key={g._id || g.id}
+                    onPress={() => {
+                      setIsCommonGroupsModalVisible(false);
+                      router.push({
+                        pathname: "/chat/[id]",
+                        params: {
+                          id: g._id || g.id,
+                          name: g.name,
+                          isGroup: "true",
+                          avatar: g.groupAvatar || "",
+                        },
+                      } as any);
+                    }}
+                    className="flex-row items-center p-3 mb-3 bg-gray-50 rounded-2xl border border-gray-100"
+                  >
+                    {g.groupAvatar ? (
+                      <Image
+                        source={{ uri: g.groupAvatar }}
+                        className="w-12 h-12 rounded-full"
+                      />
+                    ) : (
+                      <View className="w-12 h-12 bg-gray-200 rounded-full items-center justify-center">
+                        <Text className="text-gray-500 font-bold">
+                          {g.name?.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <View className="ml-4 flex-1">
+                      <Text className="text-base font-bold text-gray-900">
+                        {g.name}
+                      </Text>
+                      <Text className="text-sm text-gray-500">
+                        {g.members?.length || 0} thành viên
+                      </Text>
+                    </View>
+                    <ChevronRightIcon size={20} color="#d1d5db" />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : (
+              <View className="flex-1 items-center justify-center py-10">
+                <View className="bg-gray-50 p-6 rounded-full mb-4">
+                  <UserGroupIcon size={40} color="#d1d5db" />
+                </View>
+                <Text className="text-gray-500 font-medium">Không có nhóm chung nào</Text>
+              </View>
+            )}
+            <View className="h-6" />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

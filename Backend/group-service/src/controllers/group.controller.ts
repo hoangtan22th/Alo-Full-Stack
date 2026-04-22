@@ -171,10 +171,11 @@ export const createGroup = async (
     // Lấy danh sách bạn bè của người tạo nhóm
     // Nếu tạo nhóm từ bình chọn (fromPoll), bỏ qua kiểm tra bạn bè vì voters đều là thành viên cùng nhóm chat
     const fromPoll = req.body.fromPoll === true || req.body.fromPoll === "true";
+    const isCopy = req.body.isCopy === true || req.body.isCopy === "true";
     const authHeader = req.headers.authorization;
-    console.log(`[CreateGroup] Check danh sách userIds truyền vào:`, userIds, fromPoll ? "(fromPoll - skip friend check)" : "");
+    console.log(`[CreateGroup] Check danh sách userIds truyền vào:`, userIds, (fromPoll || isCopy) ? `(${fromPoll ? "fromPoll" : "isCopy"} - skip friend check)` : "");
     
-    if (!fromPoll) {
+    if (!fromPoll && !isCopy) {
       // Bổ sung truyền header Authorization JWT qua Request Fetch nội bộ
       const friendIds = await getFriendIds(creatorId, authHeader);
 
