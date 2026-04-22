@@ -47,12 +47,15 @@ import {
   CheckIcon,
   PhotoIcon,
 } from "@heroicons/react/24/outline";
+import ReportSelectionToolbar from "@/components/ui/report/ReportSelectionToolbar";
+import ReportModal from "@/components/ui/report/ReportModal";
 import { motion } from "framer-motion";
 import BotChatArea from "@/components/ui/BotChatArea";
 import StickerPicker from "@/components/ui/StickerPicker";
 import ForwardMessageModal from "@/components/ui/ForwardMessageModal";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useChatStore } from "@/store/useChatStore";
+import { useShallow } from "zustand/react/shallow";
 import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
 import PollMessagePreview from "@/components/chat/PollMessagePreview";
 import PollDetailsModal from "@/components/ui/group/PollDetailsModal";
@@ -174,6 +177,13 @@ export default function ChatPage() {
   // Optimized selector with stable empty array to avoid infinite loop
   const typingForThisConvo = useChatStore(
     (state) => state.typingUsers[conversationId] || EMPTY_ARRAY,
+  );
+  const { isReportSelectionMode, selectedMessagesForReport, toggleMessageForReport } = useChatStore(
+    useShallow((s) => ({
+      isReportSelectionMode: s.isReportSelectionMode,
+      selectedMessagesForReport: s.selectedMessagesForReport,
+      toggleMessageForReport: s.toggleMessageForReport,
+    }))
   );
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isTypingRef = useRef(false);
@@ -2106,6 +2116,27 @@ export default function ChatPage() {
                                     </div>
                                   ))}
                               </div>
+                              {/* Selection checkbox (report mode) */}
+                              {isReportSelectionMode && (
+                                <div className="flex items-center ml-2 mr-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleMessageForReport(msg._id);
+                                    }}
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${
+                                      selectedMessagesForReport.includes(msg._id)
+                                        ? "bg-blue-600 text-white ring-2 ring-blue-300"
+                                        : "bg-white border-gray-200 hover:bg-gray-50"
+                                    }`}
+                                    title={selectedMessagesForReport.includes(msg._id) ? "Unselect" : "Select"}
+                                  >
+                                    {selectedMessagesForReport.includes(msg._id) ? (
+                                      <svg className="w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 00-1.414-1.414L8 11.172 4.707 7.879a1 1 0 10-1.414 1.414l4 4a1 1 0 001.414 0l8-8z" clipRule="evenodd"/></svg>
+                                    ) : null}
+                                  </button>
+                                </div>
+                              )}
                               {/* Bubble */}
                               <div className="relative max-w-[75%] flex flex-col items-start">
                                 {/* System messages (General & Call) */}
@@ -2149,7 +2180,13 @@ export default function ChatPage() {
                                         : isMine
                                           ? "border-blue-100"
                                           : "border-gray-100"
-                                    } ${bubbleRadius}`}
+                                    } ${bubbleRadius} ${
+                                      isReportSelectionMode && !selectedMessagesForReport.includes(msg._id)
+                                        ? "opacity-50 filter grayscale"
+                                        : ""
+                                    } ${
+                                      selectedMessagesForReport.includes(msg._id) ? "ring-2 ring-blue-300" : ""
+                                    }`}
                                   >
                                     {/* Reply Quote Box */}
                                     {msg.replyTo &&
@@ -3466,7 +3503,7 @@ export default function ChatPage() {
             show={showInfoPanel}
             conversationId={conversationId}
             conversationInfo={conversationInfo}
-            messages={mediaMessages}
+            messages={messages}
             currentUser={currentUser}
             onClose={() => setShowInfoPanel(false)}
             onClearHistory={handleClearHistory}
@@ -3483,6 +3520,7 @@ export default function ChatPage() {
             onAssignLeader={handleAssignLeader}
             onRefreshData={handleRefreshData}
             userCache={userCache}
+            otherUserId={otherUserId}
           />
 
           {/* ALBUM PREVIEW MODAL */}
@@ -3886,6 +3924,57 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+      {/* Global Report Selection Toolbar (message selection mode) */}
+      <ReportSelectionToolbar />
+      {/* Global store-driven ReportModal for 1-1 user reports */}
+      <StoreReportModal />
     </>
+  );
+}
+
+/**
+ * Reads modal state from useChatStore and renders the ReportModal globally.
+ * This is needed because the modal is triggered from ChatInfoPanel but
+ * must survive outside the panel's render tree for the full customize flow.
+ */
+function StoreReportModal() {
+  const {
+    isReportModalOpen,
+    reportTargetId,
+    reportTargetName,
+    selectedMessagesForReport,
+    isCustomizeMode,
+    closeReportModal,
+    enterCustomizeMode,
+    clearReportSelection,
+  } = useChatStore(
+    useShallow((s) => ({
+      isReportModalOpen: s.isReportModalOpen,
+      reportTargetId: s.reportTargetId,
+      reportTargetName: s.reportTargetName,
+      selectedMessagesForReport: s.selectedMessagesForReport,
+      isCustomizeMode: s.isCustomizeMode,
+      closeReportModal: s.closeReportModal,
+      enterCustomizeMode: s.enterCustomizeMode,
+      clearReportSelection: s.clearReportSelection,
+    }))
+  );
+
+  if (!isReportModalOpen || !reportTargetId) return null;
+
+  return (
+    <ReportModal
+      isOpen={isReportModalOpen}
+      onClose={closeReportModal}
+      targetId={reportTargetId}
+      targetType="USER"
+      targetName={reportTargetName ?? undefined}
+      selectedMessageIds={selectedMessagesForReport}
+      isCustomizeMode={isCustomizeMode}
+      onCustomizeEvidence={enterCustomizeMode}
+      onSuccess={() => {
+        clearReportSelection();
+      }}
+    />
   );
 }
