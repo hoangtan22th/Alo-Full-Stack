@@ -11,7 +11,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class UserResponse {
     private String id;
-    private String name;
+    private String fullName;
+    private String firstName;
+    private String lastName;
     private String avatar;
     // other fields if needed, Feign will ignore unknown fields
 }

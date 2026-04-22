@@ -54,10 +54,10 @@ export function ReportRow({ report, onReview }: ReportRowProps) {
             </span>
           </div>
           <p className="text-xs text-on-surface-variant font-medium">
-            Mục tiêu: {report.targetUser?.name || report.targetId} • {timeAgo} •
+            Mục tiêu: {report.targetUser?.fullName || report.targetId} • {timeAgo} •
             Bởi:{" "}
             <span className="text-on-surface underline decoration-outline-variant/30 cursor-pointer">
-              {report.reporter?.name || "Ẩn danh"}
+              {report.reporter?.fullName || "Ẩn danh"}
             </span>
           </p>
           {report.description && (

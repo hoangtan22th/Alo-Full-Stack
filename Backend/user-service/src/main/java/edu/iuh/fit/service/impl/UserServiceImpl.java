@@ -32,7 +32,8 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserDto getUserById(String id) {
         UserProfile user = userProfileRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("UserProfile not found with id: " + id));
+                .orElseThrow(() -> new edu.iuh.fit.common_service.exception.AppException(
+                        404, "Không tìm thấy người dùng với ID: " + id));
         return UserDto.fromEntity(user);
     }
 

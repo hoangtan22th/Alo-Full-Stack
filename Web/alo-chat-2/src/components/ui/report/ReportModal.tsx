@@ -79,11 +79,32 @@ export default function ReportModal({
       return;
     }
 
+    // ── SAFE ID EXTRACTION ──
+    // user.id is the MariaDB UUID from user-service (set by fetchProfile).
+    // We NEVER use _id (MongoDB) or userId as fallback to avoid sending a
+    // 24-char ObjectId to report-service which calls user-service (MariaDB).
+    const isMongoId = (id?: string | null) =>
+      typeof id === 'string' && /^[a-f0-9]{24}$/i.test(id);
+
+    const reporterId = currentUser?.id
+      ? (isMongoId(currentUser.id) ? null : currentUser.id)
+      : null;
+
+    if (!reporterId) {
+      toast.error('Không thể xác định tài khoản của bạn. Vui lòng đăng xuất và đăng nhập lại.');
+      console.error('[ReportModal] Invalid or missing reporterId:', {
+        id: currentUser?.id,
+        _id: currentUser?._id,
+        userId: currentUser?.userId,
+      });
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
       const payload = {
-        reporterId: currentUser?.id || currentUser?._id || currentUser?.userId,
+        reporterId,
         targetId,
         targetType,
         reason,
@@ -91,6 +112,13 @@ export default function ReportModal({
         imageUrls: isCustomizeMode && targetType === 'USER' ? imageUrls : [],
         messageIds: targetType === 'USER' ? selectedMessageIds : [],
       };
+
+      console.log('[ReportModal] Submitting report payload:', {
+        reporterId: payload.reporterId,
+        targetId: payload.targetId,
+        targetType: payload.targetType,
+        messageCount: payload.messageIds.length,
+      });
 
       await axiosClient.post('/reports', payload);
 

@@ -21,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import feign.FeignException;
 import java.time.LocalDateTime;
 
 @Service
@@ -168,14 +169,25 @@ public class ReportServiceImpl implements ReportService {
     }
 
     private UserResponse fetchUserSafe(String userId) {
+        if (userId == null || userId.isBlank()) {
+            log.warn("fetchUserSafe called with blank userId, skipping.");
+            return UserResponse.builder().id("").fullName("Unknown User").build();
+        }
         try {
             ApiResponse<UserResponse> response = userClient.getUserById(userId);
             if (response != null && response.getData() != null) {
                 return response.getData();
             }
+        } catch (FeignException.NotFound e) {
+            // user-service returned 404 — user not found for this ID (e.g., wrong ID format).
+            // This is expected when garbage MongoDB ObjectIds were historically stored.
+            log.warn("User not found for ID: {} (404 from user-service)", userId);
+        } catch (FeignException e) {
+            log.error("Feign error fetching user {} — status: {}, body: {}",
+                    userId, e.status(), e.contentUTF8());
         } catch (Exception e) {
-            log.warn("Failed to fetch user {}, assigning fallback. Reason: {}", userId, e.getMessage());
+            log.error("Unexpected error fetching user {}: {}", userId, e.getMessage());
         }
-        return UserResponse.builder().id(userId).name("Unknown User").build();
+        return UserResponse.builder().id(userId).fullName("Unknown User").build();
     }
 }

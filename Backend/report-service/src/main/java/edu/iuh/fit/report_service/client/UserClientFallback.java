@@ -13,7 +13,7 @@ public class UserClientFallback implements UserClient {
         log.warn("Fallback called for getting UserId {}", id);
         UserResponse fallbackUser = UserResponse.builder()
                 .id(id)
-                .name("Unknown User")
+                .fullName("Unknown User")
                 .avatar(null)
                 .build();
         return ApiResponse.success(fallbackUser);

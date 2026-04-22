@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Types } from "mongoose";
+import { Message } from "../models/Message.js";
 import messageDataService from "../services/message.service.js";
 import { uploadFileToS3 } from "../services/s3Service.js";
 import rabbitMQProducer from "../services/RabbitMQProducerService.js";
@@ -1110,6 +1111,64 @@ export async function searchMessages(
     });
   } catch (error) {
     console.error("[MessageController] searchMessages error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Bulk fetch messages by IDs — for Admin evidence log in report-service.
+ * POST /api/v1/messages/bulk
+ * Body: { ids: string[] }
+ * Returns messages sorted by createdAt ASC.
+ *
+ * No user-ownership check: this is an internal Admin endpoint.
+ * The Gateway should restrict this to admin roles only.
+ */
+export async function getBulkMessages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({
+        status: "error",
+        message: "Body must contain a non-empty 'ids' array",
+      });
+      return;
+    }
+
+    if (ids.length > 40) {
+      res.status(400).json({
+        status: "error",
+        message: "Cannot fetch more than 40 messages at once",
+      });
+      return;
+    }
+
+    const messages = await Message.find({ _id: { $in: ids } })
+      .sort({ createdAt: 1 }) // ASC — chronological order for chat log rendering
+      .select("_id senderId senderName type content createdAt isRevoked")
+      .lean();
+
+    const result = messages.map((m) => ({
+      id: m._id.toString(),
+      senderId: m.senderId,
+      senderName: m.senderName ?? "Unknown",
+      type: m.type,
+      content: m.isRevoked ? "[Tin nhắn đã bị thu hồi]" : m.content,
+      createdAt: m.createdAt,
+      isRevoked: m.isRevoked,
+    }));
+
+    res.json({
+      status: "success",
+      data: result,
+    });
+  } catch (error) {
+    console.error("[MessageController] getBulkMessages error:", error);
     next(error);
   }
 }
