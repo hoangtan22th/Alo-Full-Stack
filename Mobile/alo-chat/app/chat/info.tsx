@@ -39,6 +39,7 @@ import {
   ChartBarIcon,
   PencilSquareIcon,
   CalendarDaysIcon,
+  PlusCircleIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -811,6 +812,31 @@ export default function ChatInfoScreen() {
             />
           </View>
         </View>
+
+        {!isGroup && (
+          <View className="mt-10 px-5 pb-8">
+            <Text className="text-[11px] font-bold text-gray-500 uppercase tracking-[1px] mb-4">
+              Tiện ích khác
+            </Text>
+
+            <View className="bg-[#f5f6f8] rounded-[24px]">
+              <SettingItem
+                icon={<PlusCircleIcon size={24} color="#4b5563" />}
+                title={`Tạo nhóm với ${groupName}`}
+                onPress={() => {
+                  if (otherUserId) {
+                    router.push({
+                      pathname: "/groups/create-group",
+                      params: {
+                        initialMemberIds: otherUserId,
+                      },
+                    } as any);
+                  }
+                }}
+              />
+            </View>
+          </View>
+        )}
 
         {isGroup && (
           <>
