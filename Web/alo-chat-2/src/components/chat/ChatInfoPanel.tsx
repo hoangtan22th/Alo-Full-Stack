@@ -33,6 +33,7 @@ import { MessageDTO } from "@/services/messageService";
 import AddMemberModal from "../ui/group/AddMemberModal";
 import PollModal from "../ui/group/PollModal";
 import NoteModal from "../ui/group/NoteModal";
+import CommonGroupsModal from "../ui/group/CommonGroupsModal";
 import ReminderModal from "../ui/group/ReminderModal";
 import JoinLinkModal from "../ui/group/JoinLinkModal";
 import MemberManagementModal from "../ui/group/MemberManagementModal";
@@ -91,6 +92,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
     useState(false);
   const [showGroupSettingsModal, setShowGroupSettingsModal] = useState(false);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [showCommonGroupsModal, setShowCommonGroupsModal] = useState(false);
   const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
 
   // Group Info Editing State
@@ -311,7 +313,11 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                 />
               ) : (
                 <>
-                  <ActionButton icon={<UserGroupIcon />} label="Nhóm chung" />
+                  <ActionButton 
+                    icon={<UserGroupIcon />} 
+                    label="Nhóm chung" 
+                    onClick={() => setShowCommonGroupsModal(true)}
+                  />
                   <ActionButton
                     icon={<UserPlusIcon className="w-5 h-5" />}
                     label="Tạo nhóm"
@@ -623,6 +629,15 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
             if (onRefreshData) onRefreshData();
           }}
           initialSelectedIds={otherMember?.userId ? [otherMember.userId] : []}
+        />
+      )}
+
+      {showCommonGroupsModal && otherMember && (
+        <CommonGroupsModal
+          isOpen={showCommonGroupsModal}
+          onClose={() => setShowCommonGroupsModal(false)}
+          otherUserId={otherMember.userId}
+          friendName={otherMember.fullName || conversationInfo.displayName || "Bạn bè"}
         />
       )}
     </div>

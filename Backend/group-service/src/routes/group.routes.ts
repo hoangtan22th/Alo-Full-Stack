@@ -44,6 +44,7 @@ router.post(
   groupController.createGroup,
 );
 router.get("/api/v1/groups/me", groupController.getMyGroups);
+router.get("/api/v1/groups/common/:otherUserId", groupController.getCommonGroups);
 router.post(
   "/api/v1/groups/direct",
   groupController.getOrCreateDirectConversation,
