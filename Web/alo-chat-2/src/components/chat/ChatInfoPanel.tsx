@@ -589,6 +589,8 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
             setShowMemberManagementModal(false);
             setShowAddMemberModal(true);
           }}
+          groupName={conversationInfo?.displayName}
+          groupAvatar={conversationInfo?.displayAvatar}
         />
       )}
 
