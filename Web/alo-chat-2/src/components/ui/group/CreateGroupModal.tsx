@@ -80,16 +80,18 @@ const createGroup = async (data: {
 export default function CreateGroupModal({
   onClose,
   onSuccess,
+  initialSelectedIds,
 }: {
   onClose: () => void;
   onSuccess: () => void;
+  initialSelectedIds?: string[];
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [friends, setFriends] = useState<Friend[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>(initialSelectedIds || []);
   const [friendsLoading, setFriendsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);

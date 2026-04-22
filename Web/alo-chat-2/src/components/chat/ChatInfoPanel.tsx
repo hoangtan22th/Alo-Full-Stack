@@ -17,6 +17,7 @@ import {
   TrashIcon,
   ChevronRightIcon,
   ArrowRightOnRectangleIcon,
+  UserPlusIcon,
   XMarkIcon,
   PencilIcon,
   CameraIcon,
@@ -36,6 +37,7 @@ import ReminderModal from "../ui/group/ReminderModal";
 import JoinLinkModal from "../ui/group/JoinLinkModal";
 import MemberManagementModal from "../ui/group/MemberManagementModal";
 import GroupSettingsModal from "../ui/group/GroupSettingsModal";
+import CreateGroupModal from "../ui/group/CreateGroupModal";
 import { groupService } from "@/services/groupService";
 import { toast } from "sonner";
 import { getMediaUrl } from "../../utils/media";
@@ -88,6 +90,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   const [showMemberManagementModal, setShowMemberManagementModal] =
     useState(false);
   const [showGroupSettingsModal, setShowGroupSettingsModal] = useState(false);
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
 
   // Group Info Editing State
@@ -109,6 +112,11 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   const isAdmin = currentUserRole === "leader";
   const isDeputy = currentUserRole === "deputy";
   const isManager = isAdmin || isDeputy;
+
+  const otherMember = useMemo(() => {
+    if (isGroup) return null;
+    return conversationInfo?.members?.find((m: any) => m.userId !== myId);
+  }, [isGroup, conversationInfo, myId]);
 
   // Quyền hạn giống mobile
   const permissions = conversationInfo?.permissions;
@@ -302,7 +310,14 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                   onClick={() => setShowMemberManagementModal(true)}
                 />
               ) : (
-                <ActionButton icon={<UserGroupIcon />} label="Nhóm chung" />
+                <>
+                  <ActionButton icon={<UserGroupIcon />} label="Nhóm chung" />
+                  <ActionButton
+                    icon={<UserPlusIcon className="w-5 h-5" />}
+                    label="Tạo nhóm"
+                    onClick={() => setShowCreateGroupModal(true)}
+                  />
+                </>
               )}
             </div>
           </div>
@@ -595,6 +610,17 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           onClose={() => setShowGroupSettingsModal(false)}
           onRefreshData={onRefreshData}
           onDisbandGroup={onDisbandGroup}
+        />
+      )}
+
+      {showCreateGroupModal && (
+        <CreateGroupModal
+          onClose={() => setShowCreateGroupModal(false)}
+          onSuccess={() => {
+            setShowCreateGroupModal(false);
+            if (onRefreshData) onRefreshData();
+          }}
+          initialSelectedIds={otherMember?.userId ? [otherMember.userId] : []}
         />
       )}
     </div>
