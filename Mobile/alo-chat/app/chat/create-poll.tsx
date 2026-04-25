@@ -225,10 +225,10 @@ export default function CreatePollScreen() {
               <Switch value={hideVoters} onValueChange={setHideVoters} trackColor={{ false: "#d1d5db", true: "#bfdbfe" }} thumbColor={hideVoters ? "#3b82f6" : "#f3f4f6"} />
             </View>
 
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8 }}>
+            {/* <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8 }}>
               <Text style={{ fontSize: 15, color: "#374151" }}>Ghim lên đầu đoạn chat</Text>
               <Switch value={pinToTop} onValueChange={setPinToTop} trackColor={{ false: "#d1d5db", true: "#bfdbfe" }} thumbColor={pinToTop ? "#3b82f6" : "#f3f4f6"} />
-            </View>
+            </View> */}
 
           </View>
         </ScrollView>
