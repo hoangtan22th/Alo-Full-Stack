@@ -251,6 +251,30 @@ class SocketService {
     return this.subscribe("POLL_UPDATED", callback);
   }
 
+  onNoteCreated(callback: (data: any) => void) {
+    return this.subscribe("NOTE_CREATED", callback);
+  }
+
+  onNoteUpdated(callback: (data: any) => void) {
+    return this.subscribe("NOTE_UPDATED", callback);
+  }
+
+  onNoteDeleted(callback: (data: any) => void) {
+    return this.subscribe("NOTE_DELETED", callback);
+  }
+
+  onReminderCreated(callback: (data: any) => void) {
+    return this.subscribe("REMINDER_CREATED", callback);
+  }
+
+  onReminderUpdated(callback: (data: any) => void) {
+    return this.subscribe("REMINDER_UPDATED", callback);
+  }
+
+  onReminderDeleted(callback: (data: any) => void) {
+    return this.subscribe("REMINDER_DELETED", callback);
+  }
+
   // --- Typing ---
   onTyping(callback: (data: any) => void) {
     return this.subscribe("TYPING", callback);

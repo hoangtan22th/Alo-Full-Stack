@@ -90,68 +90,60 @@ export default function Sidebar() {
   }, [user, fetchProfile]);
 
   return (
-    <div className="w-19 h-screen bg-[#f4f5f7] flex flex-col items-center py-6 justify-between shrink-0 border-r border-gray-200">
+    <div className="w-18 h-screen bg-sidebar flex flex-col items-center py-8 justify-between shrink-0 border-r border-border z-50">
       {/* === PHẦN TRÊN === */}
-      <div className="flex flex-col items-center gap-8 w-full">
+      <div className="flex flex-col items-center gap-6 w-full">
         <Link
           href="/"
-          className="w-10 h-10 rounded-full overflow-hidden mb-2 border-2 border-gray-100 shadow-sm hover:scale-110 transition-transform active:scale-95 bg-white flex items-center justify-center"
+          className="w-10 h-10 rounded-full overflow-hidden mb-4 border border-border shadow-sm hover:scale-105 transition-all active:scale-95 bg-white flex items-center justify-center"
         >
-          <img
-            src="/alochat.svg"
-            alt="Logo"
-            className="w-full h-full object-cover"
-          />
+          <img src="/alochat.svg" alt="Logo" className="object-contain" />
         </Link>
 
         <Link
           href="/chat"
-          className={`w-12 h-12 flex items-center justify-center rounded-full transition-all ${isActive("/chat") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
+          className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all duration-200 ${isActive("/chat") ? "bg-foreground text-background shadow-md" : "text-secondary hover:text-foreground hover:bg-muted"}`}
         >
           {isActive("/chat") ? (
-            <ChatSolid className="w-6 h-6" />
+            <ChatSolid className="w-5 h-5" />
           ) : (
-            <ChatOutline className="w-6 h-6" />
+            <ChatOutline className="w-5 h-5" />
           )}
         </Link>
 
         {/* Danh Bạ */}
         <Link
           href="/contacts"
-          className={`w-12 h-12 flex items-center justify-center rounded-full transition-all ${isActive("/contacts") && !isActive("/contacts/groups") && !isActive("/contacts/group-invites") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
+          className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all duration-200 ${isActive("/contacts") && !isActive("/contacts/groups") && !isActive("/contacts/group-invites") ? "bg-foreground text-background shadow-md" : "text-secondary hover:text-foreground hover:bg-muted"}`}
           title="Danh bạ"
         >
           {isActive("/contacts") &&
-            !isActive("/contacts/groups") &&
-            !isActive("/contacts/group-invites") ? (
-            <UserSolid className="w-6 h-6" />
+          !isActive("/contacts/groups") &&
+          !isActive("/contacts/group-invites") ? (
+            <UserSolid className="w-5 h-5" />
           ) : (
-            <UserOutline className="w-6 h-6" />
+            <UserOutline className="w-5 h-5" />
           )}
         </Link>
 
         {/* Quản lý nhóm */}
         <Link
           href="/contacts/groups"
-          className={`w-12 h-12 flex items-center justify-center rounded-full transition-all ${isActive("/contacts/groups") || isActive("/contacts/group-invites") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
+          className={`w-11 h-11 flex items-center justify-center rounded-xl transition-all duration-200 ${isActive("/contacts/groups") || isActive("/contacts/group-invites") ? "bg-foreground text-background shadow-md" : "text-secondary hover:text-foreground hover:bg-muted"}`}
           title="Quản lý nhóm"
         >
           {isActive("/contacts/groups") ||
-            isActive("/contacts/group-invites") ? (
-            <GroupSolid className="w-6 h-6" />
+          isActive("/contacts/group-invites") ? (
+            <GroupSolid className="w-5 h-5" />
           ) : (
-            <GroupOutline className="w-6 h-6" />
+            <GroupOutline className="w-5 h-5" />
           )}
         </Link>
-
-        {/* <Link href="/archive" className="w-12 h-12 flex items-center justify-center rounded-full text-gray-600 hover:text-black hover:bg-gray-100 transition-all">
-          <ArchiveOutline className="w-6 h-6" />
-        </Link> */}
       </div>
 
       {/* === PHẦN DƯỚI === */}
       <div className="flex flex-col items-center gap-6 w-full">
-        <button className="text-gray-600 hover:text-black transition-colors">
+        <button className="text-secondary hover:text-foreground transition-colors duration-200">
           <QuestionMarkCircleIcon className="w-6 h-6" />
         </button>
 
@@ -159,7 +151,7 @@ export default function Sidebar() {
         <div className="relative" ref={settingsRef}>
           <button
             onClick={() => setShowSettingsMenu(!showSettingsMenu)}
-            className={`transition-colors ${showSettingsMenu ? "text-black" : "text-gray-600 hover:text-black"}`}
+            className={`transition-all duration-200 ${showSettingsMenu ? "text-foreground bg-muted rounded-xl w-10 h-10 flex items-center justify-center" : "text-secondary hover:text-foreground"}`}
           >
             <Cog8ToothIcon className="w-6 h-6" />
           </button>
@@ -177,7 +169,7 @@ export default function Sidebar() {
         <div className="relative" ref={menuRef}>
           <div
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className="w-10 h-10 mt-2 cursor-pointer rounded-full overflow-hidden border border-gray-300 active:scale-90 transition-transform"
+            className="w-10 h-10 cursor-pointer rounded-full overflow-hidden border border-border active:scale-90 transition-all hover:ring-2 hover:ring-accent hover:ring-offset-2 ring-offset-background"
           >
             <img
               src={avatarUrl}

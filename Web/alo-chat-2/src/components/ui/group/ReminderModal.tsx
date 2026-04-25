@@ -9,6 +9,7 @@ import {
   PencilIcon,
 } from "@heroicons/react/24/outline";
 import { reminderService, ReminderDTO } from "@/services/reminderService";
+import { socketService } from "@/services/socketService";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/useAuthStore";
 
@@ -35,6 +36,22 @@ export default function ReminderModal({ conversationId, canCreate = true, onClos
 
   useEffect(() => {
     fetchReminders();
+
+    const unsubCreate = socketService.onReminderCreated((data) => {
+      if (String(data.conversationId) === String(conversationId)) fetchReminders();
+    });
+    const unsubUpdate = socketService.onReminderUpdated((data) => {
+      if (String(data.conversationId) === String(conversationId)) fetchReminders();
+    });
+    const unsubDelete = socketService.onReminderDeleted((data) => {
+      if (String(data.conversationId) === String(conversationId)) fetchReminders();
+    });
+    
+    return () => {
+      unsubCreate();
+      unsubUpdate();
+      unsubDelete();
+    };
   }, [conversationId]);
 
   const fetchReminders = async () => {

@@ -8,6 +8,7 @@ import {
   PencilIcon,
 } from "@heroicons/react/24/outline";
 import { noteService, NoteDTO } from "@/services/noteService";
+import { socketService } from "@/services/socketService";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/useAuthStore";
 
@@ -32,6 +33,22 @@ export default function NoteModal({ conversationId, canCreate = true, onClose }:
 
   useEffect(() => {
     fetchNotes();
+
+    const unsubCreate = socketService.onNoteCreated((data) => {
+      if (String(data.conversationId) === String(conversationId)) fetchNotes();
+    });
+    const unsubUpdate = socketService.onNoteUpdated((data) => {
+      if (String(data.conversationId) === String(conversationId)) fetchNotes();
+    });
+    const unsubDelete = socketService.onNoteDeleted((data) => {
+      if (String(data.conversationId) === String(conversationId)) fetchNotes();
+    });
+    
+    return () => {
+      unsubCreate();
+      unsubUpdate();
+      unsubDelete();
+    };
   }, [conversationId]);
 
   const fetchNotes = async () => {

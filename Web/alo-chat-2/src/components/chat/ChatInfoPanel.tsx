@@ -230,7 +230,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
   return (
     <div
-      className={`flex flex-col shrink-0 bg-white h-full transition-all duration-300 ease-in-out border-l border-gray-100 shadow-xl z-[100] overflow-hidden ${
+      className={`flex flex-col shrink-0 bg-white h-full transition-all duration-300 ease-in-out border-l border-gray-100 shadow-xl z-30 overflow-hidden ${
         show ? "w-[340px] xl:w-90 opacity-100" : "w-0 opacity-0"
       }`}
     >

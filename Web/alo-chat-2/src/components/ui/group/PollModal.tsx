@@ -6,6 +6,7 @@ import {
   ChartBarIcon,
 } from "@heroicons/react/24/outline";
 import { pollService, PollDTO } from "@/services/pollService";
+import { socketService } from "@/services/socketService";
 import { toast } from "sonner";
 
 interface PollModalProps {
@@ -35,6 +36,24 @@ export default function PollModal({ conversationId, canCreate = true, onClose, o
 
   useEffect(() => {
     fetchPolls();
+    
+    const unsub = socketService.onPollUpdated((data) => {
+      if (String(data.conversationId) === String(conversationId)) {
+        fetchPolls();
+      }
+    });
+
+    const unsubMsg = socketService.onMessageReceived((data) => {
+      const newMsg = data.message || data;
+      if (String(newMsg.conversationId || newMsg.roomId) === String(conversationId) && newMsg.type === "poll") {
+        fetchPolls();
+      }
+    });
+
+    return () => {
+      unsub();
+      unsubMsg();
+    };
   }, [conversationId]);
 
   const fetchPolls = async () => {

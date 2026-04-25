@@ -24,12 +24,12 @@ import {
   UserGroupIcon,
   ChatBubbleLeftRightIcon,
   UserIcon,
-  PaperAirplaneIcon,
   BellIcon,
 } from "@heroicons/react/24/outline";
+import { MapPinIcon as MapPinSolidIcon } from "@heroicons/react/24/solid";
 import CreateGroupModal from "@/components/ui/group/CreateGroupModal";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 // --- Sub-component: ManageLabelsModal ---
 function ManageLabelsModal({
@@ -103,48 +103,57 @@ function ManageLabelsModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-xl font-black text-gray-900">
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+      >
+        <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+          <h2 className="text-lg font-semibold text-gray-900">
             Quản lý thẻ phân loại
           </h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-500"
           >
-            <XMarkIcon className="w-6 h-6 text-gray-400" />
+            <XMarkIcon className="w-5 h-5" />
           </button>
         </div>
 
         <div className="p-6 overflow-y-auto flex-1 scrollbar-hide">
           {/* Form */}
-          <div className="mb-8 p-4 bg-gray-50 rounded-2xl flex flex-col gap-4">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+          <div className="mb-8 p-5 bg-gray-50/80 border border-gray-100 rounded-2xl flex flex-col gap-4">
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
               {editingLabel ? "Chỉnh sửa thẻ" : "Thêm thẻ mới"}
             </p>
             <div className="flex gap-3">
               <input
                 type="text"
-                placeholder="Tên thẻ..."
+                placeholder="Nhập tên thẻ..."
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-black transition-all"
+                className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
               />
               <button
                 onClick={handleCreateOrUpdate}
                 disabled={loading || !name.trim()}
-                className="px-5 bg-black text-white rounded-xl text-sm font-bold hover:bg-gray-800 transition disabled:bg-gray-300"
+                className="px-5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed shadow-sm"
               >
                 {editingLabel ? "Lưu" : "Thêm"}
               </button>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 mt-1">
               {colors.map((c) => (
                 <button
                   key={c}
                   onClick={() => setColor(c)}
-                  className={`w-7 h-7 rounded-full border-2 transition-transform hover:scale-110 ${color === c ? "border-black scale-110" : "border-transparent"}`}
+                  className={`w-7 h-7 rounded-full border-2 transition-all hover:scale-110 ${
+                    color === c
+                      ? "border-gray-900 scale-110 shadow-md"
+                      : "border-transparent"
+                  }`}
                   style={{ backgroundColor: c }}
                 />
               ))}
@@ -156,7 +165,7 @@ function ManageLabelsModal({
                   setName("");
                   setColor("#3b82f6");
                 }}
-                className="text-[12px] font-bold text-gray-400 hover:text-black self-start"
+                className="text-[13px] font-medium text-gray-500 hover:text-gray-900 self-start transition-colors"
               >
                 Hủy chỉnh sửa
               </button>
@@ -164,26 +173,26 @@ function ManageLabelsModal({
           </div>
 
           {/* List */}
-          <div className="flex flex-col gap-3">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest px-1">
+          <div className="flex flex-col gap-2">
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wider px-1 mb-1">
               Danh sách thẻ
             </p>
             {labels.length === 0 ? (
-              <p className="text-sm text-gray-400 italic px-1">
+              <p className="text-sm text-gray-500 italic px-1 bg-gray-50 py-4 rounded-xl text-center border border-dashed border-gray-200">
                 Chưa có thẻ nào...
               </p>
             ) : (
               labels.map((l) => (
                 <div
                   key={l._id || l.id}
-                  className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-2xl hover:border-gray-200 transition-colors group/item shadow-sm"
+                  className="flex items-center justify-between p-3.5 bg-white border border-gray-100 rounded-xl hover:border-blue-100 hover:shadow-sm transition-all group/item"
                 >
                   <div className="flex items-center gap-3">
                     <div
-                      className="w-3 h-3 rounded-full"
+                      className="w-3.5 h-3.5 rounded-full shadow-sm"
                       style={{ backgroundColor: l.color }}
                     />
-                    <span className="text-sm font-bold text-gray-700">
+                    <span className="text-sm font-medium text-gray-800">
                       {l.name}
                     </span>
                   </div>
@@ -194,13 +203,13 @@ function ManageLabelsModal({
                         setName(l.name);
                         setColor(l.color);
                       }}
-                      className="p-1.5 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-all"
+                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                     >
                       <PencilSquareIcon className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(l._id || l.id)}
-                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                     >
                       <TrashIcon className="w-4 h-4" />
                     </button>
@@ -210,7 +219,7 @@ function ManageLabelsModal({
             )}
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -239,7 +248,6 @@ export default function ConversationSidebar() {
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const { user: currentUser } = useAuthStore();
 
-  // Labels & Pin states
   const [labels, setLabels] = useState<any[]>([]);
   const [labelAssignments, setLabelAssignments] = useState<Record<string, any>>(
     {},
@@ -252,6 +260,7 @@ export default function ConversationSidebar() {
   const [onlineUsers, setOnlineUsers] = useState<Record<string, boolean>>({});
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const { typingUsers, friendIds, setFriendIds } = useChatStore();
+
   const menuRef = useRef<HTMLDivElement>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const conversationIdRef = useRef(conversationId);
@@ -271,9 +280,7 @@ export default function ConversationSidebar() {
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -315,13 +322,14 @@ export default function ConversationSidebar() {
 
   const fetchGroups = useCallback(async () => {
     try {
-      const currentUserId =
-        currentUser?.id || currentUser?._id || currentUser?.userId;
+      const currentUserId = (currentUser?.id ||
+        currentUser?._id ||
+        currentUser?.userId ||
+        "") as string;
 
       let groups: any = await axiosClient.get("/groups/me", {
         params: { type: "all" },
       });
-
       if (groups?.data?.data) groups = groups.data.data;
       else if (groups?.data) groups = groups.data;
 
@@ -380,7 +388,7 @@ export default function ConversationSidebar() {
                 (currentUserId && g.unreadCount?.[currentUserId]) || 0,
               updatedAt: g.updatedAt,
               otherMemberUserId: otherMember?.userId,
-              folder: g.folders?.[currentUserId] || "priority",
+              folder: (currentUserId && g.folders?.[currentUserId]) || "priority",
             };
           }),
         );
@@ -407,14 +415,17 @@ export default function ConversationSidebar() {
     try {
       setLoading(true);
       const friends = await contactService.getFriendsList();
-      const myId = String(currentUser?.id || currentUser?._id || currentUser?.userId);
+      const myId = String(
+        currentUser?.id || currentUser?._id || currentUser?.userId,
+      );
       const fIds = new Set(
         friends.map((f) =>
-          String(f.requesterId) === myId ? String(f.recipientId) : String(f.requesterId),
+          String(f.requesterId) === myId
+            ? String(f.recipientId)
+            : String(f.requesterId),
         ),
       );
       setFriendIds(fIds);
-
       await Promise.all([fetchGroups(), fetchLabelsInfo(), fetchPinnedInfo()]);
     } catch (error) {
       console.error("Lỗi tải dữ liệu:", error);
@@ -453,22 +464,17 @@ export default function ConversationSidebar() {
           });
         },
       ),
-      socketService.onConversationCreated(async () => {
-        fetchGroups();
-      }),
+      socketService.onConversationCreated(async () => fetchGroups()),
       socketService.onConversationRemoved(
         (data: { conversationId: string }) => {
           setConversations((prev) =>
             prev.filter((c) => (c._id || c.id) !== data.conversationId),
           );
-          if (conversationIdRef.current === data.conversationId) {
+          if (conversationIdRef.current === data.conversationId)
             router.push("/chat");
-          }
         },
       ),
-      socketService.onConversationUpdated((data: any) => {
-        fetchGroups();
-      }),
+      socketService.onConversationUpdated(() => fetchGroups()),
       socketService.onMessageReceived((msg: any) => {
         const convoId = msg.conversationId || msg.roomId;
         if (!convoId) return;
@@ -482,7 +488,6 @@ export default function ConversationSidebar() {
 
           const next = [...prev];
           const convo = { ...next[index] };
-
           convo.message =
             msg.type === "file"
               ? `[File] ${msg.metadata?.fileName || msg.content}`
@@ -537,9 +542,7 @@ export default function ConversationSidebar() {
       ),
     ];
 
-    return () => {
-      unsubs.forEach((unsub) => unsub());
-    };
+    return () => unsubs.forEach((unsub) => unsub());
   }, [fetchData, router, currentUser, fetchGroups]);
 
   const handleTogglePin = async (
@@ -593,9 +596,7 @@ export default function ConversationSidebar() {
       await groupService.clearConversation(id);
       setOpenMenuId(null);
       fetchGroups();
-      if (conversationId === id) {
-        router.push("/chat");
-      }
+      if (conversationId === id) router.push("/chat");
     } catch (err) {
       console.error("Lỗi xoá lịch sử:", err);
     }
@@ -655,32 +656,34 @@ export default function ConversationSidebar() {
       if (aIsStranger && !bIsStranger) return -1;
       if (!aIsStranger && bIsStranger) return 1;
     }
-
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   });
 
   const filteredConversations = sortedConversations.filter((chat) => {
-    const matchesSearch = chat.name
-      ?.toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    if (!matchesSearch) return false;
+    if (!chat.name?.toLowerCase().includes(searchQuery.toLowerCase()))
+      return false;
 
     const folder = chat.folder;
     const isStrangerConvo =
-      chat.isGroup === false &&
+      !chat.isGroup &&
       chat.id !== BOT_ID &&
       chat.otherMemberUserId &&
       !friendIds.has(chat.otherMemberUserId);
 
     let tabMatch = false;
     if (activeTab === "Ưu tiên") {
-      // Ưu tiên: Nhóm, Bot, hoặc Bạn bè (không phải folder Other)
-      tabMatch = folder === "priority" || (!folder && !isStrangerConvo) || chat.isGroup === true || chat.id === BOT_ID;
-    } else if (activeTab === "Khác") {
-      // Khác: Folder Other, hoặc Người lạ (không phải folder Priority)
       tabMatch =
-        (folder === "other" || folder === "stranger" || (!folder && isStrangerConvo)) &&
-        chat.isGroup !== true && chat.id !== BOT_ID;
+        folder === "priority" ||
+        (!folder && !isStrangerConvo) ||
+        chat.isGroup === true ||
+        chat.id === BOT_ID;
+    } else if (activeTab === "Khác") {
+      tabMatch =
+        (folder === "other" ||
+          folder === "stranger" ||
+          (!folder && isStrangerConvo)) &&
+        chat.isGroup !== true &&
+        chat.id !== BOT_ID;
     } else {
       return false;
     }
@@ -688,24 +691,18 @@ export default function ConversationSidebar() {
     if (!tabMatch) return false;
 
     if (selectedLabelId) {
-      if (selectedLabelId === "none") {
-        return !labelAssignments[chat.id];
-      }
-      if (selectedLabelId === "stranger") {
-        return isStrangerConvo;
-      }
+      if (selectedLabelId === "none") return !labelAssignments[chat.id];
+      if (selectedLabelId === "stranger") return isStrangerConvo;
       const chatLabelId =
         labelAssignments[chat.id]?._id || labelAssignments[chat.id]?.id;
       return chatLabelId === selectedLabelId;
     }
-
     return true;
   });
 
   const { priorityUnreadCount, otherUnreadCount } = useMemo(() => {
     let pCount = 0;
     let oCount = 0;
-
     conversations.forEach((chat) => {
       if (chat.unreadCount > 0) {
         const folder = chat.folder;
@@ -714,7 +711,6 @@ export default function ConversationSidebar() {
           chat.id !== BOT_ID &&
           chat.otherMemberUserId &&
           !friendIds.has(chat.otherMemberUserId);
-
         const isPriority =
           folder === "priority" ||
           (!folder && !isStrangerConvo) ||
@@ -731,25 +727,25 @@ export default function ConversationSidebar() {
         else if (isOther) oCount++;
       }
     });
-
     return { priorityUnreadCount: pCount, otherUnreadCount: oCount };
   }, [conversations, friendIds]);
 
   return (
     <>
-      <div className="w-full md:w-[320px] lg:w-85 flex flex-col border-r border-gray-100 shrink-0 h-full">
-        <div className="p-5 flex flex-col gap-5">
+      <div className="w-full md:w-[320px] lg:w-[340px] flex flex-col border-r border-gray-200/80 shrink-0 h-full bg-white">
+        {/* Header Section */}
+        <div className="px-4 pt-5 pb-2 flex flex-col gap-4 bg-white relative z-30">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-black tracking-tight text-black">
-              Messages
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+              Đoạn chat
             </h1>
             <div className="relative" ref={plusMenuRef}>
               <button
                 onClick={() => setShowPlusMenu(!showPlusMenu)}
-                className={`w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 shadow-sm active:scale-95 ${
+                className={`w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 outline-none ${
                   showPlusMenu
-                    ? "bg-black text-white"
-                    : "bg-gray-100 text-gray-900 hover:bg-gray-200"
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "bg-gray-100/80 text-gray-700 hover:bg-gray-200"
                 }`}
               >
                 <PlusIcon
@@ -757,378 +753,404 @@ export default function ConversationSidebar() {
                 />
               </button>
 
-              {showPlusMenu && (
-                <div className="absolute top-11 right-0 w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-[80] animate-in fade-in zoom-in-95 duration-200">
-                  <div className="p-1.5 flex flex-col gap-0.5">
-                    <button
-                      onClick={() => {
-                        setShowNewChatModal(true);
-                        setShowPlusMenu(false);
-                      }}
-                      className="flex items-center gap-3 w-full px-4 py-3 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
-                    >
-                      <div className="w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center">
-                        <UserIcon className="w-5 h-5 text-blue-500" />
-                      </div>
-                      Tạo chat cá nhân
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowCreateGroupModal(true);
-                        setShowPlusMenu(false);
-                      }}
-                      className="flex items-center gap-3 w-full px-4 py-3 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
-                    >
-                      <div className="w-8 h-8 bg-purple-50 rounded-full flex items-center justify-center">
-                        <UserGroupIcon className="w-5 h-5 text-purple-500" />
-                      </div>
-                      Tạo nhóm chat
-                    </button>
-                    <button
-                      onClick={() => {
-                        router.push("/contacts/groups");
-                        setShowPlusMenu(false);
-                      }}
-                      className="flex items-center gap-3 w-full px-4 py-3 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
-                    >
-                      <div className="w-8 h-8 bg-green-50 rounded-full flex items-center justify-center">
-                        <UserGroupIcon className="w-5 h-5 text-green-600" />
-                      </div>
-                      Danh sách nhóm
-                    </button>
-                    <button
-                      onClick={() => {
-                        router.push("/contacts/group-invites");
-                        setShowPlusMenu(false);
-                      }}
-                      className="flex items-center gap-3 w-full px-4 py-3 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
-                    >
-                      <div className="w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center">
-                        <BellIcon className="w-5 h-5 text-blue-600" />
-                      </div>
-                      Lời mời vào nhóm
-                    </button>
-                  </div>
-                </div>
-              )}
+              <AnimatePresence>
+                {showPlusMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute top-11 right-0 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-[80]"
+                  >
+                    <div className="p-1.5 flex flex-col gap-0.5">
+                      <button
+                        onClick={() => {
+                          setShowNewChatModal(true);
+                          setShowPlusMenu(false);
+                        }}
+                        className="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                      >
+                        <div className="w-8 h-8 bg-blue-50 rounded-full flex items-center justify-center text-blue-600">
+                          <UserIcon className="w-4 h-4" />
+                        </div>
+                        Tạo chat cá nhân
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowCreateGroupModal(true);
+                          setShowPlusMenu(false);
+                        }}
+                        className="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                      >
+                        <div className="w-8 h-8 bg-purple-50 rounded-full flex items-center justify-center text-purple-600">
+                          <UserGroupIcon className="w-4 h-4" />
+                        </div>
+                        Tạo nhóm chat
+                      </button>
+                      <button
+                        onClick={() => {
+                          router.push("/contacts/groups");
+                          setShowPlusMenu(false);
+                        }}
+                        className="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                      >
+                        <div className="w-8 h-8 bg-green-50 rounded-full flex items-center justify-center text-green-600">
+                          <UserGroupIcon className="w-4 h-4" />
+                        </div>
+                        Danh sách nhóm
+                      </button>
+                      <button
+                        onClick={() => {
+                          router.push("/contacts/group-invites");
+                          setShowPlusMenu(false);
+                        }}
+                        className="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                      >
+                        <div className="w-8 h-8 bg-orange-50 rounded-full flex items-center justify-center text-orange-600">
+                          <BellIcon className="w-4 h-4" />
+                        </div>
+                        Lời mời vào nhóm
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 
-          <div className="relative">
-            <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          {/* Search Bar */}
+          <div className="relative group">
+            <MagnifyingGlassIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
             <input
               type="text"
-              placeholder="Search conversations"
+              placeholder="Tìm kiếm đoạn chat..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#F5F5F5] border-transparent rounded-xl pl-10 pr-4 py-2.5 text-[13px] font-medium outline-none focus:bg-white focus:border-black border transition-all"
+              className="w-full bg-gray-100/80 border border-transparent rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:font-normal"
             />
           </div>
+        </div>
 
-          {/* Tabs */}
-          <div className="flex border-b border-gray-100 bg-white relative">
-            {["Ưu tiên", "Khác"].map((tab) => {
-              const isActive = activeTab === tab;
-              const unreadCount =
-                tab === "Ưu tiên" ? priorityUnreadCount : otherUnreadCount;
-
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`relative flex-1 py-4 text-[13px] font-black transition-all ${
-                    isActive
-                      ? "text-black"
-                      : "text-gray-400 hover:text-gray-600"
-                  }`}
-                >
-                  <div className="flex items-center justify-center gap-1.5">
-                    {tab}
-                    {unreadCount > 0 && (
-                      <span
-                        className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive ? "bg-black text-white" : "bg-gray-200 text-gray-500"}`}
-                      >
-                        {unreadCount}
-                      </span>
-                    )}
-                  </div>
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeTabUnderline"
-                      className="absolute bottom-0 left-0 right-0 h-[3px] bg-black rounded-t-full mx-4"
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center justify-end -mt-4">
-            <div className="relative group/filter pb-4 -mb-4">
+        {/* Tabs & Filter */}
+        <div className="flex border-b border-gray-100 bg-white relative px-2 z-20">
+          {["Ưu tiên", "Khác"].map((tab) => {
+            const isActive = activeTab === tab;
+            const unreadCount =
+              tab === "Ưu tiên" ? priorityUnreadCount : otherUnreadCount;
+            return (
               <button
-                className={`p-1.5 rounded-lg transition-colors ${selectedLabelId ? "bg-blue-50 text-blue-500" : "text-gray-400 hover:text-black"}`}
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`relative flex-1 py-3 text-[13px] transition-colors ${
+                  isActive
+                    ? "text-blue-600 font-semibold"
+                    : "text-gray-500 font-medium hover:text-gray-700"
+                }`}
               >
-                <Bars3BottomRightIcon className="w-4 h-4" />
+                <div className="flex items-center justify-center gap-1.5">
+                  {tab}
+                  {unreadCount > 0 && (
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        isActive
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-200 text-gray-600"
+                      }`}
+                    >
+                      {unreadCount}
+                    </span>
+                  )}
+                </div>
+                {isActive && (
+                  <motion.div
+                    layoutId="activeTabUnderline"
+                    className="absolute bottom-0 left-0 right-0 h-[3px] bg-blue-600 rounded-t-full mx-6"
+                  />
+                )}
               </button>
-              <div className="absolute right-0 top-[100%] pt-2 w-64 hidden group-hover/filter:block z-[90] animate-in fade-in zoom-in-95 duration-150">
-                <div className="absolute -top-4 left-[-20%] right-[-10%] h-6 bg-transparent" />
-                <div className="bg-white border border-gray-100 rounded-2xl shadow-2xl p-1 overflow-hidden relative">
-                  <p className="px-3 py-2.5 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 mb-1">
-                    Lọc theo danh mục
-                  </p>
-                  <div className="flex flex-col gap-0.5">
+            );
+          })}
+
+          {/* Filter Icon */}
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 group/filter">
+            <button
+              className={`p-1.5 rounded-lg transition-colors ${selectedLabelId ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:text-gray-700 hover:bg-gray-50"}`}
+            >
+              <Bars3BottomRightIcon className="w-5 h-5" />
+            </button>
+
+            <div className="absolute right-0 top-full pt-2 w-56 hidden group-hover/filter:block z-[90]">
+              <div className="absolute -top-2 left-0 right-0 h-4 bg-transparent" />
+              <div className="bg-white border border-gray-100 rounded-2xl shadow-xl p-1.5 overflow-hidden">
+                <p className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-50 mb-1">
+                  Lọc theo danh mục
+                </p>
+                <div className="flex flex-col gap-0.5">
+                  <button
+                    onClick={() => setSelectedLabelId(null)}
+                    className={`flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium rounded-xl transition-colors ${!selectedLabelId ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}
+                  >
+                    <div className="w-4 h-4 flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 rounded-full ring-2 ring-gray-300" />
+                    </div>
+                    Tất cả tin nhắn
+                  </button>
+                  <button
+                    onClick={() => setSelectedLabelId("stranger")}
+                    className={`flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium rounded-xl transition-colors ${selectedLabelId === "stranger" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}
+                  >
+                    <UserIcon className="w-4 h-4 text-gray-400" />
+                    Từ người lạ
+                  </button>
+                  <button
+                    onClick={() => setSelectedLabelId("none")}
+                    className={`flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium rounded-xl transition-colors ${selectedLabelId === "none" ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}
+                  >
+                    <div className="w-4 h-4 flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                    </div>
+                    Chưa gắn thẻ
+                  </button>
+                  {labels.length > 0 && (
+                    <div className="h-px bg-gray-100 my-1 mx-2" />
+                  )}
+                  {labels.map((l) => (
                     <button
-                      onClick={() => setSelectedLabelId(null)}
-                      className={`flex items-center gap-3 w-full px-3 py-2.5 text-[12px] font-bold rounded-xl transition-colors ${!selectedLabelId ? "bg-gray-50 text-black" : "text-gray-500 hover:bg-gray-50"}`}
+                      key={l._id || l.id}
+                      onClick={() => setSelectedLabelId(l._id || l.id)}
+                      className={`flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium rounded-xl transition-colors ${selectedLabelId === (l._id || l.id) ? "bg-blue-50 text-blue-700" : "text-gray-600 hover:bg-gray-50"}`}
                     >
-                      <div className="w-5 h-5 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full ring-2 ring-gray-200" />
+                      <div className="w-4 h-4 flex items-center justify-center">
+                        <div
+                          className="w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: l.color }}
+                        />
                       </div>
-                      Tất cả tin nhắn
+                      {l.name}
                     </button>
-                    <button
-                      onClick={() => setSelectedLabelId("stranger")}
-                      className={`flex items-center gap-3 w-full px-3 py-2.5 text-[12px] font-bold rounded-xl transition-colors ${selectedLabelId === "stranger" ? "bg-gray-50 text-black" : "text-gray-500 hover:bg-gray-50"}`}
-                    >
-                      <div className="w-5 h-5 flex items-center justify-center">
-                        <UserIcon className="w-4 h-4 text-gray-400" />
-                      </div>
-                      Tin nhắn từ người lạ
-                    </button>
-                    <button
-                      onClick={() => setSelectedLabelId("none")}
-                      className={`flex items-center gap-3 w-full px-3 py-2.5 text-[12px] font-bold rounded-xl transition-colors ${selectedLabelId === "none" ? "bg-gray-50 text-black" : "text-gray-500 hover:bg-gray-50"}`}
-                    >
-                      <div className="w-5 h-5 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-gray-100 border border-gray-200" />
-                      </div>
-                      Chưa gắn thẻ phân loại
-                    </button>
-                    <div className="h-px bg-gray-50 my-1 mx-2" />
-                    {labels.length > 0 && (
-                      <p className="px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest opacity-50">
-                        Thẻ phân loại
-                      </p>
-                    )}
-                    {labels.map((l) => (
-                      <button
-                        key={l._id || l.id}
-                        onClick={() => setSelectedLabelId(l._id || l.id)}
-                        className={`flex items-center gap-3 w-full px-3 py-2.5 text-[12px] font-bold rounded-xl transition-colors ${selectedLabelId === (l._id || l.id) ? "bg-gray-50 text-black" : "text-gray-700 hover:bg-gray-50"}`}
-                      >
-                        <div className="w-5 h-5 flex items-center justify-center">
-                          <div
-                            className="w-2.5 h-2.5 rounded-full shadow-sm"
-                            style={{ backgroundColor: l.color }}
-                          />
-                        </div>
-                        {l.name}
-                      </button>
-                    ))}
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto scrollbar-hide px-3 pb-4">
-          {filteredConversations.map((chat) => {
-            return (
-              <div
-                key={chat.id || chat._id}
-                onClick={() => router.push(`/chat/${chat.id || chat._id}`)}
-                className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-[background-color] duration-150 group relative select-none outline-none border ${
-                  conversationId === (chat.id || chat._id)
-                    ? "bg-[#F5F5F5] border-[#F5F5F5]"
-                    : "hover:bg-gray-50 border-transparent hover:border-gray-100"
-                } ${pinnedIds.has(chat.id || chat._id) ? "bg-blue-50/30 shadow-sm" : ""}`}
-              >
-                <div className="relative shrink-0">
-                  {chat.avatar ? (
-                    <img
-                      src={chat.avatar}
-                      alt={chat.name}
-                      className="w-12 h-12 rounded-full object-cover shadow-sm border border-gray-100"
-                    />
-                  ) : chat.isGroup ? (
-                    <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold shadow-sm">
-                      {chat.name.charAt(0).toUpperCase()}
-                    </div>
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-500 font-bold shadow-sm">
-                      {chat.name.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  {/* Unread Count Badge on Top Right of Avatar */}
-                  {chat.unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white border-2 border-white shadow-sm scale-100 animate-in fade-in zoom-in duration-300">
-                      {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
-                    </span>
-                  )}
-                  {chat.otherMemberUserId &&
-                    onlineUsers[chat.otherMemberUserId] && (
-                      <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
-                    )}
-                  {chat.id === BOT_ID && (
-                    <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center mb-0.5">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      {pinnedIds.has(chat.id) && (
-                        <MapPinIcon className="w-3.5 h-3.5 text-blue-500 shrink-0 fill-blue-500" />
-                      )}
-                      <h3 className="font-bold text-[14px] truncate text-gray-900">
-                        {chat.name}
-                      </h3>
-                      {labelAssignments[chat.id] && (
-                        <span
-                          className="px-1.5 py-0.5 rounded-full text-[9px] font-black text-white shrink-0 uppercase tracking-tighter shadow-sm"
-                          style={{
-                            backgroundColor: labelAssignments[chat.id].color,
-                          }}
-                        >
-                          {labelAssignments[chat.id].name}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10px] font-bold text-gray-400 shrink-0">
-                      {chat.time}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center h-5">
-                    <p
-                      className={`text-[13px] truncate font-medium flex-1 ${typingUsers[chat.id]?.length > 0 ? "text-green-500 italic" : "text-gray-500"}`}
-                    >
-                      {typingUsers[chat.id]?.length > 0
-                        ? "Đang soạn tin..."
-                        : chat.message}
-                    </p>
-                    <button
-                      onClick={(e) => toggleMenu(e, chat.id)}
-                      className="md:opacity-0 group-hover:opacity-100 p-1 hover:bg-white hover:shadow-sm rounded-full transition-all text-gray-400 hover:text-black"
-                    >
-                      <EllipsisHorizontalIcon className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
 
-                {openMenuId === chat.id && (
-                  <div
-                    ref={menuRef}
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute right-3 top-13 w-56 bg-white border border-gray-100 rounded-2xl shadow-2xl py-2 z-[60] animate-in fade-in zoom-in duration-150"
-                  >
-                    {menuView === "main" ? (
-                      <div className="flex flex-col p-1">
-                        <button
-                          onClick={(e) => handleTogglePin(e, chat.id)}
-                          className="flex items-center gap-3 w-full px-3 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group/item"
-                        >
-                          <MapPinIcon
-                            className={`w-5 h-5 ${pinnedIds.has(chat.id) ? "text-blue-500 fill-blue-500" : "text-gray-400 group-hover/item:text-black"}`}
-                          />
-                          {pinnedIds.has(chat.id)
-                            ? "Bỏ ghim"
-                            : "Ghim hội thoại"}
-                        </button>
-                        <button
-                          onClick={() => setMenuView("labels")}
-                          className="flex items-center justify-between w-full px-3 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group/item"
-                        >
-                          <div className="flex items-center gap-3">
-                            <TagIcon className="w-5 h-5 text-gray-400 group-hover/item:text-black" />
-                            Phân loại
-                          </div>
-                          <ChevronRightIcon className="w-4 h-4 text-gray-300" />
-                        </button>
+        {/* Conversation List */}
+        <div className="flex-1 overflow-y-auto scrollbar-hide p-2 pb-4">
+          {filteredConversations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2">
+              <ChatBubbleLeftRightIcon className="w-10 h-10 opacity-20" />
+              <p className="text-sm">Không tìm thấy đoạn chat nào</p>
+            </div>
+          ) : (
+            filteredConversations.map((chat) => {
+              const isSelected = conversationId === (chat.id || chat._id);
+              const isPinned = pinnedIds.has(chat.id || chat._id);
 
-                        <button
-                          onClick={(e) =>
-                            handleMoveFolder(
-                              e,
-                              chat.id,
-                              chat.folder === "other" ? "priority" : "other",
-                            )
-                          }
-                          className="flex items-center gap-3 w-full px-3 py-2.5 text-[13px] font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors group/item"
-                        >
-                          {chat.folder === "other" ? (
-                            <>
-                              <ChatBubbleLeftRightIcon className="w-5 h-5 text-gray-400 group-hover/item:text-black" />
-                              Chuyển sang Ưu tiên
-                            </>
-                          ) : (
-                            <>
-                              <ChatBubbleLeftRightIcon className="w-5 h-5 text-gray-400 group-hover/item:text-black" />
-                              Chuyển sang Khác
-                            </>
-                          )}
-                        </button>
-
-                        <button
-                          onClick={(e) => handleClearHistory(e, chat.id)}
-                          className="flex items-center gap-3 w-full px-3 py-2.5 text-[13px] font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors group/item"
-                        >
-                          <TrashIcon className="w-5 h-5 text-red-400 group-hover/item:text-red-500" />
-                          Xoá lịch sử
-                        </button>
-                      </div>
+              return (
+                <div
+                  key={chat.id || chat._id}
+                  onClick={() => router.push(`/chat/${chat.id || chat._id}`)}
+                  className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all duration-200 group relative select-none outline-none mb-1 ${
+                    isSelected ? "bg-blue-50/80" : "hover:bg-gray-50/80"
+                  } ${isPinned && !isSelected ? "bg-gray-50/40" : ""}`}
+                >
+                  {/* Avatar Section */}
+                  <div className="relative shrink-0">
+                    {chat.avatar ? (
+                      <img
+                        src={chat.avatar}
+                        alt={chat.name}
+                        className="w-12 h-12 rounded-full object-cover shadow-sm ring-1 ring-black/5"
+                      />
                     ) : (
-                      <div className="flex flex-col">
-                        <div className="px-2 py-1 flex items-center gap-1 border-b border-gray-50 mb-1">
-                          <button
-                            onClick={() => setMenuView("main")}
-                            className="p-1 px-2 hover:bg-gray-50 rounded-lg text-gray-400"
-                          >
-                            <ChevronLeftIcon className="w-4 h-4" />
-                          </button>
-                          <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">
-                            Phân loại
-                          </span>
-                        </div>
-                        <div className="p-1 flex flex-col gap-0.5">
-                          <button
-                            onClick={(e) => handleAssignLabel(e, chat.id, null)}
-                            className="flex items-center gap-2 w-full px-3 py-2 text-[12px] font-bold text-gray-500 hover:bg-gray-50 rounded-lg transition-colors"
-                          >
-                            <div className="w-2 h-2 rounded-full bg-gray-200" />
-                            Không có nhãn
-                          </button>
-                          {labels.map((l) => (
-                            <button
-                              key={l._id || l.id}
-                              onClick={(e) =>
-                                handleAssignLabel(e, chat.id, l._id || l.id)
-                              }
-                              className="flex items-center gap-2 w-full px-3 py-2 text-[12px] font-bold text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                            >
-                              <div
-                                className="w-2 h-2 rounded-full"
-                                style={{ backgroundColor: l.color }}
-                              />
-                              {l.name}
-                            </button>
-                          ))}
-                          <button
-                            onClick={() => {
-                              setShowManageLabelsModal(true);
-                              setOpenMenuId(null);
-                            }}
-                            className="mt-1 flex items-center justify-center gap-2 w-full px-3 py-2 text-[11px] font-black text-blue-500 hover:bg-blue-50 rounded-lg transition-colors border border-dashed border-blue-100"
-                          >
-                            <PlusIcon className="w-3 h-3" />
-                            QUẢN LÝ THẺ
-                          </button>
-                        </div>
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center font-bold shadow-sm ring-1 ring-black/5 ${chat.isGroup ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"}`}
+                      >
+                        {chat.name.charAt(0).toUpperCase()}
                       </div>
                     )}
+
+                    {/* Unread Badge */}
+                    {chat.unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-[22px] min-w-[22px] px-1 items-center justify-center rounded-full bg-red-500 text-[11px] font-bold text-white border-2 border-white shadow-sm">
+                        {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
+                      </span>
+                    )}
+
+                    {/* Online Status */}
+                    {(chat.otherMemberUserId &&
+                      onlineUsers[chat.otherMemberUserId as string]) ||
+                    chat.id === BOT_ID ? (
+                      <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" />
+                    ) : null}
                   </div>
-                )}
-              </div>
-            );
-          })}
+
+                  {/* Content Section */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center mb-0.5">
+                      <div className="flex items-center gap-1.5 overflow-hidden">
+                        {isPinned && (
+                          <MapPinSolidIcon className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                        )}
+                        <h3
+                          className={`text-[15px] truncate ${isSelected ? "font-bold text-blue-900" : "font-semibold text-gray-900"}`}
+                        >
+                          {chat.name}
+                        </h3>
+                        {chat.id && labelAssignments[chat.id as string] && (
+                          <span
+                            className="px-1.5 py-0.5 rounded-[4px] text-[10px] font-semibold text-white shrink-0 tracking-wide shadow-sm"
+                            style={{
+                              backgroundColor: labelAssignments[chat.id as string].color,
+                            }}
+                          >
+                            {labelAssignments[chat.id as string].name}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className={`text-xs whitespace-nowrap shrink-0 ${chat.unreadCount > 0 ? "font-bold text-blue-600" : "font-medium text-gray-400"}`}
+                      >
+                        {chat.time}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center h-5">
+                      <p
+                        className={`text-[13px] truncate flex-1 ${
+                          chat.id && typingUsers[chat.id as string]?.length > 0
+                            ? "text-blue-500 italic font-medium"
+                            : chat.unreadCount > 0
+                              ? "text-gray-900 font-semibold"
+                              : "text-gray-500"
+                        }`}
+                      >
+                        {chat.id && typingUsers[chat.id as string]?.length > 0
+                          ? "Đang soạn tin..."
+                          : chat.message}
+                      </p>
+
+                      {/* Menu Button */}
+                      <button
+                        onClick={(e) => toggleMenu(e, chat.id)}
+                        className={`md:opacity-0 group-hover:opacity-100 p-1 rounded-full transition-all text-gray-400 hover:text-gray-800 hover:bg-white shadow-sm ${openMenuId === chat.id ? "opacity-100 bg-white" : ""}`}
+                      >
+                        <EllipsisHorizontalIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Context Menu Dropdown */}
+                  {openMenuId === chat.id && (
+                    <div
+                      ref={menuRef}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-4 top-12 w-56 bg-white border border-gray-100 rounded-2xl shadow-xl py-1.5 z-[60]"
+                    >
+                      {menuView === "main" ? (
+                        <div className="flex flex-col px-1.5">
+                          <button
+                            onClick={(e) => handleTogglePin(e, chat.id)}
+                            className="flex items-center gap-3 w-full px-3 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                          >
+                            <MapPinIcon
+                              className={`w-4 h-4 ${isPinned ? "text-blue-600" : "text-gray-400"}`}
+                            />
+                            {isPinned ? "Bỏ ghim" : "Ghim hội thoại"}
+                          </button>
+                          <button
+                            onClick={() => setMenuView("labels")}
+                            className="flex items-center justify-between w-full px-3 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <TagIcon className="w-4 h-4 text-gray-400" /> Phân
+                              loại
+                            </div>
+                            <ChevronRightIcon className="w-4 h-4 text-gray-400" />
+                          </button>
+                          <button
+                            onClick={(e) =>
+                              handleMoveFolder(
+                                e,
+                                chat.id,
+                                chat.folder === "other" ? "priority" : "other",
+                              )
+                            }
+                            className="flex items-center gap-3 w-full px-3 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                          >
+                            <ChatBubbleLeftRightIcon className="w-4 h-4 text-gray-400" />
+                            {chat.folder === "other"
+                              ? "Chuyển sang Ưu tiên"
+                              : "Chuyển sang Khác"}
+                          </button>
+                          <div className="h-px bg-gray-100 my-1 mx-1" />
+                          <button
+                            onClick={(e) => handleClearHistory(e, chat.id)}
+                            className="flex items-center gap-3 w-full px-3 py-2 text-[13px] font-medium text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                          >
+                            <TrashIcon className="w-4 h-4 text-red-500" />
+                            Xoá lịch sử
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col">
+                          <div className="px-2 py-1 flex items-center gap-1 border-b border-gray-100 mb-1">
+                            <button
+                              onClick={() => setMenuView("main")}
+                              className="p-1 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
+                            >
+                              <ChevronLeftIcon className="w-4 h-4" />
+                            </button>
+                            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                              Phân loại
+                            </span>
+                          </div>
+                          <div className="px-1.5 flex flex-col gap-0.5 max-h-48 overflow-y-auto scrollbar-hide">
+                            <button
+                              onClick={(e) =>
+                                handleAssignLabel(e, chat.id, null)
+                              }
+                              className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] font-medium text-gray-600 hover:bg-gray-50 rounded-xl transition-colors"
+                            >
+                              <div className="w-2.5 h-2.5 rounded-full bg-gray-200" />{" "}
+                              Không có nhãn
+                            </button>
+                            {labels.map((l) => (
+                              <button
+                                key={l._id || l.id}
+                                onClick={(e) =>
+                                  handleAssignLabel(e, chat.id, l._id || l.id)
+                                }
+                                className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 rounded-xl transition-colors"
+                              >
+                                <div
+                                  className="w-2.5 h-2.5 rounded-full"
+                                  style={{ backgroundColor: l.color }}
+                                />{" "}
+                                {l.name}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="px-1.5 mt-1 border-t border-gray-100 pt-1">
+                            <button
+                              onClick={() => {
+                                setShowManageLabelsModal(true);
+                                setOpenMenuId(null);
+                              }}
+                              className="flex items-center justify-center gap-2 w-full px-3 py-2 text-[12px] font-bold text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+                            >
+                              <PlusIcon className="w-3.5 h-3.5" /> QUẢN LÝ THẺ
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 

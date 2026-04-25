@@ -161,7 +161,7 @@ export default function BotChatArea({ currentUser }: { currentUser: any }) {
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-hide bg-[#FAFAFA]">
-          <div className="flex flex-col gap-4 max-w-3xl mx-auto">
+          <div className="flex flex-col gap-4 w-full">
             {messages.map((msg) => {
               const isUser = msg.role === "user";
               return (
@@ -218,7 +218,7 @@ export default function BotChatArea({ currentUser }: { currentUser: any }) {
 
         <div className="p-4 bg-white border-t border-gray-100 shrink-0 relative">
           {messages.length <= 1 && !isTyping && !loadingHistory && (
-            <div className="flex flex-wrap gap-2 mb-3 max-w-3xl mx-auto animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex flex-wrap gap-2 mb-3 w-full animate-in fade-in slide-in-from-bottom-2">
               {SUGGESTED_PROMPTS.map((prompt, idx) => (
                 <button
                   key={idx}
@@ -230,7 +230,7 @@ export default function BotChatArea({ currentUser }: { currentUser: any }) {
               ))}
             </div>
           )}
-          <div className="max-w-3xl mx-auto flex items-center gap-3 bg-gray-50 p-1.5 rounded-full focus-within:bg-white focus-within:shadow-md border border-transparent focus-within:border-blue-100 transition-all duration-300">
+          <div className="w-full flex items-center gap-3 bg-gray-50 p-1.5 rounded-full focus-within:bg-white focus-within:shadow-md border border-transparent focus-within:border-blue-100 transition-all duration-300">
             <input
               ref={inputRef}
               type="text"

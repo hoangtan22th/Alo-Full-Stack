@@ -225,7 +225,7 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F3F3F4] p-4 font-sans">
+    <div className="min-h-screen w-full flex items-center justify-center bg-[#F3F3F4] p-4 font-sans">
       <div className="bg-white border border-gray-100 rounded-[40px] shadow-2xl max-w-5xl w-full p-8 md:p-16 grid grid-cols-1 md:grid-cols-2 gap-12 items-center min-h-150">
         {/* ================= CỘT BÊN TRÁI ================= */}
         <div className="space-y-8 relative h-full flex flex-col justify-center">

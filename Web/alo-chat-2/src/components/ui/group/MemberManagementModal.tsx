@@ -22,6 +22,7 @@ import { contactService } from "@/services/contactService";
 import { toast } from "sonner";
 import { getMediaUrl } from "../../../utils/media";
 import FriendProfileModal from "../FriendProfileModal";
+import { userService } from "@/services/userService";
 
 interface MemberManagementModalProps {
   isOpen: boolean;
@@ -62,6 +63,9 @@ export default function MemberManagementModal({
   const [friendshipLoading, setFriendshipLoading] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
 
+  // Local user cache for members not in the global userCache
+  const [localUserCache, setLocalUserCache] = useState<Record<string, { name: string; avatar: string }>>({});
+
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const myMember = members.find(m => m.userId === myId);
   const myRole = myMember?.role?.toLowerCase() || 'member';
@@ -71,7 +75,7 @@ export default function MemberManagementModal({
 
   const filteredMembers = useMemo(() => {
     return members.filter(m => {
-      const name = m.user?.fullName || userCache[m.userId]?.name || "Thành viên";
+      const name = m.fullName || m.displayName || m.name || m.user?.fullName || userCache[m.userId]?.name || localUserCache[m.userId]?.name || "Thành viên";
       const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase());
       
       if (activeTab === "managers") {
@@ -79,7 +83,40 @@ export default function MemberManagementModal({
       }
       return matchesSearch;
     });
-  }, [members, searchQuery, activeTab, userCache]);
+  }, [members, searchQuery, activeTab, userCache, localUserCache]);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchMissingUsers = async () => {
+      const missingIds = members
+        .map(m => m.userId)
+        .filter(id => id && !userCache[id] && !localUserCache[id]);
+      
+      if (missingIds.length === 0) return;
+
+      await Promise.all(
+        missingIds.map(async (id) => {
+          try {
+            const u: any = await userService.getUserById(id);
+            if (u) {
+              setLocalUserCache(prev => ({
+                ...prev,
+                [id]: { 
+                  name: u.fullName || u.displayName || u.username || u.name || "Người dùng", 
+                  avatar: u.avatar || "" 
+                }
+              }));
+            }
+          } catch (e) {
+            console.error("Lỗi fetch user", id, e);
+          }
+        })
+      );
+    };
+
+    fetchMissingUsers();
+  }, [isOpen, members, userCache]);
 
   React.useEffect(() => {
     if (!conversationId || !isManager) return;
@@ -292,8 +329,8 @@ export default function MemberManagementModal({
         <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
           {filteredMembers.length > 0 ? (
             filteredMembers.map((m) => {
-              const name = m.user?.fullName || userCache[m.userId]?.name || "Thành viên";
-              const avatar = m.user?.avatar || userCache[m.userId]?.avatar;
+              const name = m.fullName || m.displayName || m.name || m.user?.fullName || userCache[m.userId]?.name || localUserCache[m.userId]?.name || "Thành viên";
+              const avatar = m.avatar || m.user?.avatar || userCache[m.userId]?.avatar || localUserCache[m.userId]?.avatar;
               const role = m.role?.toLowerCase();
               const isMe = m.userId === myId;
 
