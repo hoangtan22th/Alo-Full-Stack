@@ -418,6 +418,10 @@ public class AuthService {
 
             Account user = accountRepository.findByEmail(email).orElse(null);
 
+            if (user != null && user.getStatus() == AccountStatus.BANNED) {
+                throw new UnauthorizedException("Tài khoản này đã bị cấm khỏi hệ thống.");
+            }
+
             if (user == null) {
                 Set<Role> roles = new HashSet<>();
                 roleRepository.findByName("ROLE_USER").ifPresent(roles::add);
