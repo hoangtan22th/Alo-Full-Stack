@@ -38,6 +38,9 @@ public class UserProfile {
     @Column(name = "cover_url")
     private String coverUrl;
 
+    @Builder.Default
+    private Integer warningCount = 0;
+
     @Enumerated(EnumType.ORDINAL)
     private Gender gender;
 

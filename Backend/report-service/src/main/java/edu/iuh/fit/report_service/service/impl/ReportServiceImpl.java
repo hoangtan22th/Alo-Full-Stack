@@ -3,6 +3,8 @@ package edu.iuh.fit.report_service.service.impl;
 import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import edu.iuh.fit.report_service.client.UserClient;
 import edu.iuh.fit.report_service.config.RabbitMQConfig;
+import edu.iuh.fit.report_service.dto.event.ReportCreatedEvent;
+import edu.iuh.fit.report_service.dto.event.ReportResolvedEvent;
 import edu.iuh.fit.report_service.dto.event.UserBannedEvent;
 import edu.iuh.fit.report_service.dto.event.UserWarnedEvent;
 import edu.iuh.fit.report_service.dto.request.AdminActionRequest;
@@ -67,12 +69,31 @@ public class ReportServiceImpl implements ReportService {
                 .description(request.getDescription())
                 .imageUrls(request.getImageUrls())
                 .messageIds(request.getMessageIds())
-                .status(ReportStatus.PENDING) // By default it is set in Entity
+                .status(ReportStatus.PENDING) 
                 .build();
 
         Report savedReport = reportRepository.save(report);
 
         log.info("Report created successfully with ID: {}", savedReport.getId());
+
+        // Publish report created event
+        String targetName = "Unknown";
+        if (report.getTargetType() == TargetType.USER) {
+            targetName = fetchUserSafe(report.getTargetId()).getFullName();
+        }
+        
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.EXCHANGE_NAME,
+                RabbitMQConfig.ROUTING_KEY_REPORT_CREATED,
+                ReportCreatedEvent.builder()
+                        .reportId(savedReport.getId())
+                        .reporterId(savedReport.getReporterId())
+                        .targetId(savedReport.getTargetId())
+                        .targetType(savedReport.getTargetType().name())
+                        .targetName(targetName)
+                        .reason(savedReport.getReason().name())
+                        .build()
+        );
 
         return ReportResponse.builder()
                 .id(savedReport.getId())
@@ -105,6 +126,14 @@ public class ReportServiceImpl implements ReportService {
         report.setAdminNotes(actionRequest.getAdminNotes());
         report.setResolvedBy(actionRequest.getAdminId());
 
+        String targetName = "Unknown";
+        if (report.getTargetType() == TargetType.USER) {
+            targetName = fetchUserSafe(report.getTargetId()).getFullName();
+        } else if (report.getTargetType() == TargetType.GROUP) {
+            // For future: fetch group name if needed, for now use a placeholder or ID
+            targetName = "Nhóm " + report.getTargetId(); 
+        }
+
         switch (actionRequest.getAction()) {
             case DISMISS:
                 report.setStatus(ReportStatus.REJECTED);
@@ -124,6 +153,21 @@ public class ReportServiceImpl implements ReportService {
         }
 
         Report savedReport = reportRepository.save(report);
+
+        // Publish report resolved event
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.EXCHANGE_NAME,
+                RabbitMQConfig.ROUTING_KEY_REPORT_RESOLVED,
+                ReportResolvedEvent.builder()
+                        .reportId(savedReport.getId())
+                        .targetId(savedReport.getTargetId())
+                        .targetType(savedReport.getTargetType().name())
+                        .targetName(targetName)
+                        .action(actionRequest.getAction().name())
+                        .reason(savedReport.getReason() != null ? savedReport.getReason().name() : "Không có lý do")
+                        .build()
+        );
+
         return mapToAdminResponse(savedReport);
     }
 
@@ -199,8 +243,6 @@ public class ReportServiceImpl implements ReportService {
                 return response.getData();
             }
         } catch (FeignException.NotFound e) {
-            // user-service returned 404 — user not found for this ID (e.g., wrong ID format).
-            // This is expected when garbage MongoDB ObjectIds were historically stored.
             log.warn("User not found for ID: {} (404 from user-service)", userId);
         } catch (FeignException e) {
             log.error("Feign error fetching user {} — status: {}, body: {}",
