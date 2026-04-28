@@ -536,6 +536,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                   <SettingItem
                     icon={<ExclamationCircleIcon />}
                     label="Báo xấu nhóm"
+                    isDanger
                     onClick={() => setShowReportGroupModal(true)}
                   />
                   <SettingItem
@@ -558,6 +559,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                 <SettingItem
                   icon={<ExclamationCircleIcon />}
                   label="Báo xấu người dùng"
+                  isDanger
                   onClick={handleReportUser}
                 />
               )}

@@ -35,6 +35,9 @@ public class Report {
     @Field("target_type")
     private TargetType targetType;
 
+    @Field("target_name")
+    private String targetName;
+
     @Field("reason")
     private ReportReason reason;
 

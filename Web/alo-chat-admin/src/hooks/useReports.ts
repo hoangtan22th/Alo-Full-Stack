@@ -18,6 +18,9 @@ export const useReports = () => {
   const fetchReports = useCallback(
     async (query?: {
       status?: string | null;
+      targetName?: string;
+      targetType?: string;
+      reason?: string;
       page?: number;
       size?: number;
     }) => {
@@ -26,6 +29,9 @@ export const useReports = () => {
       try {
         const fetchQuery = {
           status: query?.status ?? null,
+          targetName: query?.targetName,
+          targetType: query?.targetType,
+          reason: query?.reason,
           page: query?.page ?? 0,
           size: query?.size ?? 20,
         };

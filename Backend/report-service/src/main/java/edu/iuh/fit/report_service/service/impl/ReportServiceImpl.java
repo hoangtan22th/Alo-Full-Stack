@@ -25,6 +25,10 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.support.PageableExecutionUtils;
 
 import feign.FeignException;
 import java.util.List;
@@ -40,6 +44,7 @@ public class ReportServiceImpl implements ReportService {
     private final UserClient userClient;
     private final GroupClient groupClient;
     private final RabbitTemplate rabbitTemplate;
+    private final MongoTemplate mongoTemplate;
 
     @Override
     public ReportResponse createReport(ReportCreationRequest request) {
@@ -50,31 +55,44 @@ public class ReportServiceImpl implements ReportService {
 
         if (request.getTargetType() == TargetType.GROUP) {
             if (hasImages || hasMessages) {
-                throw new IllegalArgumentException("GROUP reports cannot contain image URLs or message IDs. Group reports are strictly about the group's existence/metadata.");
+                throw new IllegalArgumentException(
+                        "GROUP reports cannot contain image URLs or message IDs. Group reports are strictly about the group's existence/metadata.");
             }
         } else if (request.getTargetType() == TargetType.USER) {
-            if (request.getMessageIds() != null) {
+            if (request.getMessageIds() != null && !request.getMessageIds().isEmpty()) {
                 int messageCount = request.getMessageIds().size();
                 if (messageCount < 3 || messageCount > 40) {
-                    throw new IllegalArgumentException("USER reports must contain exactly between 3 and 40 message IDs if evidence is provided. Current count: " + messageCount);
+                    throw new IllegalArgumentException(
+                            "USER reports must contain between 1 and 40 message IDs if evidence is provided. Current count: "
+                                    + messageCount);
                 }
             }
         }
 
         boolean hasDescription = request.getDescription() != null && !request.getDescription().trim().isEmpty();
         if (!hasDescription && !hasImages && !hasMessages && request.getTargetType() == TargetType.USER) {
-             throw new IllegalArgumentException("At least one piece of evidence (description, images, or messages) is required for reporting a USER.");
+            throw new IllegalArgumentException(
+                    "At least one piece of evidence (description, images, or messages) is required for reporting a USER.");
+        }
+
+        // Fetch target name for persistence and events
+        String targetName = "Unknown";
+        if (request.getTargetType() == TargetType.USER) {
+            targetName = fetchUserSafe(request.getTargetId()).getFullName();
+        } else if (request.getTargetType() == TargetType.GROUP) {
+            targetName = fetchGroupNameSafe(request.getTargetId());
         }
 
         Report report = Report.builder()
                 .reporterId(request.getReporterId())
                 .targetId(request.getTargetId())
                 .targetType(request.getTargetType())
+                .targetName(targetName)
                 .reason(request.getReason())
                 .description(request.getDescription())
                 .imageUrls(request.getImageUrls())
                 .messageIds(request.getMessageIds())
-                .status(ReportStatus.PENDING) 
+                .status(ReportStatus.PENDING)
                 .build();
 
         Report savedReport = reportRepository.save(report);
@@ -82,13 +100,6 @@ public class ReportServiceImpl implements ReportService {
         log.info("Report created successfully with ID: {}", savedReport.getId());
 
         // Publish report created event
-        String targetName = "Unknown";
-        if (report.getTargetType() == TargetType.USER) {
-            targetName = fetchUserSafe(report.getTargetId()).getFullName();
-        } else if (report.getTargetType() == TargetType.GROUP) {
-            targetName = fetchGroupNameSafe(report.getTargetId());
-        }
-        
         rabbitTemplate.convertAndSend(
                 RabbitMQConfig.EXCHANGE_NAME,
                 RabbitMQConfig.ROUTING_KEY_REPORT_CREATED,
@@ -99,8 +110,7 @@ public class ReportServiceImpl implements ReportService {
                         .targetType(savedReport.getTargetType().name())
                         .targetName(targetName)
                         .reason(savedReport.getReason().name())
-                        .build()
-        );
+                        .build());
 
         return ReportResponse.builder()
                 .id(savedReport.getId())
@@ -114,15 +124,32 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public Page<ReportAdminResponse> getAdminReports(ReportStatus status, Pageable pageable) {
-        Page<Report> reports;
+    public Page<ReportAdminResponse> getAdminReports(ReportStatus status, String targetName,
+            edu.iuh.fit.report_service.entity.TargetType targetType,
+            edu.iuh.fit.report_service.entity.ReportReason reason, Pageable pageable) {
+        Query query = new Query().with(pageable);
+
         if (status != null) {
-            reports = reportRepository.findByStatus(status, pageable);
-        } else {
-            reports = reportRepository.findAll(pageable);
+            query.addCriteria(Criteria.where("status").is(status));
+        }
+        if (targetType != null) {
+            query.addCriteria(Criteria.where("targetType").is(targetType));
+        }
+        if (reason != null) {
+            query.addCriteria(Criteria.where("reason").is(reason));
+        }
+        if (targetName != null && !targetName.isEmpty()) {
+            query.addCriteria(Criteria.where("targetName").regex(targetName, "i"));
         }
 
-        return reports.map(this::mapToAdminResponse);
+        List<Report> reports = mongoTemplate.find(query, Report.class);
+        long count = mongoTemplate.count(Query.of(query).limit(-1).skip(-1), Report.class);
+
+        List<ReportAdminResponse> list = reports.stream()
+                .map(this::mapToAdminResponse)
+                .collect(Collectors.toList());
+
+        return PageableExecutionUtils.getPage(list, pageable, () -> count);
     }
 
     @Override
@@ -183,8 +210,7 @@ public class ReportServiceImpl implements ReportService {
                         .targetName(targetName)
                         .action(actionRequest.getAction().name())
                         .reason(savedReport.getReason() != null ? savedReport.getReason().name() : "Không có lý do")
-                        .build()
-        );
+                        .build());
 
         // AUTO-RESOLVE DUPLICATES (Strict Rules)
         try {
@@ -198,21 +224,25 @@ public class ReportServiceImpl implements ReportService {
                 autoNote = "Hệ thống tự động xử lý gộp: Đối tượng đã bị CẤM (BAN) trong báo cáo ID: " + reportId;
             } else if (action == AdminActionRequest.AdminAction.WARN) {
                 // RULE 3: WARN -> ONLY resolve reports with SAME REASON
-                duplicates = reportRepository.findByTargetIdAndStatusAndReason(report.getTargetId(), ReportStatus.PENDING, report.getReason());
-                autoNote = "Hệ thống tự động xử lý gộp: Đối tượng đã nhận CẢNH CÁO cho cùng lý do này trong báo cáo ID: " + reportId;
+                duplicates = reportRepository.findByTargetIdAndStatusAndReason(report.getTargetId(),
+                        ReportStatus.PENDING, report.getReason());
+                autoNote = "Hệ thống tự động xử lý gộp: Đối tượng đã nhận CẢNH CÁO cho cùng lý do này trong báo cáo ID: "
+                        + reportId;
             } else {
                 autoNote = "";
             }
             // RULE 1: DISMISS -> duplicates remains null, nothing happens
 
             if (duplicates != null && !duplicates.isEmpty()) {
-                // Lọc bỏ chính báo cáo hiện tại (đã được lưu ở trên, nhưng findBy có thể lấy lại nếu DB chưa sync)
+                // Lọc bỏ chính báo cáo hiện tại (đã được lưu ở trên, nhưng findBy có thể lấy
+                // lại nếu DB chưa sync)
                 List<Report> toResolve = duplicates.stream()
                         .filter(dup -> !dup.getId().equals(reportId))
                         .collect(Collectors.toList());
 
                 if (!toResolve.isEmpty()) {
-                    log.info("Auto-resolving {} related reports for target {} due to action {}", toResolve.size(), report.getTargetId(), action);
+                    log.info("Auto-resolving {} related reports for target {} due to action {}", toResolve.size(),
+                            report.getTargetId(), action);
                     toResolve.forEach(dup -> {
                         dup.setStatus(ReportStatus.RESOLVED);
                         dup.setAdminNotes(autoNote);
@@ -240,7 +270,7 @@ public class ReportServiceImpl implements ReportService {
                     .leaderId(leaderId)
                     .timestamp(LocalDateTime.now())
                     .build();
-            
+
             rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY_USER_BANNED, event);
             log.info("Published USER_BANNED_EVENT for TargetId: {}, LeaderId: {}", report.getTargetId(), leaderId);
         } catch (Exception e) {
@@ -260,7 +290,7 @@ public class ReportServiceImpl implements ReportService {
                     .leaderId(leaderId)
                     .timestamp(LocalDateTime.now())
                     .build();
-            
+
             rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY_USER_WARNED, event);
             log.info("Published USER_WARNED_EVENT for TargetId: {}, LeaderId: {}", report.getTargetId(), leaderId);
         } catch (Exception e) {
@@ -269,16 +299,16 @@ public class ReportServiceImpl implements ReportService {
     }
 
     private ReportAdminResponse mapToAdminResponse(Report report) {
-        
+
         // Fetch reporter info
         UserResponse reporter = fetchUserSafe(report.getReporterId());
-        
+
         // Fetch target info ONLY if targetType is USER
         UserResponse targetUser = null;
         if (report.getTargetType() == TargetType.USER) {
             targetUser = fetchUserSafe(report.getTargetId());
         }
-        
+
         return ReportAdminResponse.builder()
                 .id(report.getId())
                 .reporter(reporter)

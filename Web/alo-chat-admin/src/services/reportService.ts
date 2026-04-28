@@ -52,6 +52,9 @@ export interface MessageDTO {
 export const reportService = {
   getReports: async (query?: {
     status?: string | null;
+    targetName?: string;
+    targetType?: string;
+    reason?: string;
     page?: number;
     size?: number;
   }): Promise<PaginatedReports> => {
