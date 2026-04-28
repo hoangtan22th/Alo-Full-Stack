@@ -152,10 +152,20 @@ export function ReportActionModal({
 
   // --- FETCH FULL CONTEXT ---
   useEffect(() => {
-    if (showFullContext && report && chatMessages.length > 0) {
+    if (showFullContext && report && (chatMessages.length > 0 || isGroup)) {
       const fetchFull = async () => {
-        const convoId = chatMessages[0].conversationId;
-        if (!convoId) return;
+        let convoId = "";
+        if (isUser && chatMessages.length > 0) {
+          convoId = chatMessages[0].conversationId || "";
+        } else if (isGroup) {
+          convoId = report.targetId;
+        }
+
+        if (!convoId) {
+          toast.error("Không thể xác định ID cuộc hội thoại");
+          setShowFullContext(false);
+          return;
+        }
 
         setLoadingFullContext(true);
         try {
@@ -163,11 +173,11 @@ export function ReportActionModal({
           const mapped = msgs.map(m => {
             const isTarget = m.senderId === report.targetId;
             const isReporter = report.reporter?.id && m.senderId === report.reporter.id;
-            
+
             let resolvedName = m.senderName;
-            if (isTarget) resolvedName = report.targetUser?.fullName || m.senderName || "Mục tiêu (Unknown)";
+            if (isTarget && isUser) resolvedName = report.targetUser?.fullName || m.senderName || "Mục tiêu (Unknown)";
             else if (isReporter) resolvedName = report.reporter?.fullName || m.senderName || "Người tố cáo";
-            else resolvedName = m.senderName || "Người dùng khác";
+            else resolvedName = m.senderName || "Thành viên";
 
             return {
               id: m.id,
@@ -176,7 +186,7 @@ export function ReportActionModal({
               content: m.content,
               timestamp: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               rawCreatedAt: m.createdAt,
-              isTarget,
+              isTarget: isTarget && isUser, // Only mark as target visually if it's a USER report
               isReported: report.messageIds.some(rid => String(rid) === String(m.id))
             };
           });
@@ -457,6 +467,18 @@ export function ReportActionModal({
                   </div>
                 )}
               </div>
+
+              {/* Deep Fetch Button for Groups */}
+              <div className="mt-4">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full bg-surface-container-highest hover:bg-surface-variant text-on-surface font-bold text-xs py-5 rounded-xl border border-outline-variant/30 flex items-center justify-center gap-2"
+                  onClick={() => setShowFullContext(true)}
+                >
+                  Xem toàn bộ hội thoại của nhóm (Kiểm tra bối cảnh)
+                </Button>
+              </div>
             </>
           )}
         </section>
@@ -579,13 +601,17 @@ export function ReportActionModal({
               ) : (
                 <>
                   {/* Pro Tip Banner */}
-                  <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-200 dark:border-amber-800/20 text-xs text-amber-800 dark:text-amber-400 mb-4 flex items-start gap-3 shadow-sm">
-                    <span className="text-xl shrink-0">💡</span>
-                    <div className="leading-relaxed">
-                      <p className="font-bold mb-1">Mẹo kiểm tra:</p>
-                      Các tin nhắn có <b>nền vàng</b> và <b>viền cam</b> là những bằng chứng đã được đính kèm trong đơn tố cáo. Hãy kiểm tra các tin nhắn xung quanh để xác định xem có hành vi khiêu khích hay cắt xén bối cảnh không.
-                    </div>
-                  </div>
+                  {
+                    report.targetType === "USER" && (
+                      <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-200 dark:border-amber-800/20 text-xs text-amber-800 dark:text-amber-400 mb-4 flex items-start gap-3 shadow-sm">
+                        <span className="text-xl shrink-0">💡</span>
+                        <div className="leading-relaxed">
+                          <p className="font-bold mb-1">Mẹo kiểm tra:</p>
+                          Các tin nhắn có <b>nền vàng</b> và <b>viền cam</b> là những bằng chứng đã được đính kèm trong đơn tố cáo. Hãy kiểm tra các tin nhắn xung quanh để xác định xem có hành vi khiêu khích hay cắt xén bối cảnh không.
+                        </div>
+                      </div>
+                    )
+                  }
 
                   {fullContextMessages.length === 0 ? (
                     <div className="h-full flex items-center justify-center flex-col gap-2 opacity-50">
@@ -598,8 +624,8 @@ export function ReportActionModal({
                         <div
                           key={`${msg.id}-${idx}`}
                           className={`flex flex-col max-w-[85%] ${msg.isTarget ? "self-start" : "self-end"} transition-all duration-500 ${msg.isReported
-                              ? "p-3 bg-yellow-200 dark:bg-yellow-900/40 rounded-2xl border-2 border-yellow-400 shadow-md ring-4 ring-yellow-400/10"
-                              : ""
+                            ? "p-3 bg-yellow-200 dark:bg-yellow-900/40 rounded-2xl border-2 border-yellow-400 shadow-md ring-4 ring-yellow-400/10"
+                            : ""
                             }`}
                         >
                           <span
@@ -627,8 +653,8 @@ export function ReportActionModal({
                           ) : (
                             <div
                               className={`px-4 py-2.5 rounded-2xl text-sm shadow-sm leading-relaxed ${msg.isTarget
-                                  ? "bg-white dark:bg-[#2c2c2e] text-on-surface rounded-tl-none border border-outline-variant/10"
-                                  : "bg-[#007aff] text-white rounded-tr-none"
+                                ? "bg-white dark:bg-[#2c2c2e] text-on-surface rounded-tl-none border border-outline-variant/10"
+                                : "bg-[#007aff] text-white rounded-tr-none"
                                 } ${msg.isReported ? "font-medium" : ""}`}
                             >
                               {msg.content}
