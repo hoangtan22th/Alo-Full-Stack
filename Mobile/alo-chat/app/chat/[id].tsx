@@ -467,6 +467,18 @@ export default function GlobalChatScreen() {
         if (updatedGroup.groupAvatar) setRealtimeAvatar(updatedGroup.groupAvatar);
       }
     };
+    // Khi có thay đổi bình chọn, di chuyển message poll xuống cuối
+    const handlePollUpdated = (data: any) => {
+      setMessages((prev: MessageDTO[]) => {
+        const idx = prev.findIndex(
+          (m: MessageDTO) => m.type === "poll" && (m as any).metadata?.pollId === data.pollId
+        );
+        if (idx === -1) return prev;
+        const pollMsg = { ...prev[idx], updatedAt: new Date().toISOString() };
+        const filtered = prev.filter((_: any, i: number) => i !== idx);
+        return [...filtered, pollMsg];
+      });
+    };
 
     socket.on("message-received", handleMessageReceived);
     socket.on("message-reaction-updated", handleReactionUpdated);
@@ -477,6 +489,7 @@ export default function GlobalChatScreen() {
     socket.on("message-revoked", handleMessageRevoked);
     socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
     socket.on("GROUP_UPDATED", handleGroupUpdated);
+    socket.on("POLL_UPDATED", handlePollUpdated);
 
     return () => {
       socket.off("message-received", handleMessageReceived);
@@ -488,6 +501,7 @@ export default function GlobalChatScreen() {
       socket.off("message-revoked", handleMessageRevoked);
       socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
       socket.off("GROUP_UPDATED", handleGroupUpdated);
+      socket.off("POLL_UPDATED", handlePollUpdated);
     };
   }, [socket, resolvedConversationId, isGroupChat, targetUserId]);
 

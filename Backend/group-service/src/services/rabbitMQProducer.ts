@@ -144,6 +144,30 @@ export class RabbitMQProducerService {
   }
 
   /**
+   * Phát sự kiện khi có lời mời vào nhóm mới.
+   */
+  async publishNewInvitation(userId: string, group: any, invitedBy: string) {
+    await this.publishToRealtimeService('NEW_INVITATION', {
+      target: userId,
+      data: {
+        groupId: group._id.toString(),
+        groupName: group.name,
+        groupAvatar: group.groupAvatar || '',
+        invitedBy
+      }
+    });
+    console.log(`[RabbitMQProducer] Event 'NEW_INVITATION' published to user: ${userId} for group: ${group._id}`);
+  }
+
+  async publishInvitationAccepted(userId: string, groupName: string, accepterName: string) {
+    await this.publishToRealtimeService('INVITATION_ACCEPTED', {
+      target: userId,
+      data: { groupName, accepterName }
+    });
+    console.log(`[RabbitMQProducer] Event 'INVITATION_ACCEPTED' published to user: ${userId} for group: ${groupName}`);
+  }
+
+  /**
    * Phát sự kiện khi yêu cầu tham gia nhóm bị từ chối.
    */
   async publishJoinRequestRejected(userId: string, groupName: string) {

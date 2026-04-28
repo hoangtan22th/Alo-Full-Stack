@@ -27,6 +27,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import CreateGroupModal from "@/components/ui/group/CreateGroupModal";
 import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
 import { messageService, MessageDTO } from "@/services/messageService";
+import { socketService } from "@/services/socketService";
 
 // ===========================
 // API FUNCTIONS (KHÔNG DÙNG ZUSTAND)
@@ -354,6 +355,25 @@ export default function GroupListPage() {
 
   useEffect(() => {
     loadGroups();
+
+    const unsubs = [
+      socketService.onConversationCreated(() => {
+        console.log("Realtime: New group created or added, refetching...");
+        loadGroups();
+      }),
+      socketService.onConversationRemoved(() => {
+        console.log("Realtime: Group removed, refetching...");
+        loadGroups();
+      }),
+      socketService.onGroupUpdated(() => {
+        console.log("Realtime: Group info updated, refetching...");
+        loadGroups();
+      })
+    ];
+
+    return () => {
+      unsubs.forEach(unsub => unsub());
+    };
   }, [loadGroups]);
 
   useEffect(() => {
@@ -623,25 +643,35 @@ export default function GroupListPage() {
     });
   };
 
-  const handleRemoveMember = async (userId: string, userName: string) => {
+  const handleRemoveMember = async (userId: string, userName: string, isBanned: boolean = false) => {
     if (!selectedGroupId) return;
+    const confirmMsg = isBanned 
+      ? `Bạn có chắc chắn muốn mời ${userName} ra khỏi nhóm và CHẶN không cho tham gia lại?` 
+      : `Bạn có chắc muốn mời ${userName} ra khỏi nhóm?`;
+
     setConfirmModal({
       isOpen: true,
-      title: "Xác nhận xoá",
-      message: `Bạn có chắc muốn xoá ${userName} khỏi nhóm?`,
+      title: isBanned ? "Xác nhận xoá và chặn" : "Xác nhận xoá",
+      message: confirmMsg,
       onConfirm: async () => {
         setLeaveLoading(true);
         try {
-          const res = await removeMember(selectedGroupId, userId);
+          // Note: using axiosClient directly here since this page doesn't use groupService consistently
+          const res: any = await axiosClient.delete(
+            `/groups/${selectedGroupId}/members/${userId}`,
+            { data: { isBanned } }
+          );
           if (res.error) {
             toast.error(res.error);
           } else {
-            toast.success(`Đã xoá ${userName} khỏi nhóm`);
+            toast.success(isBanned ? `Đã xoá và chặn ${userName}` : `Đã xoá ${userName} khỏi nhóm`);
             getGroupById(selectedGroupId).then(
               (r) => r.data && setSelectedGroup(r.data as any),
             );
             setActiveMemberMenuId(null);
           }
+        } catch (err: any) {
+           toast.error(err.response?.data?.error || "Lỗi khi xoá thành viên");
         } finally {
           setLeaveLoading(false);
           setConfirmModal((prev) => ({ ...prev, isOpen: false }));

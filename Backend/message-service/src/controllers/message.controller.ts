@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { Types } from "mongoose";
+import { Message } from "../models/Message.js";
 import messageDataService from "../services/message.service.js";
 import { uploadFileToS3 } from "../services/s3Service.js";
 import rabbitMQProducer from "../services/RabbitMQProducerService.js";
@@ -14,6 +15,51 @@ function getUserIdFromHeader(req: Request): string | null {
 }
 
 /**
+ * Helper to fetch conversation info from group-service
+ */
+async function getConversation(
+  req: Request,
+  conversationId: string,
+  userId: string,
+): Promise<any> {
+  try {
+    // Call group-service directly to bypass Gateway JWT requirements for internal service-to-service calls
+    const groupServiceUrl = process.env.GROUP_SERVICE_URL || "http://127.0.0.1:8082/api/v1/groups";
+    // Ensure we don't double the /api/v1/groups path if it's already in the env var
+    const baseUrl = groupServiceUrl.endsWith('/api/v1/groups') ? groupServiceUrl : `${groupServiceUrl}/api/v1/groups`;
+    const url = `${baseUrl}/${conversationId}`;
+    
+    const response = await fetch(
+      url,
+      {
+        headers: {
+          "X-User-Id": userId,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+
+    if (!response.ok) {
+      console.warn(`[getConversation] Fetch failed for ${conversationId}: ${response.status} ${response.statusText}`);
+      return null;
+    }
+    const result = await response.json();
+    // Handle both { data: ... } wrapped and unwrapped responses
+    const conversation = result?.data || result;
+    
+    if (!conversation || !conversation._id) {
+      console.warn(`[getConversation] Invalid conversation data received for ${conversationId}`, result);
+      return null;
+    }
+    
+    return conversation;
+  } catch (error: any) {
+    console.error(`[getConversation] Exception fetching conversation ${conversationId}:`, error.message);
+    return null;
+  }
+}
+
+/**
  * Helper to check if a user has permission to perform an action in a conversation
  */
 async function hasGroupPermission(
@@ -22,40 +68,22 @@ async function hasGroupPermission(
   userId: string,
   action: "pinMessages" | "sendMessage" | "createPolls" | "createNotes" | "createReminders" | "editGroupInfo",
 ): Promise<boolean> {
-  try {
-    const gatewayUrl = process.env.GATEWAY_URL || "http://127.0.0.1:8888";
-    const response = await fetch(
-      `${gatewayUrl}/api/v1/groups/${conversationId}`,
-      {
-        headers: {
-          "X-User-Id": userId,
-          Authorization: req.headers.authorization || "",
-        },
-      },
-    );
+  const conversation = await getConversation(req, conversationId, userId);
+  if (!conversation) return false;
 
-    if (!response.ok) return false;
-    const result = await response.json();
-    const conversation = result.data;
+  // Direct matches (1-1) always allow all actions
+  if (!conversation.isGroup) return true;
 
-    if (!conversation) return false;
-    // Direct matches (1-1) always allow all actions
-    if (!conversation.isGroup) return true;
+  // Permissions check
+  const permission = conversation.permissions?.[action] || "EVERYONE";
+  if (permission === "EVERYONE") return true;
 
-    // Permissions check
-    const permission = conversation.permissions?.[action] || "EVERYONE";
-    if (permission === "EVERYONE") return true;
-
-    // For ADMIN only, check if the user is LEADER or DEPUTY
-    const member = conversation.members?.find(
-      (m: any) => String(m.userId) === userId,
-    );
-    const role = member?.role?.toUpperCase();
-    return role === "LEADER" || role === "DEPUTY";
-  } catch (error) {
-    console.error(`[hasGroupPermission] Error checking ${action}:`, error);
-    return false;
-  }
+  // For ADMIN only, check if the user is LEADER or DEPUTY
+  const member = conversation.members?.find(
+    (m: any) => String(m.userId) === userId,
+  );
+  const role = member?.role?.toUpperCase();
+  return role === "LEADER" || role === "DEPUTY";
 }
 
 /**
@@ -214,13 +242,16 @@ export async function getMessageHistory(
     let clearedAt: Date | undefined = undefined;
     let joinedAt: Date | undefined = undefined;
     try {
-      const gatewayUrl = process.env.GATEWAY_URL || "http://127.0.0.1:8888";
+      const groupServiceUrl = process.env.GROUP_SERVICE_URL || "http://127.0.0.1:8082/api/v1/groups";
+      const baseUrl = groupServiceUrl.endsWith('/api/v1/groups') ? groupServiceUrl : `${groupServiceUrl}/api/v1/groups`;
+      const url = `${baseUrl}/${conversationId}`;
+
       const response = await fetch(
-        `${gatewayUrl}/api/v1/groups/${conversationId}`,
+        url,
         {
           headers: {
             "X-User-Id": userId,
-            Authorization: req.headers.authorization || "",
+            "Content-Type": "application/json",
           },
         },
       );
@@ -505,24 +536,62 @@ export async function sendMessage(
     const { conversationId, type, content, metadata, replyTo, senderName } =
       req.body;
     const userId = getUserIdFromHeader(req);
+    
+    console.log(`[MessageService] sendMessage: Received request. Sender: ${userId}, Target: ${req.body.targetUserId || 'N/A'}, ConvoId: ${conversationId || 'N/A'}`);
+    console.log(`[MessageService] sendMessage: Content snippet: "${content?.substring(0, 50)}..."`);
 
     if (!userId) {
       res.status(401).json({ error: "Unauthorized - no user id" });
       return;
     }
 
-    if (!conversationId || (!content && type !== "image" && type !== "file")) {
-      res.status(400).json({ error: "Missing conversationId or content" });
+    const { targetUserId } = req.body;
+    let actualConversationId = conversationId;
+
+    // Support targetUserId for auto-creating direct chats (useful for System DMs)
+    if (!actualConversationId && targetUserId) {
+      try {
+        const groupServiceUrl = process.env.GROUP_SERVICE_URL || "http://127.0.0.1:8082/api/v1/groups";
+        const baseUrl = groupServiceUrl.endsWith('/api/v1/groups') ? groupServiceUrl : `${groupServiceUrl}/api/v1/groups`;
+        
+        const convoRes = await fetch(`${baseUrl}/direct`, {
+          method: 'POST',
+          headers: { 'X-User-Id': userId, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetUserId })
+        });
+        
+        if (convoRes.ok) {
+          const convoData = await convoRes.json();
+          actualConversationId = convoData?.data?._id || convoData?._id;
+        }
+      } catch (err) {
+        console.error("[MessageService] Failed to get/create direct conversation:", err);
+      }
+    }
+
+    if (!actualConversationId || (!content && type !== "image" && type !== "file")) {
+      res.status(400).json({ error: "Missing conversationId/targetUserId or content" });
       return;
     }
 
-    // 0. Kiểm tra quyền nhắn tin
-    const allowed = await hasGroupPermission(
-      req,
-      String(conversationId),
-      userId,
-      "sendMessage",
-    );
+    // 0. Kiểm tra quyền nhắn tin & Lấy info conversation
+    console.log(`[MessageService] sendMessage: Checking conversation ${actualConversationId} for user ${userId}`);
+    const conversation = await getConversation(req, String(actualConversationId), userId);
+    if (!conversation) {
+      console.warn(`[MessageService] sendMessage: Conversation ${actualConversationId} NOT FOUND for user ${userId}`);
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    console.log(`[MessageService] sendMessage: Found conversation ${conversation._id}, isGroup=${conversation.isGroup}`);
+
+    const permission = conversation.isGroup ? (conversation.permissions?.sendMessage || "EVERYONE") : "EVERYONE";
+    let allowed = true;
+    if (conversation.isGroup && permission !== "EVERYONE") {
+      const member = conversation.members?.find((m: any) => String(m.userId) === userId);
+      const role = member?.role?.toUpperCase();
+      allowed = role === "LEADER" || role === "DEPUTY";
+    }
+
     if (!allowed) {
       res.status(403).json({
         error: "Chỉ trưởng/phó nhóm mới có thể gửi tin nhắn trong nhóm này",
@@ -532,7 +601,7 @@ export async function sendMessage(
 
     // 1. Lưu vào Database
     const messageDoc = await messageDataService.createMessage({
-      conversationId,
+      conversationId: actualConversationId,
       senderId: userId,
       senderName: senderName,
       type: type || "text",
@@ -544,12 +613,13 @@ export async function sendMessage(
     // 2. Chuẩn bị event để bắn sang RabbitMQ
     const messageEvent: MessageEvent = {
       _id: messageDoc._id.toString(),
-      conversationId: String(conversationId),
+      conversationId: String(actualConversationId),
       senderId: userId,
       type: messageDoc.type,
       content: messageDoc.content,
       isRead: false,
       createdAt: messageDoc.createdAt,
+      isGroup: conversation.isGroup,
       ...(messageDoc.senderName && { senderName: messageDoc.senderName }),
       ...(messageDoc.metadata && { metadata: messageDoc.metadata }),
       ...(messageDoc.replyTo && { replyTo: messageDoc.replyTo as any }),
@@ -592,13 +662,21 @@ export async function uploadFile(
       return;
     }
 
-    // 0. Kiểm tra quyền nhắn tin
-    const allowed = await hasGroupPermission(
-      req,
-      String(conversationId),
-      userId,
-      "sendMessage",
-    );
+    // 0. Kiểm tra quyền nhắn tin & Lấy info
+    const conversation = await getConversation(req, String(conversationId), userId);
+    if (!conversation) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+
+    const permission = conversation.isGroup ? (conversation.permissions?.sendMessage || "EVERYONE") : "EVERYONE";
+    let allowed = true;
+    if (conversation.isGroup && permission !== "EVERYONE") {
+      const member = conversation.members?.find((m: any) => String(m.userId) === userId);
+      const role = member?.role?.toUpperCase();
+      allowed = role === "LEADER" || role === "DEPUTY";
+    }
+
     if (!allowed) {
       res.status(403).json({
         error: "Chỉ trưởng/phó nhóm mới có thể gửi tin nhắn trong nhóm này",
@@ -646,6 +724,7 @@ export async function uploadFile(
       content: messageDoc.content,
       isRead: false,
       createdAt: messageDoc.createdAt,
+      isGroup: conversation.isGroup,
       ...(messageDoc.senderName && { senderName: messageDoc.senderName }),
       ...(messageDoc.metadata && { metadata: messageDoc.metadata }),
       ...(messageDoc.replyTo && { replyTo: messageDoc.replyTo as any }),
@@ -845,13 +924,21 @@ export async function uploadImages(
       return;
     }
 
-    // 0. Kiểm tra quyền nhắn tin
-    const allowed = await hasGroupPermission(
-      req,
-      String(conversationId),
-      userId,
-      "sendMessage",
-    );
+    // 0. Kiểm tra quyền nhắn tin & Lấy info
+    const conversation = await getConversation(req, String(conversationId), userId);
+    if (!conversation) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+
+    const permission = conversation.isGroup ? (conversation.permissions?.sendMessage || "EVERYONE") : "EVERYONE";
+    let allowed = true;
+    if (conversation.isGroup && permission !== "EVERYONE") {
+      const member = conversation.members?.find((m: any) => String(m.userId) === userId);
+      const role = member?.role?.toUpperCase();
+      allowed = role === "LEADER" || role === "DEPUTY";
+    }
+
     if (!allowed) {
       res.status(403).json({
         error: "Chỉ trưởng/phó nhóm mới có thể gửi tin nhắn trong nhóm này",
@@ -911,6 +998,7 @@ export async function uploadImages(
       content: messageDoc.content,
       isRead: false,
       createdAt: messageDoc.createdAt,
+      isGroup: conversation.isGroup,
       ...(messageDoc.metadata && { metadata: messageDoc.metadata }),
       ...(messageDoc.replyTo && { replyTo: messageDoc.replyTo as any }),
     };
@@ -1110,6 +1198,146 @@ export async function searchMessages(
     });
   } catch (error) {
     console.error("[MessageController] searchMessages error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Bulk fetch messages by IDs — for Admin evidence log in report-service.
+ * POST /api/v1/messages/bulk
+ * Body: { ids: string[] }
+ * Returns messages sorted by createdAt ASC.
+ *
+ * No user-ownership check: this is an internal Admin endpoint.
+ * The Gateway should restrict this to admin roles only.
+ */
+export async function getBulkMessages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({
+        status: "error",
+        message: "Body must contain a non-empty 'ids' array",
+      });
+      return;
+    }
+
+    if (ids.length > 40) {
+      res.status(400).json({
+        status: "error",
+        message: "Cannot fetch more than 40 messages at once",
+      });
+      return;
+    }
+
+    const messages = await Message.find({ _id: { $in: ids } })
+      .sort({ createdAt: 1 }) // ASC — chronological order for chat log rendering
+      .select("_id senderId senderName type content createdAt isRevoked")
+      .lean();
+
+    const result = messages.map((m) => ({
+      id: m._id.toString(),
+      senderId: m.senderId,
+      senderName: m.senderName ?? "Unknown",
+      type: m.type,
+      content: m.isRevoked ? "[Tin nhắn đã bị thu hồi]" : m.content,
+      createdAt: m.createdAt,
+      isRevoked: m.isRevoked,
+    }));
+
+    res.json({
+      status: "success",
+      data: result,
+    });
+  } catch (error) {
+    console.error("[MessageController] getBulkMessages error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Thu hồi nhiều tin nhắn cùng lúc (Bulk Revoke)
+ */
+export async function bulkRevokeMessages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageIds } = req.body;
+    const userId = getUserIdFromHeader(req);
+
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      res.status(400).json({ error: "messageIds must be a non-empty array" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    // messageDataService.bulkRevokeMessages sẽ lọc các tin nhắn hợp lệ (của user & < 24h)
+    const revokedMessages = await messageDataService.bulkRevokeMessages(
+      messageIds,
+      userId,
+    );
+
+    // Phát sự kiện realtime cho từng tin nhắn đã thu hồi thành công
+    const publishPromises = revokedMessages.map((msg) =>
+      rabbitMQProducer.publishMessageRevokedEvent({
+        messageId: msg._id.toString(),
+        conversationId: msg.conversationId.toString(),
+      }),
+    );
+    await Promise.all(publishPromises);
+
+    res.json({
+      status: "success",
+      count: revokedMessages.length,
+      revokedIds: revokedMessages.map((m) => m._id),
+    });
+  } catch (error) {
+    console.error("[MessageController] Bulk REVOKE error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Xóa nhiều tin nhắn chỉ ở phía tôi (Bulk Delete For Me)
+ */
+export async function bulkDeleteMessagesForMe(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { messageIds } = req.body;
+    const userId = getUserIdFromHeader(req);
+
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      res.status(400).json({ error: "messageIds must be a non-empty array" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    await messageDataService.bulkDeleteMessagesForMe(messageIds, userId);
+
+    res.json({
+      status: "success",
+      count: messageIds.length,
+    });
+  } catch (error) {
+    console.error("[MessageController] Bulk DELETE for me error:", error);
     next(error);
   }
 }

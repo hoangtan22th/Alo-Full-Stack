@@ -39,6 +39,7 @@ import {
   ChartBarIcon,
   PencilSquareIcon,
   CalendarDaysIcon,
+  PlusCircleIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -82,9 +83,20 @@ export default function ChatInfoScreen() {
   const [isEditNameModalVisible, setIsEditNameModalVisible] = useState(false);
   const [tempGroupName, setTempGroupName] = useState("");
 
+  // States cho modal rời nhóm
+  const [isLeaveModalVisible, setIsLeaveModalVisible] = useState(false);
+  const [isSilentLeave, setIsSilentLeave] = useState(false);
+  const [blockReinvite, setBlockReinvite] = useState(false);
+
+  // States cho Nhóm chung
+  const [otherUserId, setOtherUserId] = useState<string | null>(null);
+  const [commonGroups, setCommonGroups] = useState<any[]>([]);
+  const [isCommonGroupsModalVisible, setIsCommonGroupsModalVisible] = useState(false);
+  const [isFetchingCommon, setIsFetchingCommon] = useState(false);
+
   const fetchGroupDetails = async () => {
     try {
-      if (!isGroup || !id) return;
+      if (!id) return;
       const res = await groupService.getGroupById(id as string);
 
       let groupData = res;
@@ -93,6 +105,17 @@ export default function ChatInfoScreen() {
       } else if (res?.data) {
         groupData = res.data;
       }
+
+      if (!isGroup && groupData && groupData.members) {
+        const otherMember = groupData.members.find(
+          (m: any) => m.userId !== currentUserId,
+        );
+        if (otherMember) {
+          setOtherUserId(otherMember.userId);
+        }
+      }
+
+      if (!isGroup) return; // Các xử lý bên dưới dành riêng cho Group
 
       if (groupData?.name) {
         setGroupName(groupData.name);
@@ -292,26 +315,27 @@ export default function ChatInfoScreen() {
       return;
     }
 
-    Alert.alert("Rời nhóm", "Bạn có chắc chắn muốn rời khỏi nhóm này?", [
-      { text: "Hủy", style: "cancel" },
-      {
-        text: "Rời nhóm",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            if (!currentUserId) return;
-            await groupService.removeMember(id as string, currentUserId);
-            Alert.alert("Thành công", "Đã rời nhóm.");
-            router.replace("/(tabs)");
-          } catch (error) {
-            Alert.alert(
-              "Lỗi",
-              typeof error === "string" ? error : "Không thể rời nhóm",
-            );
-          }
-        },
-      },
-    ]);
+    setIsSilentLeave(false);
+    setBlockReinvite(false);
+    setIsLeaveModalVisible(true);
+  };
+
+  const confirmLeaveGroup = async () => {
+    try {
+      if (!currentUserId || !id) return;
+      await groupService.removeMember(id as string, currentUserId, {
+        isSilent: isSilentLeave,
+        preventReinvite: blockReinvite,
+      });
+      setIsLeaveModalVisible(false);
+      Alert.alert("Thành công", "Đã rời nhóm.");
+      router.replace("/(tabs)");
+    } catch (error) {
+      Alert.alert(
+        "Lỗi",
+        typeof error === "string" ? error : "Không thể rời nhóm",
+      );
+    }
   };
 
   const handleClearHistory = () => {
@@ -437,6 +461,24 @@ export default function ChatInfoScreen() {
     );
   };
 
+  const handleViewCommonGroups = async () => {
+    if (!otherUserId) {
+      Alert.alert("Thông báo", "Không tìm thấy thông tin người dùng");
+      return;
+    }
+    try {
+      setIsFetchingCommon(true);
+      const res = await groupService.getCommonGroups(otherUserId);
+      setCommonGroups(res || []);
+      setIsCommonGroupsModalVisible(true);
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Lỗi", "Không thể lấy danh sách nhóm chung");
+    } finally {
+      setIsFetchingCommon(false);
+    }
+  };
+
   return (
     <View className="flex-1 bg-[#fcfcfc]" style={{ paddingTop: insets.top }}>
       {/* Header */}
@@ -557,6 +599,7 @@ export default function ChatInfoScreen() {
                 <UserGroupIcon size={24} color="#374151" strokeWidth={1.5} />
               }
               label="Nhóm chung"
+              onPress={handleViewCommonGroups}
             />
           )}
         </View>
@@ -770,6 +813,31 @@ export default function ChatInfoScreen() {
           </View>
         </View>
 
+        {!isGroup && (
+          <View className="mt-10 px-5 pb-8">
+            <Text className="text-[11px] font-bold text-gray-500 uppercase tracking-[1px] mb-4">
+              Tiện ích khác
+            </Text>
+
+            <View className="bg-[#f5f6f8] rounded-[24px]">
+              <SettingItem
+                icon={<PlusCircleIcon size={24} color="#4b5563" />}
+                title={`Tạo nhóm với ${groupName}`}
+                onPress={() => {
+                  if (otherUserId) {
+                    router.push({
+                      pathname: "/groups/create-group",
+                      params: {
+                        initialMemberIds: otherUserId,
+                      },
+                    } as any);
+                  }
+                }}
+              />
+            </View>
+          </View>
+        )}
+
         {isGroup && (
           <>
             {/* SECTION: RỜI / GIẢI TÁN NHÓM */}
@@ -861,6 +929,61 @@ export default function ChatInfoScreen() {
         </View>
       </Modal>
 
+      {/* Modal Rời nhóm */}
+      <Modal visible={isLeaveModalVisible} transparent animationType="fade">
+        <View className="flex-1 bg-black/50 items-center justify-center px-6">
+          <View className="bg-white w-full rounded-[24px] p-6">
+            <Text className="text-xl font-bold text-gray-900 mb-2">Rời nhóm</Text>
+            <Text className="text-gray-500 mb-6 font-medium">
+              Bạn có chắc chắn muốn rời khỏi nhóm <Text className="font-bold text-gray-900">{groupName}</Text>?
+            </Text>
+
+            <View className="space-y-4 mb-8">
+              <TouchableOpacity
+                onPress={() => setIsSilentLeave(!isSilentLeave)}
+                className="flex-row items-center"
+              >
+                <View className={`w-6 h-6 rounded border items-center justify-center mr-3 ${isSilentLeave ? "bg-blue-500 border-blue-500" : "border-gray-300"}`}>
+                  {isSilentLeave && <View className="w-2.5 h-2.5 bg-white rounded-sm" />}
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[15px] font-semibold text-gray-800">Rời nhóm trong im lặng</Text>
+                  <Text className="text-[12px] text-gray-500">Các thành viên khác sẽ không thấy thông báo hệ thống</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setBlockReinvite(!blockReinvite)}
+                className="flex-row items-center mt-3"
+              >
+                <View className={`w-6 h-6 rounded border items-center justify-center mr-3 ${blockReinvite ? "bg-blue-500 border-blue-500" : "border-gray-300"}`}>
+                  {blockReinvite && <View className="w-2.5 h-2.5 bg-white rounded-sm" />}
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[15px] font-semibold text-gray-800">Chặn thêm lại vào nhóm</Text>
+                  <Text className="text-[12px] text-gray-500">Bạn sẽ không nhận được lời mời vào lại nhóm này nữa</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                onPress={() => setIsLeaveModalVisible(false)}
+                className="flex-1 bg-gray-100 py-3.5 rounded-2xl items-center"
+              >
+                <Text className="font-bold text-gray-700">Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={confirmLeaveGroup}
+                className="flex-1 bg-red-500 py-3.5 rounded-2xl items-center shadow-sm"
+              >
+                <Text className="font-bold text-white">Rời nhóm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Modal Đổi tên nhóm (Fix Alert.prompt trên Android) */}
       <Modal
         visible={isEditNameModalVisible}
@@ -870,11 +993,6 @@ export default function ChatInfoScreen() {
       >
         <View className="flex-1 justify-center bg-black/40 px-6">
           <View className="bg-white rounded-[24px] p-6 shadow-xl">
-            <Text className="text-lg font-bold text-gray-900 mb-2">Đổi tên nhóm</Text>
-            <Text className="text-[13px] text-gray-500 mb-4">
-              Nhập tên nhóm mới để mọi người dễ dàng nhận diện.
-            </Text>
-            
             <TextInput
               className="bg-gray-100 rounded-xl px-4 py-3 text-base text-gray-900 mb-6 border border-gray-200"
               placeholder="Nhập tên nhóm..."
@@ -908,6 +1026,89 @@ export default function ChatInfoScreen() {
         onClose={() => setViewerIndex(null)}
         onIndexChange={(idx) => setViewerIndex(idx)}
       />
+
+      {/* Modal Nhóm chung */}
+      <Modal
+        visible={isCommonGroupsModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsCommonGroupsModalVisible(false)}
+      >
+        <View className="flex-1 justify-end bg-black/40">
+          <View className="bg-white rounded-t-[32px] min-h-[45%] max-h-[85%] p-6 pt-2">
+            <View className="w-10 h-1 bg-gray-200 rounded-full self-center my-3" />
+            <View className="flex-row justify-between items-center mb-6">
+              <View>
+                <Text className="text-xl font-bold text-gray-900">Nhóm chung</Text>
+                <Text className="text-gray-500 text-sm">{commonGroups.length} nhóm chung</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsCommonGroupsModalVisible(false)}
+                className="bg-gray-100 p-2 rounded-full"
+              >
+                <XMarkIcon size={20} color="#4b5563" />
+              </TouchableOpacity>
+            </View>
+
+            {isFetchingCommon ? (
+              <View className="flex-1 items-center justify-center">
+                <Text className="text-gray-400">Đang tải...</Text>
+              </View>
+            ) : commonGroups.length > 0 ? (
+              <ScrollView showsVerticalScrollIndicator={false} className="flex-1">
+                {commonGroups.map((g) => (
+                  <TouchableOpacity
+                    key={g._id || g.id}
+                    onPress={() => {
+                      setIsCommonGroupsModalVisible(false);
+                      router.push({
+                        pathname: "/chat/[id]",
+                        params: {
+                          id: g._id || g.id,
+                          name: g.name,
+                          isGroup: "true",
+                          avatar: g.groupAvatar || "",
+                        },
+                      } as any);
+                    }}
+                    className="flex-row items-center p-3 mb-3 bg-gray-50 rounded-2xl border border-gray-100"
+                  >
+                    {g.groupAvatar ? (
+                      <Image
+                        source={{ uri: g.groupAvatar }}
+                        className="w-12 h-12 rounded-full"
+                      />
+                    ) : (
+                      <View className="w-12 h-12 bg-gray-200 rounded-full items-center justify-center">
+                        <Text className="text-gray-500 font-bold">
+                          {g.name?.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <View className="ml-4 flex-1">
+                      <Text className="text-base font-bold text-gray-900">
+                        {g.name}
+                      </Text>
+                      <Text className="text-sm text-gray-500">
+                        {g.members?.length || 0} thành viên
+                      </Text>
+                    </View>
+                    <ChevronRightIcon size={20} color="#d1d5db" />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : (
+              <View className="flex-1 items-center justify-center py-10">
+                <View className="bg-gray-50 p-6 rounded-full mb-4">
+                  <UserGroupIcon size={40} color="#d1d5db" />
+                </View>
+                <Text className="text-gray-500 font-medium">Không có nhóm chung nào</Text>
+              </View>
+            )}
+            <View className="h-6" />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

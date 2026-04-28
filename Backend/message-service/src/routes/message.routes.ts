@@ -13,12 +13,20 @@ const upload = multer({
   },
 });
 
+// Admin: Bulk fetch messages by IDs — must be BEFORE /:conversationId to avoid collision
+router.post("/bulk", messageController.getBulkMessages);
+
 router.get("/:conversationId", messageController.getMessageHistory);
 router.get("/:conversationId/search", messageController.searchMessages);
 router.get("/:conversationId/pinned", messageController.getPinnedMessages);
 router.patch("/:messageId/pin", messageController.pinMessage);
 router.patch("/:messageId/unpin", messageController.unpinMessage);
 router.post("/", messageController.sendMessage);
+
+// Route bulk actions
+router.patch("/bulk/revoke", messageController.bulkRevokeMessages);
+router.delete("/bulk/me", messageController.bulkDeleteMessagesForMe);
+
 router.patch("/:messageId/revoke", messageController.revokeMessage);
 router.delete("/:messageId/me", messageController.deleteMessageForMe);
 router.patch("/:messageId", messageController.editMessage);

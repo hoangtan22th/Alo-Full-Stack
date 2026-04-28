@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { groupService } from "@/services/groupService";
 import { socketService } from "@/services/socketService";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useChatStore } from "@/store/useChatStore";
 
 export default function FriendProfileModal({
   isOpen,
@@ -508,7 +509,16 @@ export default function FriendProfileModal({
               <ActionItem icon={UserGroupIcon} label="Nhóm chung" />
               <ActionItem icon={ShareIcon} label="Chia sẻ danh thiếp" />
               <ActionItem icon={NoSymbolIcon} label="Chặn người này" />
-              <ActionItem icon={ExclamationTriangleIcon} label="Báo xấu" />
+              <ActionItem
+                icon={ExclamationTriangleIcon}
+                label="Báo xấu"
+                onClick={() => {
+                  // Enter report selection mode in chat for this user
+                  useChatStore.getState().setReportSelectionMode(true);
+                  // Close modal so admin/user can select messages in the chat
+                  onClose?.();
+                }}
+              />
               {currentRelation.status === "ACCEPTED" && (
                 <ActionItem
                   icon={TrashIcon}

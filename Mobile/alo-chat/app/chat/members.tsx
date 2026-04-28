@@ -26,6 +26,7 @@ import {
   NoSymbolIcon,
   ChevronRightIcon,
   XMarkIcon,
+  DocumentDuplicateIcon,
 } from "react-native-heroicons/outline";
 import { PaperAirplaneIcon } from "react-native-heroicons/solid";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -52,6 +53,52 @@ export default function GroupMembersScreen() {
   const [canViewHistory, setCanViewHistory] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
 
+  // States cho kick thành viên
+  const [isKickModalVisible, setIsKickModalVisible] = useState(false);
+  const [targetKickMember, setTargetKickMember] = useState<{id: string, name: string} | null>(null);
+  const [isKickBanned, setIsKickBanned] = useState(false);
+
+  // States cho tìm kiếm SĐT
+  const [isPhoneSearchActive, setIsPhoneSearchActive] = useState(false);
+  const [phoneSearchQuery, setPhoneSearchQuery] = useState("");
+  const [phoneSearchResult, setPhoneSearchResult] = useState<any>(null);
+  const [isSearchingPhone, setIsSearchingPhone] = useState(false);
+
+  const [blockedMembers, setBlockedMembers] = useState<any[]>([]);
+  const [groupName, setGroupName] = useState("");
+
+  // Friendship states
+  const [friendshipStatuses, setFriendshipStatuses] = useState<Record<string, "friend" | "sent" | "received" | "none">>({});
+
+  const fetchFriendshipData = async () => {
+    try {
+      const [friendsList, sentRequests, pendingRequests] = await Promise.all([
+        contactService.getFriendsList(),
+        contactService.getSentRequests(),
+        contactService.getPendingRequests(),
+      ]);
+
+      const statuses: Record<string, "friend" | "sent" | "received" | "none"> = {};
+
+      friendsList.forEach((f: any) => {
+        const friendId = f.requesterId === currentUserId ? f.recipientId : f.requesterId;
+        statuses[friendId] = "friend";
+      });
+
+      sentRequests.forEach((r: any) => {
+        statuses[r.recipientId] = "sent";
+      });
+
+      pendingRequests.forEach((r: any) => {
+        statuses[r.requesterId] = "received";
+      });
+
+      setFriendshipStatuses(statuses);
+    } catch (error) {
+      console.error("Lỗi lấy thông tin bạn bè:", error);
+    }
+  };
+
   const fetchGroupDetails = async () => {
     try {
       if (!id) return;
@@ -65,6 +112,7 @@ export default function GroupMembersScreen() {
       }
 
       if (groupData && groupData.members) {
+        setGroupName(groupData.name || "");
         setPendingCount(groupData.joinRequests?.length || 0);
         if (typeof groupData.isHistoryVisible === "boolean") {
           setCanViewHistory(groupData.isHistoryVisible);
@@ -82,6 +130,24 @@ export default function GroupMembersScreen() {
         });
         const membersList = await Promise.all(memberPromises);
         setMembers(membersList);
+
+        // Lấy danh sách thành viên bị chặn
+        if (groupData.removedMembers) {
+          const bannedOnes = groupData.removedMembers.filter((rm: any) => rm.isBanned);
+          const blockedList = await Promise.all(
+            bannedOnes.map(async (rm: any) => {
+              const userRes = await userService.getUserById(rm.userId);
+              const userData = userRes && (userRes as any).data ? (userRes as any).data : userRes;
+              return {
+                id: rm.userId,
+                name: userData?.fullName || "Người dùng",
+                avatar: userData?.avatar || "",
+                role: "blocked",
+              };
+            })
+          );
+          setBlockedMembers(blockedList);
+        }
       }
     } catch (error) {
       console.error("Lỗi lấy chi tiết nhóm:", error);
@@ -92,7 +158,8 @@ export default function GroupMembersScreen() {
 
   useEffect(() => {
     fetchGroupDetails();
-  }, [id]);
+    fetchFriendshipData();
+  }, [id, currentUserId]);
 
   useEffect(() => {
     if (!socket || !id) return;
@@ -275,27 +342,71 @@ export default function GroupMembersScreen() {
     );
   };
 
-  const handleKickMember = (memberId: string, memberName: string) => {
+  const handleUnblock = async (memberId: string, memberName: string) => {
     Alert.alert(
-      "Xác nhận xóa",
-      `Bạn có chắc chắn muốn xóa ${memberName} khỏi nhóm?`,
+      "Gỡ chặn",
+      `Bạn có chắc chắn muốn gỡ chặn cho ${memberName}?`,
       [
         { text: "Hủy", style: "cancel" },
         {
-          text: "Xóa",
-          style: "destructive",
+          text: "Xác nhận",
           onPress: async () => {
             try {
-              await groupService.removeMember(id as string, memberId);
-              Alert.alert("Thành công", "Đã xóa thành viên khỏi nhóm.");
+              await groupService.unblockMember(id as string, memberId);
+              Alert.alert("Thành công", "Đã gỡ chặn thành viên.");
               fetchGroupDetails();
             } catch (error) {
-              Alert.alert("Lỗi", "Không thể xóa thành viên.");
+              Alert.alert("Lỗi", "Không thể gỡ chặn thành viên.");
             }
           },
         },
       ],
     );
+  };
+
+  const handleKickMember = (memberId: string, memberName: string) => {
+    setTargetKickMember({ id: memberId, name: memberName });
+    setIsKickBanned(false);
+    setIsKickModalVisible(true);
+  };
+
+  const confirmKickMember = async () => {
+    if (!targetKickMember) return;
+    try {
+      await groupService.removeMember(id as string, targetKickMember.id, {
+        isBanned: isKickBanned,
+      });
+      Alert.alert("Thành công", `Đã xóa ${targetKickMember.name} khỏi nhóm.`);
+      setIsKickModalVisible(false);
+      setTargetKickMember(null);
+      fetchGroupDetails();
+    } catch (error) {
+      Alert.alert("Lỗi", "Không thể xóa thành viên.");
+    }
+  };
+
+  const handleSendFriendRequest = (member: any) => {
+    router.push({
+      pathname: "/(tabs)/contacts/send-request",
+      params: {
+        userId: member.id,
+        fullName: member.name,
+        avatarUrl: member.avatar,
+        from: "chat",
+        chatId: id as string,
+      },
+    });
+  };
+
+  const handleCopyGroup = () => {
+    const memberIds = members.map((m) => m.id).join(",");
+    router.push({
+      pathname: "/groups/create-group",
+      params: {
+        initialMemberIds: memberIds,
+        initialGroupName: `${groupName} (Copy)`,
+      },
+    });
   };
 
   const filteredMembers = members.filter((m) =>
@@ -308,7 +419,7 @@ export default function GroupMembersScreen() {
       return filteredMembers.filter(
         (m) => m.role === "leader" || m.role === "deputy",
       );
-    if (activeTab === "blocked") return []; // Tạm thời để trống
+    if (activeTab === "blocked") return blockedMembers;
     return [];
   };
 
@@ -326,6 +437,9 @@ export default function GroupMembersScreen() {
           <Text className="text-lg font-bold text-gray-900">Thành viên</Text>
         </View>
         <View className="flex-row">
+          <TouchableOpacity className="p-2 mr-2" onPress={handleCopyGroup}>
+            <DocumentDuplicateIcon size={24} color="#000" />
+          </TouchableOpacity>
           <TouchableOpacity className="p-2 mr-2" onPress={handleAddMember}>
             <UserPlusIcon size={24} color="#000" />
           </TouchableOpacity>
@@ -439,8 +553,41 @@ export default function GroupMembersScreen() {
                     Phó nhóm
                   </Text>
                 )}
+                {activeTab === "blocked" && (
+                  <Text className="text-[13px] text-red-500 font-medium">
+                    Đã chặn
+                  </Text>
+                )}
               </View>
-              {isManager && <EllipsisVerticalIcon size={24} color="#9ca3af" />}
+              {activeTab === "blocked" ? (
+                <TouchableOpacity
+                  onPress={() => handleUnblock(member.id, member.name)}
+                  className="bg-blue-50 px-3 py-1.5 rounded-full"
+                >
+                  <Text className="text-blue-600 text-[13px] font-bold">Gỡ chặn</Text>
+                </TouchableOpacity>
+              ) : (
+                <View className="flex-row items-center">
+                  {member.id !== currentUserId && !friendshipStatuses[member.id] && (
+                    <TouchableOpacity
+                      onPress={() => handleSendFriendRequest(member)}
+                      className="p-2 mr-1"
+                    >
+                      <UserPlusIcon size={24} color="#3b82f6" />
+                    </TouchableOpacity>
+                  )}
+                  {friendshipStatuses[member.id] === "sent" && (
+                    <View className="bg-gray-100 px-2 py-1 rounded-md mr-2">
+                      <Text className="text-[11px] text-gray-500 font-medium">Đã mời</Text>
+                    </View>
+                  )}
+                  {isManager && (
+                    <TouchableOpacity onPress={() => handleMemberAction(member)} className="p-2">
+                       <EllipsisVerticalIcon size={24} color="#9ca3af" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </TouchableOpacity>
           ))}
         </View>
@@ -471,81 +618,159 @@ export default function GroupMembersScreen() {
             </View>
           </View>
 
-          {/* Search */}
-          <View className="px-4 py-3">
-            <View className="bg-gray-100 rounded-full px-4 py-2 flex-row items-center">
-              <MagnifyingGlassIcon size={20} color="#9ca3af" />
-              <TextInput
-                placeholder="Tìm kiếm bạn bè..."
-                className="flex-1 ml-2 text-[15px] p-0"
-                value={searchFriend}
-                onChangeText={setSearchFriend}
-              />
-            </View>
+          {/* Search Type Toggle */}
+          <View className="flex-row px-4 mb-4">
+            <TouchableOpacity
+              onPress={() => setIsPhoneSearchActive(false)}
+              className={`flex-1 py-2 rounded-l-xl items-center border ${!isPhoneSearchActive ? "bg-blue-500 border-blue-500" : "bg-white border-gray-200"}`}
+            >
+              <Text className={`font-bold ${!isPhoneSearchActive ? "text-white" : "text-gray-500"}`}>Bạn bè</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setIsPhoneSearchActive(true)}
+              className={`flex-1 py-2 rounded-r-xl items-center border-y border-r ${isPhoneSearchActive ? "bg-blue-500 border-blue-500" : "bg-white border-gray-200"}`}
+            >
+              <Text className={`font-bold ${isPhoneSearchActive ? "text-white" : "text-gray-500"}`}>Tìm quanh đây/SĐT</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Friend List */}
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            className="flex-1 px-4"
-          >
-            {friends
-              .filter((f) =>
-                f.name.toLowerCase().includes(searchFriend.toLowerCase()),
-              )
-              .map((friend) => {
-                const isSelected = selectedFriendIds.includes(friend.id);
-                return (
-                  <TouchableOpacity
-                    key={friend.id}
-                    className="flex-row items-center py-3 border-b border-gray-50"
-                    onPress={() => {
-                      if (isSelected) {
-                        setSelectedFriendIds(
-                          selectedFriendIds.filter((fid) => fid !== friend.id),
-                        );
-                      } else {
-                        setSelectedFriendIds([...selectedFriendIds, friend.id]);
-                      }
-                    }}
-                  >
-                    <View
-                      className={`w-5 h-5 rounded-full border mr-4 items-center justify-center ${
-                        isSelected
-                          ? "bg-blue-500 border-blue-500"
-                          : "border-gray-300"
-                      }`}
-                    >
-                      {isSelected && (
-                        <View className="w-2 h-2 rounded-full bg-white" />
-                      )}
-                    </View>
-                    {friend.avatar ? (
-                      <Image
-                        source={{ uri: friend.avatar }}
-                        className="w-12 h-12 rounded-full bg-gray-200"
-                      />
-                    ) : (
-                      <View className="w-12 h-12 rounded-full bg-gray-800 items-center justify-center">
-                        <Text className="text-white font-bold text-lg">
-                          {friend.name.charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
-                    <Text className="ml-4 text-[16px] font-medium text-gray-800 flex-1">
-                      {friend.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            {friends.length === 0 && (
-              <View className="items-center justify-center py-10">
-                <Text className="text-gray-500">
-                  Tất cả bạn bè đã ở trong nhóm
-                </Text>
+          {!isPhoneSearchActive ? (
+            <>
+              {/* Search Friend */}
+              <View className="px-4 py-3">
+                <View className="bg-gray-100 rounded-full px-4 py-2 flex-row items-center">
+                  <MagnifyingGlassIcon size={20} color="#9ca3af" />
+                  <TextInput
+                    placeholder="Tìm kiếm bạn bè..."
+                    className="flex-1 ml-2 text-[15px] p-0"
+                    value={searchFriend}
+                    onChangeText={setSearchFriend}
+                  />
+                </View>
               </View>
-            )}
-          </ScrollView>
+
+              {/* Friend List */}
+              <ScrollView showsVerticalScrollIndicator={false} className="flex-1 px-4">
+                {friends
+                  .filter((f) => f.name.toLowerCase().includes(searchFriend.toLowerCase()))
+                  .map((friend) => {
+                    const isSelected = selectedFriendIds.includes(friend.id);
+                    return (
+                      <TouchableOpacity
+                        key={friend.id}
+                        className="flex-row items-center py-3 border-b border-gray-50"
+                        onPress={() => {
+                          if (isSelected) {
+                            setSelectedFriendIds(selectedFriendIds.filter((fid) => fid !== friend.id));
+                          } else {
+                            setSelectedFriendIds([...selectedFriendIds, friend.id]);
+                          }
+                        }}
+                      >
+                        <View className={`w-5 h-5 rounded-full border mr-4 items-center justify-center ${isSelected ? "bg-blue-500 border-blue-500" : "border-gray-300"}`}>
+                          {isSelected && <View className="w-2 h-2 rounded-full bg-white" />}
+                        </View>
+                        {friend.avatar ? (
+                          <Image source={{ uri: friend.avatar }} className="w-12 h-12 rounded-full bg-gray-200" />
+                        ) : (
+                          <View className="w-12 h-12 rounded-full bg-gray-800 items-center justify-center">
+                            <Text className="text-white font-bold text-lg">{friend.name.charAt(0).toUpperCase()}</Text>
+                          </View>
+                        )}
+                        <Text className="ml-4 text-[16px] font-medium text-gray-800 flex-1">{friend.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                {friends.length === 0 && (
+                  <View className="items-center justify-center py-10">
+                    <Text className="text-gray-500">Tất cả bạn bè đã ở trong nhóm</Text>
+                  </View>
+                )}
+              </ScrollView>
+            </>
+          ) : (
+            <View className="flex-1 px-4">
+              <View className="bg-gray-100 rounded-xl px-4 py-3 flex-row items-center mb-6">
+                <TextInput
+                  placeholder="Nhập số điện thoại..."
+                  keyboardType="phone-pad"
+                  className="flex-1 text-[16px]"
+                  value={phoneSearchQuery}
+                  onChangeText={setPhoneSearchQuery}
+                />
+                <TouchableOpacity
+                  onPress={async () => {
+                    if (!phoneSearchQuery) return;
+                    setIsSearchingPhone(true);
+                    try {
+                      const results = await userService.searchByPhone(phoneSearchQuery);
+                      if (results && results.length > 0) {
+                        setPhoneSearchResult(results[0]);
+                      } else {
+                        setPhoneSearchResult(null);
+                        Alert.alert("Thông báo", "Không tìm thấy người dùng này");
+                      }
+                    } catch (err) {
+                      Alert.alert("Lỗi", "Không thể tìm kiếm");
+                    } finally {
+                      setIsSearchingPhone(false);
+                    }
+                  }}
+                  disabled={isSearchingPhone}
+                >
+                  <Text className="text-blue-500 font-bold ml-2">Tìm</Text>
+                </TouchableOpacity>
+              </View>
+
+              {phoneSearchResult && (
+                <View className="items-center bg-gray-50 p-6 rounded-3xl">
+                  {phoneSearchResult.avatar ? (
+                    <Image source={{ uri: phoneSearchResult.avatar }} className="w-20 h-20 rounded-full mb-4" />
+                  ) : (
+                    <View className="w-20 h-20 rounded-full bg-gray-800 items-center justify-center mb-4">
+                      <Text className="text-white font-bold text-2xl">{phoneSearchResult.fullName.charAt(0).toUpperCase()}</Text>
+                    </View>
+                  )}
+                  <Text className="text-xl font-bold text-gray-900 mb-1">{phoneSearchResult.fullName}</Text>
+                  <Text className="text-gray-500 mb-6">{phoneSearchResult.phoneNumber}</Text>
+
+                  {members.some(m => String(m.id) === String(phoneSearchResult.id)) ? (
+                    <View className="bg-gray-200 px-6 py-2 rounded-full">
+                      <Text className="text-gray-500 font-bold">Đã vào nhóm</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={async () => {
+                        try {
+                          // Kiểm tra xem có là bạn bè không
+                          const friendList = await contactService.getFriendsList();
+                          const isFriend = friendList.some((f: any) => 
+                            String(f.requesterId) === String(phoneSearchResult.id) || 
+                            String(f.recipientId) === String(phoneSearchResult.id)
+                          );
+
+                          if (isFriend) {
+                            await groupService.addMember(id as string, phoneSearchResult.id, canViewHistory);
+                            Alert.alert("Thành công", "Đã thêm vào nhóm");
+                          } else {
+                            await groupService.inviteToGroup(id as string, phoneSearchResult.id);
+                            Alert.alert("Đã gửi lời mời", "Lời mời vào nhóm đã được gửi tới người này");
+                          }
+                          setIsAddModalVisible(false);
+                          fetchGroupDetails();
+                        } catch (err) {
+                          Alert.alert("Lỗi", "Thao tác thất bại");
+                        }
+                      }}
+                      className="bg-blue-500 px-10 py-3 rounded-full shadow-sm"
+                    >
+                      <Text className="text-white font-bold text-lg">Mời vào nhóm</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
 
           {/* Bottom Fixed Panel */}
           {selectedFriendIds.length > 0 && (
@@ -620,6 +845,46 @@ export default function GroupMembersScreen() {
             )}
             </View>
           )}
+        </View>
+      </Modal>
+
+      {/* Modal Kick Thành Viên */}
+      <Modal visible={isKickModalVisible} transparent animationType="fade">
+        <View className="flex-1 bg-black/50 items-center justify-center px-6">
+          <View className="bg-white w-full rounded-[24px] p-6">
+            <Text className="text-xl font-bold text-gray-900 mb-2">Xác nhận xóa</Text>
+            <Text className="text-gray-500 mb-6 font-medium">
+              Bạn có chắc chắn muốn mời <Text className="font-bold text-gray-900">{targetKickMember?.name}</Text> ra khỏi nhóm?
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => setIsKickBanned(!isKickBanned)}
+              className="flex-row items-center mb-8"
+            >
+              <View className={`w-6 h-6 rounded border items-center justify-center mr-3 ${isKickBanned ? "bg-red-500 border-red-500" : "border-gray-300"}`}>
+                {isKickBanned && <View className="w-2.5 h-2.5 bg-white rounded-sm" />}
+              </View>
+              <View className="flex-1">
+                <Text className="text-[15px] font-semibold text-gray-800">Chặn người này vào lại nhóm</Text>
+                <Text className="text-[12px] text-gray-500">Sau khi bị xóa, người này sẽ không thể tham gia lại bằng link hoặc lời mời</Text>
+              </View>
+            </TouchableOpacity>
+
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                onPress={() => setIsKickModalVisible(false)}
+                className="flex-1 bg-gray-100 py-3.5 rounded-2xl items-center"
+              >
+                <Text className="font-bold text-gray-700">Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={confirmKickMember}
+                className="flex-1 bg-red-500 py-3.5 rounded-2xl items-center shadow-sm"
+              >
+                <Text className="font-bold text-white">Xóa</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
     </View>

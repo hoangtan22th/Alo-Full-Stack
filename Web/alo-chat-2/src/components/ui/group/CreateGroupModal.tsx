@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import axiosClient from "@/services/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useRouter } from "next/navigation";
+import { getMediaUrl } from "@/utils/media";
 
 // ===========================
 // INTERFACES & HELPERS
@@ -56,6 +57,7 @@ const createGroup = async (data: {
   name: string;
   userIds: string[];
   avatarFile?: File;
+  groupAvatar?: string;
 }) => {
   try {
     const formData = new FormData();
@@ -63,6 +65,9 @@ const createGroup = async (data: {
     // Backend yêu cầu JSON string cho userIds khi dùng multipart/form-data
     formData.append("userIds", JSON.stringify(data.userIds));
     if (data.avatarFile) formData.append("avatarFile", data.avatarFile);
+    if (data.groupAvatar && !data.avatarFile) {
+      formData.append("groupAvatar", data.groupAvatar);
+    }
 
     const response: any = await axiosClient.post("/groups", formData, {
       headers: { "Content-Type": "multipart/form-data" },
@@ -76,20 +81,27 @@ const createGroup = async (data: {
     };
   }
 };
-
 export default function CreateGroupModal({
   onClose,
   onSuccess,
+  initialSelectedIds,
+  initialName,
+  initialAvatarUrl,
 }: {
   onClose: () => void;
   onSuccess: () => void;
+  initialSelectedIds?: string[];
+  initialName?: string;
+  initialAvatarUrl?: string;
 }) {
   const router = useRouter();
-  const [name, setName] = useState("");
+  const [name, setName] = useState(initialName || "");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(initialAvatarUrl || null);
   const [friends, setFriends] = useState<Friend[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>(
+    initialSelectedIds || [],
+  );
   const [friendsLoading, setFriendsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
@@ -179,6 +191,7 @@ export default function CreateGroupModal({
         name: name.trim(),
         userIds: selectedIds,
         avatarFile: avatarFile || undefined,
+        groupAvatar: !avatarFile ? initialAvatarUrl : undefined,
       });
 
       if (result.error) {
@@ -242,7 +255,7 @@ export default function CreateGroupModal({
                 <div className="w-16 h-16 rounded-[20px] bg-gray-100 overflow-hidden border-2 border-dashed border-gray-300 group-hover:border-black transition flex items-center justify-center">
                   {avatarPreview ? (
                     <img
-                      src={avatarPreview}
+                      src={getMediaUrl(avatarPreview)}
                       className="w-full h-full object-cover"
                       alt=""
                     />

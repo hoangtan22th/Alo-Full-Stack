@@ -32,6 +32,7 @@ export interface IConversation extends Document {
   joinRequests: { userId: string; requestedAt: Date; answer?: string }[];
   invitations: { userId: string; invitedBy: string; invitedAt: Date }[];
   isBanned: boolean;
+  warningCount: number;
   isApprovalRequired: boolean;
   isLinkEnabled: boolean; // Add isLinkEnabled field
   isHistoryVisible: boolean; // Add isHistoryVisible field
@@ -109,6 +110,7 @@ const conversationSchema = new Schema<IConversation>(
     isLinkEnabled: { type: Boolean, default: false }, // Add isLinkEnabled schema logic
     isHistoryVisible: { type: Boolean, default: true }, // Add isHistoryVisible schema logic
     isBanned: { type: Boolean, default: false },
+    warningCount: { type: Number, default: 0 },
     unreadCount: {
       type: Map,
       of: Number,

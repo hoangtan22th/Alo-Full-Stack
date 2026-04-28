@@ -18,6 +18,10 @@ const app: Application = express();
 // Bỏ CORS ở các service bên dưới vì API Gateway đã đảm nhận. Nếu mở cả 2 sẽ sinh ra lỗi 'Multiple Access-Control-Allow-Origin'
 // app.use(cors());
 app.use(express.json());
+app.use((req, res, next) => {
+  console.log(`[group-service] ${req.method} ${req.url}`);
+  next();
+});
 
 // Điểm cuối bắt buộc cho Eureka (Để Spring Boot biết Node.js còn sống)
 app.get("/info", (req: Request, res: Response) => {
@@ -52,6 +56,11 @@ app.listen(PORT, async () => {
     // Khởi chạy worker nhắc hẹn
     const { startReminderWorker } = require("./src/services/reminderWorker");
     startReminderWorker();
+
+    // Khởi chạy worker xử lý report cho Group
+    const { startReportWorker } = require("./src/workers/reportWorker");
+    const { getChannel } = require("./src/config/rabbitmq");
+    await startReportWorker(getChannel());
   } catch (err) {
     console.error("❌ Lỗi kết nối RabbitMQ:", err);
   }
