@@ -109,8 +109,8 @@ export default function ReportModal({
         targetType,
         reason,
         description: isCustomizeMode ? description : '',
-        imageUrls: isCustomizeMode && targetType === 'USER' ? imageUrls : [],
-        messageIds: targetType === 'USER' ? selectedMessageIds : [],
+        imageUrls: isCustomizeMode && isUser ? imageUrls : [],
+        messageIds: isUser ? selectedMessageIds.filter(isMongoId) : [],
       };
 
       console.log('[ReportModal] Submitting report payload:', {

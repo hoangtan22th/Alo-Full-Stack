@@ -1235,7 +1235,17 @@ export async function getBulkMessages(
       return;
     }
 
-    const messages = await Message.find({ _id: { $in: ids } })
+    const validIds = ids.filter((id: string) => Types.ObjectId.isValid(id));
+
+    if (validIds.length === 0) {
+      res.json({
+        status: "success",
+        data: [],
+      });
+      return;
+    }
+
+    const messages = await Message.find({ _id: { $in: validIds } })
       .sort({ createdAt: 1 }) // ASC — chronological order for chat log rendering
       .select("_id senderId senderName type content createdAt isRevoked")
       .lean();

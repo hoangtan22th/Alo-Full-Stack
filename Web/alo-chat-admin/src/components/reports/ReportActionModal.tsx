@@ -401,7 +401,7 @@ export function ReportActionModal({
         {/* ── SECTION B: ACTION FORM ── */}
         <section className="mt-6">
           <h4 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/20 pb-2 mb-3">
-            ⚖️ Quyết định xử lý
+            Quyết định xử lý
           </h4>
           <textarea
             className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-3 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary min-h-[100px] transition-all resize-y placeholder:text-on-surface-variant/50 disabled:opacity-50"
