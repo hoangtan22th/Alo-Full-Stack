@@ -41,12 +41,14 @@ export interface PaginatedReports {
 
 export interface MessageDTO {
   id: string;
+  conversationId: string;
   senderId: string;
   senderName: string;
   type: string;
   content: string;
   createdAt: string;
   isRevoked: boolean;
+  hiddenAfterCount?: number;
 }
 
 export const reportService = {
@@ -166,6 +168,43 @@ export const reportService = {
     } catch (error) {
       console.error(`Error fetching group info for ${groupId}:`, error);
       return null;
+    }
+  },
+ 
+  /**
+   * Fetch full conversation history for context auditing (Admin only).
+   */
+  fetchFullConversationHistory: async (
+    conversationId: string,
+    limit: number = 200,
+    skip: number = 0,
+  ): Promise<MessageDTO[]> => {
+    try {
+      const getCookie = (name: string) => {
+        if (typeof document === "undefined") return null;
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop()?.split(";").shift() ?? null;
+        return null;
+      };
+      const token = getCookie("admin_token");
+ 
+      const response = await axios.get(
+        `${MESSAGES_URL}/conversation/${conversationId}/admin`,
+        {
+          params: { limit, skip },
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        },
+      );
+      return response.data?.data ?? [];
+    } catch (error) {
+      console.error(
+        `Error fetching full history for conversation ${conversationId}:`,
+        error,
+      );
+      return [];
     }
   },
 };
