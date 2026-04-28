@@ -194,6 +194,7 @@ public class ReportServiceImpl implements ReportService {
                     .targetType(report.getTargetType().name())
                     .targetName(targetName)
                     .adminNotes(report.getAdminNotes())
+                    .reason(report.getReason() != null ? report.getReason().name() : "Không có lý do")
                     .resolvedBy(report.getResolvedBy())
                     .leaderId(leaderId)
                     .timestamp(LocalDateTime.now())

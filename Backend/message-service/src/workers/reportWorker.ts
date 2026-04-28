@@ -69,6 +69,13 @@ export function startReportWorker(channel: Channel) {
         if (routingKey === 'report.resolved') {
           if (action === 'WARN' || action === 'BAN') {
             const { leaderId: payloadLeaderId } = payload;
+            
+            // SKIP GROUP MESSAGES - Now handled by group-service reportWorker for better strike/ban coordination
+            if (targetType === 'GROUP') {
+              console.log(`[ReportWorker] Skipping group ${action} message - will be handled by group-service`);
+              return;
+            }
+
             let targetUserId = payloadLeaderId || targetId;
 
             // Nếu report nhóm và chưa có leaderId trong payload, fetch từ group-service (fallback)

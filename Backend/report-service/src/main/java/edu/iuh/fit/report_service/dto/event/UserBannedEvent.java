@@ -17,6 +17,7 @@ public class UserBannedEvent {
     private String targetType;
     private String targetName;
     private String adminNotes;
+    private String reason;
     private String resolvedBy;
     private String leaderId;
     private LocalDateTime timestamp;
