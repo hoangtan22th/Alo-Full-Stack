@@ -59,6 +59,10 @@ public class UserProfile {
     @Builder.Default
     private UserStatus status = UserStatus.ACTIVE;
 
+    @Column(name = "warning_count")
+    @Builder.Default
+    private Integer warningCount = 0;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

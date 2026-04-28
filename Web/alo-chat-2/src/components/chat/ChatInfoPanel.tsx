@@ -230,9 +230,8 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
   return (
     <div
-      className={`flex flex-col shrink-0 bg-white h-full transition-all duration-300 ease-in-out border-l border-gray-100 shadow-xl z-[100] overflow-hidden ${
-        show ? "w-[340px] xl:w-90 opacity-100" : "w-0 opacity-0"
-      }`}
+      className={`flex flex-col shrink-0 bg-white h-full transition-all duration-300 ease-in-out border-l border-gray-100 shadow-xl z-[100] overflow-hidden ${show ? "w-[340px] xl:w-90 opacity-100" : "w-0 opacity-0"
+        }`}
     >
       <div className="flex h-full flex-col">
         {/* Header */}
@@ -336,9 +335,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                 />
               ) : (
                 <>
-                  <ActionButton 
-                    icon={<UserGroupIcon />} 
-                    label="Nhóm chung" 
+                  <ActionButton
+                    icon={<UserGroupIcon />}
+                    label="Nhóm chung"
                     onClick={() => setShowCommonGroupsModal(true)}
                   />
                   <ActionButton
@@ -444,7 +443,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
                         {m.metadata?.fileSize
                           ? (m.metadata.fileSize / (1024 * 1024)).toFixed(1) +
-                            " MB"
+                          " MB"
                           : "0 MB"}{" "}
                         •{" "}
                         {new Date(m.createdAt || "").toLocaleDateString(
@@ -498,9 +497,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
               </h3>
               <div className="space-y-1">
                 {isManager && (
-                  <SettingItem 
-                    icon={<Cog6ToothIcon />} 
-                    label="Cài đặt nhóm" 
+                  <SettingItem
+                    icon={<Cog6ToothIcon />}
+                    label="Cài đặt nhóm"
                     onClick={() => setShowGroupSettingsModal(true)}
                   />
                 )}
@@ -534,11 +533,11 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
               />
               {isGroup && (
                 <>
-                    <SettingItem
-                      icon={<ExclamationCircleIcon />}
-                      label="Báo xấu nhóm"
-                      onClick={() => setShowReportGroupModal(true)}
-                    />
+                  <SettingItem
+                    icon={<ExclamationCircleIcon />}
+                    label="Báo xấu nhóm"
+                    onClick={() => setShowReportGroupModal(true)}
+                  />
                   <SettingItem
                     icon={<ArrowRightOnRectangleIcon />}
                     label="Rời khỏi nhóm"
@@ -643,7 +642,6 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           targetType="GROUP"
           targetName={conversationInfo?.displayName}
           onSuccess={() => {
-            toast.success("Báo cáo nhóm đã gửi");
             setShowReportGroupModal(false);
             // Ask to leave
             if (confirm("Bạn muốn rời nhóm này sau khi báo cáo không?")) {
@@ -711,8 +709,8 @@ const ActionButton: React.FC<{
     <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition shadow-sm ring-1 ring-gray-100">
       {React.isValidElement(icon)
         ? React.cloneElement(icon as React.ReactElement<any>, {
-            className: "w-5 h-5",
-          })
+          className: "w-5 h-5",
+        })
         : icon}
     </div>
     <span className="text-[10px] font-bold text-gray-400 group-hover:text-gray-600">
@@ -738,8 +736,8 @@ const SettingItem: React.FC<{
       >
         {React.isValidElement(icon)
           ? React.cloneElement(icon as React.ReactElement<any>, {
-              className: "w-5 h-5",
-            })
+            className: "w-5 h-5",
+          })
           : icon}
       </div>
       <span

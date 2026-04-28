@@ -49,7 +49,7 @@ export function ReportActionModal({
   const [adminNotes, setAdminNotes] = useState("");
   const [chatMessages, setChatMessages] = useState<EvidenceMessage[]>([]);
   const [loadingEvidence, setLoadingEvidence] = useState(false);
-  const [groupInfo, setGroupInfo] = useState<{name?: string, avatar?: string | null} | null>(null);
+  const [groupInfo, setGroupInfo] = useState<{ name?: string, avatar?: string | null } | null>(null);
   const [loadingGroup, setLoadingGroup] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -99,7 +99,7 @@ export function ReportActionModal({
         const mapped: EvidenceMessage[] = msgs.map((m) => {
           const isTarget = m.senderId === report.targetId;
           const isReporter = report.reporter?.id && m.senderId === report.reporter.id;
-          
+
           let resolvedName = m.senderName;
           if (isTarget) resolvedName = report.targetUser?.fullName || m.senderName || "Mục tiêu (Unknown)";
           else if (isReporter) resolvedName = report.reporter?.fullName || m.senderName || "Người tố cáo";
@@ -148,7 +148,7 @@ export function ReportActionModal({
       toast.error("Vui lòng nhập Admin Notes trước khi Cảnh cáo hoặc Cấm!");
       return;
     }
-    
+
     try {
       setIsSubmitting(true);
       await onSubmit(report.id, action, adminNotes);
@@ -302,9 +302,9 @@ export function ReportActionModal({
                               {msg.senderName} · {msg.timestamp}
                             </span>
                             {msg.type === "image" || msg.content.match(/^https?:\/\/.*\.(png|jpe?g|gif|webp)(\?.*)?$/i) ? (
-                              <a 
-                                href={msg.content} 
-                                target="_blank" 
+                              <a
+                                href={msg.content}
+                                target="_blank"
                                 rel="noopener noreferrer"
                                 className={`rounded-xl overflow-hidden shadow-sm inline-block border ${msg.isTarget ? 'rounded-tl-none border-red-200 dark:border-red-900/40' : 'rounded-tr-none border-transparent'}`}
                               >
@@ -317,8 +317,8 @@ export function ReportActionModal({
                             ) : (
                               <div
                                 className={`px-3.5 py-2.5 rounded-2xl text-sm shadow-sm ${msg.isTarget
-                                    ? "bg-white dark:bg-[#2c2c2e] text-black dark:text-white rounded-tl-none border border-red-200 dark:border-red-900/40"
-                                    : "bg-[#007aff] text-white rounded-tr-none"
+                                  ? "bg-white dark:bg-[#2c2c2e] text-black dark:text-white rounded-tl-none border border-red-200 dark:border-red-900/40"
+                                  : "bg-[#007aff] text-white rounded-tr-none"
                                   }`}
                               >
                                 {msg.content}
@@ -380,7 +380,7 @@ export function ReportActionModal({
                     {REASON_LABELS[report.reason] ?? report.reason}
                   </span>
                 </div>
-                
+
                 {report.description && (
                   <div>
                     <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2 border-b border-outline-variant/20 pb-1">
@@ -431,14 +431,14 @@ export function ReportActionModal({
               disabled={isSubmitting}
               className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 flex items-center gap-2"
             >
-              ⚠️ Cảnh cáo
+              Cảnh cáo
             </Button>
             <Button
               onClick={() => handleSubmit("BAN")}
               disabled={isSubmitting}
               className="bg-red-600 text-white hover:bg-red-700 font-bold shadow-sm flex items-center gap-2"
             >
-              🚫 Cấm (Ban)
+              Cấm (Ban)
             </Button>
           </div>
         </DialogFooter>
