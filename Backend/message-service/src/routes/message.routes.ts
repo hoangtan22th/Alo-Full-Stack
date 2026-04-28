@@ -35,6 +35,7 @@ router.patch("/:messageId", messageController.editMessage);
 // Route upload file lên S3
 router.post("/upload", upload.single("file"), messageController.uploadFile);
 router.post("/upload/images", upload.array("files", 20), messageController.uploadImages);
+router.post("/upload/raw", upload.array("files", 10), messageController.uploadRawFiles);
 
 // Hành động trên từng ảnh trong album
 router.patch("/:messageId/images/:index/revoke", messageController.revokeImageInGroup);

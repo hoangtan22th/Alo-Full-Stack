@@ -745,6 +745,47 @@ export async function uploadFile(
 }
 
 /**
+ * Upload files to S3 WITHOUT creating messages (for reports, profile, etc.)
+ */
+export async function uploadRawFiles(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      res.status(400).json({ error: "No files provided" });
+      return;
+    }
+
+    const uploadPromises = files.map(async (file) => {
+      // Fix Vietnamese encoding for originalname
+      const originalName = Buffer.from(file.originalname, "latin1").toString("utf8");
+      
+      // Upload to S3
+      const fileUrl = await uploadFileToS3(
+        file.buffer,
+        file.mimetype,
+        originalName
+      );
+      
+      return fileUrl;
+    });
+
+    const urls = await Promise.all(uploadPromises);
+
+    res.status(201).json({
+      status: "success",
+      data: urls,
+    });
+  } catch (error) {
+    console.error("[MessageController] POST uploadRawFiles error:", error);
+    next(error);
+  }
+}
+
+/**
  * Đánh dấu đã xem tất cả tin nhắn trong một cuộc hội thoại
  */
 export async function markMessagesAsRead(

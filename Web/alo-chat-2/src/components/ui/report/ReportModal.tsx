@@ -20,7 +20,8 @@ import {
 import { toast } from 'sonner';
 import axiosClient from '@/services/api';
 import { useAuthStore } from '@/store/useAuthStore';
-import { AdjustmentsHorizontalIcon, PhotoIcon } from '@heroicons/react/24/outline';
+import { messageService } from '@/services/messageService';
+import { AdjustmentsHorizontalIcon, PhotoIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -60,12 +61,33 @@ export default function ReportModal({
   const { user: currentUser } = useAuthStore();
   const [reason, setReason] = useState<string>('');
   const [description, setDescription] = useState('');
-  const [imageUrls] = useState<string[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const resetForm = () => {
     setReason('');
     setDescription('');
+    setSelectedFiles([]);
+    setUploadProgress(0);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      // Limit to 5 images
+      if (selectedFiles.length + filesArray.length > 5) {
+        toast.error('Chỉ được tải lên tối đa 5 hình ảnh bằng chứng');
+        return;
+      }
+      setSelectedFiles([...selectedFiles, ...filesArray]);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(selectedFiles.filter((_, i) => i !== index));
   };
 
   const handleClose = () => {
@@ -80,9 +102,6 @@ export default function ReportModal({
     }
 
     // ── SAFE ID EXTRACTION ──
-    // user.id is the MariaDB UUID from user-service (set by fetchProfile).
-    // We NEVER use _id (MongoDB) or userId as fallback to avoid sending a
-    // 24-char ObjectId to report-service which calls user-service (MariaDB).
     const isMongoId = (id?: string | null) =>
       typeof id === 'string' && /^[a-f0-9]{24}$/i.test(id);
 
@@ -92,16 +111,26 @@ export default function ReportModal({
 
     if (!reporterId) {
       toast.error('Không thể xác định tài khoản của bạn. Vui lòng đăng xuất và đăng nhập lại.');
-      console.error('[ReportModal] Invalid or missing reporterId:', {
-        id: currentUser?.id,
-        _id: currentUser?._id,
-        userId: currentUser?.userId,
-      });
       return;
     }
 
     try {
       setIsSubmitting(true);
+
+      // 1. Upload images if any
+      let finalImageUrls: string[] = [];
+      if (isCustomizeMode && targetType === 'USER' && selectedFiles.length > 0) {
+        setUploadProgress(10);
+        finalImageUrls = await messageService.uploadRawFiles(
+          selectedFiles,
+          (percent) => setUploadProgress(percent)
+        );
+        if (finalImageUrls.length === 0) {
+          toast.error('Tải ảnh lên thất bại. Vui lòng thử lại.');
+          setIsSubmitting(false);
+          return;
+        }
+      }
 
       const payload = {
         reporterId,
@@ -109,16 +138,9 @@ export default function ReportModal({
         targetType,
         reason,
         description: isCustomizeMode ? description : '',
-        imageUrls: isCustomizeMode && isUser ? imageUrls : [],
-        messageIds: isUser ? selectedMessageIds.filter(isMongoId) : [],
+        imageUrls: finalImageUrls,
+        messageIds: targetType === 'USER' ? selectedMessageIds.filter(isMongoId) : [],
       };
-
-      console.log('[ReportModal] Submitting report payload:', {
-        reporterId: payload.reporterId,
-        targetId: payload.targetId,
-        targetType: payload.targetType,
-        messageCount: payload.messageIds.length,
-      });
 
       await axiosClient.post('/reports', payload);
 
@@ -166,7 +188,7 @@ export default function ReportModal({
           </div>
 
           {/* --- EVIDENCE SUMMARY (User reports only) --- */}
-          {isUser && (
+          {isUser && !isCustomizeMode && (
             <div className="rounded-xl bg-amber-50 border border-amber-100 p-3 flex items-center justify-between gap-3">
               <div className="text-xs text-amber-700 leading-relaxed">
                 {selectedMessageIds.length > 0 ? (
@@ -203,14 +225,52 @@ export default function ReportModal({
                   className="resize-none h-20"
                 />
               </div>
+
               {isUser && (
                 <div className="space-y-1.5">
                   <label className="text-sm font-semibold text-gray-700">
-                    Hình ảnh đính kèm (tùy chọn)
+                    Hình ảnh đính kèm (tối đa 5)
                   </label>
-                  <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 flex justify-center items-center gap-2 cursor-pointer hover:bg-gray-50 transition-colors text-gray-400">
+
+                  {/* Preview Area */}
+                  {selectedFiles.length > 0 && (
+                    <div className="grid grid-cols-5 gap-2 mb-2">
+                      {selectedFiles.map((file, idx) => (
+                        <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 group">
+                          <img 
+                            src={URL.createObjectURL(file)} 
+                            className="w-full h-full object-cover" 
+                            alt="Preview" 
+                          />
+                          <button 
+                            type="button"
+                            onClick={() => removeFile(idx)}
+                            className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <XMarkIcon className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleFileSelect} 
+                    accept="image/*" 
+                    multiple 
+                    className="hidden" 
+                  />
+                  
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-gray-200 rounded-xl p-4 flex justify-center items-center gap-2 cursor-pointer hover:bg-gray-50 transition-colors text-gray-400"
+                  >
                     <PhotoIcon className="w-5 h-5" />
-                    <span className="text-sm">Bấm để thêm ảnh</span>
+                    <span className="text-sm">
+                      {selectedFiles.length > 0 ? 'Thêm ảnh khác' : 'Bấm để thêm ảnh'}
+                    </span>
                   </div>
                 </div>
               )}
@@ -223,7 +283,10 @@ export default function ReportModal({
             Hủy
           </Button>
           <Button onClick={handleSubmit} disabled={isSubmitting || !reason}>
-            {isSubmitting ? 'Đang gửi...' : 'Gửi báo cáo'}
+            {isSubmitting 
+              ? (uploadProgress > 0 && uploadProgress < 100 ? `Đang tải ảnh (${uploadProgress}%)...` : 'Đang gửi báo cáo...') 
+              : 'Gửi báo cáo'
+            }
           </Button>
         </DialogFooter>
       </DialogContent>

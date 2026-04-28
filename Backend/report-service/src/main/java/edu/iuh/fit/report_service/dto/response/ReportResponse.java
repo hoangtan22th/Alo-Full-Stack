@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -18,5 +19,6 @@ public class ReportResponse {
     private TargetType targetType;
     private ReportReason reason;
     private ReportStatus status;
+    private List<String> imageUrls;
     private LocalDateTime createdAt;
 }

@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ReportItem, MessageDTO, reportService } from "@/services/reportService";
-import { AdjustmentsHorizontalIcon } from "@heroicons/react/24/outline";
+import { AdjustmentsHorizontalIcon, PhotoIcon } from "@heroicons/react/24/outline";
 
 interface EvidenceMessage {
   id: string;
@@ -295,28 +295,31 @@ export function ReportActionModal({
                 </div>
               )}
 
-              {/* Image Gallery — USER ONLY */}
+              {/* Evidence Images Grid — USER */}
               {report.imageUrls && report.imageUrls.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-on-surface-variant mb-2">
-                    Hình ảnh đính kèm ({report.imageUrls.length}):
+                <div className="mt-4">
+                  <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/70 mb-3 flex items-center gap-2">
+                    <PhotoIcon className="w-4 h-4" />
+                    Ảnh bằng chứng đính kèm ({report.imageUrls.length})
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {report.imageUrls.map((url, idx) => (
                       <a
                         key={idx}
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="relative group overflow-hidden rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-shadow"
+                        className="relative aspect-video group overflow-hidden rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-all hover:border-primary/40"
                       >
                         <img
                           src={url}
                           alt={`Bằng chứng ${idx + 1}`}
-                          className="w-28 h-28 object-cover group-hover:scale-105 transition-transform duration-200"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                          <span className="text-white text-xs opacity-0 group-hover:opacity-100 font-bold">🔍 Mở</span>
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                          <span className="bg-white/90 text-black text-[10px] font-bold px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0 shadow-sm">
+                            Xem ảnh gốc
+                          </span>
                         </div>
                       </a>
                     ))}
@@ -467,6 +470,38 @@ export function ReportActionModal({
                   </div>
                 )}
               </div>
+
+              {/* Evidence Images Grid — GROUP */}
+              {report.imageUrls && report.imageUrls.length > 0 && (
+                <div className="mt-6">
+                  <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/70 mb-3 flex items-center gap-2">
+                    <PhotoIcon className="w-4 h-4" />
+                    Ảnh bằng chứng của nhóm ({report.imageUrls.length})
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {report.imageUrls.map((url, idx) => (
+                      <a
+                        key={idx}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="relative aspect-video group overflow-hidden rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-all hover:border-primary/40"
+                      >
+                        <img
+                          src={url}
+                          alt={`Bằng chứng nhóm ${idx + 1}`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                          <span className="bg-white/90 text-black text-[10px] font-bold px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0 shadow-sm">
+                            Xem ảnh gốc
+                          </span>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Deep Fetch Button for Groups */}
               <div className="mt-4">
