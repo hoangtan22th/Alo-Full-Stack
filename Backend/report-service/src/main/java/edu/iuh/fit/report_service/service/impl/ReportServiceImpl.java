@@ -27,6 +27,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import feign.FeignException;
+import java.util.List;
+import java.util.stream.Collectors;
 import java.time.LocalDateTime;
 
 @Service
@@ -183,6 +185,45 @@ public class ReportServiceImpl implements ReportService {
                         .reason(savedReport.getReason() != null ? savedReport.getReason().name() : "Không có lý do")
                         .build()
         );
+
+        // AUTO-RESOLVE DUPLICATES (Strict Rules)
+        try {
+            AdminActionRequest.AdminAction action = actionRequest.getAction();
+            List<Report> duplicates = null;
+            String autoNote;
+
+            if (action == AdminActionRequest.AdminAction.BAN) {
+                // RULE 2: BAN -> Resolve ALL other pending reports for this target
+                duplicates = reportRepository.findByTargetIdAndStatus(report.getTargetId(), ReportStatus.PENDING);
+                autoNote = "Hệ thống tự động xử lý gộp: Đối tượng đã bị CẤM (BAN) trong báo cáo ID: " + reportId;
+            } else if (action == AdminActionRequest.AdminAction.WARN) {
+                // RULE 3: WARN -> ONLY resolve reports with SAME REASON
+                duplicates = reportRepository.findByTargetIdAndStatusAndReason(report.getTargetId(), ReportStatus.PENDING, report.getReason());
+                autoNote = "Hệ thống tự động xử lý gộp: Đối tượng đã nhận CẢNH CÁO cho cùng lý do này trong báo cáo ID: " + reportId;
+            } else {
+                autoNote = "";
+            }
+            // RULE 1: DISMISS -> duplicates remains null, nothing happens
+
+            if (duplicates != null && !duplicates.isEmpty()) {
+                // Lọc bỏ chính báo cáo hiện tại (đã được lưu ở trên, nhưng findBy có thể lấy lại nếu DB chưa sync)
+                List<Report> toResolve = duplicates.stream()
+                        .filter(dup -> !dup.getId().equals(reportId))
+                        .collect(Collectors.toList());
+
+                if (!toResolve.isEmpty()) {
+                    log.info("Auto-resolving {} related reports for target {} due to action {}", toResolve.size(), report.getTargetId(), action);
+                    toResolve.forEach(dup -> {
+                        dup.setStatus(ReportStatus.RESOLVED);
+                        dup.setAdminNotes(autoNote);
+                        dup.setResolvedBy("SYSTEM");
+                    });
+                    reportRepository.saveAll(toResolve);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to safely auto-resolve duplicate reports: {}", e.getMessage());
+        }
 
         return mapToAdminResponse(savedReport);
     }

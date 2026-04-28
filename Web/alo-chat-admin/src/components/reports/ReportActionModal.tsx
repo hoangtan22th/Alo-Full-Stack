@@ -185,7 +185,7 @@ export function ReportActionModal({
         {/* ── SECTION A: EVIDENCE ── */}
         <section className="mt-4 space-y-5">
           <h4 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/20 pb-2">
-            🔍 Bằng chứng & Thông tin
+            Bằng chứng & Thông tin
           </h4>
 
           {/* ════════════════ USER EVIDENCE ════════════════ */}
