@@ -215,6 +215,36 @@ export const messageService = {
       return null;
     }
   },
+  
+  // Upload files thuần túy lên S3 (không tạo tin nhắn)
+  uploadRawFiles: async (
+    files: File[],
+    onProgress?: (percent: number) => void,
+  ): Promise<string[]> => {
+    try {
+      const formData = new FormData();
+      files.forEach((file) => formData.append("files", file));
+      
+      const raw = await api.post<any, any>(`/messages/upload/raw`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (progressEvent) => {
+          if (onProgress && progressEvent.total) {
+            const percent = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total,
+            );
+            onProgress(percent);
+          }
+        },
+      });
+      
+      // API trả về { status: 'success', data: [url1, url2, ...] }
+      // api interceptor sẽ unwrap thành [url1, url2, ...] nếu có .data
+      return raw.data || raw || [];
+    } catch (error) {
+      console.error("Lỗi upload files thuần túy:", error);
+      return [];
+    }
+  },
 
   // Thu hồi 1 ảnh trong album
   revokeImageInGroup: async (messageId: string, index: number): Promise<boolean> => {

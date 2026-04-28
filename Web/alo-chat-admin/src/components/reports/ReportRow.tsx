@@ -3,6 +3,7 @@ import { ExclamationTriangleIcon, FlagIcon } from "@heroicons/react/24/outline";
 import { ReportItem } from "@/services/reportService";
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
+import { UserGroupIcon, UserIcon } from "@heroicons/react/24/solid";
 
 interface ReportRowProps {
   report: ReportItem;
@@ -51,7 +52,7 @@ export function ReportRow({ report, onReview }: ReportRowProps) {
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-surface-container-high text-on-surface`}
             >
-              Target: {report.targetType}
+              {report.targetType === "USER" ? <div className="flex items-center gap-1"><UserIcon className="w-4 h-4" /> User</div> : <div className="flex items-center gap-1"><UserGroupIcon className="w-4 h-4" /> Group</div>}
             </span>
           </div>
           <p className="text-xs text-on-surface-variant font-medium">
@@ -76,16 +77,15 @@ export function ReportRow({ report, onReview }: ReportRowProps) {
             <p className="font-semibold text-primary/80">{report.resolvedBy || "Hệ thống"}</p>
           </div>
         )}
-        
+
         <Button
           size="sm"
           onClick={() => onReview(report)}
           variant={report.status === "PENDING" ? "default" : "outline"}
-          className={`text-xs font-bold shadow-minimal ${
-            report.status === "PENDING" 
-              ? "bg-primary text-on-primary hover:bg-primary/90" 
-              : "border-outline-variant text-on-surface-variant hover:bg-surface-container-high"
-          }`}
+          className={`text-xs font-bold shadow-minimal ${report.status === "PENDING"
+            ? "bg-primary text-on-primary hover:bg-primary/90"
+            : "border-outline-variant text-on-surface-variant hover:bg-surface-container-high"
+            }`}
         >
           {report.status === "PENDING" ? "Review Case" : "View Details"}
         </Button>

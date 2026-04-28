@@ -10,14 +10,19 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ReportItem, MessageDTO, reportService } from "@/services/reportService";
+import { AdjustmentsHorizontalIcon, PhotoIcon } from "@heroicons/react/24/outline";
 
 interface EvidenceMessage {
   id: string;
+  conversationId?: string;
   senderName: string;
   type: string;
   content: string;
   timestamp: string;
+  rawCreatedAt: string; // Used for gap detection
   isTarget: boolean;
+  isReported?: boolean; // Highlight in full context view
+  hiddenAfterCount?: number;
 }
 
 interface ReportActionModalProps {
@@ -52,6 +57,9 @@ export function ReportActionModal({
   const [groupInfo, setGroupInfo] = useState<{ name?: string, avatar?: string | null } | null>(null);
   const [loadingGroup, setLoadingGroup] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showFullContext, setShowFullContext] = useState(false);
+  const [fullContextMessages, setFullContextMessages] = useState<EvidenceMessage[]>([]);
+  const [loadingFullContext, setLoadingFullContext] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -107,6 +115,7 @@ export function ReportActionModal({
 
           return {
             id: m.id,
+            conversationId: m.conversationId,
             senderName: resolvedName,
             type: m.type,
             content: m.content,
@@ -114,9 +123,12 @@ export function ReportActionModal({
               hour: "2-digit",
               minute: "2-digit",
             }),
+            rawCreatedAt: m.createdAt,
             isTarget,
+            hiddenAfterCount: m.hiddenAfterCount,
           };
-        });
+        })
+          .sort((a, b) => new Date(a.rawCreatedAt).getTime() - new Date(b.rawCreatedAt).getTime());
 
         setChatMessages(mapped);
       } catch (error) {
@@ -137,6 +149,57 @@ export function ReportActionModal({
       isMounted = false;
     };
   }, [isOpen, report]);
+
+  // --- FETCH FULL CONTEXT ---
+  useEffect(() => {
+    if (showFullContext && report && (chatMessages.length > 0 || isGroup)) {
+      const fetchFull = async () => {
+        let convoId = "";
+        if (isUser && chatMessages.length > 0) {
+          convoId = chatMessages[0].conversationId || "";
+        } else if (isGroup) {
+          convoId = report.targetId;
+        }
+
+        if (!convoId) {
+          toast.error("Không thể xác định ID cuộc hội thoại");
+          setShowFullContext(false);
+          return;
+        }
+
+        setLoadingFullContext(true);
+        try {
+          const msgs = await reportService.fetchFullConversationHistory(convoId);
+          const mapped = msgs.map(m => {
+            const isTarget = m.senderId === report.targetId;
+            const isReporter = report.reporter?.id && m.senderId === report.reporter.id;
+
+            let resolvedName = m.senderName;
+            if (isTarget && isUser) resolvedName = report.targetUser?.fullName || m.senderName || "Mục tiêu (Unknown)";
+            else if (isReporter) resolvedName = report.reporter?.fullName || m.senderName || "Người tố cáo";
+            else resolvedName = m.senderName || "Thành viên";
+
+            return {
+              id: m.id,
+              senderName: resolvedName,
+              type: m.type,
+              content: m.content,
+              timestamp: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              rawCreatedAt: m.createdAt,
+              isTarget: isTarget && isUser, // Only mark as target visually if it's a USER report
+              isReported: report.messageIds.some(rid => String(rid) === String(m.id))
+            };
+          });
+          setFullContextMessages(mapped);
+        } catch (error) {
+          toast.error("Không thể tải bối cảnh hội thoại");
+        } finally {
+          setLoadingFullContext(false);
+        }
+      };
+      fetchFull();
+    }
+  }, [showFullContext, report, chatMessages]);
 
   if (!report) return null;
 
@@ -232,28 +295,31 @@ export function ReportActionModal({
                 </div>
               )}
 
-              {/* Image Gallery — USER ONLY */}
+              {/* Evidence Images Grid — USER */}
               {report.imageUrls && report.imageUrls.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-on-surface-variant mb-2">
-                    Hình ảnh đính kèm ({report.imageUrls.length}):
+                <div className="mt-4">
+                  <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/70 mb-3 flex items-center gap-2">
+                    <PhotoIcon className="w-4 h-4" />
+                    Ảnh bằng chứng đính kèm ({report.imageUrls.length})
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {report.imageUrls.map((url, idx) => (
                       <a
                         key={idx}
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="relative group overflow-hidden rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-shadow"
+                        className="relative aspect-video group overflow-hidden rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-all hover:border-primary/40"
                       >
                         <img
                           src={url}
                           alt={`Bằng chứng ${idx + 1}`}
-                          className="w-28 h-28 object-cover group-hover:scale-105 transition-transform duration-200"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                          <span className="text-white text-xs opacity-0 group-hover:opacity-100 font-bold">🔍 Mở</span>
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                          <span className="bg-white/90 text-black text-[10px] font-bold px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0 shadow-sm">
+                            Xem ảnh gốc
+                          </span>
                         </div>
                       </a>
                     ))}
@@ -279,54 +345,64 @@ export function ReportActionModal({
                       Không thể tải tin nhắn bằng chứng. Kiểm tra console để biết thêm chi tiết.
                     </div>
                   ) : (
-                    <div className="bg-[#e9eaeb] dark:bg-[#1c1c1e] p-4 rounded-xl flex flex-col gap-3 max-h-[300px] overflow-y-auto">
-                      {chatMessages.map((msg, index) => (
-                        <React.Fragment key={msg.id}>
-                          {index === 20 && chatMessages.length === 40 && (
-                            <div className="flex items-center my-4 w-full">
-                              <div className="flex-1 border-t border-dashed border-outline-variant/60"></div>
-                              <span className="mx-4 text-[11px] font-bold tracking-wider text-on-surface-variant/70 uppercase flex items-center gap-1.5">
-                                ✂️ KHẢNG THỜI GIAN BỊ ẨN ✂️
-                              </span>
-                              <div className="flex-1 border-t border-dashed border-outline-variant/60"></div>
-                            </div>
-                          )}
-                          <div
-                            className={`flex flex-col max-w-[80%] ${msg.isTarget ? "self-start" : "self-end"}`}
-                          >
-                            <span
-                              className={`text-[10px] mb-1 px-1 font-semibold ${msg.isTarget ? "text-red-500 self-start" : "text-gray-500 self-end"
-                                }`}
+                    <div className="space-y-4">
+                      <div className="bg-[#e9eaeb] dark:bg-[#1c1c1e] p-4 rounded-xl flex flex-col gap-3 max-h-[400px] overflow-y-auto shadow-inner border border-outline-variant/10">
+                        {chatMessages.map((msg, idx) => (
+                          <React.Fragment key={`${msg.id}-${idx}`}>
+                            <div
+                              className={`flex flex-col max-w-[85%] ${msg.isTarget ? "self-start" : "self-end"}`}
                             >
-                              {msg.isTarget && "⚠️ "}
-                              {msg.senderName} · {msg.timestamp}
-                            </span>
-                            {msg.type === "image" || msg.content.match(/^https?:\/\/.*\.(png|jpe?g|gif|webp)(\?.*)?$/i) ? (
-                              <a
-                                href={msg.content}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={`rounded-xl overflow-hidden shadow-sm inline-block border ${msg.isTarget ? 'rounded-tl-none border-red-200 dark:border-red-900/40' : 'rounded-tr-none border-transparent'}`}
-                              >
-                                <img
-                                  src={msg.content}
-                                  alt="Message Image"
-                                  className="max-w-[200px] sm:max-w-[250px] object-cover"
-                                />
-                              </a>
-                            ) : (
-                              <div
-                                className={`px-3.5 py-2.5 rounded-2xl text-sm shadow-sm ${msg.isTarget
-                                  ? "bg-white dark:bg-[#2c2c2e] text-black dark:text-white rounded-tl-none border border-red-200 dark:border-red-900/40"
-                                  : "bg-[#007aff] text-white rounded-tr-none"
+                              <span
+                                className={`text-[10px] mb-1 px-1 font-semibold ${msg.isTarget ? "text-red-500 self-start" : "text-gray-500 dark:text-gray-400 self-end"
                                   }`}
                               >
-                                {msg.content}
+                                {msg.isTarget && "⚠️ "}
+                                {msg.senderName} · {msg.timestamp}
+                              </span>
+                              {msg.type === "image" || msg.content.match(/^https?:\/\/.*\.(png|jpe?g|gif|webp)(\?.*)?$/i) ? (
+                                <a
+                                  href={msg.content}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`rounded-xl overflow-hidden shadow-sm inline-block border ${msg.isTarget ? 'rounded-tl-none border-red-200 dark:border-red-900/40' : 'rounded-tr-none border-transparent'}`}
+                                >
+                                  <img
+                                    src={msg.content}
+                                    alt="Message Image"
+                                    className="max-w-[200px] sm:max-w-[250px] object-cover"
+                                  />
+                                </a>
+                              ) : (
+                                <div
+                                  className={`px-3.5 py-2.5 rounded-2xl text-sm shadow-sm leading-relaxed ${msg.isTarget
+                                    ? "bg-white dark:bg-[#2c2c2e] text-black dark:text-white rounded-tl-none border border-red-200 dark:border-red-900/40"
+                                    : "bg-[#007aff] text-white rounded-tr-none"
+                                    }`}
+                                >
+                                  {msg.content}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* --- UPGRADED GAP DETECTION: INVISIBLE MESSAGE COUNT --- */}
+                            {msg.hiddenAfterCount && msg.hiddenAfterCount > 0 ? (
+                              <div className="flex items-center justify-center my-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-700 dark:text-yellow-400 text-[10px] italic font-bold uppercase tracking-wider">
+                                ⚠️ Cảnh báo: Có {msg.hiddenAfterCount} tin nhắn đã bị ẩn ở đoạn này.
                               </div>
-                            )}
-                          </div>
-                        </React.Fragment>
-                      ))}
+                            ) : null}
+                          </React.Fragment>
+                        ))}
+                      </div>
+
+                      {/* --- DEEP FETCH BUTTON --- */}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="w-full bg-surface-container-highest hover:bg-surface-variant text-on-surface font-bold text-xs py-5 rounded-xl border border-outline-variant/30 flex items-center justify-center gap-2"
+                        onClick={() => setShowFullContext(true)}
+                      >
+                        Xem toàn bộ hội thoại gốc (Kiểm tra bối cảnh)
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -394,20 +470,70 @@ export function ReportActionModal({
                   </div>
                 )}
               </div>
+
+              {/* Evidence Images Grid — GROUP */}
+              {report.imageUrls && report.imageUrls.length > 0 && (
+                <div className="mt-6">
+                  <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant/70 mb-3 flex items-center gap-2">
+                    <PhotoIcon className="w-4 h-4" />
+                    Ảnh bằng chứng của nhóm ({report.imageUrls.length})
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {report.imageUrls.map((url, idx) => (
+                      <a
+                        key={idx}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="relative aspect-video group overflow-hidden rounded-xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-all hover:border-primary/40"
+                      >
+                        <img
+                          src={url}
+                          alt={`Bằng chứng nhóm ${idx + 1}`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                          <span className="bg-white/90 text-black text-[10px] font-bold px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0 shadow-sm">
+                            Xem ảnh gốc
+                          </span>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Deep Fetch Button for Groups */}
+              <div className="mt-4">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full bg-surface-container-highest hover:bg-surface-variant text-on-surface font-bold text-xs py-5 rounded-xl border border-outline-variant/30 flex items-center justify-center gap-2"
+                  onClick={() => setShowFullContext(true)}
+                >
+                  Xem toàn bộ hội thoại của nhóm (Kiểm tra bối cảnh)
+                </Button>
+              </div>
             </>
           )}
         </section>
 
         {/* ── SECTION B: ACTION FORM ── */}
         <section className="mt-6">
-          <h4 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/20 pb-2 mb-3">
-            ⚖️ Quyết định xử lý
-          </h4>
+          <div className="flex justify-between items-center border-b border-outline-variant/20 pb-2 mb-3">
+            <h4 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+              Quyết định xử lý
+            </h4>
+            <span className={`text-[10px] font-bold ${adminNotes.length > 900 ? 'text-red-500' : 'text-on-surface-variant/50'}`}>
+              {adminNotes.length}/1000
+            </span>
+          </div>
           <textarea
             className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-3 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary min-h-[100px] transition-all resize-y placeholder:text-on-surface-variant/50 disabled:opacity-50"
             placeholder="Nhập ghi chú cho quyết định (Bắt buộc nếu chọn Warn/Ban)..."
             value={adminNotes}
             onChange={(e) => setAdminNotes(e.target.value)}
+            maxLength={1000}
             disabled={isSubmitting}
           />
         </section>
@@ -473,6 +599,117 @@ export function ReportActionModal({
             </>
           )}
         </DialogFooter>
+        {/* ── FULL CONTEXT OVERLAY (Side Panel Style) ── */}
+        {showFullContext && (
+          <div className="absolute inset-0 z-50 bg-surface flex flex-col animate-in fade-in slide-in-from-right duration-300 shadow-2xl border-l border-outline-variant/30">
+            {/* Overlay Header */}
+            <div className="p-5 border-b border-outline-variant/20 flex justify-between items-center bg-surface-container-low shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-xl">
+                  <AdjustmentsHorizontalIcon className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-headline text-lg text-on-surface">Toàn bộ hội thoại gốc</h3>
+                  <p className="text-[10px] text-on-surface-variant uppercase tracking-[0.1em] font-bold mt-0.5 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                    Đang kiểm tra bối cảnh hội thoại
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFullContext(false)}
+                className="rounded-full hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-bold"
+              >
+                Đóng bối cảnh
+              </Button>
+            </div>
+
+            {/* Chat Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#f8f9fa] dark:bg-[#0f0f0f]">
+              {loadingFullContext ? (
+                <div className="h-full flex items-center justify-center flex-col gap-4">
+                  <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin shadow-sm" />
+                  <p className="text-sm font-headline text-on-surface-variant animate-pulse">Đang truy xuất dữ liệu từ Database...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Pro Tip Banner */}
+                  {
+                    report.targetType === "USER" && (
+                      <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-200 dark:border-amber-800/20 text-xs text-amber-800 dark:text-amber-400 mb-4 flex items-start gap-3 shadow-sm">
+                        <span className="text-xl shrink-0">💡</span>
+                        <div className="leading-relaxed">
+                          <p className="font-bold mb-1">Mẹo kiểm tra:</p>
+                          Các tin nhắn có <b>nền vàng</b> và <b>viền cam</b> là những bằng chứng đã được đính kèm trong đơn tố cáo. Hãy kiểm tra các tin nhắn xung quanh để xác định xem có hành vi khiêu khích hay cắt xén bối cảnh không.
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  {fullContextMessages.length === 0 ? (
+                    <div className="h-full flex items-center justify-center flex-col gap-2 opacity-50">
+                      <span className="text-4xl">📭</span>
+                      <p className="text-sm font-bold">Không tìm thấy lịch sử hội thoại</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-4">
+                      {fullContextMessages.map((msg, idx) => (
+                        <div
+                          key={`${msg.id}-${idx}`}
+                          className={`flex flex-col max-w-[85%] ${msg.isTarget ? "self-start" : "self-end"} transition-all duration-500 ${msg.isReported
+                            ? "p-3 bg-yellow-200 dark:bg-yellow-900/40 rounded-2xl border-2 border-yellow-400 shadow-md ring-4 ring-yellow-400/10"
+                            : ""
+                            }`}
+                        >
+                          <span
+                            className={`text-[10px] mb-1.5 px-1 font-bold tracking-tight ${msg.isTarget ? "text-red-500 self-start" : "text-gray-500 dark:text-gray-400 self-end"
+                              }`}
+                          >
+                            {msg.isReported && "🚩 [ĐÃ TỐ CÁO] "}
+                            {msg.senderName} · {msg.timestamp}
+                          </span>
+
+                          {msg.type === "image" || msg.content.match(/^https?:\/\/.*\.(png|jpe?g|gif|webp)(\?.*)?$/i) ? (
+                            <a
+                              href={msg.content}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`rounded-xl overflow-hidden shadow-sm inline-block border hover:opacity-90 transition-opacity ${msg.isTarget ? 'rounded-tl-none border-red-200 dark:border-red-900/40' : 'rounded-tr-none border-transparent'
+                                }`}
+                            >
+                              <img
+                                src={msg.content}
+                                alt="Context Image"
+                                className="max-w-[200px] sm:max-w-[280px] object-cover"
+                              />
+                            </a>
+                          ) : (
+                            <div
+                              className={`px-4 py-2.5 rounded-2xl text-sm shadow-sm leading-relaxed ${msg.isTarget
+                                ? "bg-white dark:bg-[#2c2c2e] text-on-surface rounded-tl-none border border-outline-variant/10"
+                                : "bg-[#007aff] text-white rounded-tr-none"
+                                } ${msg.isReported ? "font-medium" : ""}`}
+                            >
+                              {msg.content}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="text-center py-12">
+                    <div className="inline-block px-4 py-1.5 bg-surface-container rounded-full text-[10px] font-bold text-on-surface-variant/40 uppercase tracking-[0.2em] border border-outline-variant/10">
+                      Hết lịch sử tải được
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
