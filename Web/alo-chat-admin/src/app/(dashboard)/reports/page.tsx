@@ -200,6 +200,7 @@ export default function ReportsModerationPage() {
             {[
               { value: "PENDING", label: "Chờ xử lý" },
               { value: "RESOLVED", label: "Đã giải quyết" },
+              { value: "REJECTED", label: "Đã từ chối" },
               { value: null, label: "Tất cả" },
             ].map((tab) => (
               <Button
@@ -207,10 +208,11 @@ export default function ReportsModerationPage() {
                 variant={filterStatus === tab.value ? "default" : "ghost"}
                 size="sm"
                 onClick={() => handleFilterStatusChange(tab.value)}
-                className={`text-xs font-bold rounded-lg px-4 ${filterStatus === tab.value
+                className={`text-xs font-bold rounded-lg px-4 ${
+                  filterStatus === tab.value
                     ? "bg-white dark:bg-surface-container-highest shadow-sm text-primary"
                     : "text-on-surface-variant"
-                  }`}
+                }`}
               >
                 {tab.label}
               </Button>
