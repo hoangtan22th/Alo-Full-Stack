@@ -18,13 +18,24 @@ export const useReports = () => {
   const fetchReports = useCallback(
     async (query?: {
       status?: string | null;
+      targetName?: string;
+      targetType?: string;
+      reason?: string;
       page?: number;
       size?: number;
     }) => {
       setLoading(true);
       setError(null);
       try {
-        const data = await reportService.getReports(query);
+        const fetchQuery = {
+          status: query?.status ?? null,
+          targetName: query?.targetName,
+          targetType: query?.targetType,
+          reason: query?.reason,
+          page: query?.page ?? 0,
+          size: query?.size ?? 20,
+        };
+        const data = await reportService.getReports(fetchQuery);
         setReports(data.content || []);
 
         let currentPage = 0;

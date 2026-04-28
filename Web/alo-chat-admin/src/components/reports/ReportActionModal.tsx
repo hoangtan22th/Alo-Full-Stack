@@ -49,7 +49,7 @@ export function ReportActionModal({
   const [adminNotes, setAdminNotes] = useState("");
   const [chatMessages, setChatMessages] = useState<EvidenceMessage[]>([]);
   const [loadingEvidence, setLoadingEvidence] = useState(false);
-  const [groupInfo, setGroupInfo] = useState<{name?: string, avatar?: string | null} | null>(null);
+  const [groupInfo, setGroupInfo] = useState<{ name?: string, avatar?: string | null } | null>(null);
   const [loadingGroup, setLoadingGroup] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -99,7 +99,7 @@ export function ReportActionModal({
         const mapped: EvidenceMessage[] = msgs.map((m) => {
           const isTarget = m.senderId === report.targetId;
           const isReporter = report.reporter?.id && m.senderId === report.reporter.id;
-          
+
           let resolvedName = m.senderName;
           if (isTarget) resolvedName = report.targetUser?.fullName || m.senderName || "Mục tiêu (Unknown)";
           else if (isReporter) resolvedName = report.reporter?.fullName || m.senderName || "Người tố cáo";
@@ -148,7 +148,7 @@ export function ReportActionModal({
       toast.error("Vui lòng nhập Admin Notes trước khi Cảnh cáo hoặc Cấm!");
       return;
     }
-    
+
     try {
       setIsSubmitting(true);
       await onSubmit(report.id, action, adminNotes);
@@ -185,7 +185,7 @@ export function ReportActionModal({
         {/* ── SECTION A: EVIDENCE ── */}
         <section className="mt-4 space-y-5">
           <h4 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/20 pb-2">
-            🔍 Bằng chứng & Thông tin
+            Bằng chứng & Thông tin
           </h4>
 
           {/* ════════════════ USER EVIDENCE ════════════════ */}
@@ -302,9 +302,9 @@ export function ReportActionModal({
                               {msg.senderName} · {msg.timestamp}
                             </span>
                             {msg.type === "image" || msg.content.match(/^https?:\/\/.*\.(png|jpe?g|gif|webp)(\?.*)?$/i) ? (
-                              <a 
-                                href={msg.content} 
-                                target="_blank" 
+                              <a
+                                href={msg.content}
+                                target="_blank"
                                 rel="noopener noreferrer"
                                 className={`rounded-xl overflow-hidden shadow-sm inline-block border ${msg.isTarget ? 'rounded-tl-none border-red-200 dark:border-red-900/40' : 'rounded-tr-none border-transparent'}`}
                               >
@@ -317,8 +317,8 @@ export function ReportActionModal({
                             ) : (
                               <div
                                 className={`px-3.5 py-2.5 rounded-2xl text-sm shadow-sm ${msg.isTarget
-                                    ? "bg-white dark:bg-[#2c2c2e] text-black dark:text-white rounded-tl-none border border-red-200 dark:border-red-900/40"
-                                    : "bg-[#007aff] text-white rounded-tr-none"
+                                  ? "bg-white dark:bg-[#2c2c2e] text-black dark:text-white rounded-tl-none border border-red-200 dark:border-red-900/40"
+                                  : "bg-[#007aff] text-white rounded-tr-none"
                                   }`}
                               >
                                 {msg.content}
@@ -380,7 +380,7 @@ export function ReportActionModal({
                     {REASON_LABELS[report.reason] ?? report.reason}
                   </span>
                 </div>
-                
+
                 {report.description && (
                   <div>
                     <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2 border-b border-outline-variant/20 pb-1">
@@ -413,34 +413,65 @@ export function ReportActionModal({
         </section>
 
         <DialogFooter className="mt-6 flex sm:justify-between items-center gap-3">
-          <Button variant="ghost" onClick={onClose} disabled={isSubmitting} className="text-on-surface-variant hover:bg-surface-variant">
-            Hủy bỏ
-          </Button>
-          <div className="flex items-center justify-end gap-3 flex-wrap">
-            <Button
-              variant="outline"
-              onClick={() => handleSubmit("DISMISS")}
-              disabled={isSubmitting}
-              className="border-outline-variant text-on-surface-variant hover:bg-surface-container-highest flex items-center gap-2"
-            >
-              {isSubmitting ? "Đang xử lý..." : "Bỏ qua"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => handleSubmit("WARN")}
-              disabled={isSubmitting}
-              className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 flex items-center gap-2"
-            >
-              ⚠️ Cảnh cáo
-            </Button>
-            <Button
-              onClick={() => handleSubmit("BAN")}
-              disabled={isSubmitting}
-              className="bg-red-600 text-white hover:bg-red-700 font-bold shadow-sm flex items-center gap-2"
-            >
-              🚫 Cấm (Ban)
-            </Button>
-          </div>
+          {report.status !== "PENDING" ? (
+            <div className="w-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 rounded-xl p-4 mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-blue-600 dark:text-blue-400 font-bold text-sm">Đã xử lý</span>
+                <span className="text-xs text-blue-500">•</span>
+                <span className="text-xs text-on-surface-variant font-mono">ID: {report.id}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <p className="text-on-surface-variant uppercase font-bold tracking-tighter mb-1">Người xử lý</p>
+                  <p className="font-semibold text-on-surface">{report.resolvedBy || "Hệ thống"}</p>
+                </div>
+                <div>
+                  <p className="text-on-surface-variant uppercase font-bold tracking-tighter mb-1">Thời gian</p>
+                  <p className="font-semibold text-on-surface">{new Date(report.updatedAt).toLocaleString()}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-on-surface-variant uppercase font-bold tracking-tighter mb-1">Ghi chú Admin</p>
+                  <p className="text-on-surface bg-white/50 dark:bg-black/20 p-2 rounded-lg border border-blue-100 dark:border-blue-900/30">
+                    {report.adminNotes || "Không có ghi chú"}
+                  </p>
+                </div>
+              </div>
+              <Button onClick={onClose} className="w-full mt-4 bg-surface-container-highest text-on-surface hover:bg-surface-variant">
+                Đóng
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={onClose} disabled={isSubmitting} className="text-on-surface-variant hover:bg-surface-variant">
+                Hủy bỏ
+              </Button>
+              <div className="flex items-center justify-end gap-3 flex-wrap">
+                <Button
+                  variant="outline"
+                  onClick={() => handleSubmit("DISMISS")}
+                  disabled={isSubmitting}
+                  className="border-outline-variant text-on-surface-variant hover:bg-surface-container-highest flex items-center gap-2"
+                >
+                  {isSubmitting ? "Đang xử lý..." : "Bỏ qua"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleSubmit("WARN")}
+                  disabled={isSubmitting}
+                  className="border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 flex items-center gap-2"
+                >
+                  Cảnh cáo
+                </Button>
+                <Button
+                  onClick={() => handleSubmit("BAN")}
+                  disabled={isSubmitting}
+                  className="bg-red-600 text-white hover:bg-red-700 font-bold shadow-sm flex items-center gap-2"
+                >
+                  Cấm (Ban)
+                </Button>
+              </div>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

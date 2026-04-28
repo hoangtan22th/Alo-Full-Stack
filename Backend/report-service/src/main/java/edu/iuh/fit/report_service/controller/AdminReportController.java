@@ -3,7 +3,9 @@ package edu.iuh.fit.report_service.controller;
 import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import edu.iuh.fit.report_service.dto.request.AdminActionRequest;
 import edu.iuh.fit.report_service.dto.response.ReportAdminResponse;
+import edu.iuh.fit.report_service.entity.ReportReason;
 import edu.iuh.fit.report_service.entity.ReportStatus;
+import edu.iuh.fit.report_service.entity.TargetType;
 import edu.iuh.fit.report_service.service.ReportService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,11 +26,14 @@ public class AdminReportController {
     @GetMapping
     public ResponseEntity<ApiResponse<Page<ReportAdminResponse>>> getReports(
             @RequestParam(required = false) ReportStatus status,
+            @RequestParam(required = false) String targetName,
+            @RequestParam(required = false) TargetType targetType,
+            @RequestParam(required = false) ReportReason reason,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<ReportAdminResponse> reports = reportService.getAdminReports(status, pageable);
+        Page<ReportAdminResponse> reports = reportService.getAdminReports(status, targetName, targetType, reason, pageable);
 
         return ResponseEntity.ok(ApiResponse.success(reports));
     }

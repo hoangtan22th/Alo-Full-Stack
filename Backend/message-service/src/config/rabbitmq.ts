@@ -1,5 +1,6 @@
 import amqp, { Connection, Channel } from 'amqplib';
 import { startPollWorker } from '../workers/pollWorker';
+import { startReportWorker } from '../workers/reportWorker';
 
 // fix vội
 // let connection: Connection | null = null;
@@ -12,11 +13,13 @@ const RABBITMQ_URL = `amqp://${process.env.RABBITMQ_USER}:${process.env.RABBITMQ
 
 export const EXCHANGES = {
   CHAT: 'chat_exchange',
+  ADMIN: 'admin.exchange',
 };
 
 export const QUEUES = {
   MESSAGE: 'message_queue',
   POLL: 'message_poll_queue',
+  REPORT: 'message_report_queue',
 };
 
 export const ROUTING_KEYS = {
@@ -44,6 +47,7 @@ export async function connectRabbitMQ(): Promise<Channel> {
 
     // Khởi tạo Exchange loại 'topic'
     await channel.assertExchange(EXCHANGES.CHAT, 'topic', { durable: true });
+    await channel.assertExchange(EXCHANGES.ADMIN, 'topic', { durable: true });
     
     // Khởi tạo Queue
     await channel.assertQueue(QUEUES.MESSAGE, { durable: true });
@@ -57,12 +61,18 @@ export async function connectRabbitMQ(): Promise<Channel> {
     // Bind sự kiện poll (Bình chọn) vào queue riêng để tránh conflicts với group-service
     await channel.assertQueue(QUEUES.POLL, { durable: true });
     await channel.bindQueue(QUEUES.POLL, EXCHANGES.CHAT, 'poll.*');
+
+    // Bind sự kiện report vào queue riêng
+    await channel.assertQueue(QUEUES.REPORT, { durable: true });
+    await channel.bindQueue(QUEUES.REPORT, EXCHANGES.ADMIN, 'report.*');
     
     console.log(`[RabbitMQ] Queue '${QUEUES.MESSAGE}' ready for Message events`);
     console.log(`[RabbitMQ] Queue '${QUEUES.POLL}' ready for Poll events`);
+    console.log(`[RabbitMQ] Queue '${QUEUES.REPORT}' ready for Report events`);
 
     // Khởi động các worker tiêu thụ (consumers)
     startPollWorker(channel);
+    startReportWorker(channel);
 
     connection?.on('error', (err: any) => {
       console.error('[RabbitMQ] Connection error:', err);

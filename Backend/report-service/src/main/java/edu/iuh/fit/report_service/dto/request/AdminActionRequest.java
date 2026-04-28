@@ -20,9 +20,10 @@ public class AdminActionRequest {
     @NotNull(message = "Action is required")
     private AdminAction action;
 
-    @NotBlank(message = "Admin notes are required for this action")
     private String adminNotes;
 
     @NotBlank(message = "Admin ID is required")
     private String adminId;
+
+    private String targetName;
 }

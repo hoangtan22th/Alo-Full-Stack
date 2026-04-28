@@ -3,6 +3,7 @@ package edu.iuh.fit.service;
 import edu.iuh.fit.config.RabbitMQConfig;
 import edu.iuh.fit.dto.event.UserBannedEvent;
 import edu.iuh.fit.dto.UserUpdatedEvent;
+import edu.iuh.fit.dto.event.UserWarnedEvent;
 import edu.iuh.fit.entity.UserProfile;
 import edu.iuh.fit.repository.UserProfileRepository;
 
@@ -24,6 +25,47 @@ public class UserReportEventListener {
 
     private final UserProfileRepository userRepository;
     private final RabbitTemplate rabbitTemplate;
+
+    @RabbitListener(bindings = @QueueBinding(
+            value = @Queue(value = "user.warned.queue", durable = "true"),
+            exchange = @Exchange(value = RabbitMQConfig.EXCHANGE_ADMIN, type = "topic"),
+            key = RabbitMQConfig.ROUTING_KEY_USER_WARNED
+    ))
+    public void onUserWarned(UserWarnedEvent event) {
+        log.info("Received USER_WARNED_EVENT for user: {}", event.getTargetId());
+        try {
+            Optional<UserProfile> userOpt = userRepository.findById(event.getTargetId());
+            if (userOpt.isPresent()) {
+                UserProfile user = userOpt.get();
+                int currentWarnings = user.getWarningCount() != null ? user.getWarningCount() : 0;
+                user.setWarningCount(currentWarnings + 1);
+                
+                log.info("User {} now has {} warnings", event.getTargetId(), user.getWarningCount());
+
+                if (user.getWarningCount() >= 3) {
+                    log.info("User {} reached 3 strikes. Banning...", event.getTargetId());
+                    user.setStatus(UserProfile.UserStatus.BANNED);
+                    
+                    // Publish update event for other services
+                    UserUpdatedEvent updateEvent = UserUpdatedEvent.builder()
+                            .id(event.getTargetId())
+                            .status("BANNED")
+                            .build();
+                    rabbitTemplate.convertAndSend(
+                            RabbitMQConfig.EXCHANGE_NAME,
+                            RabbitMQConfig.ROUTING_KEY_UPDATE,
+                            updateEvent
+                    );
+                }
+                
+                userRepository.save(user);
+            } else {
+                log.warn("User not found for warning. ID: {}", event.getTargetId());
+            }
+        } catch (Exception e) {
+            log.error("Error processing USER_WARNED_EVENT for {}: {}", event.getTargetId(), e.getMessage());
+        }
+    }
 
     @RabbitListener(bindings = @QueueBinding(
             value = @Queue(value = "user.banned.queue", durable = "true"),

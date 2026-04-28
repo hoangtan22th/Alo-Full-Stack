@@ -11,18 +11,19 @@ interface ReportRowProps {
 
 export function ReportRow({ report, onReview }: ReportRowProps) {
   // Translate target type to severity roughly or just use status for styling
-  const getSeverity = () => {
-    if (report.targetType === "USER") return "High";
-    if (report.targetType === "GROUP") return "Medium";
-    return "Low";
+  const getStatusInfo = () => {
+    switch (report.status) {
+      case "PENDING":
+        return { label: "Chờ xử lý", color: "text-amber-700 bg-amber-100 border-amber-200" };
+      case "RESOLVED":
+        return { label: "Đã giải quyết", color: "text-green-700 bg-green-100 border-green-200" };
+      case "REJECTED":
+        return { label: "Đã từ chối", color: "text-slate-600 bg-slate-100 border-slate-200" };
+      default:
+        return { label: report.status, color: "text-on-surface-variant bg-surface-container-high" };
+    }
   };
-  const severity = getSeverity();
-
-  const badgeColor = () => {
-    if (severity === "High") return "text-error bg-error-container";
-    if (severity === "Medium") return "text-tertiary bg-tertiary-container";
-    return "text-secondary bg-secondary-container";
-  };
+  const statusInfo = getStatusInfo();
 
   const timeAgo = formatDistanceToNow(new Date(report.createdAt), {
     addSuffix: true,
@@ -32,10 +33,10 @@ export function ReportRow({ report, onReview }: ReportRowProps) {
   return (
     <div className="p-6 hover:bg-surface-container-lowest/50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-outline-variant/10">
       <div className="flex items-start gap-4 flex-1">
-        {severity === "High" ? (
+        {report.targetType === "USER" ? (
           <ExclamationTriangleIcon className="w-8 h-8 text-error p-1 bg-error/10 rounded-full shrink-0" />
         ) : (
-          <FlagIcon className="w-8 h-8 text-tertiary p-1 bg-tertiary/10 rounded-full shrink-0" />
+          <FlagIcon className="w-8 h-8 text-indigo-500 p-1 bg-indigo-500/10 rounded-full shrink-0" />
         )}
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-1">
@@ -43,9 +44,9 @@ export function ReportRow({ report, onReview }: ReportRowProps) {
               {report.reason}
             </h4>
             <span
-              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${badgeColor()}`}
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${statusInfo.color}`}
             >
-              {report.status}
+              {statusInfo.label}
             </span>
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-surface-container-high text-on-surface`}
@@ -68,23 +69,27 @@ export function ReportRow({ report, onReview }: ReportRowProps) {
         </div>
       </div>
 
-      {report.status === "PENDING" && (
-        <div className="flex flex-wrap gap-2 sm:ml-auto shrink-0">
-          <Button
-            size="sm"
-            onClick={() => onReview(report)}
-            className="bg-primary text-on-primary hover:bg-primary/90 text-xs font-bold shadow-minimal"
-          >
-            Review Case
-          </Button>
-        </div>
-      )}
-
-      {report.status !== "PENDING" && (
-        <div className="text-sm min-w-[max-content] font-semibold text-primary/80 shrink-0">
-          Đã xử lý: {report.resolvedBy || "Hệ thống"}
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-4 sm:ml-auto shrink-0">
+        {report.status !== "PENDING" && (
+          <div className="text-[11px] text-right">
+            <p className="text-on-surface-variant uppercase font-bold tracking-tighter">Đã xử lý bởi</p>
+            <p className="font-semibold text-primary/80">{report.resolvedBy || "Hệ thống"}</p>
+          </div>
+        )}
+        
+        <Button
+          size="sm"
+          onClick={() => onReview(report)}
+          variant={report.status === "PENDING" ? "default" : "outline"}
+          className={`text-xs font-bold shadow-minimal ${
+            report.status === "PENDING" 
+              ? "bg-primary text-on-primary hover:bg-primary/90" 
+              : "border-outline-variant text-on-surface-variant hover:bg-surface-container-high"
+          }`}
+        >
+          {report.status === "PENDING" ? "Review Case" : "View Details"}
+        </Button>
+      </div>
     </div>
   );
 }
