@@ -70,11 +70,16 @@ export default function GlobalNotificationHandler() {
         return;
       }
 
-      // Play sound
+      // Play sound - wrap in user interaction check to avoid console errors
       if (receiveAudio.current) {
-        console.log("🔊 [GlobalNotification] Playing receive sound...");
         receiveAudio.current.currentTime = 0;
-        receiveAudio.current.play().catch((e) => console.error("❌ [GlobalNotification] Sound blocked:", e));
+        receiveAudio.current.play().catch((e) => {
+          if (e.name === 'NotAllowedError') {
+            console.warn("🔔 [GlobalNotification] Sound was blocked by browser (autoplay policy). Click anywhere to enable sounds.");
+          } else {
+            console.error("❌ [GlobalNotification] Sound error:", e);
+          }
+        });
       }
 
       const msgConvoId = String(msg.conversationId || msg.roomId || "");
@@ -185,6 +190,34 @@ export default function GlobalNotificationHandler() {
       });
     };
 
+    const onConversationRemoved = (data: any) => {
+      console.log("🔔 [GlobalNotification] Conversation Removed:", data);
+      
+      const { conversationId, groupName, reason } = data;
+      
+      const title = reason === 'delete' ? "Nhóm đã giải tán" : "Bạn đã rời khỏi nhóm";
+      const desc = reason === 'delete' 
+        ? `Nhóm "${groupName}" đã bị giải tán bởi quản trị viên hoặc hệ thống.`
+        : `Bạn không còn là thành viên của nhóm "${groupName}".`;
+
+      toast.error(title, {
+        description: desc,
+        duration: 6000,
+      });
+
+      // If user is currently in this chat, redirect to /chat
+      const pathParts = pathname?.split("/").filter(Boolean) || [];
+      const currentConvoId = (pathParts[0] === "chat" && pathParts[1]) ? pathParts[1] : null;
+      
+      if (currentConvoId === conversationId) {
+        router.push("/chat");
+      }
+      
+      // Trigger a refresh of the conversation list if possible
+      // (Using a custom event that sidebar can listen to)
+      window.dispatchEvent(new CustomEvent("refresh_conversations"));
+    };
+
     const onInvitationAccepted = (data: any) => {
       console.log("🔔 [GlobalNotification] Invitation Accepted:", data);
       toast.success(`Lời mời được chấp nhận`, {
@@ -202,6 +235,7 @@ export default function GlobalNotificationHandler() {
     socketService.onNewInvitation(onNewInvitation);
     socketService.onAddedToGroup(onAddedToGroup);
     socketService.onInvitationAccepted(onInvitationAccepted);
+    socketService.onConversationRemoved(onConversationRemoved);
 
     return () => {
       socketService.removeListener("message-received", onMessage);
@@ -213,6 +247,7 @@ export default function GlobalNotificationHandler() {
       socketService.removeListener("NEW_INVITATION", onNewInvitation);
       socketService.removeListener("ADDED_TO_GROUP", onAddedToGroup);
       socketService.removeListener("INVITATION_ACCEPTED", onInvitationAccepted);
+      socketService.removeListener("CONVERSATION_REMOVED", onConversationRemoved);
     };
   }, [currentUser, pathname, router, setTyping]);
 

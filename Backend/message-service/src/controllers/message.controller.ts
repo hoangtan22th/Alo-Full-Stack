@@ -23,22 +23,38 @@ async function getConversation(
   userId: string,
 ): Promise<any> {
   try {
-    const gatewayUrl = process.env.GATEWAY_URL || "http://127.0.0.1:8888";
+    // Call group-service directly to bypass Gateway JWT requirements for internal service-to-service calls
+    const groupServiceUrl = process.env.GROUP_SERVICE_URL || "http://127.0.0.1:8082/api/v1/groups";
+    // Ensure we don't double the /api/v1/groups path if it's already in the env var
+    const baseUrl = groupServiceUrl.endsWith('/api/v1/groups') ? groupServiceUrl : `${groupServiceUrl}/api/v1/groups`;
+    const url = `${baseUrl}/${conversationId}`;
+    
     const response = await fetch(
-      `${gatewayUrl}/api/v1/groups/${conversationId}`,
+      url,
       {
         headers: {
           "X-User-Id": userId,
-          Authorization: req.headers.authorization || "",
+          "Content-Type": "application/json",
         },
       },
     );
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn(`[getConversation] Fetch failed for ${conversationId}: ${response.status} ${response.statusText}`);
+      return null;
+    }
     const result = await response.json();
-    return result.data;
-  } catch (error) {
-    console.error(`[getConversation] Error fetching conversation ${conversationId}:`, error);
+    // Handle both { data: ... } wrapped and unwrapped responses
+    const conversation = result?.data || result;
+    
+    if (!conversation || !conversation._id) {
+      console.warn(`[getConversation] Invalid conversation data received for ${conversationId}`, result);
+      return null;
+    }
+    
+    return conversation;
+  } catch (error: any) {
+    console.error(`[getConversation] Exception fetching conversation ${conversationId}:`, error.message);
     return null;
   }
 }
@@ -226,13 +242,16 @@ export async function getMessageHistory(
     let clearedAt: Date | undefined = undefined;
     let joinedAt: Date | undefined = undefined;
     try {
-      const gatewayUrl = process.env.GATEWAY_URL || "http://127.0.0.1:8888";
+      const groupServiceUrl = process.env.GROUP_SERVICE_URL || "http://127.0.0.1:8082/api/v1/groups";
+      const baseUrl = groupServiceUrl.endsWith('/api/v1/groups') ? groupServiceUrl : `${groupServiceUrl}/api/v1/groups`;
+      const url = `${baseUrl}/${conversationId}`;
+
       const response = await fetch(
-        `${gatewayUrl}/api/v1/groups/${conversationId}`,
+        url,
         {
           headers: {
             "X-User-Id": userId,
-            Authorization: req.headers.authorization || "",
+            "Content-Type": "application/json",
           },
         },
       );
@@ -517,23 +536,53 @@ export async function sendMessage(
     const { conversationId, type, content, metadata, replyTo, senderName } =
       req.body;
     const userId = getUserIdFromHeader(req);
+    
+    console.log(`[MessageService] sendMessage: Received request. Sender: ${userId}, Target: ${req.body.targetUserId || 'N/A'}, ConvoId: ${conversationId || 'N/A'}`);
+    console.log(`[MessageService] sendMessage: Content snippet: "${content?.substring(0, 50)}..."`);
 
     if (!userId) {
       res.status(401).json({ error: "Unauthorized - no user id" });
       return;
     }
 
-    if (!conversationId || (!content && type !== "image" && type !== "file")) {
-      res.status(400).json({ error: "Missing conversationId or content" });
+    const { targetUserId } = req.body;
+    let actualConversationId = conversationId;
+
+    // Support targetUserId for auto-creating direct chats (useful for System DMs)
+    if (!actualConversationId && targetUserId) {
+      try {
+        const groupServiceUrl = process.env.GROUP_SERVICE_URL || "http://127.0.0.1:8082/api/v1/groups";
+        const baseUrl = groupServiceUrl.endsWith('/api/v1/groups') ? groupServiceUrl : `${groupServiceUrl}/api/v1/groups`;
+        
+        const convoRes = await fetch(`${baseUrl}/direct`, {
+          method: 'POST',
+          headers: { 'X-User-Id': userId, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetUserId })
+        });
+        
+        if (convoRes.ok) {
+          const convoData = await convoRes.json();
+          actualConversationId = convoData?.data?._id || convoData?._id;
+        }
+      } catch (err) {
+        console.error("[MessageService] Failed to get/create direct conversation:", err);
+      }
+    }
+
+    if (!actualConversationId || (!content && type !== "image" && type !== "file")) {
+      res.status(400).json({ error: "Missing conversationId/targetUserId or content" });
       return;
     }
 
     // 0. Kiểm tra quyền nhắn tin & Lấy info conversation
-    const conversation = await getConversation(req, String(conversationId), userId);
+    console.log(`[MessageService] sendMessage: Checking conversation ${actualConversationId} for user ${userId}`);
+    const conversation = await getConversation(req, String(actualConversationId), userId);
     if (!conversation) {
+      console.warn(`[MessageService] sendMessage: Conversation ${actualConversationId} NOT FOUND for user ${userId}`);
       res.status(404).json({ error: "Conversation not found" });
       return;
     }
+    console.log(`[MessageService] sendMessage: Found conversation ${conversation._id}, isGroup=${conversation.isGroup}`);
 
     const permission = conversation.isGroup ? (conversation.permissions?.sendMessage || "EVERYONE") : "EVERYONE";
     let allowed = true;
@@ -552,7 +601,7 @@ export async function sendMessage(
 
     // 1. Lưu vào Database
     const messageDoc = await messageDataService.createMessage({
-      conversationId,
+      conversationId: actualConversationId,
       senderId: userId,
       senderName: senderName,
       type: type || "text",
@@ -564,7 +613,7 @@ export async function sendMessage(
     // 2. Chuẩn bị event để bắn sang RabbitMQ
     const messageEvent: MessageEvent = {
       _id: messageDoc._id.toString(),
-      conversationId: String(conversationId),
+      conversationId: String(actualConversationId),
       senderId: userId,
       type: messageDoc.type,
       content: messageDoc.content,

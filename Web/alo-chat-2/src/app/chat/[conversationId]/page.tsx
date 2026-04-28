@@ -91,7 +91,6 @@ const getMediaUrl = (url: string | undefined): string => {
 };
 
 const BOT_ID = "alo-bot";
-const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
 const GROUP_LINK_REGEX = /(?:https?:\/\/)?alo\.chat\/g\/([a-f\d]{24})/i;
 const EMPTY_ARRAY: any[] = [];
 const BOT_INFO = {
@@ -181,7 +180,6 @@ export default function ChatPage() {
   const [isStranger, setIsStranger] = useState(false);
   const [relationStatus, setRelationStatus] = useState<string>("NOT_FRIEND");
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
-  const isSystemUser = useMemo(() => otherUserId === SYSTEM_USER_ID, [otherUserId]);
   const [shouldShowSummary, setShouldShowSummary] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [summaryDismissed, setSummaryDismissed] = useState<
@@ -1897,7 +1895,7 @@ export default function ChatPage() {
       }
     }
     return groups;
-  }, [messages, myId, conversationId]);
+  }, [messages, myId]);
 
   /* ─────────────────────────────────────────
      RENDER
@@ -1936,18 +1934,14 @@ export default function ChatPage() {
             {/* Chat Header */}
             <div className="h-19 px-6 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md z-10">
               <div
-                className={`flex items-center gap-3 ${!conversationInfo?.isGroup && !isSystemUser ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+                className={`flex items-center gap-3 ${!conversationInfo?.isGroup ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
                 onClick={() => {
-                  if (!conversationInfo?.isGroup && !isSystemUser) setShowProfileModal(true);
+                  if (!conversationInfo?.isGroup) setShowProfileModal(true);
                 }}
               >
                 {/* Avatar */}
                 <div className="relative shrink-0">
-                  {isSystemUser ? (
-                    <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white">
-                      <CheckCircleIcon className="w-6 h-6" />
-                    </div>
-                  ) : conversationInfo?.displayAvatar ? (
+                  {conversationInfo?.displayAvatar ? (
                     <img
                       src={getMediaUrl(conversationInfo.displayAvatar)}
                       alt={conversationInfo.displayName || ""}
@@ -1984,9 +1978,7 @@ export default function ChatPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-[16px] font-black tracking-tight">
-                      {isSystemUser
-                        ? "Hệ thống Alo Chat ✅"
-                        : conversationInfo?.displayName ||
+                      {conversationInfo?.displayName ||
                         conversationInfo?.name ||
                         "Đang tải..."}
                     </h2>
@@ -1997,32 +1989,26 @@ export default function ChatPage() {
                     )}
                   </div>
                   <p className="text-[12px] font-bold text-gray-400 mt-0.5">
-                    {isSystemUser
-                      ? "Thông báo tự động"
-                      : conversationInfo?.isGroup
-                        ? `${conversationInfo?.members?.length ?? ""} thành viên`
-                        : "Đang hoạt động"}
+                    {conversationInfo?.isGroup
+                      ? `${conversationInfo?.members?.length ?? ""} thành viên`
+                      : "Đang hoạt động"}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-4 text-gray-400">
-                {!isSystemUser && (
-                  <>
-                    <button
-                      onClick={() => handleStartCall(false)}
-                      className="hover:text-black transition"
-                    >
-                      <PhoneIcon className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleStartCall(true)}
-                      className="hover:text-black transition"
-                    >
-                      <VideoCameraIcon className="w-5 h-5" />
-                    </button>
-                  </>
-                )}
+                <button
+                  onClick={() => handleStartCall(false)}
+                  className="hover:text-black transition"
+                >
+                  <PhoneIcon className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => handleStartCall(true)}
+                  className="hover:text-black transition"
+                >
+                  <VideoCameraIcon className="w-5 h-5" />
+                </button>
 
                 <button className="hover:text-black transition">
                   <MagnifyingGlassIcon className="w-5 h-5" />
@@ -3482,15 +3468,7 @@ export default function ChatPage() {
             )}
 
             {/* Message Input Container */}
-            {isSystemUser ? (
-              <div className="h-24 border-t border-gray-100 bg-gray-50 flex items-center justify-center px-6 shrink-0">
-                <div className="flex items-center gap-3 text-gray-500 font-bold text-sm bg-white px-6 py-3 rounded-2xl shadow-sm border border-gray-200">
-                  <InformationCircleIcon className="w-6 h-6 text-blue-500" />
-                  Đây là tin nhắn từ hệ thống. Bạn không thể phản hồi cuộc hội thoại này.
-                </div>
-              </div>
-            ) : (
-              <div className="bg-white border-t border-gray-200 shrink-0">
+            <div className="bg-white border-t border-gray-200 shrink-0">
               {/* Hidden file input — chỉ chọn file (không phải ảnh) */}
               <input
                 type="file"
@@ -3668,7 +3646,6 @@ export default function ChatPage() {
                 </div>
               </div>
             </div>
-          )}
 
             {/* Reaction Modal */}
             {viewingReactions && (

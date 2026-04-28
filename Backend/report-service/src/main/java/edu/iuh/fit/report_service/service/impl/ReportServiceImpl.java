@@ -1,6 +1,7 @@
 package edu.iuh.fit.report_service.service.impl;
 
 import edu.iuh.fit.common_service.dto.response.ApiResponse;
+import edu.iuh.fit.report_service.client.GroupClient;
 import edu.iuh.fit.report_service.client.UserClient;
 import edu.iuh.fit.report_service.config.RabbitMQConfig;
 import edu.iuh.fit.report_service.dto.event.ReportCreatedEvent;
@@ -9,6 +10,7 @@ import edu.iuh.fit.report_service.dto.event.UserBannedEvent;
 import edu.iuh.fit.report_service.dto.event.UserWarnedEvent;
 import edu.iuh.fit.report_service.dto.request.AdminActionRequest;
 import edu.iuh.fit.report_service.dto.request.ReportCreationRequest;
+import edu.iuh.fit.report_service.dto.response.GroupResponse;
 import edu.iuh.fit.report_service.dto.response.ReportAdminResponse;
 import edu.iuh.fit.report_service.dto.response.ReportResponse;
 import edu.iuh.fit.report_service.dto.response.UserResponse;
@@ -34,6 +36,7 @@ public class ReportServiceImpl implements ReportService {
 
     private final ReportRepository reportRepository;
     private final UserClient userClient;
+    private final GroupClient groupClient;
     private final RabbitTemplate rabbitTemplate;
 
     @Override
@@ -80,6 +83,8 @@ public class ReportServiceImpl implements ReportService {
         String targetName = "Unknown";
         if (report.getTargetType() == TargetType.USER) {
             targetName = fetchUserSafe(report.getTargetId()).getFullName();
+        } else if (report.getTargetType() == TargetType.GROUP) {
+            targetName = fetchGroupNameSafe(report.getTargetId());
         }
         
         rabbitTemplate.convertAndSend(
@@ -126,12 +131,27 @@ public class ReportServiceImpl implements ReportService {
         report.setAdminNotes(actionRequest.getAdminNotes());
         report.setResolvedBy(actionRequest.getAdminId());
 
-        String targetName = "Unknown";
+        String targetName = actionRequest.getTargetName();
+        String leaderId = null;
         if (report.getTargetType() == TargetType.USER) {
             targetName = fetchUserSafe(report.getTargetId()).getFullName();
         } else if (report.getTargetType() == TargetType.GROUP) {
-            // For future: fetch group name if needed, for now use a placeholder or ID
-            targetName = "Nhóm " + report.getTargetId(); 
+            try {
+                GroupResponse gRes = groupClient.getGroupById(report.getTargetId());
+                if (gRes != null && gRes.getData() != null) {
+                    targetName = gRes.getData().getName();
+                    if (gRes.getData().getMembers() != null) {
+                        leaderId = gRes.getData().getMembers().stream()
+                                .filter(m -> "LEADER".equals(m.getRole()))
+                                .map(GroupResponse.GroupData.MemberData::getUserId)
+                                .findFirst()
+                                .orElse(null);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to fetch group info for {}: {}", report.getTargetId(), e.getMessage());
+                targetName = fetchGroupNameSafe(report.getTargetId());
+            }
         }
 
         switch (actionRequest.getAction()) {
@@ -140,15 +160,11 @@ public class ReportServiceImpl implements ReportService {
                 break;
             case WARN:
                 report.setStatus(ReportStatus.RESOLVED);
-                if (report.getTargetType() == TargetType.USER) {
-                    publishWarnEvent(report);
-                }
+                publishWarnEvent(report, targetName, leaderId);
                 break;
             case BAN:
                 report.setStatus(ReportStatus.RESOLVED);
-                if (report.getTargetType() == TargetType.USER) {
-                    publishBanEvent(report);
-                }
+                publishBanEvent(report, targetName, leaderId);
                 break;
         }
 
@@ -171,33 +187,40 @@ public class ReportServiceImpl implements ReportService {
         return mapToAdminResponse(savedReport);
     }
 
-    private void publishBanEvent(Report report) {
+    private void publishBanEvent(Report report, String targetName, String leaderId) {
         try {
             UserBannedEvent event = UserBannedEvent.builder()
                     .targetId(report.getTargetId())
+                    .targetType(report.getTargetType().name())
+                    .targetName(targetName)
                     .adminNotes(report.getAdminNotes())
                     .resolvedBy(report.getResolvedBy())
+                    .leaderId(leaderId)
                     .timestamp(LocalDateTime.now())
                     .build();
             
             rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY_USER_BANNED, event);
-            log.info("Published USER_BANNED_EVENT to RabbitMQ for TargetId: {}", report.getTargetId());
+            log.info("Published USER_BANNED_EVENT for TargetId: {}, LeaderId: {}", report.getTargetId(), leaderId);
         } catch (Exception e) {
             log.error("Failed to publish BANNED event for TargetId: {}", report.getTargetId(), e);
         }
     }
 
-    private void publishWarnEvent(Report report) {
+    private void publishWarnEvent(Report report, String targetName, String leaderId) {
         try {
             UserWarnedEvent event = UserWarnedEvent.builder()
                     .targetId(report.getTargetId())
+                    .targetType(report.getTargetType().name())
+                    .targetName(targetName)
                     .adminNotes(report.getAdminNotes())
+                    .reason(report.getReason() != null ? report.getReason().name() : "Không có lý do")
                     .resolvedBy(report.getResolvedBy())
+                    .leaderId(leaderId)
                     .timestamp(LocalDateTime.now())
                     .build();
             
             rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY_USER_WARNED, event);
-            log.info("Published USER_WARNED_EVENT to RabbitMQ for TargetId: {}", report.getTargetId());
+            log.info("Published USER_WARNED_EVENT for TargetId: {}, LeaderId: {}", report.getTargetId(), leaderId);
         } catch (Exception e) {
             log.error("Failed to publish WARNED event for TargetId: {}", report.getTargetId(), e);
         }
@@ -230,6 +253,21 @@ public class ReportServiceImpl implements ReportService {
                 .createdAt(report.getCreatedAt())
                 .updatedAt(report.getUpdatedAt())
                 .build();
+    }
+
+    private String fetchGroupNameSafe(String groupId) {
+        if (groupId == null || groupId.isBlank()) {
+            return "Nhóm không xác định";
+        }
+        try {
+            GroupResponse response = groupClient.getGroupById(groupId);
+            if (response != null && response.getData() != null) {
+                return response.getData().getName();
+            }
+        } catch (Exception e) {
+            log.error("Unexpected error fetching group name for {}: {}", groupId, e.getMessage());
+        }
+        return "Nhóm " + groupId;
     }
 
     private UserResponse fetchUserSafe(String userId) {

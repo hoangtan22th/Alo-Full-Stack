@@ -67,13 +67,14 @@ export function startReportWorker(channel: Channel) {
         }
 
         if (routingKey === 'report.resolved') {
-
           if (action === 'WARN' || action === 'BAN') {
-            let targetUserId = targetId;
+            const { leaderId: payloadLeaderId } = payload;
+            let targetUserId = payloadLeaderId || targetId;
 
-            // Nếu report nhóm, gửi cho Leader
-            if (targetType === 'GROUP') {
+            // Nếu report nhóm và chưa có leaderId trong payload, fetch từ group-service (fallback)
+            if (targetType === 'GROUP' && !payloadLeaderId) {
               try {
+                console.log(`[ReportWorker] No leaderId in payload, fetching from group-service for group ${targetId}`);
                 const groupRes = await axios.get(`${GROUP_SERVICE_URL}/${targetId}`, {
                   headers: { 'X-User-Id': SYSTEM_USER_ID }
                 });

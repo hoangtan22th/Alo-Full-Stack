@@ -25,4 +25,6 @@ public class AdminActionRequest {
 
     @NotBlank(message = "Admin ID is required")
     private String adminId;
+
+    private String targetName;
 }

@@ -14,7 +14,11 @@ import java.time.LocalDateTime;
 public class UserWarnedEvent {
 
     private String targetId;
+    private String targetType;
+    private String targetName;
     private String adminNotes;
+    private String reason;
     private String resolvedBy;
+    private String leaderId;
     private LocalDateTime timestamp;
 }
