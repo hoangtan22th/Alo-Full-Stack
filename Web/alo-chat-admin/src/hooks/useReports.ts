@@ -24,7 +24,12 @@ export const useReports = () => {
       setLoading(true);
       setError(null);
       try {
-        const data = await reportService.getReports(query);
+        const fetchQuery = {
+          status: query?.status ?? null,
+          page: query?.page ?? 0,
+          size: query?.size ?? 20,
+        };
+        const data = await reportService.getReports(fetchQuery);
         setReports(data.content || []);
 
         let currentPage = 0;

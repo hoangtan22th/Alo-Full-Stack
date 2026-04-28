@@ -11,20 +11,32 @@ import {
 import { Button } from "@/components/ui/button";
 import { ReportRow } from "@/components/reports/ReportRow";
 import { ReportActionModal } from "@/components/reports/ReportActionModal";
+import { Pagination } from "@/components/ui/Pagination";
 import { useReports } from "@/hooks/useReports";
 import { ReportItem } from "@/services/reportService";
 
 export default function ReportsModerationPage() {
-  const { reports, loading, error, fetchReports, resolveReport } = useReports();
+  const { reports, pagination, loading, error, fetchReports, resolveReport } =
+    useReports();
   const [filterStatus, setFilterStatus] = useState<string | null>("PENDING");
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
 
   useEffect(() => {
-    fetchReports({ status: filterStatus, page: 0, size: 20 });
-  }, [filterStatus, fetchReports]);
+    fetchReports({ status: filterStatus, page: currentPage, size: 20 });
+  }, [filterStatus, currentPage, fetchReports]);
 
   const handleReview = (report: ReportItem) => {
     setSelectedReport(report);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleFilterChange = (status: string | null) => {
+    setFilterStatus(status);
+    setCurrentPage(0); // Reset về trang đầu khi đổi filter
   };
 
   const handleModalSubmit = async (
@@ -35,8 +47,8 @@ export default function ReportsModerationPage() {
     const ok = await resolveReport(reportId, action, notes);
     if (ok) {
       setSelectedReport(null);
-      // Reload lại danh sách
-      fetchReports({ status: filterStatus, page: 0, size: 20 });
+      // Reload lại trang hiện tại
+      fetchReports({ status: filterStatus, page: currentPage, size: 20 });
     }
   };
 
@@ -59,7 +71,7 @@ export default function ReportsModerationPage() {
         <div>
           <Button
             onClick={() =>
-              fetchReports({ status: filterStatus, page: 0, size: 20 })
+              fetchReports({ status: filterStatus, page: currentPage, size: 20 })
             }
             variant="outline"
           >
@@ -141,7 +153,7 @@ export default function ReportsModerationPage() {
             <Button
               variant={filterStatus === "PENDING" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setFilterStatus("PENDING")}
+              onClick={() => handleFilterChange("PENDING")}
               className={`text-xs font-semibold ${
                 filterStatus === "PENDING" &&
                 "bg-surface-container-highest shadow-none text-on-surface"
@@ -152,7 +164,7 @@ export default function ReportsModerationPage() {
             <Button
               variant={filterStatus === "RESOLVED" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setFilterStatus("RESOLVED")}
+              onClick={() => handleFilterChange("RESOLVED")}
               className={`text-xs font-semibold ${
                 filterStatus === "RESOLVED" &&
                 "bg-surface-container-highest shadow-none text-on-surface"
@@ -163,7 +175,7 @@ export default function ReportsModerationPage() {
             <Button
               variant={filterStatus === null ? "default" : "ghost"}
               size="sm"
-              onClick={() => setFilterStatus(null)}
+              onClick={() => handleFilterChange(null)}
               className={`text-xs font-semibold ${
                 filterStatus === null &&
                 "bg-surface-container-highest shadow-none text-on-surface"
@@ -186,13 +198,22 @@ export default function ReportsModerationPage() {
               Không có báo cáo nào khớp với bộ lọc
             </div>
           ) : (
-            reports.map((report) => (
-              <ReportRow
-                key={report.id}
-                report={report}
-                onReview={handleReview}
+            <>
+              {reports.map((report) => (
+                <ReportRow
+                  key={report.id}
+                  report={report}
+                  onReview={handleReview}
+                />
+              ))}
+              <Pagination
+                currentPage={pagination.page}
+                totalPages={pagination.totalPages}
+                totalElements={pagination.totalElements}
+                onPageChange={handlePageChange}
+                loading={loading}
               />
-            ))
+            </>
           )}
         </div>
       </div>

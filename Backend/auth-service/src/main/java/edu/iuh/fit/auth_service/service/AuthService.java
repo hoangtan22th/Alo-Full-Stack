@@ -54,7 +54,8 @@ public class AuthService {
             throw new edu.iuh.fit.common_service.exception.DuplicateResourceException("Email đã được đăng ký");
         }
         if (accountRepository.existsByPhoneNumber(phoneNumber)) {
-            throw new edu.iuh.fit.common_service.exception.DuplicateResourceException("Số điện thoại đã được đăng ký bởi tài khoản khác");
+            throw new edu.iuh.fit.common_service.exception.DuplicateResourceException(
+                    "Số điện thoại đã được đăng ký bởi tài khoản khác");
         }
 
         SecureRandom random = new SecureRandom();
@@ -63,7 +64,8 @@ public class AuthService {
         stringRedisTemplate.opsForValue().set(redisKey, otp, 5, TimeUnit.MINUTES);
 
         String subject = "Mã xác nhận đăng ký tài khoản ALO";
-        String text = "Xin chào,\n\nMã OTP xác nhận đăng ký tài khoản của bạn là: " + otp + "\nMã này sẽ hết hạn trong vòng 5 phút.\n\nTrân trọng,\nĐội ngũ ALO";
+        String text = "Xin chào,\n\nMã OTP xác nhận đăng ký tài khoản của bạn là: " + otp
+                + "\nMã này sẽ hết hạn trong vòng 5 phút.\n\nTrân trọng,\nĐội ngũ ALO";
         emailService.sendTextEmail(email, subject, text);
     }
 
@@ -80,7 +82,8 @@ public class AuthService {
         }
 
         if (accountRepository.existsByPhoneNumber(request.phoneNumber())) {
-            throw new edu.iuh.fit.common_service.exception.DuplicateResourceException("Số điện thoại đã được đăng ký bởi tài khoản khác");
+            throw new edu.iuh.fit.common_service.exception.DuplicateResourceException(
+                    "Số điện thoại đã được đăng ký bởi tài khoản khác");
         }
 
         stringRedisTemplate.delete(redisKey);
@@ -112,7 +115,8 @@ public class AuthService {
     }
 
     @Transactional
-    public Map<String, String> login(LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse response) {
+    public Map<String, String> login(LoginRequest request, HttpServletRequest httpRequest,
+            HttpServletResponse response) {
         Account user = accountRepository.findByEmailOrPhoneNumber(request.email(), request.email())
                 .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
 
@@ -124,14 +128,16 @@ public class AuthService {
         }
 
         if (user.getStatus() == AccountStatus.BANNED) {
-            throw new UnauthorizedException("Tài khoản này đã bị cấm khỏi hệ thống.");
+            throw new UnauthorizedException(
+                    "Tài khoản này đã bị cấm khỏi hệ thống.\nNếu bạn cho rằng đây là sự nhầm lẫn, vui lòng liên hệ đội ngũ hỗ trợ:\nHotline: 1900 0091");
         }
 
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             Long attempts = stringRedisTemplate.opsForValue().increment(attemptsKey);
 
             // Also store failed attempts in DB
-            user.setFailedLoginAttempts((user.getFailedLoginAttempts() != null ? user.getFailedLoginAttempts() : 0) + 1);
+            user.setFailedLoginAttempts(
+                    (user.getFailedLoginAttempts() != null ? user.getFailedLoginAttempts() : 0) + 1);
 
             if (attempts != null && attempts >= MAX_FAILED_ATTEMPTS) {
                 stringRedisTemplate.opsForValue().set(lockKey, "LOCKED", LOCK_TIME_DURATION, TimeUnit.MINUTES);
@@ -147,7 +153,8 @@ public class AuthService {
                 stringRedisTemplate.expire(attemptsKey, 1, TimeUnit.HOURS);
             }
             accountRepository.save(user);
-            throw new UnauthorizedException("Sai mật khẩu. Bạn còn " + (Math.max(0, MAX_FAILED_ATTEMPTS - (attempts != null ? attempts : 1))) + " lần thử.");
+            throw new UnauthorizedException("Sai mật khẩu. Bạn còn "
+                    + (Math.max(0, MAX_FAILED_ATTEMPTS - (attempts != null ? attempts : 1))) + " lần thử.");
         }
 
         // Đăng nhập thành công -> Xóa attempts
@@ -184,7 +191,8 @@ public class AuthService {
     }
 
     @Transactional
-    public Map<String, String> adminLogin(LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse response) {
+    public Map<String, String> adminLogin(LoginRequest request, HttpServletRequest httpRequest,
+            HttpServletResponse response) {
         Account user = accountRepository.findByEmailOrPhoneNumber(request.email(), request.email())
                 .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
 
@@ -205,7 +213,8 @@ public class AuthService {
 
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             Long attempts = stringRedisTemplate.opsForValue().increment(attemptsKey);
-            user.setFailedLoginAttempts((user.getFailedLoginAttempts() != null ? user.getFailedLoginAttempts() : 0) + 1);
+            user.setFailedLoginAttempts(
+                    (user.getFailedLoginAttempts() != null ? user.getFailedLoginAttempts() : 0) + 1);
 
             if (attempts != null && attempts >= MAX_FAILED_ATTEMPTS) {
                 stringRedisTemplate.opsForValue().set(lockKey, "LOCKED", LOCK_TIME_DURATION, TimeUnit.MINUTES);
@@ -219,7 +228,8 @@ public class AuthService {
                 stringRedisTemplate.expire(attemptsKey, 1, TimeUnit.HOURS);
             }
             accountRepository.save(user);
-            throw new UnauthorizedException("Sai mật khẩu. Bạn còn " + (Math.max(0, MAX_FAILED_ATTEMPTS - (attempts != null ? attempts : 1))) + " lần thử.");
+            throw new UnauthorizedException("Sai mật khẩu. Bạn còn "
+                    + (Math.max(0, MAX_FAILED_ATTEMPTS - (attempts != null ? attempts : 1))) + " lần thử.");
         }
 
         stringRedisTemplate.delete(attemptsKey);
@@ -253,7 +263,8 @@ public class AuthService {
         return Map.of("accessToken", accessToken, "refreshToken", refreshToken);
     }
 
-    // 1. Dùng DTO fallback cho Profile vì thông tin này hằng ngày nằm trên User Service.
+    // 1. Dùng DTO fallback cho Profile vì thông tin này hằng ngày nằm trên User
+    // Service.
     public UserResponse getProfile(String userId) {
         Account acc = accountRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User không tồn tại"));
@@ -263,14 +274,16 @@ public class AuthService {
     @Transactional
     public void logout(String refreshTokenId) {
         sessionRepository.findByRefreshTokenId(refreshTokenId).ifPresent(session -> {
-            stringRedisTemplate.opsForValue().set("BLACKLIST_SESSION:" + session.getId(), "KICKED", 15, TimeUnit.MINUTES);
+            stringRedisTemplate.opsForValue().set("BLACKLIST_SESSION:" + session.getId(), "KICKED", 15,
+                    TimeUnit.MINUTES);
             sessionRepository.delete(session);
         });
     }
 
     public List<UserSessionResponse> getActiveSessions(String userId, String currentSessionId) {
         return sessionRepository.findByAccountId(userId).stream() // Lưu ý cần đổi hàm repo
-                .map(s -> new UserSessionResponse(s.getId(), s.getDeviceId(), s.getIpAddress(), s.getCreatedAt(), s.getId().equals(currentSessionId)))
+                .map(s -> new UserSessionResponse(s.getId(), s.getDeviceId(), s.getIpAddress(), s.getCreatedAt(),
+                        s.getId().equals(currentSessionId)))
                 .collect(Collectors.toList());
     }
 
@@ -291,7 +304,8 @@ public class AuthService {
         List<UserSession> allSessions = sessionRepository.findByAccountId(userId);
         for (UserSession session : allSessions) {
             if (!session.getId().equals(currentSessionId)) {
-                stringRedisTemplate.opsForValue().set("BLACKLIST_SESSION:" + session.getId(), "KICKED", 15, TimeUnit.MINUTES);
+                stringRedisTemplate.opsForValue().set("BLACKLIST_SESSION:" + session.getId(), "KICKED", 15,
+                        TimeUnit.MINUTES);
                 sessionRepository.delete(session);
             }
         }
@@ -396,9 +410,11 @@ public class AuthService {
     }
 
     @Transactional
-    public Map<String, String> loginWithGoogle(GoogleLoginRequest request, HttpServletRequest httpRequest, HttpServletResponse response) {
+    public Map<String, String> loginWithGoogle(GoogleLoginRequest request, HttpServletRequest httpRequest,
+            HttpServletResponse response) {
         try {
-            GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
+            GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(),
+                    new GsonFactory())
                     .setAudience(Collections.singletonList(GOOGLE_CLIENT_ID))
                     .build();
 
@@ -419,7 +435,8 @@ public class AuthService {
             Account user = accountRepository.findByEmail(email).orElse(null);
 
             if (user != null && user.getStatus() == AccountStatus.BANNED) {
-                throw new UnauthorizedException("Tài khoản này đã bị cấm khỏi hệ thống.");
+                throw new UnauthorizedException(
+                        "Tài khoản này đã bị cấm khỏi hệ thống.\nNếu bạn cho rằng đây là sự nhầm lẫn, vui lòng liên hệ đội ngũ hỗ trợ:\nHotline: 1900 0091");
             }
 
             if (user == null) {
@@ -437,7 +454,9 @@ public class AuthService {
                         .build();
                 user = accountRepository.save(user);
 
-                rabbitMQPublisher.publishUserRegisteredEvent(user.getId(), email, name, null, pictureUrl, "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg", 2);
+                rabbitMQPublisher.publishUserRegisteredEvent(user.getId(), email, name, null, pictureUrl,
+                        "https://btl-alo-chat.s3.ap-southeast-1.amazonaws.com/alo_cover_images/default-cover-img.jpg",
+                        2);
             } else {
                 if (user.getAuthProvider() == null || user.getAuthProvider() == Account.AuthProvider.LOCAL) {
                     user.setAuthProvider(Account.AuthProvider.GOOGLE);
@@ -497,7 +516,8 @@ public class AuthService {
 
         if (!sessionsToKill.isEmpty()) {
             sessionRepository.deleteAll(sessionsToKill);
-            rabbitMQPublisher.publishForceLogoutEvent(accountId, killedSessionIds, "Tài khoản của bạn đã được đăng nhập ở một thiết bị khác");
+            rabbitMQPublisher.publishForceLogoutEvent(accountId, killedSessionIds,
+                    "Tài khoản của bạn đã được đăng nhập ở một thiết bị khác");
         }
     }
 
