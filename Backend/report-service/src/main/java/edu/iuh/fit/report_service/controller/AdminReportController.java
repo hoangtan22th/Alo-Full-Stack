@@ -3,6 +3,7 @@ package edu.iuh.fit.report_service.controller;
 import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import edu.iuh.fit.report_service.dto.request.AdminActionRequest;
 import edu.iuh.fit.report_service.dto.response.ReportAdminResponse;
+import edu.iuh.fit.report_service.dto.response.ReportStatisticsResponse;
 import edu.iuh.fit.report_service.entity.ReportReason;
 import edu.iuh.fit.report_service.entity.ReportStatus;
 import edu.iuh.fit.report_service.entity.TargetType;
@@ -45,5 +46,11 @@ public class AdminReportController {
 
         ReportAdminResponse response = reportService.resolveReport(reportId, actionRequest);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/statistics")
+    public ResponseEntity<ApiResponse<ReportStatisticsResponse>> getStatistics() {
+        ReportStatisticsResponse statistics = reportService.getStatistics();
+        return ResponseEntity.ok(ApiResponse.success(statistics));
     }
 }

@@ -4,6 +4,7 @@ import edu.iuh.fit.report_service.dto.request.AdminActionRequest;
 import edu.iuh.fit.report_service.dto.request.ReportCreationRequest;
 import edu.iuh.fit.report_service.dto.response.ReportAdminResponse;
 import edu.iuh.fit.report_service.dto.response.ReportResponse;
+import edu.iuh.fit.report_service.dto.response.ReportStatisticsResponse;
 import edu.iuh.fit.report_service.entity.ReportReason;
 import edu.iuh.fit.report_service.entity.ReportStatus;
 import edu.iuh.fit.report_service.entity.TargetType;
@@ -16,4 +17,6 @@ public interface ReportService {
     Page<ReportAdminResponse> getAdminReports(ReportStatus status, String targetName, TargetType targetType, ReportReason reason, Pageable pageable);
 
     ReportAdminResponse resolveReport(String reportId, AdminActionRequest actionRequest);
+
+    ReportStatisticsResponse getStatistics();
 }

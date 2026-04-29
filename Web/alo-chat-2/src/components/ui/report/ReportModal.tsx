@@ -217,11 +217,17 @@ export default function ReportModal({
           {isCustomizeMode && (
             <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-gray-700">Mô tả thêm (tùy chọn)</label>
+                <div className="flex justify-between items-center">
+                  <label className="text-sm font-semibold text-gray-700">Mô tả thêm (tùy chọn)</label>
+                  <span className={`text-[10px] font-bold ${description.length > 450 ? 'text-red-500' : 'text-gray-400'}`}>
+                    {description.length}/500
+                  </span>
+                </div>
                 <Textarea
                   placeholder="Cung cấp thêm ngữ cảnh cho quản trị viên..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
+                  maxLength={500}
                   className="resize-none h-20"
                 />
               </div>

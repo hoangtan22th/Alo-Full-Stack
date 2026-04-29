@@ -23,6 +23,7 @@ public class ReportAdminResponse {
     private UserResponse reporter;
 
     private String targetId;
+    private String targetName;
     private UserResponse targetUser; // Will be populated if targetType == USER
     private TargetType targetType;
     

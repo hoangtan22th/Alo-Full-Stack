@@ -33,7 +33,13 @@ import org.springframework.data.support.PageableExecutionUtils;
 import feign.FeignException;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationResults;
+import org.springframework.data.domain.Sort;
+import edu.iuh.fit.report_service.dto.response.ReportStatisticsResponse;
 
 @Service
 @RequiredArgsConstructor
@@ -159,6 +165,7 @@ public class ReportServiceImpl implements ReportService {
 
         report.setAdminNotes(actionRequest.getAdminNotes());
         report.setResolvedBy(actionRequest.getAdminId());
+        report.setResolvedAction(actionRequest.getAction());
 
         String targetName = actionRequest.getTargetName();
         String leaderId = null;
@@ -258,6 +265,64 @@ public class ReportServiceImpl implements ReportService {
         return mapToAdminResponse(savedReport);
     }
 
+    @Override
+    public ReportStatisticsResponse getStatistics() {
+        log.info("Calculating report statistics...");
+
+        // 1. Overview Metrics
+        long totalPending = reportRepository.countByStatus(ReportStatus.PENDING);
+        
+        LocalDateTime todayStart = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
+        long resolvedToday = reportRepository.countByStatusInAndUpdatedAtAfter(
+                List.of(ReportStatus.RESOLVED, ReportStatus.REJECTED), todayStart);
+        
+        long totalBanned = reportRepository.countByResolvedAction(AdminActionRequest.AdminAction.BAN);
+
+        // 2. Group By Reason
+        Aggregation reasonAgg = Aggregation.newAggregation(
+                Aggregation.group("reason").count().as("value"),
+                Aggregation.project("value").and("name").previousOperation()
+        );
+        List<ReportStatisticsResponse.DataPoint> byReason = mongoTemplate
+                .aggregate(reasonAgg, Report.class, ReportStatisticsResponse.DataPoint.class)
+                .getMappedResults();
+
+        // 3. Group By Target Type
+        Aggregation targetTypeAgg = Aggregation.newAggregation(
+                Aggregation.group("targetType").count().as("value"),
+                Aggregation.project("value").and("name").previousOperation()
+        );
+        List<ReportStatisticsResponse.DataPoint> byTargetType = mongoTemplate
+                .aggregate(targetTypeAgg, Report.class, ReportStatisticsResponse.DataPoint.class)
+                .getMappedResults();
+
+        // 4. Top Offenders (Pending Only)
+        Aggregation topOffendersAgg = Aggregation.newAggregation(
+                Aggregation.match(Criteria.where("status").is(ReportStatus.PENDING)),
+                Aggregation.group("targetId")
+                        .count().as("pendingCount")
+                        .first("targetName").as("targetName")
+                        .first("targetType").as("targetType"),
+                Aggregation.sort(Sort.Direction.DESC, "pendingCount"),
+                Aggregation.limit(5),
+                Aggregation.project("pendingCount", "targetName", "targetType").and("targetId").previousOperation()
+        );
+        List<ReportStatisticsResponse.OffenderInfo> topOffenders = mongoTemplate
+                .aggregate(topOffendersAgg, Report.class, ReportStatisticsResponse.OffenderInfo.class)
+                .getMappedResults();
+
+        return ReportStatisticsResponse.builder()
+                .overview(ReportStatisticsResponse.Overview.builder()
+                        .totalPending(totalPending)
+                        .resolvedToday(resolvedToday)
+                        .totalBanned(totalBanned)
+                        .build())
+                .byReason(byReason)
+                .byTargetType(byTargetType)
+                .topOffenders(topOffenders)
+                .build();
+    }
+
     private void publishBanEvent(Report report, String targetName, String leaderId) {
         try {
             UserBannedEvent event = UserBannedEvent.builder()
@@ -313,6 +378,7 @@ public class ReportServiceImpl implements ReportService {
                 .id(report.getId())
                 .reporter(reporter)
                 .targetId(report.getTargetId())
+                .targetName(report.getTargetName())
                 .targetUser(targetUser)
                 .targetType(report.getTargetType())
                 .reason(report.getReason())

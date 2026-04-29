@@ -61,6 +61,9 @@ public class Report {
     @Field("resolved_by")
     private String resolvedBy;
 
+    @Field("resolved_action")
+    private edu.iuh.fit.report_service.dto.request.AdminActionRequest.AdminAction resolvedAction;
+
     @CreatedDate
     @Field("created_at")
     private LocalDateTime createdAt;
