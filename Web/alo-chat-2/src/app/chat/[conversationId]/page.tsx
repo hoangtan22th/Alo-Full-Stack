@@ -1025,6 +1025,13 @@ export default function ChatPage() {
           return [...filtered, pollMsg];
         });
       }),
+      socketService.onGroupBanned((data: any) => {
+        const activeConvoId = conversationIdRef.current;
+        if (String(data.groupId || data.conversationId) === String(activeConvoId)) {
+          console.log("[Realtime] Group BANNED, refreshing info...");
+          fetchConversationInfo();
+        }
+      }),
     ];
 
     return () => {
@@ -2044,9 +2051,9 @@ export default function ChatPage() {
                       relationStatus === "YOU_SENT_REQUEST"
                     }
                     className={`px-3 py-1.5 text-white text-[11px] font-black rounded-lg transition active:scale-95 shadow-sm ${relationStatus === "I_SENT_REQUEST" ||
-                        relationStatus === "YOU_SENT_REQUEST"
-                        ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-red-600 hover:bg-red-700"
+                      relationStatus === "YOU_SENT_REQUEST"
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-red-600 hover:bg-red-700"
                       }`}
                   >
                     {relationStatus === "I_SENT_REQUEST" ||
@@ -2383,8 +2390,8 @@ export default function ChatPage() {
                                       toggleMessageForReport(msg._id);
                                     }}
                                     className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${selectedMessagesForReport.includes(msg._id)
-                                        ? "bg-blue-600 text-white ring-2 ring-blue-300"
-                                        : "bg-white border-gray-200 hover:bg-gray-50"
+                                      ? "bg-blue-600 text-white ring-2 ring-blue-300"
+                                      : "bg-white border-gray-200 hover:bg-gray-50"
                                       }`}
                                     title={selectedMessagesForReport.includes(msg._id) ? "Unselect" : "Select"}
                                   >
@@ -2429,8 +2436,8 @@ export default function ChatPage() {
                                 ) : (
                                   <div
                                     className={`relative max-w-full flex flex-col p-1.5 px-2 border shadow-sm ${isMine
-                                        ? "bg-blue-50/80 shadow-blue-900/5 items-end"
-                                        : "bg-white shadow-gray-900/5 items-start"
+                                      ? "bg-blue-50/80 shadow-blue-900/5 items-end"
+                                      : "bg-white shadow-gray-900/5 items-start"
                                       } ${conversationInfo?.isHighlightEnabled &&
                                         adminIds.has(String(msg.senderId))
                                         ? "border-amber-300 ring-2 ring-amber-200/50"
@@ -2449,8 +2456,8 @@ export default function ChatPage() {
                                       !isRevoked && (
                                         <div
                                           className={`mb-2 px-3 py-2 border-l-[3px] border-blue-600 ${isMine
-                                              ? "bg-white/50"
-                                              : "bg-blue-50/50"
+                                            ? "bg-white/50"
+                                            : "bg-blue-50/50"
                                             } rounded-r-lg text-left cursor-pointer hover:bg-white/80 transition-colors w-full min-w-[150px] max-w-full overflow-hidden`}
                                           onClick={() => {
                                             const targetMsg =
@@ -3018,8 +3025,8 @@ export default function ChatPage() {
                                     {/* Hover Controls (Reaction & Menu & Redo) */}
                                     <div
                                       className={`absolute bottom-0 ${isMine ? "right-full pr-2" : "left-full pl-2"} flex items-center gap-1 z-[1000] ${hoveredMsgId === msg._id && !isMultiSelectMode
-                                          ? "opacity-100 translate-y-0"
-                                          : "opacity-0 translate-y-2 pointer-events-none"
+                                        ? "opacity-100 translate-y-0"
+                                        : "opacity-0 translate-y-2 pointer-events-none"
                                         } transition-all duration-200`}
                                     >
                                       {/* 1. Reaction Button */}
@@ -3350,8 +3357,8 @@ export default function ChatPage() {
                                                       currentUser?.userId,
                                                     ),
                                                 )
-                                                    ? "bg-blue-100 text-blue-600 border border-blue-200"
-                                                    : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
+                                                  ? "bg-blue-100 text-blue-600 border border-blue-200"
+                                                  : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200"
                                                   }`}
                                               >
                                                 <span>
@@ -3389,8 +3396,8 @@ export default function ChatPage() {
                           {isMine && (
                             <span
                               className={`text-[10px] font-bold ${lastMsg.isRead
-                                  ? "text-blue-500"
-                                  : "text-gray-400"
+                                ? "text-blue-500"
+                                : "text-gray-400"
                                 }`}
                             >
                               {lastMsg.isRead ? "✓✓" : "✓"}
@@ -3468,184 +3475,199 @@ export default function ChatPage() {
             )}
 
             {/* Message Input Container */}
-            <div className="bg-white border-t border-gray-200 shrink-0">
-              {/* Hidden file input — chỉ chọn file (không phải ảnh) */}
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-                multiple
-                accept="application/*,text/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.mp3,.mp4,.avi,.mov,.mkv"
-              />
-              {/* Hidden image input — chỉ chọn ảnh */}
-              <input
-                type="file"
-                ref={imageInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-                multiple
-                accept="image/*"
-              />
-              {/* Toolbar Section */}
-              <div className="flex items-center gap-1 px-4 py-2">
-                {/* 1. Sticker placeholder — giữ icon cũ, chưa có sự kiện */}
-                {/* <button
-                  className="p-2 text-gray-500 rounded-md transition cursor-default"
-                  title="Sticker (sắp ra mắt)"
-                >
-                  <FaceSmileIcon className="w-5 h-5" />
-                </button> */}
-                {/* 2. Sticker picker — gửi sticker thật */}
-                <StickerPicker onStickerSelect={handleSendSticker} />
-                {/* 3. Đính kèm ảnh */}
-                <button
-                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition"
-                  onClick={handleImageButtonClick}
-                  title="Gửi ảnh"
-                >
-                  <PhotoIcon className="w-5 h-5" />
-                </button>
-                {/* 4. Đính kèm file */}
-                <button
-                  className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition"
-                  onClick={handleFileButtonClick}
-                  title="Gửi file"
-                >
-                  <PaperClipIcon className="w-5 h-5" />
-                </button>
+            {conversationInfo?.isBanned ? (
+              <div className="bg-gray-50 border-t border-gray-200 p-8 flex flex-col items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500 shrink-0">
+                <div className="w-16 h-16 rounded-[24px] bg-red-50 flex items-center justify-center text-red-500 shadow-sm border border-red-100/50">
+                  <NoSymbolIcon className="w-8 h-8" />
+                </div>
+                <div className="text-center space-y-1">
+                  <h3 className="text-[17px] font-black text-gray-900 tracking-tight">
+                    Nhóm này đã bị giải tán
+                  </h3>
+                  <p className="text-[13px] font-bold text-gray-500 max-w-[280px] leading-relaxed">
+                    Hệ thống đã ngừng hoạt động nhóm này do vi phạm tiêu chuẩn cộng đồng. Bạn chỉ có thể xem lại lịch sử trò chuyện.
+                  </p>
+                </div>
               </div>
-
-              {/* Reply Preview Section */}
-              {replyingTo && (
-                <div className="mx-4 mb-2 p-3 bg-[#F0F2F5] border-l-[3px] border-blue-600 rounded-sm flex items-center gap-3 animate-in slide-in-from-bottom-1 duration-200 w-fit max-w-[75%]">
-                  {replyingTo.type === "image" && (
-                    <img
-                      src={replyingTo.content}
-                      alt="reply"
-                      className="w-10 h-10 object-cover rounded-md shrink-0 border border-gray-200"
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        className="w-3.5 h-3.5 text-gray-500"
-                      >
-                        <path d="M14.017 21L14.017 18C14.017 16.8954 14.9125 16 16.0171 16H19.0171C20.1217 16 21.0171 16.8954 21.0171 18V21M14.017 21H21.0171M14.017 21C12.9125 21 12.017 20.1046 12.017 19V15M3.01709 21H10.0171M10.0171 21V18C10.0171 16.8954 10.9125 16 12.0171 16H15.0171M10.0171 21C8.91253 21 8.01709 20.1046 8.01709 19V15M12.017 15V13C12.017 11.8954 12.9125 11 14.0171 11H17.0171C18.1217 11 19.0171 11.8954 19.0171 13V15M12.017 15C10.9125 15 10.0171 14.1046 10.0171 13V9M3.01709 15H10.0171M10.0171 15V12C10.0171 10.8954 10.9125 10 12.0171 10H15.0171M10.0171 15C8.91253 15 8.01709 14.1046 8.01709 13V9" />
-                        <path
-                          d="M11.1892 5.07107C10.0175 3.8994 8.11805 3.8994 6.94639 5.07107C5.77473 6.24274 5.77473 8.14224 6.94639 9.31391L11.1892 13.5567L15.432 9.31391C16.6037 8.14224 16.6037 6.24274 15.432 5.07107C14.2603 3.8994 12.3608 3.8994 11.1892 5.07107Z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                      {/* Using the text character directly is often more faithful to these chat UIs */}
-                      <span className="text-[14px] text-gray-500 font-medium">
-                        Trả lời{" "}
-                        <span className="font-bold text-gray-800">
-                          {getSenderDisplayName(
-                            replyingTo.senderId,
-                            replyingTo,
-                          )}
-                        </span>
-                      </span>
-                    </div>
-                    <p className="text-[13px] text-gray-600 truncate ml-1">
-                      {replyingTo.type === "image"
-                        ? "[Hình ảnh]"
-                        : replyingTo.type === "file"
-                          ? replyingTo.metadata?.fileName || "[Tệp tin]"
-                          : replyingTo.content}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setReplyingTo(null)}
-                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+            ) : (
+              <div className="bg-white border-t border-gray-200 shrink-0">
+                {/* Hidden file input — chỉ chọn file (không phải ảnh) */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  multiple
+                  accept="application/*,text/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,.mp3,.mp4,.avi,.mov,.mkv"
+                />
+                {/* Hidden image input — chỉ chọn ảnh */}
+                <input
+                  type="file"
+                  ref={imageInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  multiple
+                  accept="image/*"
+                />
+                {/* Toolbar Section */}
+                <div className="flex items-center gap-1 px-4 py-2">
+                  {/* 1. Sticker placeholder — giữ icon cũ, chưa có sự kiện */}
+                  {/* <button
+                    className="p-2 text-gray-500 rounded-md transition cursor-default"
+                    title="Sticker (sắp ra mắt)"
                   >
-                    <XMarkIcon className="w-5 h-5" strokeWidth={2.5} />
+                    <FaceSmileIcon className="w-5 h-5" />
+                  </button> */}
+                  {/* 2. Sticker picker — gửi sticker thật */}
+                  <StickerPicker onStickerSelect={handleSendSticker} />
+                  {/* 3. Đính kèm ảnh */}
+                  <button
+                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition"
+                    onClick={handleImageButtonClick}
+                    title="Gửi ảnh"
+                  >
+                    <PhotoIcon className="w-5 h-5" />
+                  </button>
+                  {/* 4. Đính kèm file */}
+                  <button
+                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition"
+                    onClick={handleFileButtonClick}
+                    title="Gửi file"
+                  >
+                    <PaperClipIcon className="w-5 h-5" />
                   </button>
                 </div>
-              )}
 
-              {/* Input section */}
-              <div className="px-4 pb-4 relative">
-                {/* Mention Suggestion List */}
-                {mentionSearch !== null && filteredMentions.length > 0 && (
-                  <div className="absolute bottom-full left-4 mb-2 w-64 max-h-60 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-y-auto z-[2000] animate-in slide-in-from-bottom-2 duration-200">
-                    <div className="p-2 border-b border-gray-50 flex items-center justify-between bg-gray-50/50">
-                      <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Nhắc tên thành viên</span>
-                    </div>
-                    {filteredMentions.map((item: any, idx: number) => (
-                      <div
-                        key={item.id}
-                        className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${idx === mentionIndex ? "bg-blue-50" : "hover:bg-gray-50"
-                          }`}
-                        onMouseEnter={() => setMentionIndex(idx)}
-                        onClick={() => handleSelectMention(item)}
-                      >
-                        {item.id === "all" ? (
-                          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-sm">
-                            <span className="text-[10px] font-black italic">@</span>
-                          </div>
-                        ) : item.avatar ? (
-                          <img
-                            src={item.avatar}
-                            className="w-8 h-8 rounded-full object-cover shrink-0 border border-gray-100 shadow-sm"
+                {/* Reply Preview Section */}
+                {replyingTo && (
+                  <div className="mx-4 mb-2 p-3 bg-[#F0F2F5] border-l-[3px] border-blue-600 rounded-sm flex items-center gap-3 animate-in slide-in-from-bottom-1 duration-200 w-fit max-w-[75%]">
+                    {replyingTo.type === "image" && (
+                      <img
+                        src={replyingTo.content}
+                        alt="reply"
+                        className="w-10 h-10 object-cover rounded-md shrink-0 border border-gray-200"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="w-3.5 h-3.5 text-gray-500"
+                        >
+                          <path d="M14.017 21L14.017 18C14.017 16.8954 14.9125 16 16.0171 16H19.0171C20.1217 16 21.0171 16.8954 21.0171 18V21M14.017 21H21.0171M14.017 21C12.9125 21 12.017 20.1046 12.017 19V15M3.01709 21H10.0171M10.0171 21V18C10.0171 16.8954 10.9125 16 12.0171 16H15.0171M10.0171 21C8.91253 21 8.01709 20.1046 8.01709 19V15M12.017 15V13C12.017 11.8954 12.9125 11 14.0171 11H17.0171C18.1217 11 19.0171 11.8954 19.0171 13V15M12.017 15C10.9125 15 10.0171 14.1046 10.0171 13V9M3.01709 15H10.0171M10.0171 15V12C10.0171 10.8954 10.9125 10 12.0171 10H15.0171M10.0171 15C8.91253 15 8.01709 14.1046 8.01709 13V9" />
+                          <path
+                            d="M11.1892 5.07107C10.0175 3.8994 8.11805 3.8994 6.94639 5.07107C5.77473 6.24274 5.77473 8.14224 6.94639 9.31391L11.1892 13.5567L15.432 9.31391C16.6037 8.14224 16.6037 6.24274 15.432 5.07107C14.2603 3.8994 12.3608 3.8994 11.1892 5.07107Z"
+                            fill="currentColor"
                           />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 font-bold text-[12px] shrink-0 border border-gray-100 shadow-sm">
-                            {item.name.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-[13px] font-bold truncate ${item.id === "all" ? "text-blue-600" : "text-gray-800"}`}>
-                            {item.id === "all" ? item.name : item.name}
-                          </p>
-                          {item.id === "all" && (
-                            <p className="text-[10px] text-blue-500 font-medium">Nhắc cả nhóm</p>
-                          )}
-                        </div>
-                        {idx === mentionIndex && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-glow animate-pulse" />
-                        )}
+                        </svg>
+                        <span className="text-[14px] text-gray-500 font-medium">
+                          Trả lời{" "}
+                          <span className="font-bold text-gray-800">
+                            {getSenderDisplayName(
+                              replyingTo.senderId,
+                              replyingTo,
+                            )}
+                          </span>
+                        </span>
                       </div>
-                    ))}
+                      <p className="text-[13px] text-gray-600 truncate ml-1">
+                        {replyingTo.type === "image"
+                          ? "[Hình ảnh]"
+                          : replyingTo.type === "file"
+                            ? replyingTo.metadata?.fileName || "[Tệp tin]"
+                            : replyingTo.content}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setReplyingTo(null)}
+                      className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <XMarkIcon className="w-5 h-5" strokeWidth={2.5} />
+                    </button>
                   </div>
                 )}
 
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    placeholder={
-                      replyingTo
-                        ? `Nhập @, tin nhắn tới ${userCache[replyingTo.senderId]?.name || "người dùng"}`
-                        : "Nhập tin nhắn..."
-                    }
-                    value={messageText}
-                    onChange={handleInputChange}
-                    onKeyDown={handleKeyDown}
-                    className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
-                  />
-                  <div className="flex items-center gap-1">
-                    {messageText.trim() ? (
-                      <button
-                        onClick={handleSend}
-                        disabled={sending}
-                        className="p-2 text-blue-600 hover:text-blue-700 transition active:scale-95 disabled:opacity-40"
-                      >
-                        <PaperAirplaneIcon className="w-6 h-6" />
-                      </button>
-                    ) : (
-                      <button className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90">
-                        {/* This matches the Like/Thumb icon in the image */}
-                        <span className="text-2xl">👍</span>
-                      </button>
-                    )}
+                {/* Input section */}
+                <div className="px-4 pb-4 relative">
+                  {/* Mention Suggestion List */}
+                  {mentionSearch !== null && filteredMentions.length > 0 && (
+                    <div className="absolute bottom-full left-4 mb-2 w-64 max-h-60 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-y-auto z-[2000] animate-in slide-in-from-bottom-2 duration-200">
+                      <div className="p-2 border-b border-gray-50 flex items-center justify-between bg-gray-50/50">
+                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Nhắc tên thành viên</span>
+                      </div>
+                      {filteredMentions.map((item: any, idx: number) => (
+                        <div
+                          key={item.id}
+                          className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${idx === mentionIndex ? "bg-blue-50" : "hover:bg-gray-50"
+                            }`}
+                          onMouseEnter={() => setMentionIndex(idx)}
+                          onClick={() => handleSelectMention(item)}
+                        >
+                          {item.id === "all" ? (
+                            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-sm">
+                              <span className="text-[10px] font-black italic">@</span>
+                            </div>
+                          ) : item.avatar ? (
+                            <img
+                              src={item.avatar}
+                              className="w-8 h-8 rounded-full object-cover shrink-0 border border-gray-100 shadow-sm"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 font-bold text-[12px] shrink-0 border border-gray-100 shadow-sm">
+                              {item.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-[13px] font-bold truncate ${item.id === "all" ? "text-blue-600" : "text-gray-800"}`}>
+                              {item.id === "all" ? item.name : item.name}
+                            </p>
+                            {item.id === "all" && (
+                              <p className="text-[10px] text-blue-500 font-medium">Nhắc cả nhóm</p>
+                            )}
+                          </div>
+                          {idx === mentionIndex && (
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-glow animate-pulse" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      placeholder={
+                        replyingTo
+                          ? `Nhập @, tin nhắn tới ${userCache[replyingTo.senderId]?.name || "người dùng"}`
+                          : "Nhập tin nhắn..."
+                      }
+                      value={messageText}
+                      onChange={handleInputChange}
+                      onKeyDown={handleKeyDown}
+                      className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
+                    />
+                    <div className="flex items-center gap-1">
+                      {messageText.trim() ? (
+                        <button
+                          onClick={handleSend}
+                          disabled={sending}
+                          className="p-2 text-blue-600 hover:text-blue-700 transition active:scale-95 disabled:opacity-40"
+                        >
+                          <PaperAirplaneIcon className="w-6 h-6" />
+                        </button>
+                      ) : (
+                        <button className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90">
+                          {/* This matches the Like/Thumb icon in the image */}
+                          <span className="text-2xl">👍</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Reaction Modal */}
             {viewingReactions && (

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { useAdmins } from "@/hooks/useAdmins";
@@ -175,26 +175,68 @@ export default function AdminManagementPage() {
       )}
 
       {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="relative flex-1">
+      <div className="bg-surface-container-low rounded-xl p-4 mb-6 flex flex-wrap gap-4 items-center border border-outline-variant/15">
+        <div className="text-xs font-bold text-on-surface mr-2 tracking-wide uppercase">
+          Filters
+        </div>
+
+        <div className="relative flex-1 min-w-[200px] max-w-[300px]">
           <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
           <input
             type="text"
             placeholder="Search admins by name or email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+            className="w-full pl-10 pr-4 py-2 text-sm bg-surface-container-lowest border border-outline-variant/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
           />
         </div>
+
         <select
           value={roleFilter}
           onChange={(e) => setRoleFilter(e.target.value)}
-          className="px-4 py-2 bg-surface-container-low border border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all min-w-[150px]"
+          className="bg-surface-container-lowest border border-outline-variant/15 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary focus:border-primary min-w-[150px]"
         >
           <option value="ALL">All Roles</option>
           <option value="SUPER_ADMIN">Super Admin</option>
           <option value="ADMIN">Admin</option>
         </select>
+
+        <button
+          onClick={() => {
+            setSearchTerm("");
+            setRoleFilter("ALL");
+            setCurrentPage(0);
+            // If any of these didn't change, manually trigger fetch
+            if (searchTerm === "" && roleFilter === "ALL" && currentPage === 0) {
+              fetchAdmins({ search: "", roleFilter: "ALL", page: 0 });
+            }
+          }}
+          className="p-2 bg-surface-container-lowest border border-outline-variant/15 rounded-lg text-on-surface-variant hover:text-primary hover:border-primary transition-all shadow-sm"
+          title="Reset & Refresh"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+        </button>
+
+        <div className="ml-auto text-sm text-on-surface-variant font-medium">
+          Showing{" "}
+          <span className="text-on-surface font-bold">
+            {pagination.totalElements === 0
+              ? 0
+              : pagination.page * 10 + 1}
+            -
+            {Math.min(
+              (pagination.page + 1) * 10,
+              pagination.totalElements,
+            )}
+          </span>{" "}
+          of{" "}
+          <span className="text-on-surface font-bold">
+            {pagination.totalElements}
+          </span>{" "}
+          admins
+        </div>
       </div>
 
       <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-[#ebeef0] overflow-hidden">

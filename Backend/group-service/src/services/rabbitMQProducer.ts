@@ -97,6 +97,18 @@ export class RabbitMQProducerService {
   }
 
   /**
+   * Phát sự kiện khi nhóm bị BAN (giải tán) bởi Admin.
+   * Gửi đến room của nhóm để Client cập nhật trạng thái read-only.
+   */
+  async publishGroupBanned(groupId: string) {
+    await this.publishToRealtimeService('GROUP_BANNED', {
+      room: groupId,
+      data: { groupId, isBanned: true }
+    });
+    console.log(`[RabbitMQProducer] Event 'GROUP_BANNED' published to room: ${groupId}`);
+  }
+
+  /**
    * Phát sự kiện khi có người yêu cầu tham gia nhóm (cần duyệt).
    * Gửi riêng cho các quản trị viên (LEADER, DEPUTY).
    */

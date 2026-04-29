@@ -1513,7 +1513,7 @@ export const toggleBanGroupAdmin = async (
 ): Promise<void> => {
   try {
     const groupId = String(req.params.groupId || "");
-    const { isBanned } = req.body;
+    const { isBanned, reason } = req.body;
 
     const group = await Conversation.findById(groupId);
     if (!group) {
@@ -1522,12 +1522,101 @@ export const toggleBanGroupAdmin = async (
     }
 
     if (typeof isBanned === "boolean") {
+      const wasBanned = group.isBanned;
       group.isBanned = isBanned;
       await group.save();
-    }
 
-    // Thông báo cho mọi người nếu cần
-    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
+      // Chỉ thực hiện thông báo nếu trạng thái thực sự thay đổi
+      if (wasBanned !== isBanned) {
+        const MESSAGE_SERVICE_URL = process.env.MESSAGE_SERVICE_URL || 'http://localhost:8083/api/v1/messages';
+        const SYSTEM_BOT_ID = "00000000-0000-0000-0000-000000000000";
+        const leaderId = group.members?.find((m: any) => m.role === "LEADER")?.userId;
+
+        if (isBanned) {
+          // 1. Thông báo hệ thống vào nhóm
+          try {
+            await fetch(MESSAGE_SERVICE_URL, {
+              method: "POST",
+              headers: {
+                "X-User-Id": SYSTEM_BOT_ID,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                conversationId: groupId,
+                content: "⚠️ Nhóm này đã bị hệ thống giải tán do vi phạm Tiêu chuẩn cộng đồng.",
+                type: 'system'
+              }),
+            });
+          } catch (err) {
+            console.error("[toggleBanGroupAdmin] Failed to send system announcement:", err);
+          }
+
+          // 2. Gửi DM cho trưởng nhóm
+          if (leaderId) {
+            try {
+              await fetch(MESSAGE_SERVICE_URL, {
+                method: "POST",
+                headers: {
+                  "X-User-Id": SYSTEM_BOT_ID,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  targetUserId: leaderId,
+                  senderName: "Hệ thống Alo Chat",
+                  content: `Nhóm "${group.name}" của bạn đã bị khóa bởi quản trị viên. Lý do: ${reason || "Vi phạm chính sách hệ thống"}.`,
+                  type: "text",
+                }),
+              });
+            } catch (dmErr) {
+              console.error("[toggleBanGroupAdmin] Failed to send DM to leader:", dmErr);
+            }
+          }
+        } else {
+          // UNBAN LOGIC
+          // 1. Thông báo hệ thống vào nhóm
+          try {
+            await fetch(MESSAGE_SERVICE_URL, {
+              method: "POST",
+              headers: {
+                "X-User-Id": SYSTEM_BOT_ID,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                conversationId: groupId,
+                content: "⚠️ Nhóm này đã được hệ thống mở khóa. Các thành viên có thể tiếp tục trò chuyện.",
+                type: 'system'
+              }),
+            });
+          } catch (err) {
+            console.error("[toggleBanGroupAdmin] Failed to send system unban announcement:", err);
+          }
+
+          // 2. Gửi DM cho trưởng nhóm
+          if (leaderId) {
+            try {
+              await fetch(MESSAGE_SERVICE_URL, {
+                method: "POST",
+                headers: {
+                  "X-User-Id": SYSTEM_BOT_ID,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  targetUserId: leaderId,
+                  senderName: "Hệ thống Alo Chat",
+                  content: `Nhóm "${group.name}" của bạn đã được mở khóa bởi quản trị viên. Chúc bạn có những giây phút trò chuyện vui vẻ.`,
+                  type: "text",
+                }),
+              });
+            } catch (dmErr) {
+              console.error("[toggleBanGroupAdmin] Failed to send DM to leader (unban):", dmErr);
+            }
+          }
+        }
+
+        // 3. Phát sự kiện realtime đồng bộ UI (Dùng chung GROUP_BANNED để trigger refresh)
+        rabbitMQProducer.publishGroupBanned(groupId).catch(console.error);
+      }
+    }
 
     res
       .status(200)
