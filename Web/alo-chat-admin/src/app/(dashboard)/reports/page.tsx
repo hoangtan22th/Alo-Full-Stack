@@ -30,6 +30,7 @@ export default function ReportsModerationPage() {
   const [filterStatus, setFilterStatus] = useState<string | null>("PENDING");
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Search & Filter states
   const [searchTerm, setSearchTerm] = useState("");
@@ -55,10 +56,19 @@ export default function ReportsModerationPage() {
       page: currentPage,
       size: 20,
     });
+    // Trigger statistics refresh
+    setRefreshKey(prev => prev + 1);
   };
 
   useEffect(() => {
-    loadData();
+    fetchReports({
+      status: filterStatus,
+      targetName: debouncedSearch || undefined,
+      targetType: filterTargetType !== "ALL" ? filterTargetType : undefined,
+      reason: filterReason !== "ALL" ? filterReason : undefined,
+      page: currentPage,
+      size: 20,
+    });
   }, [filterStatus, currentPage, debouncedSearch, filterTargetType, filterReason, fetchReports]);
 
   const handleReview = (report: ReportItem) => {
@@ -105,13 +115,12 @@ export default function ReportsModerationPage() {
       </div>
 
       {/* ── ANALYTICS DASHBOARD ── */}
-      <ReportAnalytics />
+      <ReportAnalytics key={refreshKey} />
 
       {/* ── SEARCH & FILTERS BAR ── */}
-      <div className="bg-surface-container-low rounded-2xl p-4 mb-6 flex flex-wrap gap-4 items-center border border-outline-variant/15 shadow-sm">
-        <div className="text-xs font-bold text-on-surface mr-2 tracking-widest uppercase flex items-center gap-2">
-          <FunnelIcon className="w-4 h-4" />
-          Bộ lọc
+      <div className="bg-surface-container-low rounded-xl p-4 mb-6 flex flex-wrap gap-4 items-center border border-outline-variant/15 shadow-sm">
+        <div className="text-xs font-bold text-on-surface mr-2 tracking-wide uppercase">
+          Filters
         </div>
 
         {/* Search by Target Name */}
@@ -121,10 +130,10 @@ export default function ReportsModerationPage() {
           </div>
           <input
             type="text"
-            placeholder="Tìm theo tên người dùng hoặc nhóm bị báo cáo..."
+            placeholder="Tìm theo tên người dùng hoặc nhóm..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-sm bg-surface-container-lowest border border-outline-variant/15 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            className="w-full pl-10 pr-4 py-2 text-sm bg-surface-container-lowest border border-outline-variant/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
           />
         </div>
 
@@ -135,7 +144,7 @@ export default function ReportsModerationPage() {
             setFilterTargetType(e.target.value);
             setCurrentPage(0);
           }}
-          className="bg-surface-container-lowest border border-outline-variant/15 rounded-xl px-3 py-2 text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+          className="bg-surface-container-lowest border border-outline-variant/15 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary transition-all"
         >
           <option value="ALL">Tất cả đối tượng</option>
           <option value="USER">Người dùng (USER)</option>
@@ -149,7 +158,7 @@ export default function ReportsModerationPage() {
             setFilterReason(e.target.value);
             setCurrentPage(0);
           }}
-          className="bg-surface-container-lowest border border-outline-variant/15 rounded-xl px-3 py-2 text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+          className="bg-surface-container-lowest border border-outline-variant/15 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary transition-all"
         >
           {REASON_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -158,15 +167,44 @@ export default function ReportsModerationPage() {
           ))}
         </select>
 
-        <Button
-          onClick={loadData}
-          variant="outline"
-          size="sm"
-          className="border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-highest rounded-xl px-4 flex items-center gap-2"
+        <button
+          onClick={() => {
+            setSearchTerm("");
+            setFilterStatus("PENDING");
+            setFilterTargetType("ALL");
+            setFilterReason("ALL");
+            setCurrentPage(0);
+            setRefreshKey(prev => prev + 1);
+            if (searchTerm === "" && filterStatus === "PENDING" && filterTargetType === "ALL" && filterReason === "ALL" && currentPage === 0) {
+              loadData();
+            }
+          }}
+          className="p-2 bg-surface-container-lowest border border-outline-variant/15 rounded-lg text-on-surface-variant hover:text-primary hover:border-primary transition-all shadow-sm"
+          title="Reset & Refresh"
         >
-          <ArrowPathIcon className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          Làm mới
-        </Button>
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+        </button>
+
+        <div className="ml-auto text-sm text-on-surface-variant font-medium">
+          Showing{" "}
+          <span className="text-on-surface font-bold">
+            {pagination.totalElements === 0
+              ? 0
+              : pagination.page * 20 + 1}
+            -
+            {Math.min(
+              (pagination.page + 1) * 20,
+              pagination.totalElements,
+            )}
+          </span>{" "}
+          of{" "}
+          <span className="text-on-surface font-bold">
+            {pagination.totalElements}
+          </span>{" "}
+          reports
+        </div>
       </div>
 
       {/* ── STATUS TABS ── */}
