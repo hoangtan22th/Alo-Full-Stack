@@ -31,4 +31,8 @@ public interface UserProfileRepository extends JpaRepository<UserProfile, String
     boolean existsByPhoneNumber(String phoneNumber);
 
     boolean existsByPhoneNumberAndIdNot(String phoneNumber, String id);
+
+    long countByCreatedAtAfter(java.time.LocalDateTime dateTime);
+
+    long countByStatus(UserProfile.UserStatus status);
 }
