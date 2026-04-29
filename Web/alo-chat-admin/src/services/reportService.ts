@@ -18,6 +18,7 @@ export interface ReportItem {
   id: string;
   reporter?: ReportUser;
   targetId: string;
+  targetName: string | null;
   targetUser?: ReportUser;
   targetType: "USER" | "GROUP";
   reason: string;
@@ -205,6 +206,16 @@ export const reportService = {
         error,
       );
       return [];
+    }
+  },
+
+  getStatistics: async (): Promise<any> => {
+    try {
+      const response = await axiosClient.get(`${API_URL}/statistics`);
+      return response.data?.data;
+    } catch (error) {
+      console.error("Error fetching report statistics:", error);
+      throw error;
     }
   },
 };

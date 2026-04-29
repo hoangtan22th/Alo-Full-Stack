@@ -114,6 +114,11 @@ export default function ReportModal({
       return;
     }
 
+    if (reason === 'OTHER' && !description.trim()) {
+      toast.error('Vui lòng nhập mô tả chi tiết cho lý do "Khác"');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
@@ -137,7 +142,7 @@ export default function ReportModal({
         targetId,
         targetType,
         reason,
-        description: isCustomizeMode ? description : '',
+        description: (isCustomizeMode || reason === 'OTHER') ? description : '',
         imageUrls: finalImageUrls,
         messageIds: targetType === 'USER' ? selectedMessageIds.filter(isMongoId) : [],
       };
@@ -213,15 +218,23 @@ export default function ReportModal({
             </div>
           )}
 
-          {/* --- EXPANDABLE SECTION: description + images (only in customize mode) --- */}
-          {isCustomizeMode && (
+          {/* --- EXPANDABLE SECTION: description + images (Customize mode OR 'OTHER' reason) --- */}
+          {(isCustomizeMode || reason === 'OTHER') && (
             <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-gray-700">Mô tả thêm (tùy chọn)</label>
+                <div className="flex justify-between items-center">
+                  <label className="text-sm font-semibold text-gray-700">
+                    Mô tả chi tiết {reason === 'OTHER' && <span className="text-red-500">*</span>}
+                  </label>
+                  <span className={`text-[10px] font-bold ${description.length > 450 ? 'text-red-500' : 'text-gray-400'}`}>
+                    {description.length}/500
+                  </span>
+                </div>
                 <Textarea
-                  placeholder="Cung cấp thêm ngữ cảnh cho quản trị viên..."
+                  placeholder={reason === 'OTHER' ? "Vui lòng mô tả chi tiết lý do bạn báo cáo..." : "Cung cấp thêm ngữ cảnh cho quản trị viên (tùy chọn)..."}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
+                  maxLength={500}
                   className="resize-none h-20"
                 />
               </div>

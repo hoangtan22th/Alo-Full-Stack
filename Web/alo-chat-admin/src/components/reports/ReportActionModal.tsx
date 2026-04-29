@@ -254,32 +254,46 @@ export function ReportActionModal({
           {/* ════════════════ USER EVIDENCE ════════════════ */}
           {isUser && (
             <>
-              {/* Profile Card */}
-              <div className="flex items-center gap-4 bg-surface-container-low p-4 rounded-xl border border-outline-variant/20">
-                <img
-                  src={report.targetUser?.avatar || "/placeholder.png"}
-                  alt="Avatar"
-                  className="w-14 h-14 rounded-full object-cover border-2 border-outline-variant/30 shrink-0"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src =
-                      `https://ui-avatars.com/api/?name=${encodeURIComponent(report.targetUser?.fullName || "User")}&background=random`;
-                  }}
-                />
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">
-                    Mục tiêu bị tố cáo
-                  </p>
-                  <h5 className="text-base font-bold text-on-surface mt-0.5">
-                    {report.targetUser?.fullName || "Unknown User"}
-                  </h5>
-                  <p className="text-xs font-mono text-on-surface-variant mt-0.5">
-                    ID: {report.targetId}
-                  </p>
-                  {!report.targetUser?.fullName && (
-                    <p className="text-[10px] text-amber-500 mt-1">
-                      ⚠️ Tên chưa tải được — kiểm tra FeignClient token relay trong report-service
-                    </p>
-                  )}
+              {/* Profile Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Target Profile */}
+                <div className="flex items-center gap-3 bg-red-50/30 dark:bg-red-900/10 p-3 rounded-2xl border border-red-200/30">
+                  <img
+                    src={report.targetUser?.avatar || "/placeholder.png"}
+                    alt="Target Avatar"
+                    className="w-12 h-12 rounded-full object-cover border-2 border-red-200 shrink-0 shadow-sm"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src =
+                        `https://ui-avatars.com/api/?name=${encodeURIComponent(report.targetUser?.fullName || "T")}&background=random`;
+                    }}
+                  />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-red-600/70">Mục tiêu bị tố cáo</p>
+                    <h5 className="text-sm font-bold text-on-surface truncate">
+                      {report.targetUser?.fullName || report.targetName || "Unknown User/Group"}
+                    </h5>
+                    <p className="text-[9px] font-mono text-on-surface-variant truncate">ID: {report.targetId}</p>
+                  </div>
+                </div>
+
+                {/* Reporter Profile */}
+                <div className="flex items-center gap-3 bg-surface-container-low p-3 rounded-2xl border border-outline-variant/20">
+                  <img
+                    src={report.reporter?.avatar || "/placeholder.png"}
+                    alt="Reporter Avatar"
+                    className="w-12 h-12 rounded-full object-cover border-2 border-outline-variant/30 shrink-0 shadow-sm"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src =
+                        `https://ui-avatars.com/api/?name=${encodeURIComponent(report.reporter?.fullName || "R")}&background=random`;
+                    }}
+                  />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/70">Người gửi báo cáo</p>
+                    <h5 className="text-sm font-bold text-on-surface truncate">
+                      {report.reporter?.fullName || "Ẩn danh"}
+                    </h5>
+                    <p className="text-[9px] font-mono text-on-surface-variant truncate">ID: {report.reporter?.id}</p>
+                  </div>
                 </div>
               </div>
 
@@ -289,7 +303,7 @@ export function ReportActionModal({
                   <p className="text-xs font-semibold text-on-surface-variant mb-1.5">
                     Mô tả từ người tố cáo:
                   </p>
-                  <blockquote className="text-sm bg-surface-container-low p-3 rounded-xl text-on-surface italic border-l-4 border-primary/40">
+                  <blockquote className="text-sm bg-surface-container-low p-4 rounded-2xl text-on-surface italic border-l-4 border-primary/40 break-all whitespace-pre-wrap max-h-[180px] overflow-y-auto overflow-x-hidden shadow-inner w-full">
                     "{report.description}"
                   </blockquote>
                 </div>
@@ -374,7 +388,7 @@ export function ReportActionModal({
                                 </a>
                               ) : (
                                 <div
-                                  className={`px-3.5 py-2.5 rounded-2xl text-sm shadow-sm leading-relaxed ${msg.isTarget
+                                  className={`px-3.5 py-2.5 rounded-2xl text-sm shadow-sm leading-relaxed break-all whitespace-pre-wrap ${msg.isTarget
                                     ? "bg-white dark:bg-[#2c2c2e] text-black dark:text-white rounded-tl-none border border-red-200 dark:border-red-900/40"
                                     : "bg-[#007aff] text-white rounded-tr-none"
                                     }`}
@@ -442,7 +456,7 @@ export function ReportActionModal({
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">Nhóm bị tố cáo</p>
                   <h5 className="text-base font-bold text-on-surface mt-0.5">
-                    {loadingGroup ? "Đang tải thông tin nhóm..." : groupInfo?.name || "Tên nhóm không rõ"}
+                    {report.targetName || groupInfo?.name || (loadingGroup ? "Đang tải..." : "Tên nhóm không rõ")}
                   </h5>
                   <p className="text-xs font-mono text-on-surface-variant mt-0.5">ID: {report.targetId}</p>
                 </div>
@@ -462,8 +476,8 @@ export function ReportActionModal({
                     <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2 border-b border-outline-variant/20 pb-1">
                       Mô tả chi tiết từ người tố cáo:
                     </p>
-                    <div className="bg-surface-container p-4 rounded-xl border-l-4 border-amber-500 shadow-sm">
-                      <p className="text-sm text-on-surface leading-relaxed whitespace-pre-wrap">
+                    <div className="bg-surface-container p-4 rounded-xl border-l-4 border-amber-500 shadow-sm max-h-[180px] overflow-y-auto overflow-x-hidden w-full">
+                      <p className="text-sm text-on-surface leading-relaxed whitespace-pre-wrap break-all">
                         {report.description}
                       </p>
                     </div>
@@ -687,7 +701,7 @@ export function ReportActionModal({
                             </a>
                           ) : (
                             <div
-                              className={`px-4 py-2.5 rounded-2xl text-sm shadow-sm leading-relaxed ${msg.isTarget
+                              className={`px-4 py-2.5 rounded-2xl text-sm shadow-sm leading-relaxed break-all whitespace-pre-wrap ${msg.isTarget
                                 ? "bg-white dark:bg-[#2c2c2e] text-on-surface rounded-tl-none border border-outline-variant/10"
                                 : "bg-[#007aff] text-white rounded-tr-none"
                                 } ${msg.isReported ? "font-medium" : ""}`}
