@@ -11,7 +11,7 @@ export async function startReportWorker(channel: Channel) {
   try {
     await channel.assertExchange(ADMIN_EXCHANGE, 'topic', { durable: true });
     await channel.assertQueue(GROUP_REPORT_QUEUE, { durable: true });
-    
+
     // Bind for both warned and banned events
     await channel.bindQueue(GROUP_REPORT_QUEUE, ADMIN_EXCHANGE, 'user.warned');
     await channel.bindQueue(GROUP_REPORT_QUEUE, ADMIN_EXCHANGE, 'user.banned');
@@ -26,7 +26,7 @@ export async function startReportWorker(channel: Channel) {
           const routingKey = msg.fields.routingKey;
           const payload = JSON.parse(msg.content.toString());
           console.log(`[Group ReportWorker] Received event "${routingKey}" with payload:`, JSON.stringify(payload, null, 2));
-          
+
           const { targetId, targetType, targetName } = payload;
 
           if (targetType === 'GROUP') {
@@ -35,7 +35,7 @@ export async function startReportWorker(channel: Channel) {
               if (routingKey === 'user.warned') {
                 group.warningCount = (group.warningCount || 0) + 1;
                 console.log(`[Group ReportWorker] Group ${targetId} warning count: ${group.warningCount}`);
-                
+
                 if (group.warningCount >= 3) {
                   console.log(`[Group ReportWorker] Group ${targetId} reached 3 strikes. Banning...`);
                   group.isBanned = true;
@@ -49,7 +49,7 @@ export async function startReportWorker(channel: Channel) {
               const leader = group.members.find(m => m.role === 'LEADER');
               const leaderId = payloadLeaderId || leader?.userId?.toString();
               const finalTargetName = targetName || group.name || "Nhóm";
-              
+
               const reasonMap: Record<string, string> = {
                 'SPAM_HARRASSMENT': 'Spam/Quấy rối',
                 'CHILD_ABUSE': 'Bảo vệ trẻ em',
@@ -62,70 +62,55 @@ export async function startReportWorker(channel: Channel) {
               const MESSAGE_SERVICE_URL = process.env.MESSAGE_SERVICE_URL || 'http://localhost:8083/api/v1/messages';
 
               if (group.isBanned) {
-                console.log(`[Group ReportWorker] Group ${targetId} is banned. Disbanding and notifying all members...`);
-                console.log(`[Group ReportWorker] Disbanding group. LeaderId: ${leaderId || 'NOT FOUND'}, TargetName: ${finalTargetName}`);
-
-                // 0. Send a permanent System DM to the leader before deleting the group
+                // 1. Notify the LEADER via DM about the ban reason
                 if (leaderId) {
                   try {
-                    console.log(`[Group ReportWorker] Attempting to send disband DM to leader ${leaderId} for group "${finalTargetName}" at ${MESSAGE_SERVICE_URL}`);
-                    
                     const isStrikeBan = group.warningCount >= 3;
                     const notificationContent = isStrikeBan
                       ? `Nhóm "${finalTargetName}" của bạn đã bị giải tán do nhận đủ 3 cảnh cáo hệ thống. Lý do: ${readableReason}.`
                       : `Nhóm "${finalTargetName}" của bạn đã bị giải tán/khóa do vi phạm tiêu chuẩn cộng đồng. Lý do: ${readableReason}.`;
 
-                    const response = await axios.post(MESSAGE_SERVICE_URL, {
+                    await axios.post(MESSAGE_SERVICE_URL, {
                       targetUserId: leaderId,
-                      senderName: 'Hệ thống Alo Chat ✅',
+                      senderName: 'Hệ thống Alo Chat',
                       content: notificationContent,
                       type: 'text'
                     }, {
                       headers: { 'X-User-Id': '00000000-0000-0000-0000-000000000000' }
                     });
-                    
-                    console.log(`[Group ReportWorker] SUCCESS: Sent permanent disband notification to leader ${leaderId}. MessageId: ${response.data?._id || response.data?.data?._id || 'unknown'}`);
+                    console.log(`[Group ReportWorker] Sent ban DM to leader ${leaderId}`);
                   } catch (err: any) {
-                    console.error(`[Group ReportWorker] ERROR: Failed to send permanent notification to leader:`, err.message);
+                    console.error(`[Group ReportWorker] Failed to send ban DM to leader:`, err.message);
                   }
                 }
 
-                // 1. Notify all members (EXCEPT leader for now) to remove the group from UI
-                if (group.members && group.members.length > 0) {
-                  for (const member of group.members) {
-                    const memberId = member.userId?.toString();
-                    if (memberId && memberId !== leaderId) {
-                      try {
-                        await rabbitMQProducer.publishConversationRemoved(targetId, memberId, finalTargetName, 'delete');
-                        console.log(`[Group ReportWorker] Notified removal to member ${memberId}`);
-                      } catch (err) {
-                        console.error(`[Group ReportWorker] Error notifying member ${memberId}:`, err);
-                      }
-                    }
-                  }
+                // 2. Send System Announcement to the Group Conversation
+                try {
+                  await axios.post(MESSAGE_SERVICE_URL, {
+                    conversationId: targetId,
+                    content: "⚠️ Nhóm này đã bị hệ thống giải tán do vi phạm Tiêu chuẩn cộng đồng.",
+                    type: 'system'
+                  }, {
+                    headers: { 'X-User-Id': '00000000-0000-0000-0000-000000000000' }
+                  });
+                  console.log(`[Group ReportWorker] Sent announcement to group ${targetId}`);
+                } catch (err: any) {
+                  console.error(`[Group ReportWorker] Failed to send announcement:`, err.message);
                 }
 
-                // 2. Notify the LEADER LAST to remove the group from UI
-                if (leaderId) {
-                  try {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    await rabbitMQProducer.publishConversationRemoved(targetId, leaderId, finalTargetName, 'delete');
-                    console.log(`[Group ReportWorker] Notified removal to leader ${leaderId} (LAST)`);
-                  } catch (err) {
-                    console.error(`[Group ReportWorker] Error notifying leader ${leaderId}:`, err);
-                  }
-                }
-                
-                // 3. Finally delete the group
-                await Conversation.findByIdAndDelete(targetId);
-                console.log(`[Group ReportWorker] Group ${targetId} permanently deleted.`);
+                // 3. Emit real-time GROUP_BANNED event
+                await rabbitMQProducer.publishGroupBanned(targetId);
+
+                // 4. Save group as BANNED (Read-only Tombstone)
+                await group.save();
+                console.log(`[Group ReportWorker] Group ${targetId} marked as BANNED.`);
               } else {
                 // NOT BANNED (1st or 2nd warning)
                 if (leaderId && routingKey === 'user.warned') {
                   try {
                     await axios.post(MESSAGE_SERVICE_URL, {
                       targetUserId: leaderId,
-                      senderName: 'Hệ thống Alo Chat ✅',
+                      senderName: 'Hệ thống Alo Chat',
                       content: `Nhóm "${finalTargetName}" của bạn vừa nhận 1 cảnh cáo từ hệ thống. Lý do: ${readableReason}. Lưu ý: Nếu tiếp tục vi phạm, nhóm sẽ bị giải tán.`,
                       type: 'text'
                     }, {
@@ -136,7 +121,7 @@ export async function startReportWorker(channel: Channel) {
                     console.error(`[Group ReportWorker] Failed to send warning notification:`, err.message);
                   }
                 }
-                
+
                 await group.save();
                 rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
               }

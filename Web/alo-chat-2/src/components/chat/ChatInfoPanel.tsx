@@ -108,6 +108,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const isGroup = conversationInfo?.isGroup;
+  const isBanned = conversationInfo?.isBanned;
 
   // Lấy role của user hiện tại trong nhóm
   const currentUserRole = useMemo(() => {
@@ -129,13 +130,13 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   // Quyền hạn giống mobile
   const permissions = conversationInfo?.permissions;
   const canEdit =
-    isGroup && (isManager || permissions?.editGroupInfo === "EVERYONE");
+    isGroup && !isBanned && (isManager || permissions?.editGroupInfo === "EVERYONE");
   const canCreatePoll =
-    isGroup && (isManager || permissions?.createPolls === "EVERYONE");
+    isGroup && !isBanned && (isManager || permissions?.createPolls === "EVERYONE");
   const canCreateNote =
-    isGroup && (isManager || permissions?.createNotes === "EVERYONE");
+    isGroup && !isBanned && (isManager || permissions?.createNotes === "EVERYONE");
   const canCreateReminder =
-    isGroup && (isManager || permissions?.createReminders === "EVERYONE");
+    isGroup && !isBanned && (isManager || permissions?.createReminders === "EVERYONE");
 
   const handleUpdateName = async () => {
     if (!tempName.trim() || tempName === conversationInfo?.displayName) {
@@ -331,7 +332,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                 <ActionButton
                   icon={<UserGroupIcon />}
                   label="Thành viên"
-                  onClick={() => setShowMemberManagementModal(true)}
+                  onClick={!isBanned ? () => setShowMemberManagementModal(true) : undefined}
                 />
               ) : (
                 <>
@@ -705,17 +706,17 @@ const ActionButton: React.FC<{
   onClick?: () => void;
 }> = ({ icon, label, onClick }) => (
   <div
-    className="flex flex-col items-center gap-1.5 cursor-pointer group"
+    className={`flex flex-col items-center gap-1.5 transition-all ${onClick ? "cursor-pointer group active:scale-95" : "cursor-not-allowed opacity-40"}`}
     onClick={onClick}
   >
-    <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition shadow-sm ring-1 ring-gray-100">
+    <div className={`w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 transition shadow-sm ring-1 ring-gray-100 ${onClick ? "group-hover:bg-blue-50 group-hover:text-blue-600" : ""}`}>
       {React.isValidElement(icon)
         ? React.cloneElement(icon as React.ReactElement<any>, {
           className: "w-5 h-5",
         })
         : icon}
     </div>
-    <span className="text-[10px] font-bold text-gray-400 group-hover:text-gray-600">
+    <span className={`text-[10px] font-bold ${onClick ? "text-gray-400 group-hover:text-gray-600" : "text-gray-300"}`}>
       {label}
     </span>
   </div>

@@ -69,7 +69,7 @@ export function startReportWorker(channel: Channel) {
         if (routingKey === 'report.resolved') {
           if (action === 'WARN' || action === 'BAN') {
             const { leaderId: payloadLeaderId } = payload;
-            
+
             // SKIP GROUP MESSAGES - Now handled by group-service reportWorker for better strike/ban coordination
             if (targetType === 'GROUP') {
               console.log(`[ReportWorker] Skipping group ${action} message - will be handled by group-service`);
@@ -132,7 +132,7 @@ export function startReportWorker(channel: Channel) {
             const createdMessage = await messageService.createMessage({
               conversationId,
               senderId: SYSTEM_USER_ID,
-              senderName: 'Hệ thống Alo Chat ✅',
+              senderName: 'Hệ thống Alo Chat',
               type: 'text',
               content,
               metadata: { isSystemGenerated: true, reportAction: action }
