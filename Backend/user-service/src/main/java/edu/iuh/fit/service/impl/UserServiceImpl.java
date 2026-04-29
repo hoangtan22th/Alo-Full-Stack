@@ -3,6 +3,7 @@ package edu.iuh.fit.service.impl;
 import edu.iuh.fit.common_service.exception.DuplicateResourceException;
 import edu.iuh.fit.dto.request.UserUpdateRequest;
 import edu.iuh.fit.dto.response.UserDto;
+import edu.iuh.fit.dto.response.UserQuickStatsResponse;
 import edu.iuh.fit.entity.UserProfile;
 import edu.iuh.fit.repository.UserProfileRepository;
 import edu.iuh.fit.service.RabbitMQPublisher;
@@ -15,6 +16,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -156,5 +159,23 @@ public class UserServiceImpl implements UserService {
         return userProfileRepository.findAllById(ids).stream()
                 .map(UserDto::fromEntity)
                 .toList();
+    }
+
+    @Override
+    public UserQuickStatsResponse getQuickStats() {
+        long totalUsers = userProfileRepository.count();
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        long newToday = userProfileRepository.countByCreatedAtAfter(startOfToday);
+        long bannedUsers = userProfileRepository.countByStatus(UserProfile.UserStatus.BANNED);
+
+        // Mock onlineNow between 10 and 50
+        long onlineNow = 10 + (long) (Math.random() * 41);
+
+        return UserQuickStatsResponse.builder()
+                .totalUsers(totalUsers)
+                .newToday(newToday)
+                .onlineNow(onlineNow)
+                .bannedUsers(bannedUsers)
+                .build();
     }
 }

@@ -4,6 +4,7 @@ import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import edu.iuh.fit.common_service.dto.response.PageResponse;
 import edu.iuh.fit.dto.request.UserUpdateRequest;
 import edu.iuh.fit.dto.response.UserDto;
+import edu.iuh.fit.dto.response.UserQuickStatsResponse;
 import edu.iuh.fit.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -68,5 +69,10 @@ public class AdminUserController {
     public ResponseEntity<ApiResponse<Void>> unbanUser(@PathVariable String id) {
         userService.unbanUser(id);
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @GetMapping("/quick-stats")
+    public ResponseEntity<ApiResponse<UserQuickStatsResponse>> getQuickStats() {
+        return ResponseEntity.ok(ApiResponse.success(userService.getQuickStats()));
     }
 }

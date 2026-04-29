@@ -13,6 +13,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { UserRow } from "@/components/users/UserRow";
+import { UserQuickStats } from "@/components/users/UserQuickStats";
 import { UserDetailModal } from "@/components/users/UserDetailModal";
 import { UserEditModal } from "@/components/users/UserEditModal";
 import { Pagination } from "@/components/ui/Pagination";
@@ -97,7 +98,7 @@ export default function UserManagementPage() {
             User Management
           </h2>
           <p className="text-on-surface-variant mt-1 font-medium text-sm">
-            Manage and monitor all active users across the platform.
+            Monitor user growth, activity, and manage community safety.
           </p>
         </div>
         <div className="flex gap-3">
@@ -114,6 +115,8 @@ export default function UserManagementPage() {
           </Button>
         </div>
       </div>
+
+      <UserQuickStats />
 
       <div className="bg-surface-container-low rounded-xl p-4 mb-6 flex flex-wrap gap-4 items-center border border-outline-variant/15">
         <div className="text-xs font-bold text-on-surface mr-2 tracking-wide uppercase">

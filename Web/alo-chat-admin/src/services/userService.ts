@@ -78,4 +78,19 @@ export const userService = {
       throw error;
     }
   },
+
+  getQuickStats: async (): Promise<{
+    totalUsers: number;
+    newToday: number;
+    onlineNow: number;
+    bannedUsers: number;
+  }> => {
+    try {
+      const response = await axiosClient.get(`${API_URL}/quick-stats`);
+      return response.data?.data || { totalUsers: 0, newToday: 0, onlineNow: 0, bannedUsers: 0 };
+    } catch (error) {
+      console.error("Error fetching user quick stats:", error);
+      return { totalUsers: 0, newToday: 0, onlineNow: 0, bannedUsers: 0 };
+    }
+  },
 };
