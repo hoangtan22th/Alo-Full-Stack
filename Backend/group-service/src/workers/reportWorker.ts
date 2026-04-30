@@ -72,7 +72,7 @@ export async function startReportWorker(channel: Channel) {
 
                     await axios.post(MESSAGE_SERVICE_URL, {
                       targetUserId: leaderId,
-                      senderName: 'Hệ thống Alo Chat',
+                      senderName: 'Alo Chat System',
                       content: notificationContent,
                       type: 'text'
                     }, {
@@ -110,7 +110,7 @@ export async function startReportWorker(channel: Channel) {
                   try {
                     await axios.post(MESSAGE_SERVICE_URL, {
                       targetUserId: leaderId,
-                      senderName: 'Hệ thống Alo Chat',
+                      senderName: 'Alo Chat System',
                       content: `Nhóm "${finalTargetName}" của bạn vừa nhận 1 cảnh cáo từ hệ thống. Lý do: ${readableReason}. Lưu ý: Nếu tiếp tục vi phạm, nhóm sẽ bị giải tán.`,
                       type: 'text'
                     }, {

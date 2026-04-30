@@ -174,7 +174,7 @@ export const createGroup = async (
     const isCopy = req.body.isCopy === true || req.body.isCopy === "true";
     const authHeader = req.headers.authorization;
     console.log(`[CreateGroup] Check danh sách userIds truyền vào:`, userIds, (fromPoll || isCopy) ? `(${fromPoll ? "fromPoll" : "isCopy"} - skip friend check)` : "");
-    
+
     if (!fromPoll && !isCopy) {
       // Bổ sung truyền header Authorization JWT qua Request Fetch nội bộ
       const friendIds = await getFriendIds(creatorId, authHeader);
@@ -1562,7 +1562,7 @@ export const toggleBanGroupAdmin = async (
                 },
                 body: JSON.stringify({
                   targetUserId: leaderId,
-                  senderName: "Hệ thống Alo Chat",
+                  senderName: "Alo Chat System",
                   content: `Nhóm "${group.name}" của bạn đã bị khóa bởi quản trị viên. Lý do: ${reason || "Vi phạm chính sách hệ thống"}.`,
                   type: "text",
                 }),
@@ -1602,7 +1602,7 @@ export const toggleBanGroupAdmin = async (
                 },
                 body: JSON.stringify({
                   targetUserId: leaderId,
-                  senderName: "Hệ thống Alo Chat",
+                  senderName: "Alo Chat System",
                   content: `Nhóm "${group.name}" của bạn đã được mở khóa bởi quản trị viên. Chúc bạn có những giây phút trò chuyện vui vẻ.`,
                   type: "text",
                 }),

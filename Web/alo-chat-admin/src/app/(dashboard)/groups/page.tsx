@@ -137,7 +137,7 @@ export default function GroupManagementPage() {
           </div>
           <div className="mt-2 text-sm text-on-surface-variant flex items-center">
             {stats?.createdTodayTrend !== undefined &&
-            stats.createdTodayTrend > 0 ? (
+              stats.createdTodayTrend > 0 ? (
               <ArrowTrendingUpIcon className="w-4 h-4 text-emerald-600 mr-1" />
             ) : stats?.createdTodayTrend !== undefined &&
               stats.createdTodayTrend < 0 ? (
@@ -146,15 +146,14 @@ export default function GroupManagementPage() {
               <ArrowRightIcon className="w-4 h-4 text-[#4b525f] mr-1" />
             )}
             <span
-              className={`font-semibold ${
-                stats?.createdTodayTrend !== undefined &&
-                stats.createdTodayTrend > 0
+              className={`font-semibold ${stats?.createdTodayTrend !== undefined &&
+                  stats.createdTodayTrend > 0
                   ? "text-emerald-600"
                   : stats?.createdTodayTrend !== undefined &&
-                      stats.createdTodayTrend < 0
+                    stats.createdTodayTrend < 0
                     ? "text-error"
                     : "text-[#4b525f]"
-              }`}
+                }`}
             >
               {stats?.createdTodayTrend !== undefined
                 ? `${stats.createdTodayTrend > 0 ? "+" : ""}${stats.createdTodayTrend}%`
@@ -205,11 +204,10 @@ export default function GroupManagementPage() {
                 setActiveStatus(status);
                 setCurrentPage(0);
               }}
-              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
-                activeStatus === status
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeStatus === status
                   ? "bg-primary text-on-primary shadow-sm"
                   : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest"
-              }`}
+                }`}
             >
               {status}
             </button>
@@ -256,16 +254,7 @@ export default function GroupManagementPage() {
 
       {/* Data Table Container */}
       <div className="bg-surface-container-lowest rounded-xl overflow-hidden flex flex-col shadow-minimal border-none">
-        <div className="p-6 pb-4 flex justify-between items-center bg-surface-container-lowest">
-          <h2 className="text-lg font-bold text-on-surface">Active Groups</h2>
-          <Button
-            variant="secondary"
-            className="bg-surface-container-highest hover:bg-surface-variant text-on-surface rounded-lg text-sm font-semibold transition-colors"
-          >
-            <FunnelIcon className="w-4 h-4 mr-2" />
-            Filter
-          </Button>
-        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -346,11 +335,10 @@ export default function GroupManagementPage() {
                       </td>
                       <td className="py-4 px-6">
                         <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                            group.isBanned
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${group.isBanned
                               ? "bg-error-container/30 text-error"
                               : "bg-tertiary-container text-on-tertiary-container"
-                          }`}
+                            }`}
                         >
                           {group.isBanned ? "Banned" : "Active"}
                         </span>
@@ -360,11 +348,10 @@ export default function GroupManagementPage() {
                           variant="ghost"
                           size="icon"
                           title={group.isBanned ? "Unban Group" : "Ban Group"}
-                          className={`h-8 w-8 mx-0.5 ${
-                            group.isBanned
+                          className={`h-8 w-8 mx-0.5 ${group.isBanned
                               ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
                               : "text-error hover:text-error hover:bg-error-container/50"
-                          }`}
+                            }`}
                           onClick={() =>
                             handleBanToggle(group._id, group.isBanned)
                           }

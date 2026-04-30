@@ -75,4 +75,9 @@ public class AdminUserController {
     public ResponseEntity<ApiResponse<UserQuickStatsResponse>> getQuickStats() {
         return ResponseEntity.ok(ApiResponse.success(userService.getQuickStats()));
     }
+
+    @GetMapping("/internal/ids")
+    public ResponseEntity<ApiResponse<java.util.List<String>>> getAllUserIds() {
+        return ResponseEntity.ok(ApiResponse.success(userService.getAllUserIds()));
+    }
 }

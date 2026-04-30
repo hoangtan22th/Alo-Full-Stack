@@ -178,4 +178,11 @@ public class UserServiceImpl implements UserService {
                 .bannedUsers(bannedUsers)
                 .build();
     }
+
+    @Override
+    public List<String> getAllUserIds() {
+        return userProfileRepository.findAll().stream()
+                .map(UserProfile::getId)
+                .collect(Collectors.toList());
+    }
 }

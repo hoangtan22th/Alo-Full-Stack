@@ -1,0 +1,8 @@
+// src/constants/bots.ts
+export const SYSTEM_BOTS = {
+  SYSTEM: "00000000-0000-0000-0000-000000000000",
+  SECURITY: "11111111-1111-1111-1111-111111111111",
+  EVENT: "22222222-2222-2222-2222-222222222222",
+} as const;
+
+export type BotType = keyof typeof SYSTEM_BOTS;
