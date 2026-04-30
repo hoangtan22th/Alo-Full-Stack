@@ -15,6 +15,11 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
+// Health check endpoint
+app.get("/api/v1/realtime/health", (req, res) => {
+  res.status(200).json({ status: "UP", service: "realtime-service", timestamp: new Date() });
+});
+
 // 1. Default Socket Server Setup
 const io = new Server(server, {
   cors: {

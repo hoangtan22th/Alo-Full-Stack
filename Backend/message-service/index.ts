@@ -8,6 +8,7 @@ import eurekaClient from './src/config/eureka-client';
 
 // Import routes
 import messageRouter from './src/routes/message.routes';
+import broadcastRouter from './src/routes/broadcast.route';
 
 // Import middleware
 import { errorHandler, notFoundHandler } from './src/middleware/errorHandler';
@@ -45,6 +46,7 @@ async function startApplication(): Promise<void> {
     });
 
     app.use('/api/v1/messages', messageRouter);
+    app.use('/api/v1/admin/messages/broadcasts', broadcastRouter);
 
     // 5. Error handling middleware
     app.use(notFoundHandler);

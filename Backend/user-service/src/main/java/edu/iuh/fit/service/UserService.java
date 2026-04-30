@@ -32,4 +32,6 @@ public interface UserService {
             throws java.io.IOException;
 
     UserQuickStatsResponse getQuickStats();
+
+    List<String> getAllUserIds();
 }

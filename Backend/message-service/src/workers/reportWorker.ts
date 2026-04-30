@@ -45,7 +45,7 @@ export function startReportWorker(channel: Channel) {
             const createdMessage = await messageService.createMessage({
               conversationId,
               senderId: SYSTEM_USER_ID,
-              senderName: 'Hệ thống Alo Chat',
+              senderName: 'Alo Chat System',
               type: 'text',
               content,
               metadata: { isSystemGenerated: true, reportEvent: 'CREATED' }
@@ -132,7 +132,7 @@ export function startReportWorker(channel: Channel) {
             const createdMessage = await messageService.createMessage({
               conversationId,
               senderId: SYSTEM_USER_ID,
-              senderName: 'Hệ thống Alo Chat',
+              senderName: 'Alo Chat System',
               type: 'text',
               content,
               metadata: { isSystemGenerated: true, reportAction: action }

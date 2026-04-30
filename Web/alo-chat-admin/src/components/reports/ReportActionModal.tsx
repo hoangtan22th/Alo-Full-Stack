@@ -427,7 +427,7 @@ export function ReportActionModal({
           {/* ════════════════ GROUP EVIDENCE ════════════════ */}
           {isGroup && (
             <>
-              {/* Red Warning Banner */}
+              {/* Red Warning Banner
               <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 rounded-xl">
                 <span className="text-2xl shrink-0">⚠️</span>
                 <div>
@@ -438,7 +438,7 @@ export function ReportActionModal({
                     khỏi hệ thống. Hành động này không thể hoàn tác!
                   </p>
                 </div>
-              </div>
+              </div> */}
 
               {/* Group Info Card */}
               <div className="flex items-center gap-4 bg-surface-container-low p-4 rounded-xl border border-outline-variant/20">
