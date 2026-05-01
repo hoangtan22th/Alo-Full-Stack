@@ -54,6 +54,10 @@ public class UserProfile {
     @Column(name = "last_active_at")
     private LocalDateTime lastActiveAt;
 
+    @Column(name = "is_online")
+    @Builder.Default
+    private Boolean isOnline = false;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "account_status")
     @Builder.Default

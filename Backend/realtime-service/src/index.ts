@@ -9,16 +9,22 @@ import { initRabbitMQ } from "./config/rabbitmq";
 import { socketAuthMiddleware } from "./middlewares/auth";
 import { initSocketConnection } from "./socket/connection";
 import { eurekaClient } from "./config/eureka";
+import presenceRoute from "./routes/presence.route";
 
 dotenv.config();
 
 const app = express();
+app.use(express.json());
+
 const server = http.createServer(app);
 
 // Health check endpoint
 app.get("/api/v1/realtime/health", (req, res) => {
   res.status(200).json({ status: "UP", service: "realtime-service", timestamp: new Date() });
 });
+
+// REST Routes
+app.use("/api/v1/realtime/presence", presenceRoute);
 
 // 1. Default Socket Server Setup
 const io = new Server(server, {

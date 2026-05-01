@@ -15,6 +15,11 @@ export async function initRabbitMQ(io: Server) {
 
   const queue = RABBITMQ_QUEUES.REALTIME_EVENTS || "realtime_events";
   await amqpChannel.assertQueue(queue, { durable: true });
+
+  // NEW: Setup presence exchange
+  const presenceExchange = "presence_events";
+  await amqpChannel.assertExchange(presenceExchange, "topic", { durable: true });
+
   console.log(`RabbitMQ waiting for messages in ${queue}.`);
 
   // NEW: Setup binding for Admin Ban Events

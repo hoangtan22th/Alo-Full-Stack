@@ -2,6 +2,7 @@ import { Server, Socket } from "socket.io";
 import axios from "axios";
 import { presenceClient } from "../config/redis";
 import { SOCKET_EVENTS } from "../constants/events";
+import { amqpChannel } from "../config/rabbitmq";
 
 // Fetch groups from group-service via API Gateway
 async function fetchUserGroups(
@@ -70,6 +71,15 @@ export function initSocketConnection(io: Server) {
       userId,
       status: "online",
     });
+
+    // 3.1 Sync with User Service via RabbitMQ
+    if (amqpChannel) {
+      amqpChannel.publish(
+        "presence_events",
+        "user.online",
+        Buffer.from(JSON.stringify({ userId, timestamp: Date.now() })),
+      );
+    }
 
     // ============================================
     // REAL-TIME INTERACTION EVENTS (< 10ms)
@@ -203,8 +213,15 @@ export function initSocketConnection(io: Server) {
     socket.on("disconnect", async () => {
       console.log(`User disconnected: ${userId}`);
 
-      // Remove presence
-      await presenceClient.hDel(`presence:users`, userId);
+      // Update presence to offline instead of deleting
+      await presenceClient.hSet(
+        `presence:users`,
+        userId,
+        JSON.stringify({
+          status: "offline",
+          last_active: Date.now(),
+        }),
+      );
 
       // Broadcast Offline status
       socket.broadcast.emit(SOCKET_EVENTS.USER_OFFLINE, {
@@ -212,6 +229,15 @@ export function initSocketConnection(io: Server) {
         status: "offline",
         last_active: Date.now(),
       });
+
+      // Sync with User Service via RabbitMQ
+      if (amqpChannel) {
+        amqpChannel.publish(
+          "presence_events",
+          "user.offline",
+          Buffer.from(JSON.stringify({ userId, timestamp: Date.now() })),
+        );
+      }
     });
   });
 }
