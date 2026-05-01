@@ -89,10 +89,24 @@ export default function ChatInfoScreen() {
   const [blockReinvite, setBlockReinvite] = useState(false);
 
   // States cho Nhóm chung
+  const { socket, onlineUsers, fetchBulkPresence } = useSocket();
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
-  const [commonGroups, setCommonGroups] = useState<any[]>([]);
+
+  const userStatus = !isGroup && otherUserId ? onlineUsers[String(otherUserId)] : null;
+  const isOnline = userStatus?.status === "online";
+
+  const getOfflineText = (lastActive?: number) => {
+    if (!lastActive) return "Chưa truy cập";
+    const diff = Math.floor((Date.now() - lastActive) / 60000);
+    if (diff < 1) return "Vừa mới truy cập";
+    if (diff < 60) return `Hoạt động ${diff} phút trước`;
+    const hours = Math.floor(diff / 60);
+    if (hours < 24) return `Hoạt động ${hours} giờ trước`;
+    return `Hoạt động ${Math.floor(hours / 24)} ngày trước`;
+  };
   const [isCommonGroupsModalVisible, setIsCommonGroupsModalVisible] = useState(false);
   const [isFetchingCommon, setIsFetchingCommon] = useState(false);
+  const [commonGroups, setCommonGroups] = useState<any[]>([]);
 
   const fetchGroupDetails = async () => {
     try {
@@ -108,10 +122,12 @@ export default function ChatInfoScreen() {
 
       if (!isGroup && groupData && groupData.members) {
         const otherMember = groupData.members.find(
-          (m: any) => m.userId !== currentUserId,
+          (m: any) => String(m.userId) !== String(currentUserId),
         );
         if (otherMember) {
           setOtherUserId(otherMember.userId);
+          // Fetch presence for this user
+          fetchBulkPresence([otherMember.userId]);
         }
       }
 
@@ -212,7 +228,7 @@ export default function ChatInfoScreen() {
     }, [id]),
   );
 
-  const { socket } = useSocket();
+
 
   useEffect(() => {
     if (!socket || !id) return;
@@ -532,7 +548,7 @@ export default function ChatInfoScreen() {
                 <CameraIcon size={16} color="#4b5563" />
               </TouchableOpacity>
             ) : (
-              !isGroup && (
+              !isGroup && isOnline && (
                 <View className="absolute bottom-1 right-2 w-[18px] h-[18px] bg-green-500 border-[3px] border-white rounded-full" />
               )
             )}
@@ -557,7 +573,9 @@ export default function ChatInfoScreen() {
           <Text className="text-[13px] text-gray-500 font-medium">
             {isGroup
               ? `${realtimeMembersCount || ""} thành viên`
-              : "Đang hoạt động"}
+              : isOnline
+                ? "Đang hoạt động"
+                : getOfflineText(userStatus?.last_active)}
           </Text>
         </View>
 

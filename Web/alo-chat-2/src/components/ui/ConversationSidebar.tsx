@@ -9,6 +9,8 @@ import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useChatStore } from "@/store/useChatStore";
 import { contactService } from "@/services/contactService";
+import { userService } from "@/services/userService";
+import { presenceService } from "@/services/presenceService";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -249,7 +251,7 @@ export default function ConversationSidebar() {
   const [menuView, setMenuView] = useState<"main" | "labels">("main");
   const [showManageLabelsModal, setShowManageLabelsModal] = useState(false);
 
-  const [onlineUsers, setOnlineUsers] = useState<Record<string, boolean>>({});
+  const { onlineUsers, setOnlineStatus, setBulkPresence } = useChatStore();
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const { typingUsers, friendIds, setFriendIds } = useChatStore();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -397,6 +399,16 @@ export default function ConversationSidebar() {
           },
           ...formattedGroups,
         ]);
+
+        // Fetch presence for all users in the list
+        const userIds = formattedGroups
+          .filter((g) => !g.isGroup && g.otherMemberUserId)
+          .map((g) => g.otherMemberUserId as string);
+        if (userIds.length > 0) {
+          presenceService.getBulkPresence(userIds).then((res) => {
+            if (res) setBulkPresence(res);
+          });
+        }
       }
     } catch (error) {
       console.error("Lỗi lấy danh sách nhóm:", error);
@@ -519,20 +531,6 @@ export default function ConversationSidebar() {
               ),
             );
           }
-        },
-      ),
-      socketService.onUserOnline((data: { userId: string }) => {
-        setOnlineUsers((prev) => ({ ...prev, [data.userId]: true }));
-      }),
-      socketService.onUserOffline((data: { userId: string }) => {
-        setOnlineUsers((prev) => ({ ...prev, [data.userId]: false }));
-      }),
-      socketService.onUserStatusResult(
-        (data: { userId: string; status: string }) => {
-          setOnlineUsers((prev) => ({
-            ...prev,
-            [data.userId]: data.status === "online",
-          }));
         },
       ),
     ];
@@ -966,7 +964,7 @@ export default function ConversationSidebar() {
                     </span>
                   )}
                   {chat.otherMemberUserId &&
-                    onlineUsers[chat.otherMemberUserId] && (
+                    onlineUsers[chat.otherMemberUserId]?.status === "online" && (
                       <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
                     )}
                   {chat.id === BOT_ID && (

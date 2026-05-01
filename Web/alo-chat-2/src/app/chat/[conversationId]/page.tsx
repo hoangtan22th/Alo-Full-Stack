@@ -5,6 +5,8 @@ import axiosClient from "@/services/api";
 import { messageService, MessageDTO } from "@/services/messageService";
 import { groupService } from "@/services/groupService";
 import { contactService } from "@/services/contactService";
+import { userService } from "@/services/userService";
+import { presenceService } from "@/services/presenceService";
 import { socketService } from "@/services/socketService";
 import { toast } from "sonner";
 import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
@@ -209,6 +211,7 @@ export default function ChatPage() {
     );
     return member?.role?.toUpperCase() || "MEMBER";
   }, [conversationInfo, myId]);
+
   // Modal tham gia nhóm có câu hỏi
   const [joinGroupModal, setJoinGroupModal] = useState<{
     groupId: string;
@@ -223,13 +226,37 @@ export default function ChatPage() {
   const typingForThisConvo = useChatStore(
     (state) => state.typingUsers[conversationId] || EMPTY_ARRAY,
   );
-  const { isReportSelectionMode, selectedMessagesForReport, toggleMessageForReport } = useChatStore(
+  const { isReportSelectionMode, selectedMessagesForReport, toggleMessageForReport, onlineUsers, setBulkPresence } = useChatStore(
     useShallow((s) => ({
       isReportSelectionMode: s.isReportSelectionMode,
       selectedMessagesForReport: s.selectedMessagesForReport,
       toggleMessageForReport: s.toggleMessageForReport,
+      onlineUsers: s.onlineUsers,
+      setBulkPresence: s.setBulkPresence,
     }))
   );
+
+  // Fetch presence when entering chat
+  useEffect(() => {
+    if (!conversationInfo?.isGroup && otherUserId) {
+      presenceService.getBulkPresence([otherUserId]).then(res => {
+        if (res) setBulkPresence(res);
+      });
+    }
+  }, [conversationInfo?.isGroup, otherUserId, setBulkPresence]);
+
+  const userStatus = !conversationInfo?.isGroup && otherUserId ? onlineUsers[String(otherUserId)] : null;
+  const isOnline = userStatus?.status === "online";
+
+  const getOfflineText = (lastActive?: number) => {
+    if (!lastActive) return "Chưa truy cập";
+    const diff = Math.floor((Date.now() - lastActive) / 60000);
+    if (diff < 1) return "Vừa mới truy cập";
+    if (diff < 60) return `Hoạt động ${diff} phút trước`;
+    const hours = Math.floor(diff / 60);
+    if (hours < 24) return `Hoạt động ${hours} giờ trước`;
+    return `Hoạt động ${Math.floor(hours / 24)} ngày trước`;
+  };
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isTypingRef = useRef(false);
 
@@ -1975,8 +2002,8 @@ export default function ChatPage() {
                         .toUpperCase()}
                     </div>
                   )}
-                  {/* Online dot — chỉ hiện với chat 1-1 */}
-                  {!conversationInfo?.isGroup && (
+                  {/* Online dot — chỉ hiện với chat 1-1 khi online */}
+                  {!conversationInfo?.isGroup && isOnline && (
                     <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" />
                   )}
                 </div>
@@ -1998,7 +2025,9 @@ export default function ChatPage() {
                   <p className="text-[12px] font-bold text-gray-400 mt-0.5">
                     {conversationInfo?.isGroup
                       ? `${conversationInfo?.members?.length ?? ""} thành viên`
-                      : "Đang hoạt động"}
+                      : isOnline
+                        ? "Đang hoạt động"
+                        : getOfflineText(userStatus?.last_active)}
                   </p>
                 </div>
               </div>

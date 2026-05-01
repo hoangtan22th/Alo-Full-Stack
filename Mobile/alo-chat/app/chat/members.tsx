@@ -131,6 +131,12 @@ export default function GroupMembersScreen() {
         const membersList = await Promise.all(memberPromises);
         setMembers(membersList);
 
+        // Fetch bulk presence for members
+        const userIds = membersList.map(m => m.id).filter(id => !!id);
+        if (userIds.length > 0) {
+          fetchBulkPresence(userIds);
+        }
+
         // Lấy danh sách thành viên bị chặn
         if (groupData.removedMembers) {
           const bannedOnes = groupData.removedMembers.filter((rm: any) => rm.isBanned);
@@ -154,7 +160,7 @@ export default function GroupMembersScreen() {
     }
   };
 
-  const { socket } = useSocket();
+  const { socket, onlineUsers, fetchBulkPresence } = useSocket();
 
   useEffect(() => {
     fetchGroupDetails();
@@ -768,6 +774,9 @@ export default function GroupMembersScreen() {
                     </TouchableOpacity>
                   )}
                 </View>
+              )}
+              {onlineUsers[String(member.id)]?.status === "online" && (
+                <View className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full z-10" />
               )}
             </View>
           )}

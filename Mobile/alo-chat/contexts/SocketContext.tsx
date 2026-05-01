@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DeviceEventEmitter, Alert } from "react-native";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "./AuthContext";
+import { presenceService } from "../services/presenceService";
 
 export type OnlineUser = {
   status: "online" | "offline";
@@ -13,12 +14,14 @@ type SocketContextType = {
   socket: Socket | null;
   isConnected: boolean;
   onlineUsers: Record<string, OnlineUser>;
+  fetchBulkPresence: (userIds: string[]) => Promise<void>;
 };
 
 const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
   onlineUsers: {},
+  fetchBulkPresence: async () => {},
 });
 
 export function useSocket() {
@@ -33,6 +36,21 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [onlineUsers, setOnlineUsers] = useState<Record<string, OnlineUser>>(
     {},
   );
+
+  const fetchBulkPresence = async (userIds: string[]) => {
+    if (!userIds || userIds.length === 0) return;
+    const result = await presenceService.getBulkPresence(userIds);
+    if (result) {
+      const formatted: Record<string, OnlineUser> = {};
+      Object.entries(result).forEach(([userId, info]) => {
+        formatted[userId] = {
+          status: info.isOnline ? "online" : "offline",
+          last_active: info.lastActiveAt,
+        };
+      });
+      setOnlineUsers((prev) => ({ ...prev, ...formatted }));
+    }
+  };
 
   useEffect(() => {
     let newSocket: Socket | null = null;
@@ -390,7 +408,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated]);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected, onlineUsers }}>
+    <SocketContext.Provider value={{ socket, isConnected, onlineUsers, fetchBulkPresence }}>
       {children}
     </SocketContext.Provider>
   );

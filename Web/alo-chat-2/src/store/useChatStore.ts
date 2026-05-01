@@ -9,6 +9,7 @@ interface Message {
 interface ChatState {
   typingUsers: Record<string, string[]>;
   friendIds: Set<string>;
+  onlineUsers: Record<string, { status: string; last_active?: number }>;
   isReportSelectionMode: boolean;
   selectedMessagesForReport: string[];
   isReportModalOpen: boolean;
@@ -27,11 +28,14 @@ interface ChatState {
 
   setTyping: (conversationId: string, userId: string, isTyping: boolean) => void;
   setFriendIds: (ids: Set<string>) => void;
+  setOnlineStatus: (userId: string, status: string, lastActive?: number) => void;
+  setBulkPresence: (presenceData: Record<string, any>) => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
   typingUsers: {},
   friendIds: new Set(),
+  onlineUsers: {},
   isReportSelectionMode: false,
   selectedMessagesForReport: [],
   isReportModalOpen: false,
@@ -144,4 +148,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
   },
   setFriendIds: (ids) => set({ friendIds: ids }),
+
+  setOnlineStatus: (userId, status, lastActive) => {
+    set((state) => ({
+      onlineUsers: {
+        ...state.onlineUsers,
+        [userId]: { status, last_active: lastActive },
+      },
+    }));
+  },
+
+  setBulkPresence: (presenceData) => {
+    const formatted: Record<string, { status: string; last_active?: number }> = {};
+    Object.entries(presenceData).forEach(([userId, info]: [string, any]) => {
+      formatted[userId] = {
+        status: info.isOnline ? "online" : "offline",
+        last_active: info.lastActiveAt,
+      };
+    });
+    set((state) => ({
+      onlineUsers: {
+        ...state.onlineUsers,
+        ...formatted,
+      },
+    }));
+  },
 }));

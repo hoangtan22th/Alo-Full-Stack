@@ -113,12 +113,20 @@ export default function ContactsScreen() {
 
       setAllFriends(parsedFriends);
       updateSections(parsedFriends);
+
+      // Fetch bulk presence for all friends
+      const userIds = parsedFriends.map(f => f.userId).filter(id => !!id);
+      if (userIds.length > 0) {
+        fetchBulkPresence(userIds);
+      }
     } catch (error) {
       console.error(error);
     } finally {
       setLoading(false);
     }
   };
+
+  const { fetchBulkPresence } = useSocket();
 
   const updateSections = (list: any[]) => {
     const groups: Record<string, any[]> = {};
@@ -300,7 +308,9 @@ export default function ContactsScreen() {
                       </Text>
                     </View>
                   )}
-                  {/* Có thể lắp thêm online status sau này nếu muốn */}
+                  {onlineUsers[phoneSearchResult.userId]?.status === "online" && (
+                    <View className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full z-10" />
+                  )}
                 </View>
 
                 <View className="ml-4 flex-1 justify-center">
@@ -401,15 +411,20 @@ function ActionItem({
 // Component Từng người liên hệ
 function ContactItem({ contact }: { contact: any }) {
   const router = useRouter();
-  const { socket, onlineUsers } = useSocket();
+  const { onlineUsers } = useSocket();
 
-  const isOnline = onlineUsers[contact.userId]?.status === "online";
+  const userStatus = onlineUsers[String(contact.userId)];
+  const isOnline = userStatus?.status === "online";
 
-  React.useEffect(() => {
-    if (socket && contact.userId && !onlineUsers[contact.userId]) {
-      socket.emit("CHECK_USER_STATUS", contact.userId);
-    }
-  }, [socket, contact.userId]);
+  const getOfflineText = (lastActive?: number) => {
+    if (!lastActive) return "Chưa truy cập";
+    const diff = Math.floor((Date.now() - lastActive) / 60000);
+    if (diff < 1) return "Vừa mới truy cập";
+    if (diff < 60) return `Hoạt động ${diff} phút trước`;
+    const hours = Math.floor(diff / 60);
+    if (hours < 24) return `Hoạt động ${hours} giờ trước`;
+    return `Hoạt động ${Math.floor(hours / 24)} ngày trước`;
+  };
 
   return (
     <TouchableOpacity
@@ -451,7 +466,7 @@ function ContactItem({ contact }: { contact: any }) {
           {contact.name}
         </Text>
         <Text className="text-[13px] text-gray-500" numberOfLines={1}>
-          {isOnline ? "Đang hoạt động" : contact.status || "Chưa truy cập"}
+          {isOnline ? "Đang hoạt động" : getOfflineText(userStatus?.last_active)}
         </Text>
       </View>
     </TouchableOpacity>
