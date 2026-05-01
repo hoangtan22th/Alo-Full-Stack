@@ -9,7 +9,7 @@ import { groupService } from "@/services/groupService";
 import { useRouter, usePathname } from "next/navigation";
 
 export default function GlobalNotificationHandler() {
-  const { setTyping, typingUsers, friendIds, setFriendIds } = useChatStore();
+  const { setTyping, typingUsers, friendIds, setFriendIds, setOnlineStatus } = useChatStore();
   const { user: currentUser } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
@@ -226,6 +226,21 @@ export default function GlobalNotificationHandler() {
       });
     };
 
+    const onUserOnline = (data: { userId: string }) => {
+      console.log("🌐 [GlobalNotification] User Online:", data.userId);
+      setOnlineStatus(data.userId, "online");
+    };
+
+    const onUserOffline = (data: { userId: string }) => {
+      console.log("🌑 [GlobalNotification] User Offline:", data.userId);
+      setOnlineStatus(data.userId, "offline", Date.now());
+    };
+
+    const onUserStatusResult = (data: { userId: string; status: string }) => {
+      console.log("📊 [GlobalNotification] User Status Result:", data);
+      setOnlineStatus(data.userId, data.status);
+    };
+
     socketService.onMessageReceived(onMessage);
     socketService.onTyping(onTyping);
     socketService.onStopTyping(onStopTyping);
@@ -236,6 +251,9 @@ export default function GlobalNotificationHandler() {
     socketService.onAddedToGroup(onAddedToGroup);
     socketService.onInvitationAccepted(onInvitationAccepted);
     socketService.onConversationRemoved(onConversationRemoved);
+    socketService.onUserOnline(onUserOnline);
+    socketService.onUserOffline(onUserOffline);
+    socketService.onUserStatusResult(onUserStatusResult);
 
     return () => {
       socketService.removeListener("message-received", onMessage);
@@ -248,6 +266,9 @@ export default function GlobalNotificationHandler() {
       socketService.removeListener("ADDED_TO_GROUP", onAddedToGroup);
       socketService.removeListener("INVITATION_ACCEPTED", onInvitationAccepted);
       socketService.removeListener("CONVERSATION_REMOVED", onConversationRemoved);
+      socketService.removeListener("USER_ONLINE", onUserOnline);
+      socketService.removeListener("USER_OFFLINE", onUserOffline);
+      socketService.removeListener("USER_STATUS_RESULT", onUserStatusResult);
     };
   }, [currentUser, pathname, router, setTyping]);
 

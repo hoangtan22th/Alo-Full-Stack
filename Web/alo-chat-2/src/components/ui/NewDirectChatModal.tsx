@@ -11,6 +11,9 @@ import { groupService } from "@/services/groupService";
 import { useAuthStore } from "@/store/useAuthStore";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useChatStore } from "@/store/useChatStore";
+import { presenceService } from "@/services/presenceService";
+import { useShallow } from "zustand/react/shallow";
 
 interface NewDirectChatModalProps {
   isOpen: boolean;
@@ -30,6 +33,13 @@ export default function NewDirectChatModal({
   const [creating, setCreating] = useState<string | null>(null); // userId đang tạo
   const [searchQuery, setSearchQuery] = useState("");
 
+  const { onlineUsers, setBulkPresence } = useChatStore(
+    useShallow((s) => ({
+      onlineUsers: s.onlineUsers,
+      setBulkPresence: s.setBulkPresence,
+    }))
+  );
+
   useEffect(() => {
     if (isOpen) {
       fetchFriends();
@@ -44,7 +54,19 @@ export default function NewDirectChatModal({
     setLoading(true);
     try {
       const data = await contactService.getFriendsList();
-      setFriends(Array.isArray(data) ? data : []);
+      const friendsList = Array.isArray(data) ? data : [];
+      setFriends(friendsList);
+
+      // Fetch presence
+      const userIds = friendsList.map((f: any) =>
+        f.requesterId === currentUserId ? f.recipientId : f.requesterId
+      ).filter(Boolean);
+
+      if (userIds.length > 0) {
+        presenceService.getBulkPresence(userIds).then((res) => {
+          if (res) setBulkPresence(res);
+        });
+      }
     } catch (error) {
       toast.error("Không tải được danh sách bạn bè");
     } finally {
@@ -184,6 +206,9 @@ export default function NewDirectChatModal({
                         <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center text-white font-bold text-[15px]">
                           {(friendName || "?").charAt(0).toUpperCase()}
                         </div>
+                      )}
+                      {onlineUsers[String(friendId)]?.status === "online" && (
+                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
                       )}
                     </div>
 

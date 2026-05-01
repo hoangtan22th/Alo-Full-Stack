@@ -87,6 +87,25 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   otherUserId,
   onOpenPollDetails,
 }) => {
+  const { onlineUsers } = useChatStore(
+    useShallow((s) => ({
+      onlineUsers: s.onlineUsers,
+    }))
+  );
+
+  const userStatus = !conversationInfo?.isGroup && otherUserId ? onlineUsers[String(otherUserId)] : null;
+  const isOnline = userStatus?.status === "online";
+
+  const getOfflineText = (lastActive?: number) => {
+    if (!lastActive) return "Chưa truy cập";
+    const diff = Math.floor((Date.now() - lastActive) / 60000);
+    if (diff < 1) return "Vừa mới truy cập";
+    if (diff < 60) return `Hoạt động ${diff} phút trước`;
+    const hours = Math.floor(diff / 60);
+    if (hours < 24) return `Hoạt động ${hours} giờ trước`;
+    return `Hoạt động ${Math.floor(hours / 24)} ngày trước`;
+  };
+
   const [showMembers, setShowMembers] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showPollModal, setShowPollModal] = useState(false);
@@ -279,7 +298,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                     <CameraIcon className="w-4 h-4" />
                   </button>
                 )}
-                {!isGroup && (
+                {!isGroup && isOnline && (
                   <div className="absolute bottom-1 right-2 w-4 h-4 bg-green-500 border-2 border-white rounded-full" />
                 )}
               </div>
@@ -320,7 +339,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
             <p className="text-[12px] font-bold text-gray-400 mt-1 uppercase tracking-wider">
               {isGroup
                 ? `${conversationInfo?.members?.length ?? 0} thành viên`
-                : "Đang hoạt động"}
+                : isOnline
+                  ? "Đang hoạt động"
+                  : getOfflineText(userStatus?.last_active)}
             </p>
 
             {/* Quick Actions */}
