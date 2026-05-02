@@ -137,7 +137,7 @@ export default function UserManagementPage() {
           </div>
           <input
             type="text"
-            placeholder="Search by name, email or phone..."
+            placeholder="Search by ID, name, email or phone..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 text-sm bg-surface-container-lowest border border-outline-variant/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
