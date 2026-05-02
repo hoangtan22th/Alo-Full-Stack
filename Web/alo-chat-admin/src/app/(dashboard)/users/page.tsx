@@ -53,21 +53,22 @@ export default function UserManagementPage() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  const loadData = () => {
+  const loadData = (isSilent = false) => {
     fetchUsers({
       page: currentPage,
       size: pageSize,
       search: debouncedSearch || undefined,
       status: activeStatus !== "ALL" ? activeStatus : undefined,
+      silent: isSilent,
     });
   };
 
   useEffect(() => {
     loadData();
 
-    // Tự động cập nhật trạng thái mỗi 15 giây
+    // Tự động cập nhật trạng thái mỗi 15 giây (chạy ngầm không hiện loading)
     const interval = setInterval(() => {
-      loadData();
+      loadData(true);
     }, 15000);
 
     return () => clearInterval(interval);

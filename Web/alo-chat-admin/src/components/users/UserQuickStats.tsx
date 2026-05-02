@@ -64,8 +64,8 @@ export const UserQuickStats = () => {
       title: "Mới hôm nay",
       value: stats.newToday,
       icon: UserPlusIcon,
-      color: "text-secondary",
-      bgColor: "bg-secondary/10",
+      color: "text-primary",
+      bgColor: "bg-primary/10",
     },
     {
       title: "Đang trực tuyến",
