@@ -5,6 +5,9 @@ import {
   MagnifyingGlassIcon,
   FunnelIcon,
   ArrowPathIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
+  ChartBarIcon,
 } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { ReportRow } from "@/components/reports/ReportRow";
@@ -31,6 +34,7 @@ export default function ReportsModerationPage() {
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showAnalytics, setShowAnalytics] = useState(true);
 
   // Search & Filter states
   const [searchTerm, setSearchTerm] = useState("");
@@ -112,10 +116,31 @@ export default function ReportsModerationPage() {
             restrictions.
           </p>
         </div>
+
+        <button
+          onClick={() => setShowAnalytics(!showAnalytics)}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-container-low hover:bg-surface-container-high border border-outline-variant/15 text-on-surface-variant text-sm font-bold transition-all shadow-sm active:scale-95"
+        >
+          {showAnalytics ? (
+            <>
+              <ChevronUpIcon className="w-4 h-4" />
+              Hide Statistics
+            </>
+          ) : (
+            <>
+              <ChartBarIcon className="w-4 h-4 text-primary" />
+              Show Statistics
+            </>
+          )}
+        </button>
       </div>
 
       {/* ── ANALYTICS DASHBOARD ── */}
-      <ReportAnalytics key={refreshKey} />
+      {showAnalytics && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+          <ReportAnalytics key={refreshKey} />
+        </div>
+      )}
 
       {/* ── SEARCH & FILTERS BAR ── */}
       <div className="bg-surface-container-low rounded-xl p-4 mb-6 flex flex-wrap gap-4 items-center border border-outline-variant/15 shadow-sm">

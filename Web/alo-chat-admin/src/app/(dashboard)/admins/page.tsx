@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAdmins } from "@/hooks/useAdmins";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useConfirmStore } from "@/store/useConfirmStore";
@@ -27,6 +28,7 @@ export default function AdminManagementPage() {
     updateAdmin,
     deleteAdmin,
   } = useAdmins();
+  const router = useRouter();
   const { isSuperAdmin, checkAuth } = useAuthStore();
   const { confirm } = useConfirmStore();
   const [isAuthChecked, setIsAuthChecked] = useState(false);
@@ -135,14 +137,17 @@ export default function AdminManagementPage() {
 
   if (!isAuthChecked) return null; // loading state
 
+  // Strict Route Guarding: Redirect if not super admin
   if (!isSuperAdmin) {
+    if (typeof window !== "undefined") {
+      router.replace("/");
+    }
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 bg-surface text-center">
         <ShieldCheckIcon className="w-16 h-16 text-on-surface-variant mb-4" />
         <h1 className="text-2xl font-bold text-on-surface">Access Denied</h1>
         <p className="text-on-surface-variant mt-2">
-          Only Super Admins can access this page. Please contact administration
-          if you need access.
+          Redirecting to dashboard...
         </p>
       </div>
     );

@@ -29,7 +29,7 @@ public class AdminUserController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Pageable pageable = PageRequest.of(page, size, Sort.by("isOnline").descending().and(Sort.by("createdAt").descending()));
         // Map chung từ khoá search vào tất cả các trường: Tên, Email, Số điện thoại
         Page<UserDto> users = userService.searchAdminUsers(search, status, pageable);
 
@@ -74,6 +74,12 @@ public class AdminUserController {
     @GetMapping("/quick-stats")
     public ResponseEntity<ApiResponse<UserQuickStatsResponse>> getQuickStats() {
         return ResponseEntity.ok(ApiResponse.success(userService.getQuickStats()));
+    }
+
+    @GetMapping("/growth-stats")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getGrowthStats(
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(ApiResponse.success(userService.getGrowthStats(days)));
     }
 
     @GetMapping("/internal/ids")

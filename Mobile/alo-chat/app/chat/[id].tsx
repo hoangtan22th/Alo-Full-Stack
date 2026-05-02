@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 
@@ -60,6 +60,8 @@ export default function GlobalChatScreen() {
     membersCount,
     isGroup,
     targetUserId: paramsTargetUserId,
+    selectionMode,
+    initialSelectedIds,
   } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -104,11 +106,31 @@ export default function GlobalChatScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [groupDetails, setGroupDetails] = useState<any>(null);
   const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(selectionMode === "true");
+  const [selectedReportIds, setSelectedReportIds] = useState<string[]>(() => {
+    if (initialSelectedIds) {
+      try {
+        const ids = typeof initialSelectedIds === 'string' ? JSON.parse(initialSelectedIds) : initialSelectedIds;
+        return Array.isArray(ids) ? ids : [];
+      } catch (e) {
+        console.error("Error parsing initialSelectedIds:", e);
+      }
+    }
+    return [];
+  });
 
 
   const chatInputRef = useRef<any>(null);
   const replyingToRef = useRef<MessageDTO | null>(null);
   const fetchingRef = useRef(false); // V3: Strict protection against concurrent fetches
+
+  const toggleMessageSelection = React.useCallback((msgId: string) => {
+    setSelectedReportIds(prev =>
+      prev.includes(msgId)
+        ? prev.filter(id => id !== msgId)
+        : [...prev, msgId]
+    );
+  }, []);
 
   const setReplyingToWithRef = (msg: MessageDTO | null) => {
     setReplyingTo(msg);
@@ -133,6 +155,28 @@ export default function GlobalChatScreen() {
   const chatImages = useMemo(() => {
     return messages.filter((m) => m.type === "image" && !m.isRevoked);
   }, [messages]);
+
+  const getAutoSelectedMessageIds = useCallback(() => {
+    if (isGroupChat) return [];
+    const valid = messages.filter(
+      (m) =>
+        !m.isRevoked &&
+        (m.type === "text" || m.type === "image" || m.type === "file")
+    );
+    if (valid.length <= 40) {
+      return valid.map((m) => m._id);
+    } else {
+      const first20 = valid.slice(0, 20).map((m) => m._id);
+      const last20 = valid.slice(-20).map((m) => m._id);
+      return Array.from(new Set([...first20, ...last20]));
+    }
+  }, [messages, isGroupChat]);
+
+  useEffect(() => {
+    if (name && name !== "undefined" && name !== "null") setRealtimeGroupName(name as string);
+    if (avatar && avatar !== "undefined" && avatar !== "null") setRealtimeAvatar(avatar as string);
+    if (membersCount && membersCount !== "undefined" && membersCount !== "null") setRealtimeMembersCount(membersCount as string);
+  }, [name, avatar, membersCount]);
 
   const closeReactionDetails = () => {
     setReactionDetailMsgId(null);
@@ -240,7 +284,11 @@ export default function GlobalChatScreen() {
     const resolve = async () => {
       const initialId = Array.isArray(id) ? id[0] : id;
       if (!initialId) return;
-      const needsResolution = isGroup === undefined && !paramsTargetUserId;
+      const isGroupVal = isGroup !== undefined ? isGroup === "true" : Boolean(membersCount && membersCount !== "undefined" && membersCount !== "null");
+
+      // UUIDs in this project have dashes, Conversation IDs (MongoDB) don't.
+      const isUUID = initialId.includes("-");
+      const needsResolution = !isGroupVal && isUUID;
 
       if (needsResolution) {
         try {
@@ -343,6 +391,25 @@ export default function GlobalChatScreen() {
       }
     }
   }, [resolvedConversationId, isGroupChat]);
+
+  // Handle selection mode from params (if coming back from ReportModal)
+  useEffect(() => {
+    const isSelection = selectionMode === "true";
+    setIsSelectionMode(isSelection);
+
+    if (isSelection && initialSelectedIds) {
+      try {
+        const ids = typeof initialSelectedIds === 'string' ? JSON.parse(initialSelectedIds) : initialSelectedIds;
+        if (Array.isArray(ids)) {
+          setSelectedReportIds(ids);
+        }
+      } catch (e) {
+        console.error("Error parsing initialSelectedIds:", e);
+      }
+    } else if (!isSelection) {
+      setSelectedReportIds([]);
+    }
+  }, [selectionMode, initialSelectedIds]);
 
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {
@@ -452,7 +519,7 @@ export default function GlobalChatScreen() {
     const handleGroupUpdated = (data: any) => {
       const updatedGroup = data.group ? data.group : data;
       const updatedId = updatedGroup._id || updatedGroup.id || updatedGroup.conversationId;
-      
+
       if (String(updatedId) === String(resolvedConversationId)) {
         setGroupDetails(updatedGroup);
         if (updatedGroup.members) {
@@ -601,8 +668,8 @@ export default function GlobalChatScreen() {
         msg.senderId === currentUserId
           ? "Bạn"
           : msg.senderName ||
-            userCache[msg.senderId]?.fullName ||
-            "Người dùng",
+          userCache[msg.senderId]?.fullName ||
+          "Người dùng",
       content: content,
       type: msg.type,
     };
@@ -751,6 +818,9 @@ export default function GlobalChatScreen() {
     if (!isGroupChat) return true;
     if (!groupDetails) return true;
 
+    // Check if group is banned
+    if (groupDetails.isBanned) return false;
+
     const sendPermission = groupDetails.permissions?.sendMessage || "EVERYONE";
     if (sendPermission === "EVERYONE") return true;
 
@@ -823,24 +893,26 @@ export default function GlobalChatScreen() {
             onBack={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))}
             onSearchToggle={() => setIsSearchMode(true)}
             onInfo={() => {
-              router.push({
+              const autoIds = isGroupChat ? [] : getAutoSelectedMessageIds();
+              router.replace({
                 pathname: "/chat/info",
                 params: {
-                  id: resolvedConversationId || id,
+                  id: id as string,
                   name: realtimeGroupName,
                   avatar: realtimeAvatar,
                   membersCount: realtimeMembersCount,
                   isGroup: isGroupChat ? "true" : "false",
                   targetUserId,
+                  selectedMessageIds: JSON.stringify(autoIds),
                 },
               });
             }}
             onHeaderClick={() => {
               if (isGroupChat) {
-                router.push({
+                router.replace({
                   pathname: "/chat/info",
                   params: {
-                    id: resolvedConversationId || id,
+                    id: id as string,
                     name: realtimeGroupName,
                     avatar: realtimeAvatar,
                     membersCount: realtimeMembersCount,
@@ -849,11 +921,17 @@ export default function GlobalChatScreen() {
                   },
                 });
               } else {
+                const autoIds = getAutoSelectedMessageIds();
                 router.push({
-                  pathname: "/(tabs)/contacts/send-request",
+                  pathname: "/chat/info",
                   params: {
-                    userId: targetUserId,
-                    from: "chat",
+                    id: resolvedConversationId || id,
+                    name: realtimeGroupName,
+                    avatar: realtimeAvatar,
+                    membersCount: realtimeMembersCount,
+                    isGroup: "false",
+                    targetUserId,
+                    selectedMessageIds: JSON.stringify(autoIds),
                   },
                 });
               }
@@ -935,25 +1013,32 @@ export default function GlobalChatScreen() {
                   <View className={`max-w-[80%] ${group.isSender ? "items-end" : "items-start"}`}>
                     {!group.isSender && isGroupChat && <Text className="text-[11px] font-bold text-gray-500 mb-1 ml-1">{senderName}</Text>}
                     {group.messages.map((msg: MessageDTO, idx: number) => (
-                      <MessageItem
-                        key={msg._id}
-                        msg={msg}
-                        isSender={group.isSender}
-                        isLastInBlock={idx === group.messages.length - 1}
-                        onLongPress={() => onLongPressMessage(msg._id)}
-                        openReactionDetails={() => setReactionDetailMsgId(msg._id)}
-                        chatImages={chatImages}
-                        setViewerIndex={setViewerIndex}
-                        messageRefs={messageRefs}
-                        expandedTimeMsgId={expandedTimeMsgId}
-                        setExpandedTimeMsgId={setExpandedTimeMsgId}
-                        onReplyClick={scrollToMessage}
-                        isHighlighted={msg._id === highlightedMsgId}
-                        isAdminHighlighted={
-                          groupDetails?.isHighlightEnabled &&
-                          adminIds.has(String(msg.senderId))
-                        }
-                      />
+                      <View key={msg._id}>
+                        <MessageItem
+                          msg={msg}
+                          isSender={group.isSender}
+                          isLastInBlock={idx === group.messages.length - 1}
+                          onLongPress={() => !isSelectionMode && onLongPressMessage(msg._id)}
+                          onPress={() => {
+                            if (isSelectionMode) {
+                              toggleMessageSelection(msg._id);
+                            }
+                          }}
+                          isSelected={isSelectionMode && selectedReportIds.includes(msg._id)}
+                          openReactionDetails={() => setReactionDetailMsgId(msg._id)}
+                          chatImages={chatImages}
+                          setViewerIndex={setViewerIndex}
+                          messageRefs={messageRefs}
+                          expandedTimeMsgId={expandedTimeMsgId}
+                          setExpandedTimeMsgId={setExpandedTimeMsgId}
+                          onReplyClick={scrollToMessage}
+                          isHighlighted={msg._id === highlightedMsgId}
+                          isAdminHighlighted={
+                            groupDetails?.isHighlightEnabled &&
+                            adminIds.has(String(msg.senderId))
+                          }
+                        />
+                      </View>
                     ))}
                   </View>
                 </View>
@@ -1035,28 +1120,87 @@ export default function GlobalChatScreen() {
           </View>
         )}
 
-        <View className="flex-1 justify-end" pointerEvents="box-none">
-          <ChatInput
-            ref={chatInputRef}
-            inputText={inputText}
-            onInputChange={handleInputChange}
-            onSendMessage={sendMessage}
-            onSendImage={handleSendImage}
-            onSendFile={handleSendFile}
-            onCreatePoll={() => {
-              if (resolvedConversationId) {
-                router.push({
-                  pathname: "/chat/create-poll",
-                  params: { conversationId: resolvedConversationId },
-                });
-              }
+        {!isSelectionMode ? (
+          <View className="flex-1 justify-end" pointerEvents="box-none">
+            <ChatInput
+              ref={chatInputRef}
+              inputText={inputText}
+              onInputChange={handleInputChange}
+              onSendMessage={sendMessage}
+              onSendImage={handleSendImage}
+              onSendFile={handleSendFile}
+              onCreatePoll={() => {
+                if (resolvedConversationId) {
+                  router.push({
+                    pathname: "/chat/create-poll",
+                    params: { conversationId: resolvedConversationId },
+                  });
+                }
+              }}
+              isKeyboardVisible={isKeyboardVisible}
+              replyingTo={replyingTo}
+              onCancelReply={() => setReplyingToWithRef(null)}
+              canSendMessage={canSendMessage}
+              isBanned={groupDetails?.isBanned}
+            />
+          </View>
+        ) : (
+          <View
+            className="bg-white border-t border-gray-100 px-6 py-4 flex-row items-center justify-between"
+            style={{
+              paddingBottom: Math.max(insets.bottom, 16),
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: -3 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 10,
             }}
-            isKeyboardVisible={isKeyboardVisible}
-            replyingTo={replyingTo}
-            onCancelReply={() => setReplyingToWithRef(null)}
-            canSendMessage={canSendMessage}
-          />
-        </View>
+          >
+            <View>
+              <Text className="text-sm text-gray-500">Đã chọn</Text>
+              <Text
+                className="text-lg font-bold"
+                style={{ color: selectedReportIds.length > 0 && (selectedReportIds.length < 3 || selectedReportIds.length > 40) ? '#ef4444' : '#111827' }}
+              >
+                {selectedReportIds.length} <Text className="text-xs font-normal text-gray-400">(cần 3-40)</Text>
+              </Text>
+            </View>
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                onPress={() => {
+                  setIsSelectionMode(false);
+                  setSelectedReportIds([]);
+                }}
+                className="px-4 py-2 bg-gray-100 rounded-full"
+              >
+                <Text className="font-bold text-gray-600">Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  if (selectedReportIds.length < 3 || selectedReportIds.length > 40) {
+                    Alert.alert("Thông báo", "Vui lòng chọn từ 3 đến 40 tin nhắn làm bằng chứng.");
+                    return;
+                  }
+
+                  const selectedIds = JSON.stringify(selectedReportIds);
+                  const isGroupStr = isGroupChat ? "true" : "false";
+
+                  let query = `id=${id}&name=${encodeURIComponent(realtimeGroupName)}&avatar=${encodeURIComponent(realtimeAvatar)}&membersCount=${realtimeMembersCount}&isGroup=${isGroupStr}&selectedMessageIds=${encodeURIComponent(selectedIds)}&showReport=true`;
+
+                  if (!isGroupChat && targetUserId) {
+                    query += `&targetUserId=${targetUserId}`;
+                  }
+
+                  router.replace(`/chat/info?${query}` as any);
+                }}
+                className="px-6 py-2 rounded-full"
+                style={{ backgroundColor: selectedReportIds.length >= 3 && selectedReportIds.length <= 40 ? '#2563eb' : '#93c5fd' }}
+              >
+                <Text className="font-bold text-white">Xong</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
 
       <GalleryViewerModal images={chatImages} initialIndex={viewerIndex ?? 0} onClose={() => setViewerIndex(null)} onIndexChange={setViewerIndex} visible={viewerIndex !== null} />

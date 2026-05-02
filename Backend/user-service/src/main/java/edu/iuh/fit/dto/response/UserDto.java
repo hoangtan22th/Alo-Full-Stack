@@ -52,7 +52,7 @@ public class UserDto {
                 .coverImage(profile.getCoverUrl())
                 .gender(profile.getGender() != null ? profile.getGender().name() : null)
                 .dateOfBirth(profile.getDateOfBirth())
-                .isOnline(false)
+                .isOnline(profile.getIsOnline())
                 .isBanned(profile.getStatus() == UserProfile.UserStatus.BANNED)
                 .lastActive(profile.getLastActiveAt())
                 .createdAt(profile.getCreatedAt())

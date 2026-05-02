@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { getBulkPresence } from "../controllers/presence.controller";
+import { getBulkPresence, getMetrics } from "../controllers/presence.controller";
 
 const router = Router();
 
 router.post("/bulk", getBulkPresence);
+router.get("/metrics", getMetrics);
 
 export default router;

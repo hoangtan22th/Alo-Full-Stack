@@ -25,6 +25,7 @@ export default function OverviewPage() {
     userStats: any;
     groupStats: GroupStats | null;
     reportStats: any;
+    growthStats: Record<string, number> | null;
     recentUsers: User[];
     loading: boolean;
     error: string | null;
@@ -32,25 +33,30 @@ export default function OverviewPage() {
     userStats: null,
     groupStats: null,
     reportStats: null,
+    growthStats: null,
     recentUsers: [],
     loading: true,
     error: null,
   });
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = async (isInitial = true) => {
       try {
-        const [userStats, groupStats, reportStats, recentUsersData] = await Promise.all([
+        if (isInitial) setData((prev) => ({ ...prev, loading: true }));
+        
+        const [userStats, groupStats, reportStats, recentUsersData, growthStats] = await Promise.all([
           userService.getQuickStats(),
           groupService.getGroupStats(),
           reportService.getStatistics(),
           userService.getAllUsers({ size: 5 }),
+          userService.getGrowthStats(),
         ]);
 
         setData({
           userStats,
           groupStats,
           reportStats,
+          growthStats,
           recentUsers: recentUsersData.content || [],
           loading: false,
           error: null,
@@ -66,6 +72,12 @@ export default function OverviewPage() {
     };
 
     fetchDashboardData();
+
+    const interval = setInterval(() => {
+      fetchDashboardData(false);
+    }, 10000); // Tự động cập nhật mỗi 10 giây (chạy ngầm)
+
+    return () => clearInterval(interval);
   }, []);
 
   if (data.loading) {
@@ -145,7 +157,7 @@ export default function OverviewPage() {
 
       {/* Middle Row: Charts */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <GrowthChartCard totalUsers={data.userStats?.totalUsers || 0} />
+        <GrowthChartCard initialData={data.growthStats || {}} totalUsers={data.userStats?.totalUsers || 0} />
         <ActivityDonutCard data={data.reportStats?.byReason || []} />
       </section>
 
@@ -189,13 +201,6 @@ export default function OverviewPage() {
               No recent activity found.
             </div>
           )}
-          <ActivityFeedItem
-            icon={<CheckBadgeIcon className="w-5 h-5 text-on-secondary-container" />}
-            title="System Status"
-            description="All services are currently operational and healthy."
-            time="Now"
-            iconBg="bg-secondary-container"
-          />
         </div>
       </section>
     </>
