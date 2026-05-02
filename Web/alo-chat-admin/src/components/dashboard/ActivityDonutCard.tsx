@@ -15,6 +15,15 @@ const COLORS = [
   "#6366f1", // Indigo
 ];
 
+const REASON_LABELS: Record<string, string> = {
+  SCAM_FRAUD: "Lừa đảo",
+  CHILD_ABUSE: "Xâm hại trẻ em",
+  SEXUAL_CONTENT: "Nội dung 18+",
+  VIOLENCE_TERRORISM: "Bạo lực",
+  SPAM_HARRASSMENT: "Quấy rối",
+  OTHER: "Khác",
+};
+
 export function ActivityDonutCard({ data }: ActivityDonutCardProps) {
   const total = data.reduce((acc, curr) => acc + curr.value, 0);
 
@@ -26,7 +35,7 @@ export function ActivityDonutCard({ data }: ActivityDonutCardProps) {
           Distribution by violation category.
         </p>
       </div>
-      
+
       <div className="flex-1 flex items-center justify-center relative min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -38,14 +47,20 @@ export function ActivityDonutCard({ data }: ActivityDonutCardProps) {
               outerRadius={80}
               paddingAngle={5}
               dataKey="value"
-              animationDuration={1500}
+              animationDuration={800}
+              isAnimationActive={true}
             >
               {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                <Cell
+                  key={`cell-${entry.name}`}
+                  fill={COLORS[index % COLORS.length]}
+                  stroke="none"
+                />
               ))}
               {data.length === 0 && <Cell fill="var(--color-surface-container-high)" />}
             </Pie>
             <Tooltip
+              formatter={(value: number, name: string) => [value, REASON_LABELS[name] || name]}
               contentStyle={{
                 backgroundColor: "var(--color-surface-container-lowest)",
                 borderRadius: "12px",
@@ -56,7 +71,7 @@ export function ActivityDonutCard({ data }: ActivityDonutCardProps) {
             />
           </PieChart>
         </ResponsiveContainer>
-        
+
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
           <span className="text-2xl font-extrabold text-on-surface">
             {total.toLocaleString()}
@@ -73,7 +88,7 @@ export function ActivityDonutCard({ data }: ActivityDonutCardProps) {
             <LegendItem
               key={item.name}
               color={COLORS[index % COLORS.length]}
-              label={item.name}
+              label={REASON_LABELS[item.name] || item.name}
               value={`${((item.value / total) * 100).toFixed(1)}%`}
             />
           ))
@@ -99,8 +114,8 @@ function LegendItem({
   return (
     <div className="flex items-center justify-between text-xs">
       <div className="flex items-center gap-2 truncate mr-2">
-        <span 
-          className="w-2 h-2 rounded-full shrink-0" 
+        <span
+          className="w-2 h-2 rounded-full shrink-0"
           style={{ backgroundColor: color }}
         ></span>
         <span className="font-medium text-on-surface truncate">{label}</span>

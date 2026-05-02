@@ -281,7 +281,8 @@ public class ReportServiceImpl implements ReportService {
         // 2. Group By Reason
         Aggregation reasonAgg = Aggregation.newAggregation(
                 Aggregation.group("reason").count().as("value"),
-                Aggregation.project("value").and("name").previousOperation()
+                Aggregation.project("value").and("name").previousOperation(),
+                Aggregation.sort(Sort.Direction.DESC, "value")
         );
         List<ReportStatisticsResponse.DataPoint> byReason = mongoTemplate
                 .aggregate(reasonAgg, Report.class, ReportStatisticsResponse.DataPoint.class)
@@ -290,7 +291,8 @@ public class ReportServiceImpl implements ReportService {
         // 3. Group By Target Type
         Aggregation targetTypeAgg = Aggregation.newAggregation(
                 Aggregation.group("targetType").count().as("value"),
-                Aggregation.project("value").and("name").previousOperation()
+                Aggregation.project("value").and("name").previousOperation(),
+                Aggregation.sort(Sort.Direction.DESC, "value")
         );
         List<ReportStatisticsResponse.DataPoint> byTargetType = mongoTemplate
                 .aggregate(targetTypeAgg, Report.class, ReportStatisticsResponse.DataPoint.class)
