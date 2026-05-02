@@ -44,6 +44,14 @@ export function initSocketConnection(io: Server) {
     // 1. Join Personal Room for 1v1 messages
     socket.join(`user_${userId}`);
 
+    // 1.1 Join Admin Notifications Room if user is an admin
+    const roles = socket.data.roles || [];
+    const isAdmin = roles.includes("ROLE_ADMIN") || roles.includes("ROLE_SUPER_ADMIN");
+    if (isAdmin) {
+      socket.join("admin_notifications");
+      console.log(`Admin ${userId} joined admin_notifications room`);
+    }
+
     // 2. Auto join all Group Chat rooms
     try {
       const gIds = await fetchUserGroups(userId, token);

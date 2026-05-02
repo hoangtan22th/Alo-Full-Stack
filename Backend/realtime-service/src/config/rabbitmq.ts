@@ -26,15 +26,21 @@ export async function initRabbitMQ(io: Server) {
   const adminExchange = "admin.exchange";
   const authBanQueue = "realtime.user.banned.queue";
   const authUnbanQueue = "realtime.user.unbanned.queue";
+  const reportCreatedQueue = "realtime.report.created.queue";
   await amqpChannel.assertExchange(adminExchange, "topic", { durable: true });
   await amqpChannel.assertQueue(authBanQueue, { durable: true });
   await amqpChannel.bindQueue(authBanQueue, adminExchange, "user.banned");
   await amqpChannel.assertQueue(authUnbanQueue, { durable: true });
   await amqpChannel.bindQueue(authUnbanQueue, adminExchange, "user.unbanned");
+  
+  await amqpChannel.assertQueue(reportCreatedQueue, { durable: true });
+  await amqpChannel.bindQueue(reportCreatedQueue, adminExchange, "report.created");
+
   console.log(`RabbitMQ waiting for Admin Banned events in ${authBanQueue}.`);
   console.log(
     `RabbitMQ waiting for Admin Unbanned events in ${authUnbanQueue}.`,
   );
+  console.log(`RabbitMQ waiting for Report Created events in ${reportCreatedQueue}.`);
 
   amqpChannel.consume(queue, (msg) => {
     if (msg !== null) {
@@ -135,6 +141,21 @@ export async function initRabbitMQ(io: Server) {
         }
       } catch (error) {
         console.error("Error processing Unbanned Event message", error);
+      }
+      amqpChannel.ack(msg);
+    }
+  });
+
+  amqpChannel.consume(reportCreatedQueue, async (msg) => {
+    if (msg !== null) {
+      try {
+        const payload = JSON.parse(msg.content.toString());
+        console.log("Received REPORT_CREATED_EVENT via RabbitMQ:", payload);
+        
+        // Broadcast to all connected admins
+        io.to("admin_notifications").emit("NEW_REPORT", payload);
+      } catch (error) {
+        console.error("Error processing Report Created Event message", error);
       }
       amqpChannel.ack(msg);
     }

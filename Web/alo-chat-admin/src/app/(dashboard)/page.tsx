@@ -201,13 +201,6 @@ export default function OverviewPage() {
               No recent activity found.
             </div>
           )}
-          <ActivityFeedItem
-            icon={<CheckBadgeIcon className="w-5 h-5 text-on-secondary-container" />}
-            title="System Status"
-            description="All services are currently operational and healthy."
-            time="Now"
-            iconBg="bg-secondary-container"
-          />
         </div>
       </section>
     </>
