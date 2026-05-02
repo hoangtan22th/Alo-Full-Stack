@@ -56,12 +56,12 @@ export function BroadcastStats({ totalCampaigns, totalReach, isRealtimeOnline }:
               "text-sm font-bold uppercase tracking-widest transition-colors",
               isRealtimeOnline ? "text-green-700" : "text-red-700"
             )}>
-              {isRealtimeOnline ? "Online" : "Offline"}
+              {isRealtimeOnline ? "Ổn định" : "Mất kết nối"}
             </span>
           </div>
         </div>
         <p className="text-xs text-on-surface-variant font-medium">
-          {isRealtimeOnline ? "Hạ tầng Socket.IO sẵn sàng" : "Hệ thống đang gặp sự cố"}
+          {isRealtimeOnline ? "Hệ thống truyền tin thời gian thực sẵn sàng" : "Kết nối thời gian thực đang bị gián đoạn"}
         </p>
       </div>
     </div>
