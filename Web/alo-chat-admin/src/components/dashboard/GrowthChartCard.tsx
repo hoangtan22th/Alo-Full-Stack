@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState, useCallback } from "react";
 
 import { EllipsisVerticalIcon } from "@heroicons/react/24/solid";
 import {
@@ -23,32 +24,88 @@ import {
   DownloadIcon, 
   RefreshCcwIcon, 
   CalendarIcon,
-  ChevronDownIcon
 } from "lucide-react";
+import { userService } from "@/services/userService";
 
 interface GrowthChartCardProps {
   totalUsers: number;
+  initialData?: Record<string, number>;
 }
 
-export function GrowthChartCard({ totalUsers }: GrowthChartCardProps) {
-  // Generate mock historical data based on current totalUsers
-  const generateData = () => {
-    const data = [];
+export function GrowthChartCard({ totalUsers, initialData = {} }: GrowthChartCardProps) {
+  const [range, setRange] = useState(7);
+  const [data, setData] = useState<Record<string, number>>(initialData);
+  const [loading, setLoading] = useState(false);
+
+  // Sync with initialData if it changes (only for the 7-day default range)
+  useEffect(() => {
+    if (range === 7 && Object.keys(initialData).length > 0) {
+      setData(initialData);
+    }
+  }, [initialData, range]);
+
+  const fetchStats = useCallback(async (selectedRange: number) => {
+    setLoading(true);
+    try {
+      const newData = await userService.getGrowthStats(selectedRange);
+      setData(newData);
+    } catch (error) {
+      console.error("Failed to fetch growth stats:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleRangeChange = (newRange: number) => {
+    setRange(newRange);
+    fetchStats(newRange);
+  };
+
+  // Use real data if available, otherwise generate mock for visualization
+  const generateChartData = () => {
+    if (Object.keys(data).length > 0 || range !== 7) {
+      const result = [];
+      const now = new Date();
+      
+      // Fill gaps with 0 for the selected range
+      for (let i = range - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0]; // YYYY-MM-DD
+        
+        const count = data[dateStr] || 0;
+        const dayName = d.toLocaleDateString('en-US', { 
+          weekday: range <= 7 ? 'short' : undefined,
+          day: '2-digit',
+          month: '2-digit'
+        });
+
+        result.push({
+          name: dayName,
+          users: count,
+          fullDate: dateStr
+        });
+      }
+      return result;
+    }
+
+    // Fallback Mock (as before)
+    const mockData = [];
     const base = totalUsers > 0 ? totalUsers : 1240000;
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     
     for (let i = 0; i < 7; i++) {
       const dayOffset = 6 - i;
-      const growthFactor = 1 - dayOffset * 0.02; // Roughly 2% growth per day
-      data.push({
+      const growthFactor = 1 - dayOffset * 0.02;
+      mockData.push({
         name: days[i],
         users: Math.floor(base * growthFactor),
       });
     }
-    return data;
+    return mockData;
   };
 
-  const chartData = generateData();
+  const chartData = generateChartData();
 
   return (
     <div className="lg:col-span-2 bg-surface-container-lowest rounded-2xl p-8 shadow-minimal flex flex-col h-[400px]">
@@ -58,7 +115,7 @@ export function GrowthChartCard({ totalUsers }: GrowthChartCardProps) {
             User Growth & Activity
           </h3>
           <p className="text-sm font-medium text-on-surface-variant">
-            Daily active users over the last 7 days.
+            Daily user registrations over the last {range} days.
           </p>
         </div>
         
@@ -71,8 +128,8 @@ export function GrowthChartCard({ totalUsers }: GrowthChartCardProps) {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>Chart Options</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => window.location.reload()}>
-              <RefreshCcwIcon className="mr-2 h-4 w-4" />
+            <DropdownMenuItem onClick={() => fetchStats(range)}>
+              <RefreshCcwIcon className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               <span>Refresh Stats</span>
             </DropdownMenuItem>
             <DropdownMenuItem>
@@ -81,23 +138,32 @@ export function GrowthChartCard({ totalUsers }: GrowthChartCardProps) {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Time Range</DropdownMenuLabel>
-            <DropdownMenuItem className="bg-surface-container-low">
+            <DropdownMenuItem 
+              onClick={() => handleRangeChange(7)}
+              className={range === 7 ? "bg-surface-container-low font-bold" : ""}
+            >
               <CalendarIcon className="mr-2 h-4 w-4" />
               <span>Last 7 Days</span>
             </DropdownMenuItem>
-            <DropdownMenuItem>
-              <CalendarIcon className="mr-2 h-4 w-4 opacity-0" />
+            <DropdownMenuItem 
+              onClick={() => handleRangeChange(30)}
+              className={range === 30 ? "bg-surface-container-low font-bold" : ""}
+            >
+              <CalendarIcon className={`mr-2 h-4 w-4 ${range === 30 ? '' : 'opacity-0'}`} />
               <span>Last 30 Days</span>
             </DropdownMenuItem>
-            <DropdownMenuItem>
-              <CalendarIcon className="mr-2 h-4 w-4 opacity-0" />
+            <DropdownMenuItem 
+              onClick={() => handleRangeChange(90)}
+              className={range === 90 ? "bg-surface-container-low font-bold" : ""}
+            >
+              <CalendarIcon className={`mr-2 h-4 w-4 ${range === 90 ? '' : 'opacity-0'}`} />
               <span>Last 90 Days</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
-      <div className="flex-1 w-full min-h-0">
+      <div className={`flex-1 w-full min-h-0 transition-opacity ${loading ? 'opacity-50' : 'opacity-100'}`}>
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
             data={chartData}

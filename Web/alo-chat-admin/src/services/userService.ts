@@ -93,4 +93,16 @@ export const userService = {
       return { totalUsers: 0, newToday: 0, onlineNow: 0, bannedUsers: 0 };
     }
   },
+
+  getGrowthStats: async (days: number = 7): Promise<Record<string, number>> => {
+    try {
+      const response = await axiosClient.get(`${API_URL}/growth-stats`, {
+        params: { days }
+      });
+      return response.data?.data || {};
+    } catch (error) {
+      console.error("Error fetching user growth stats:", error);
+      return {};
+    }
+  },
 };

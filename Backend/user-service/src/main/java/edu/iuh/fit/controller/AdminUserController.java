@@ -76,6 +76,12 @@ public class AdminUserController {
         return ResponseEntity.ok(ApiResponse.success(userService.getQuickStats()));
     }
 
+    @GetMapping("/growth-stats")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getGrowthStats(
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(ApiResponse.success(userService.getGrowthStats(days)));
+    }
+
     @GetMapping("/internal/ids")
     public ResponseEntity<ApiResponse<java.util.List<String>>> getAllUserIds() {
         return ResponseEntity.ok(ApiResponse.success(userService.getAllUserIds()));

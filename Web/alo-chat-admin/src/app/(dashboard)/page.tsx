@@ -25,6 +25,7 @@ export default function OverviewPage() {
     userStats: any;
     groupStats: GroupStats | null;
     reportStats: any;
+    growthStats: Record<string, number> | null;
     recentUsers: User[];
     loading: boolean;
     error: string | null;
@@ -32,6 +33,7 @@ export default function OverviewPage() {
     userStats: null,
     groupStats: null,
     reportStats: null,
+    growthStats: null,
     recentUsers: [],
     loading: true,
     error: null,
@@ -42,17 +44,19 @@ export default function OverviewPage() {
       try {
         if (isInitial) setData((prev) => ({ ...prev, loading: true }));
         
-        const [userStats, groupStats, reportStats, recentUsersData] = await Promise.all([
+        const [userStats, groupStats, reportStats, recentUsersData, growthStats] = await Promise.all([
           userService.getQuickStats(),
           groupService.getGroupStats(),
           reportService.getStatistics(),
           userService.getAllUsers({ size: 5 }),
+          userService.getGrowthStats(),
         ]);
 
         setData({
           userStats,
           groupStats,
           reportStats,
+          growthStats,
           recentUsers: recentUsersData.content || [],
           loading: false,
           error: null,
@@ -153,7 +157,7 @@ export default function OverviewPage() {
 
       {/* Middle Row: Charts */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <GrowthChartCard totalUsers={data.userStats?.totalUsers || 0} />
+        <GrowthChartCard initialData={data.growthStats || {}} totalUsers={data.userStats?.totalUsers || 0} />
         <ActivityDonutCard data={data.reportStats?.byReason || []} />
       </section>
 

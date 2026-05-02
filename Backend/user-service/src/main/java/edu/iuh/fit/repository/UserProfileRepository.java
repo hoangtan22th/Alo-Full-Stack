@@ -37,4 +37,11 @@ public interface UserProfileRepository extends JpaRepository<UserProfile, String
     long countByStatus(UserProfile.UserStatus status);
 
     long countByIsOnline(Boolean isOnline);
+
+    @Query(value = "SELECT DATE(created_at) as date, COUNT(*) as count " +
+            "FROM user_profiles " +
+            "WHERE created_at >= :startDate " +
+            "GROUP BY DATE(created_at) " +
+            "ORDER BY date ASC", nativeQuery = true)
+    java.util.List<Object[]> getRegistrationStats(@Param("startDate") java.time.LocalDateTime startDate);
 }
