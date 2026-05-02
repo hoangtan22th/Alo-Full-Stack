@@ -64,6 +64,13 @@ export default function UserManagementPage() {
 
   useEffect(() => {
     loadData();
+
+    // Tự động cập nhật trạng thái mỗi 15 giây
+    const interval = setInterval(() => {
+      loadData();
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, [currentPage, debouncedSearch, activeStatus, fetchUsers]);
 
   const handleBanToggle = (id: string, currentStatus: boolean) => {

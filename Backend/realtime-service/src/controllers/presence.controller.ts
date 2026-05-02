@@ -37,3 +37,37 @@ export const getBulkPresence = async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
+
+export const getMetrics = async (req: Request, res: Response) => {
+  try {
+    const allPresence = await presenceClient.hGetAll(`presence:users`);
+    const userIds = Object.keys(allPresence);
+    
+    let onlineCount = 0;
+    const onlineUserIds: string[] = [];
+
+    Object.entries(allPresence).forEach(([userId, presenceStr]) => {
+      try {
+        const presence = JSON.parse(presenceStr);
+        if (presence.status === "online") {
+          onlineCount++;
+          onlineUserIds.push(userId);
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    });
+
+    return res.status(200).json({
+      status: 200,
+      data: {
+        totalTracked: userIds.length,
+        onlineCount,
+        onlineUserIds
+      }
+    });
+  } catch (error) {
+    console.error("Error in getMetrics:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};

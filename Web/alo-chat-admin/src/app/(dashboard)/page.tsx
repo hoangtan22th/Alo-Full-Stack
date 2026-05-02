@@ -38,8 +38,10 @@ export default function OverviewPage() {
   });
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = async (isInitial = true) => {
       try {
+        if (isInitial) setData((prev) => ({ ...prev, loading: true }));
+        
         const [userStats, groupStats, reportStats, recentUsersData] = await Promise.all([
           userService.getQuickStats(),
           groupService.getGroupStats(),
@@ -66,6 +68,12 @@ export default function OverviewPage() {
     };
 
     fetchDashboardData();
+
+    const interval = setInterval(() => {
+      fetchDashboardData(false);
+    }, 10000); // Tự động cập nhật mỗi 10 giây
+
+    return () => clearInterval(interval);
   }, []);
 
   if (data.loading) {

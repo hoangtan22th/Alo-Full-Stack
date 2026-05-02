@@ -167,9 +167,7 @@ public class UserServiceImpl implements UserService {
         LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
         long newToday = userProfileRepository.countByCreatedAtAfter(startOfToday);
         long bannedUsers = userProfileRepository.countByStatus(UserProfile.UserStatus.BANNED);
-
-        // Mock onlineNow between 10 and 50
-        long onlineNow = 10 + (long) (Math.random() * 41);
+        long onlineNow = userProfileRepository.countByIsOnline(true);
 
         return UserQuickStatsResponse.builder()
                 .totalUsers(totalUsers)

@@ -35,4 +35,6 @@ public interface UserProfileRepository extends JpaRepository<UserProfile, String
     long countByCreatedAtAfter(java.time.LocalDateTime dateTime);
 
     long countByStatus(UserProfile.UserStatus status);
+
+    long countByIsOnline(Boolean isOnline);
 }
