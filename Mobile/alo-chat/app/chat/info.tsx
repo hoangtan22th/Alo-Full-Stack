@@ -40,9 +40,13 @@ import {
   PencilSquareIcon,
   CalendarDaysIcon,
   PlusCircleIcon,
+  ShieldExclamationIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
+import { ReportModal } from "../../components/ReportModal";
+import { TargetType } from "../../services/reportService";
+
 
 export default function ChatInfoScreen() {
   const router = useRouter();
@@ -53,6 +57,8 @@ export default function ChatInfoScreen() {
     avatar,
     membersCount,
     isGroup: paramsIsGroup,
+    selectedMessageIds: paramsSelectedMessageIds,
+    showReport,
   } = useLocalSearchParams();
   const { user } = useAuth();
   const currentUserId = user?.id || user?._id || user?.userId || null;
@@ -92,8 +98,52 @@ export default function ChatInfoScreen() {
   const { socket, onlineUsers, fetchBulkPresence } = useSocket();
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
 
+  const [isReportModalVisible, setIsReportModalVisible] = useState(false);
+  const [pendingSelectionMode, setPendingSelectionMode] = useState(false);
+
+
   const userStatus = !isGroup && otherUserId ? onlineUsers[String(otherUserId)] : null;
   const isOnline = userStatus?.status === "online";
+
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (paramsSelectedMessageIds) {
+      try {
+        const ids = typeof paramsSelectedMessageIds === 'string' ? JSON.parse(paramsSelectedMessageIds) : paramsSelectedMessageIds;
+        if (Array.isArray(ids)) {
+          setSelectedMessageIds(ids);
+          // Only auto-open if showReport is true
+          if (showReport === "true") {
+            setIsReportModalVisible(true);
+          }
+        }
+      } catch (e) {
+        console.error("Error parsing paramsSelectedMessageIds:", e);
+      }
+    }
+  }, [paramsSelectedMessageIds, showReport]);
+
+  useEffect(() => {
+    if (pendingSelectionMode) {
+      setPendingSelectionMode(false);
+      setIsReportModalVisible(false);
+      
+      const isGroupStr = isGroup ? "true" : "false";
+      // Use the original ID from params to ensure the path remains identical
+      const convId = id as string;
+      
+      const selectedIds = JSON.stringify(selectedMessageIds || []);
+      
+      // Pass EVERYTHING back so the UI doesn't reset
+      let query = `selectionMode=true&initialSelectedIds=${encodeURIComponent(selectedIds)}&name=${encodeURIComponent(groupName || name as string)}&avatar=${encodeURIComponent(groupAvatar || avatar as string)}&membersCount=${realtimeMembersCount}&isGroup=${isGroupStr}`;
+      
+      if (!isGroup && otherUserId) {
+        query += `&targetUserId=${otherUserId}`;
+      }
+      
+      router.replace(`/chat/${convId}?${query}` as any);
+    }
+  }, [pendingSelectionMode, id, otherUserId, isGroup, groupName, name, groupAvatar, avatar, realtimeMembersCount, selectedMessageIds]);
 
   const getOfflineText = (lastActive?: number) => {
     if (!lastActive) return "Chưa truy cập";
@@ -703,7 +753,7 @@ export default function ChatInfoScreen() {
             {fileList.length > 0 ? (
               fileList.slice(0, 3).map((file, index) => {
                 const uniqueKey = file._id
-                   ? `${file._id}-${index}`
+                  ? `${file._id}-${index}`
                   : `file-fallback-${index}-${Math.random().toString(36).substring(2)}`;
                 return (
                   <View key={uniqueKey}>
@@ -716,13 +766,12 @@ export default function ChatInfoScreen() {
                         )
                       }
                       title={file.metadata?.fileName || "Không tên"}
-                      info={`${
-                        file.metadata?.fileSize
+                      info={`${file.metadata?.fileSize
                           ? (file.metadata.fileSize / (1024 * 1024)).toFixed(
-                              1,
-                            ) + " MB"
+                            1,
+                          ) + " MB"
                           : "0 MB"
-                      } • ${file.createdAt ? new Date(file.createdAt).toLocaleDateString("vi-VN") : "Vừa xong"}`}
+                        } • ${file.createdAt ? new Date(file.createdAt).toLocaleDateString("vi-VN") : "Vừa xong"}`}
                     />
                     {index < Math.min(fileList.length, 3) - 1 && (
                       <View className="h-[1px] bg-white w-[90%] self-end" />
@@ -828,6 +877,13 @@ export default function ChatInfoScreen() {
               isDestructive
               onPress={handleClearHistory}
             />
+            <View className="h-[1px] bg-white w-full" />
+            <SettingItem
+              icon={<ShieldExclamationIcon size={24} color="#ef4444" />}
+              title={isGroup ? "Báo cáo nhóm" : "Báo cáo người dùng"}
+              isDestructive
+              onPress={() => setIsReportModalVisible(true)}
+            />
           </View>
         </View>
 
@@ -857,6 +913,7 @@ export default function ChatInfoScreen() {
         )}
 
         {isGroup && (
+
           <>
             {/* SECTION: RỜI / GIẢI TÁN NHÓM */}
             <View className="px-5 mt-10 pb-12">
@@ -907,11 +964,10 @@ export default function ChatInfoScreen() {
                 .map((m) => (
                   <TouchableOpacity
                     key={m.id}
-                    className={`flex-row items-center p-3 rounded-xl mb-2 border ${
-                      selectedNewLeaderId === m.id
+                    className={`flex-row items-center p-3 rounded-xl mb-2 border ${selectedNewLeaderId === m.id
                         ? "border-[#007AFF] bg-[#007AFF]/10"
                         : "border-gray-200"
-                    }`}
+                      }`}
                     onPress={() => setSelectedNewLeaderId(m.id)}
                   >
                     <Image
@@ -922,11 +978,10 @@ export default function ChatInfoScreen() {
                     />
                     <Text className="ml-3 text-base flex-1">{m.name}</Text>
                     <View
-                      className={`w-5 h-5 rounded-full border items-center justify-center ${
-                        selectedNewLeaderId === m.id
+                      className={`w-5 h-5 rounded-full border items-center justify-center ${selectedNewLeaderId === m.id
                           ? "border-[#007AFF]"
                           : "border-gray-400"
-                      }`}
+                        }`}
                     >
                       {selectedNewLeaderId === m.id && (
                         <View className="w-3 h-3 rounded-full bg-[#007AFF]" />
@@ -1127,9 +1182,34 @@ export default function ChatInfoScreen() {
           </View>
         </View>
       </Modal>
+
+      <ReportModal
+        visible={isReportModalVisible}
+        onClose={() => setIsReportModalVisible(false)}
+        targetId={(isGroup ? id : otherUserId) as string}
+        targetType={isGroup ? TargetType.GROUP : TargetType.USER}
+        targetName={groupName || (isGroup ? "Nhóm" : "Người dùng")}
+        selectedMessageIds={selectedMessageIds}
+        onSelectMessages={() => setPendingSelectionMode(true)}
+        onSuccess={() => {
+          setIsReportModalVisible(false);
+          // Navigate back to chat WITHOUT selectionMode
+          const isGroupStr = isGroup ? "true" : "false";
+          const convId = id as string;
+          
+          let query = `isGroup=${isGroupStr}&name=${encodeURIComponent(groupName || name as string)}&avatar=${encodeURIComponent(groupAvatar || avatar as string)}&membersCount=${realtimeMembersCount}`;
+          if (!isGroup && otherUserId) {
+            query += `&targetUserId=${otherUserId}`;
+          }
+          
+          // Use replace to ensure the stack doesn't grow
+          router.replace(`/chat/${convId}?${query}` as any);
+        }}
+      />
     </View>
   );
 }
+
 
 // --- Các Component Phụ ---
 
@@ -1214,9 +1294,8 @@ function SettingItem({
         {icon}
       </View>
       <Text
-        className={`ml-4 flex-1 text-[15px] font-medium ${
-          isDestructive ? "text-red-600" : "text-gray-800"
-        }`}
+        className={`ml-4 flex-1 text-[15px] font-medium ${isDestructive ? "text-red-600" : "text-gray-800"
+          }`}
       >
         {title}
       </Text>

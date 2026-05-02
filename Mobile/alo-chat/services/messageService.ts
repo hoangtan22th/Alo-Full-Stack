@@ -372,4 +372,42 @@ export const messageService = {
       return false;
     }
   },
+
+  // Upload files thuần túy lên S3 (không tạo tin nhắn)
+  uploadRawFiles: async (
+    files: any[],
+    onProgress?: (percent: number) => void,
+  ): Promise<string[]> => {
+    try {
+      const formData = new FormData();
+      files.forEach((file) => {
+        const name = file.name || file.fileName || `file_${Date.now()}`;
+        const type = file.mimeType || file.type || "application/octet-stream";
+        formData.append("files", {
+          uri: file.uri,
+          name,
+          type,
+        } as any);
+      });
+
+      const raw = await api.post<any, any>(`/messages/upload/raw`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (progressEvent) => {
+          if (onProgress && progressEvent.total) {
+            const percent = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total,
+            );
+            onProgress(percent);
+          }
+        },
+      });
+
+      // API trả về { status: 'success', data: [url1, url2, ...] }
+      return raw.data || raw || [];
+    } catch (error) {
+      console.error("Lỗi upload files thuần túy:", error);
+      return [];
+    }
+  },
 };
+

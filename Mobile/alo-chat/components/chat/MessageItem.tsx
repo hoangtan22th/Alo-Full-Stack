@@ -29,6 +29,8 @@ interface MessageItemProps {
   onReplyClick?: (messageId: string) => void;
   isHighlighted?: boolean;
   isAdminHighlighted?: boolean;
+  onPress?: () => void;
+  isSelected?: boolean;
 }
 
 export const MessageItem = ({
@@ -45,6 +47,8 @@ export const MessageItem = ({
   onReplyClick,
   isHighlighted,
   isAdminHighlighted,
+  onPress,
+  isSelected,
 }: MessageItemProps) => {
   const timeString = new Date(msg.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
@@ -76,7 +80,9 @@ export const MessageItem = ({
         activeOpacity={0.8}
         onLongPress={onLongPress}
         onPress={() => {
-          if (!isLastInBlock) {
+          if (onPress) {
+            onPress();
+          } else if (!isLastInBlock) {
             LayoutAnimation.configureNext(
               LayoutAnimation.Presets.easeInEaseOut,
             );
@@ -94,10 +100,11 @@ export const MessageItem = ({
                 (isSender
                   ? "bg-black rounded-3xl rounded-br-lg"
                   : "bg-white rounded-3xl rounded-bl-lg")
-          } ${isAdminHighlighted ? "border-amber-200" : "border-transparent"}`}
-          style={
-            msg.type === "poll" ? { width: "100%", alignItems: "center" } : {}
-          }
+          } ${isAdminHighlighted ? "border-amber-200" : isSelected ? "border-blue-500" : "border-transparent"}`}
+          style={[
+            msg.type === "poll" ? { width: "100%", alignItems: "center" } : {},
+            isSelected ? { backgroundColor: 'rgba(59, 130, 246, 0.1)' } : {}
+          ]}
         >
           {msg.replyTo && msg.replyTo.messageId && (
             <TouchableOpacity
@@ -144,8 +151,12 @@ export const MessageItem = ({
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={() => {
-                const idx = chatImages.findIndex((img) => img._id === msg._id);
-                if (idx !== -1) setViewerIndex(idx);
+                if (onPress) {
+                  onPress();
+                } else {
+                  const idx = chatImages.findIndex((img) => img._id === msg._id);
+                  if (idx !== -1) setViewerIndex(idx);
+                }
               }}
               onLongPress={onLongPress}
             >
@@ -158,12 +169,16 @@ export const MessageItem = ({
           ) : msg.type === "file" ? (
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={() =>
-                openRemoteFile(
-                  msg.content,
-                  msg.metadata?.fileName || `file_${msg._id}`,
-                )
-              }
+              onPress={() => {
+                if (onPress) {
+                  onPress();
+                } else {
+                  openRemoteFile(
+                    msg.content,
+                    msg.metadata?.fileName || `file_${msg._id}`,
+                  );
+                }
+              }}
               className={`overflow-hidden rounded-2xl ${
                 isSender ? "bg-white" : "bg-white"
               }`}

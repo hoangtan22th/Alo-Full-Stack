@@ -16,7 +16,7 @@ function RootLayoutNav() {
   const { isAuthenticated, isReady } = useAuth();
   const router = useRouter();
   const segments = useSegments();
-  const searchParams = useLocalSearchParams();
+  // const searchParams = useLocalSearchParams(); // Remove this to avoid root re-renders on param changes
 
   useEffect(() => {
     if (!isReady) return;
@@ -56,15 +56,14 @@ function RootLayoutNav() {
         if (data.type === "REMOVED") {
           const groupId = data.data?.groupId;
           const currentPathId = segments[1];
-          const queryId = searchParams.id;
+          // const queryId = searchParams.id; // Use segments instead
 
           // Nếu đang ở màn hình chat của nhóm đó hoặc màn hình info của nhóm đó
-          // ['chat', 'id'] hoặc ['chat', 'info'] với ?id=...
+          // ['chat', 'id'] hoặc ['chat', 'info'] 
           const isAtChat = segments[0] === "chat" && currentPathId === groupId;
           const isAtInfo =
             segments[0] === "chat" &&
-            currentPathId === "info" &&
-            queryId === groupId;
+            currentPathId === "info"; // Simplified check
 
           if (isAtChat || isAtInfo) {
             console.log(
@@ -112,6 +111,8 @@ function RootLayoutNav() {
         <Stack.Screen name="register" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="chat/[id]" />
+        <Stack.Screen name="chat/info" />
+        <Stack.Screen name="chat/media" />
         <Stack.Screen name="groups/create-group" />
       </Stack>
 

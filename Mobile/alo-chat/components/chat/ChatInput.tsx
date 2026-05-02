@@ -38,6 +38,7 @@ interface ChatInputProps {
   replyingTo?: MessageDTO | null;
   onCancelReply?: () => void;
   canSendMessage?: boolean;
+  isBanned?: boolean;
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
@@ -53,6 +54,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       replyingTo,
       onCancelReply,
       canSendMessage = true,
+      isBanned = false,
     },
     ref,
   ) => {
@@ -181,13 +183,13 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
         <View className="flex-1 flex-row items-end bg-white rounded-[25px] pl-4 pr-1.5 py-1.5 shadow-sm border border-gray-200 min-h-[50px]">
           <TextInput
             ref={textInputRef}
-            className={`flex-1 text-[15px] text-gray-800 max-h-24 pt-2 pb-2 mt-0.5 mb-0.5 ${!canSendMessage ? "text-gray-400" : ""}`}
-            placeholder={canSendMessage ? "Nhập tin nhắn..." : "Chỉ trưởng/phó nhóm mới được nhắn tin"}
+            className={`flex-1 text-[15px] text-gray-800 max-h-24 pt-2 pb-2 mt-0.5 mb-0.5 ${(!canSendMessage || isBanned) ? "text-gray-400" : ""}`}
+            placeholder={isBanned ? "Nhóm này đã bị khóa do vi phạm tiêu chuẩn" : canSendMessage ? "Nhập tin nhắn..." : "Chỉ trưởng/phó nhóm mới được nhắn tin"}
             placeholderTextColor="#9ca3af"
             multiline
             value={inputText}
             onChangeText={onInputChange}
-            editable={canSendMessage}
+            editable={canSendMessage && !isBanned}
           />
           <TouchableOpacity
             onPress={() => (inputText.trim() && canSendMessage ? onSendMessage() : null)}
