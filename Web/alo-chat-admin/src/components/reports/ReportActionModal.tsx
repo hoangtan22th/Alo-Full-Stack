@@ -109,7 +109,8 @@ export function ReportActionModal({
           const isReporter = report.reporter?.id && m.senderId === report.reporter.id;
 
           let resolvedName = m.senderName;
-          if (isTarget) resolvedName = report.targetUser?.fullName || m.senderName || "Mục tiêu (Unknown)";
+          if (m.type === "system") resolvedName = "Hệ thống";
+          else if (isTarget) resolvedName = report.targetUser?.fullName || m.senderName || "Mục tiêu (Unknown)";
           else if (isReporter) resolvedName = report.reporter?.fullName || m.senderName || "Người tố cáo";
           else resolvedName = m.senderName || "Người dùng khác";
 
@@ -175,7 +176,8 @@ export function ReportActionModal({
             const isReporter = report.reporter?.id && m.senderId === report.reporter.id;
 
             let resolvedName = m.senderName;
-            if (isTarget && isUser) resolvedName = report.targetUser?.fullName || m.senderName || "Mục tiêu (Unknown)";
+            if (m.type === "system") resolvedName = "Hệ thống";
+            else if (isTarget && isUser) resolvedName = report.targetUser?.fullName || m.senderName || "Mục tiêu (Unknown)";
             else if (isReporter) resolvedName = report.reporter?.fullName || m.senderName || "Người tố cáo";
             else resolvedName = m.senderName || "Thành viên";
 
@@ -361,51 +363,61 @@ export function ReportActionModal({
                   ) : (
                     <div className="space-y-4">
                       <div className="bg-[#e9eaeb] dark:bg-[#1c1c1e] p-4 rounded-xl flex flex-col gap-3 max-h-[400px] overflow-y-auto shadow-inner border border-outline-variant/10">
-                        {chatMessages.map((msg, idx) => (
-                          <React.Fragment key={`${msg.id}-${idx}`}>
-                            <div
-                              className={`flex flex-col max-w-[85%] ${msg.isTarget ? "self-start" : "self-end"}`}
-                            >
-                              <span
-                                className={`text-[10px] mb-1 px-1 font-semibold ${msg.isTarget ? "text-red-500 self-start" : "text-gray-500 dark:text-gray-400 self-end"
-                                  }`}
+                        {chatMessages.map((msg, idx) => {
+                          const isSystem = msg.type === "system";
+                          return (
+                            <React.Fragment key={`${msg.id}-${idx}`}>
+                              <div
+                                className={`flex flex-col ${isSystem ? "max-w-full w-full items-center" : "max-w-[85%]"} ${isSystem ? "" : (msg.isTarget ? "self-start" : "self-end")}`}
                               >
-                                {msg.isTarget && "⚠️ "}
-                                {msg.senderName} · {msg.timestamp}
-                              </span>
-                              {msg.type === "image" || msg.content.match(/^https?:\/\/.*\.(png|jpe?g|gif|webp)(\?.*)?$/i) ? (
-                                <a
-                                  href={msg.content}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={`rounded-xl overflow-hidden shadow-sm inline-block border ${msg.isTarget ? 'rounded-tl-none border-red-200 dark:border-red-900/40' : 'rounded-tr-none border-transparent'}`}
-                                >
-                                  <img
-                                    src={msg.content}
-                                    alt="Message Image"
-                                    className="max-w-[200px] sm:max-w-[250px] object-cover"
-                                  />
-                                </a>
-                              ) : (
-                                <div
-                                  className={`px-3.5 py-2.5 rounded-2xl text-sm shadow-sm leading-relaxed break-all whitespace-pre-wrap ${msg.isTarget
-                                    ? "bg-white dark:bg-[#2c2c2e] text-black dark:text-white rounded-tl-none border border-red-200 dark:border-red-900/40"
-                                    : "bg-[#007aff] text-white rounded-tr-none"
-                                    }`}
-                                >
-                                  {msg.content}
-                                </div>
-                              )}
-                            </div>
+                                {!isSystem && (
+                                  <span
+                                    className={`text-[10px] mb-1 px-1 font-semibold ${msg.isTarget ? "text-red-500 self-start" : "text-gray-500 dark:text-gray-400 self-end"
+                                      }`}
+                                  >
+                                    {msg.isTarget && "⚠️ "}
+                                    {msg.senderName} · {msg.timestamp}
+                                  </span>
+                                )}
 
-                            {/* --- UPGRADED GAP DETECTION: INVISIBLE MESSAGE COUNT --- */}
-                            {msg.hiddenAfterCount && msg.hiddenAfterCount > 0 ? (
-                              <div className="flex items-center justify-center my-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-700 dark:text-yellow-400 text-[10px] italic font-bold uppercase tracking-wider">
-                                ⚠️ Cảnh báo: Có {msg.hiddenAfterCount} tin nhắn đã bị ẩn ở đoạn này.
+                                {isSystem ? (
+                                  <div className="py-2 px-4 text-[11px] text-on-surface-variant/60 font-medium italic text-center leading-relaxed">
+                                    {msg.content}
+                                  </div>
+                                ) : msg.type === "image" || msg.content.match(/^https?:\/\/.*\.(png|jpe?g|gif|webp)(\?.*)?$/i) ? (
+                                  <a
+                                    href={msg.content}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`rounded-xl overflow-hidden shadow-sm inline-block border ${msg.isTarget ? 'rounded-tl-none border-red-200 dark:border-red-900/40' : 'rounded-tr-none border-transparent'}`}
+                                  >
+                                    <img
+                                      src={msg.content}
+                                      alt="Message Image"
+                                      className="max-w-[200px] sm:max-w-[250px] object-cover"
+                                    />
+                                  </a>
+                                ) : (
+                                  <div
+                                    className={`px-3.5 py-2.5 rounded-2xl text-sm shadow-sm leading-relaxed break-all whitespace-pre-wrap ${msg.isTarget
+                                      ? "bg-white dark:bg-[#2c2c2e] text-black dark:text-white rounded-tl-none border border-red-200 dark:border-red-900/40"
+                                      : "bg-[#007aff] text-white rounded-tr-none"
+                                      }`}
+                                  >
+                                    {msg.content}
+                                  </div>
+                                )}
                               </div>
-                            ) : null}
-                          </React.Fragment>
-                        ))}
+
+                              {/* --- UPGRADED GAP DETECTION: INVISIBLE MESSAGE COUNT --- */}
+                              {msg.hiddenAfterCount && msg.hiddenAfterCount > 0 ? (
+                                <div className="flex items-center justify-center my-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-700 dark:text-yellow-400 text-[10px] italic font-bold uppercase tracking-wider">
+                                  ⚠️ Cảnh báo: Có {msg.hiddenAfterCount} tin nhắn đã bị ẩn ở đoạn này.
+                                </div>
+                              ) : null}
+                            </React.Fragment>
+                          );
+                        })}
                       </div>
 
                       {/* --- DEEP FETCH BUTTON --- */}
@@ -669,48 +681,57 @@ export function ReportActionModal({
                     </div>
                   ) : (
                     <div className="flex flex-col gap-4">
-                      {fullContextMessages.map((msg, idx) => (
-                        <div
-                          key={`${msg.id}-${idx}`}
-                          className={`flex flex-col max-w-[85%] ${msg.isTarget ? "self-start" : "self-end"} transition-all duration-500 ${msg.isReported
-                            ? "p-3 bg-yellow-200 dark:bg-yellow-900/40 rounded-2xl border-2 border-yellow-400 shadow-md ring-4 ring-yellow-400/10"
-                            : ""
-                            }`}
-                        >
-                          <span
-                            className={`text-[10px] mb-1.5 px-1 font-bold tracking-tight ${msg.isTarget ? "text-red-500 self-start" : "text-gray-500 dark:text-gray-400 self-end"
+                      {fullContextMessages.map((msg, idx) => {
+                        const isSystem = msg.type === "system";
+                        return (
+                          <div
+                            key={`${msg.id}-${idx}`}
+                            className={`flex flex-col ${isSystem ? "max-w-full w-full items-center" : "max-w-[85%]"} ${isSystem ? "" : (msg.isTarget ? "self-start" : "self-end")} transition-all duration-500 ${msg.isReported
+                              ? "p-3 bg-yellow-200 dark:bg-yellow-900/40 rounded-2xl border-2 border-yellow-400 shadow-md ring-4 ring-yellow-400/10"
+                              : ""
                               }`}
                           >
-                            {msg.isReported && "🚩 [ĐÃ TỐ CÁO] "}
-                            {msg.senderName} · {msg.timestamp}
-                          </span>
+                            {!isSystem && (
+                              <span
+                                className={`text-[10px] mb-1.5 px-1 font-bold tracking-tight ${msg.isTarget ? "text-red-500 self-start" : "text-gray-500 dark:text-gray-400 self-end"
+                                  }`}
+                              >
+                                {msg.isReported && "🚩 [ĐÃ TỐ CÁO] "}
+                                {msg.senderName} · {msg.timestamp}
+                              </span>
+                            )}
 
-                          {msg.type === "image" || msg.content.match(/^https?:\/\/.*\.(png|jpe?g|gif|webp)(\?.*)?$/i) ? (
-                            <a
-                              href={msg.content}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className={`rounded-xl overflow-hidden shadow-sm inline-block border hover:opacity-90 transition-opacity ${msg.isTarget ? 'rounded-tl-none border-red-200 dark:border-red-900/40' : 'rounded-tr-none border-transparent'
-                                }`}
-                            >
-                              <img
-                                src={msg.content}
-                                alt="Context Image"
-                                className="max-w-[200px] sm:max-w-[280px] object-cover"
-                              />
-                            </a>
-                          ) : (
-                            <div
-                              className={`px-4 py-2.5 rounded-2xl text-sm shadow-sm leading-relaxed break-all whitespace-pre-wrap ${msg.isTarget
-                                ? "bg-white dark:bg-[#2c2c2e] text-on-surface rounded-tl-none border border-outline-variant/10"
-                                : "bg-[#007aff] text-white rounded-tr-none"
-                                } ${msg.isReported ? "font-medium" : ""}`}
-                            >
-                              {msg.content}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                            {isSystem ? (
+                              <div className="py-2 px-6 text-[11px] text-on-surface-variant/60 font-semibold italic text-center leading-relaxed">
+                                {msg.content}
+                              </div>
+                            ) : msg.type === "image" || msg.content.match(/^https?:\/\/.*\.(png|jpe?g|gif|webp)(\?.*)?$/i) ? (
+                              <a
+                                href={msg.content}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`rounded-xl overflow-hidden shadow-sm inline-block border hover:opacity-90 transition-opacity ${msg.isTarget ? 'rounded-tl-none border-red-200 dark:border-red-900/40' : 'rounded-tr-none border-transparent'
+                                  }`}
+                              >
+                                <img
+                                  src={msg.content}
+                                  alt="Context Image"
+                                  className="max-w-[200px] sm:max-w-[280px] object-cover"
+                                />
+                              </a>
+                            ) : (
+                              <div
+                                className={`px-4 py-2.5 rounded-2xl text-sm shadow-sm leading-relaxed break-all whitespace-pre-wrap ${msg.isTarget
+                                  ? "bg-white dark:bg-[#2c2c2e] text-on-surface rounded-tl-none border border-outline-variant/10"
+                                  : "bg-[#007aff] text-white rounded-tr-none"
+                                  } ${msg.isReported ? "font-medium" : ""}`}
+                              >
+                                {msg.content}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
