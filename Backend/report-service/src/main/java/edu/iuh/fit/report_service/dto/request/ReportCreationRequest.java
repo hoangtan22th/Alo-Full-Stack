@@ -1,5 +1,6 @@
 package edu.iuh.fit.report_service.dto.request;
 
+import edu.iuh.fit.report_service.entity.MessageSnapshot;
 import edu.iuh.fit.report_service.entity.ReportReason;
 import edu.iuh.fit.report_service.entity.TargetType;
 import jakarta.validation.constraints.NotBlank;
@@ -33,5 +34,5 @@ public class ReportCreationRequest {
 
     private List<String> imageUrls;
 
-    private List<String> messageIds;
+    private List<MessageSnapshot> messageSnapshots;
 }

@@ -42,10 +42,29 @@ public class AdminReportController {
     @PatchMapping("/{reportId}/action")
     public ResponseEntity<ApiResponse<ReportAdminResponse>> resolveReport(
             @PathVariable String reportId,
+            @RequestHeader("X-Admin-Id") String adminId,
             @Valid @RequestBody AdminActionRequest actionRequest) {
 
-        ReportAdminResponse response = reportService.resolveReport(reportId, actionRequest);
+        ReportAdminResponse response = reportService.resolveReport(reportId, actionRequest, adminId);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PatchMapping("/{reportId}/lock")
+    public ResponseEntity<ApiResponse<Void>> lockReport(
+            @PathVariable String reportId,
+            @RequestHeader("X-Admin-Id") String adminId) {
+        
+        reportService.lockReport(reportId, adminId);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @PatchMapping("/{reportId}/heartbeat")
+    public ResponseEntity<ApiResponse<Void>> heartbeatLock(
+            @PathVariable String reportId,
+            @RequestHeader("X-Admin-Id") String adminId) {
+        
+        reportService.heartbeatLock(reportId, adminId);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @GetMapping("/statistics")
