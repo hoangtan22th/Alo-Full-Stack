@@ -49,7 +49,6 @@ import {
   CheckIcon,
   PhotoIcon,
 } from "@heroicons/react/24/outline";
-import ReportSelectionToolbar from "@/components/ui/report/ReportSelectionToolbar";
 import ReportModal from "@/components/ui/report/ReportModal";
 import { motion } from "framer-motion";
 import BotChatArea from "@/components/ui/BotChatArea";
@@ -226,15 +225,19 @@ export default function ChatPage() {
   const typingForThisConvo = useChatStore(
     (state) => state.typingUsers[conversationId] || EMPTY_ARRAY,
   );
-  const { isReportSelectionMode, selectedMessagesForReport, toggleMessageForReport, onlineUsers, setBulkPresence } = useChatStore(
+  const { onlineUsers, setBulkPresence, openReportModal } = useChatStore(
     useShallow((s) => ({
-      isReportSelectionMode: s.isReportSelectionMode,
-      selectedMessagesForReport: s.selectedMessagesForReport,
-      toggleMessageForReport: s.toggleMessageForReport,
       onlineUsers: s.onlineUsers,
       setBulkPresence: s.setBulkPresence,
+      reportAnchorId: s.reportAnchorId,
+      openReportModal: s.openReportModal,
     }))
   );
+
+  const handleReportUser = useCallback(() => {
+    if (!otherUserId) return;
+    openReportModal(otherUserId, conversationInfo?.displayName || "Người dùng");
+  }, [otherUserId, openReportModal, conversationInfo?.displayName]);
 
   // Fetch presence when entering chat
   useEffect(() => {
@@ -2093,7 +2096,10 @@ export default function ChatPage() {
                   <button className="px-3 py-1.5 bg-white text-gray-700 text-[11px] font-black rounded-lg border border-gray-100 hover:bg-gray-50 transition active:scale-95 shadow-sm">
                     Chặn
                   </button>
-                  <button className="px-3 py-1.5 bg-white text-gray-700 text-[11px] font-black rounded-lg border border-gray-100 hover:bg-red-50 hover:text-red-600 transition active:scale-95 shadow-sm">
+                  <button 
+                    onClick={handleReportUser}
+                    className="px-3 py-1.5 bg-white text-gray-700 text-[11px] font-black rounded-lg border border-gray-100 hover:bg-red-50 hover:text-red-600 transition active:scale-95 shadow-sm"
+                  >
                     Báo xấu
                   </button>
                 </div>
@@ -2410,26 +2416,7 @@ export default function ChatPage() {
                                     </div>
                                   ))}
                               </div>
-                              {/* Selection checkbox (report mode) */}
-                              {isReportSelectionMode && (
-                                <div className="flex items-center ml-2 mr-2">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleMessageForReport(msg._id);
-                                    }}
-                                    className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${selectedMessagesForReport.includes(msg._id)
-                                      ? "bg-blue-600 text-white ring-2 ring-blue-300"
-                                      : "bg-white border-gray-200 hover:bg-gray-50"
-                                      }`}
-                                    title={selectedMessagesForReport.includes(msg._id) ? "Unselect" : "Select"}
-                                  >
-                                    {selectedMessagesForReport.includes(msg._id) ? (
-                                      <svg className="w-4 h-4 text-white" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 00-1.414-1.414L8 11.172 4.707 7.879a1 1 0 10-1.414 1.414l4 4a1 1 0 001.414 0l8-8z" clipRule="evenodd" /></svg>
-                                    ) : null}
-                                  </button>
-                                </div>
-                              )}
+
                               {/* Bubble */}
                               <div className={`relative max-w-[75%] flex flex-col ${isMine ? "items-end" : "items-start"} transition-all duration-300 ${isMultiSelectMode ? "p-1 rounded-2xl" : ""
                                 } ${selectedMessageIds.has(msg._id) ? "bg-black/10 shadow-inner" : isMultiSelectMode ? "hover:bg-black/5" : ""
@@ -2473,11 +2460,7 @@ export default function ChatPage() {
                                         : isMine
                                           ? "border-blue-100"
                                           : "border-gray-100"
-                                      } ${bubbleRadius} ${isReportSelectionMode && !selectedMessagesForReport.includes(msg._id)
-                                        ? "opacity-50 filter grayscale"
-                                        : ""
-                                      } ${selectedMessagesForReport.includes(msg._id) ? "ring-2 ring-blue-300" : ""
-                                      }`}
+                                      } ${bubbleRadius}`}
                                   >
                                     {/* Reply Quote Box */}
                                     {msg.replyTo &&
@@ -3279,16 +3262,28 @@ export default function ChatPage() {
                                                   Thu hồi tin nhắn
                                                 </button>
                                               )}
-                                            <button
-                                              onClick={() =>
-                                                handleDeleteForMe(msg._id)
-                                              }
-                                              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition text-left"
-                                            >
-                                              <TrashIcon className="w-4 h-4 shrink-0" />
-                                              Xóa chỉ ở phía tôi
-                                            </button>
-                                          </div>
+                                              <button
+                                                onClick={() =>
+                                                  handleDeleteForMe(msg._id)
+                                                }
+                                                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition text-left"
+                                              >
+                                                <TrashIcon className="w-4 h-4 shrink-0" />
+                                                Xóa chỉ ở phía tôi
+                                              </button>
+                                              {!isMine && (
+                                                <button
+                                                  onClick={() => {
+                                                    setActiveMenu(null);
+                                                    openReportModal(String(msg.senderId), getSenderDisplayName(String(msg.senderId), msg), msg._id);
+                                                  }}
+                                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-600 hover:bg-red-50 transition text-left"
+                                                >
+                                                  <ExclamationCircleIcon className="w-4 h-4 shrink-0" />
+                                                  Báo cáo tin nhắn
+                                                </button>
+                                              )}
+                                            </div>
                                         )}
                                       </div>
 
@@ -4315,9 +4310,9 @@ export default function ChatPage() {
         </div>
       )}
       {/* Global Report Selection Toolbar (message selection mode) */}
-      <ReportSelectionToolbar />
+
       {/* Global store-driven ReportModal for 1-1 user reports */}
-      <StoreReportModal />
+      <StoreReportModal messages={messages} />
 
       {/* Multi-Select Toolbar */}
       {isMultiSelectMode && (
@@ -4412,26 +4407,20 @@ export default function ChatPage() {
  * This is needed because the modal is triggered from ChatInfoPanel but
  * must survive outside the panel's render tree for the full customize flow.
  */
-function StoreReportModal() {
+function StoreReportModal({ messages }: { messages: MessageDTO[] }) {
   const {
     isReportModalOpen,
     reportTargetId,
     reportTargetName,
-    selectedMessagesForReport,
-    isCustomizeMode,
     closeReportModal,
-    enterCustomizeMode,
-    clearReportSelection,
+    reportAnchorId,
   } = useChatStore(
     useShallow((s) => ({
       isReportModalOpen: s.isReportModalOpen,
       reportTargetId: s.reportTargetId,
       reportTargetName: s.reportTargetName,
-      selectedMessagesForReport: s.selectedMessagesForReport,
-      isCustomizeMode: s.isCustomizeMode,
       closeReportModal: s.closeReportModal,
-      enterCustomizeMode: s.enterCustomizeMode,
-      clearReportSelection: s.clearReportSelection,
+      reportAnchorId: s.reportAnchorId,
     }))
   );
 
@@ -4443,13 +4432,9 @@ function StoreReportModal() {
       onClose={closeReportModal}
       targetId={reportTargetId}
       targetType="USER"
-      targetName={reportTargetName ?? undefined}
-      selectedMessageIds={selectedMessagesForReport}
-      isCustomizeMode={isCustomizeMode}
-      onCustomizeEvidence={enterCustomizeMode}
-      onSuccess={() => {
-        clearReportSelection();
-      }}
+      targetName={reportTargetName || undefined}
+      messages={messages}
+      anchorId={reportAnchorId || undefined}
     />
   );
 }

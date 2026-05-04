@@ -39,6 +39,7 @@ import JoinLinkModal from "../ui/group/JoinLinkModal";
 import MemberManagementModal from "../ui/group/MemberManagementModal";
 import GroupSettingsModal from "../ui/group/GroupSettingsModal";
 import ReportModal from "@/components/ui/report/ReportModal";
+import ReportTargetModal from "@/components/ui/report/ReportTargetModal";
 import CreateGroupModal from "../ui/group/CreateGroupModal";
 import { groupService } from "@/services/groupService";
 import { useChatStore } from "@/store/useChatStore";
@@ -116,6 +117,8 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
     useState(false);
   const [showGroupSettingsModal, setShowGroupSettingsModal] = useState(false);
   const [showReportGroupModal, setShowReportGroupModal] = useState(false);
+  const [showReportTargetModal, setShowReportTargetModal] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ type: "USER" | "GROUP"; id: string; name: string } | null>(null);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [showCommonGroupsModal, setShowCommonGroupsModal] = useState(false);
   const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
@@ -222,20 +225,16 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   }, [messages]);
 
   const {
-    autoSelectEvidence,
-    enterCustomizeMode,
     openReportModal,
   } = useChatStore(
     useShallow((s) => ({
-      autoSelectEvidence: s.autoSelectEvidence,
-      enterCustomizeMode: s.enterCustomizeMode,
       openReportModal: s.openReportModal,
     }))
   );
 
   const handleReportUser = () => {
-    autoSelectEvidence(messages);
-    openReportModal(otherUserId!, conversationInfo?.displayName);
+    if (!otherUserId) return;
+    openReportModal(otherUserId, conversationInfo?.displayName || "Người dùng");
   };
 
   // Lọc file
@@ -559,7 +558,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                     icon={<ExclamationCircleIcon />}
                     label="Báo xấu nhóm"
                     isDanger
-                    onClick={() => setShowReportGroupModal(true)}
+                    onClick={() => setShowReportTargetModal(true)}
                   />
                   <SettingItem
                     icon={<ArrowRightOnRectangleIcon />}
@@ -658,13 +657,28 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
         />
       )}
 
+      {showReportTargetModal && (
+        <ReportTargetModal
+          isOpen={showReportTargetModal}
+          onClose={() => setShowReportTargetModal(false)}
+          groupName={conversationInfo?.displayName || "Nhóm"}
+          members={conversationInfo?.members || []}
+          onSelectTarget={(type, id, name) => {
+            setReportTarget({ type, id: id || conversationId, name });
+            setShowReportTargetModal(false);
+            setShowReportGroupModal(true);
+          }}
+        />
+      )}
+
       {showReportGroupModal && (
         <ReportModal
           isOpen={showReportGroupModal}
           onClose={() => setShowReportGroupModal(false)}
-          targetId={conversationId}
-          targetType="GROUP"
-          targetName={conversationInfo?.displayName}
+          targetId={reportTarget?.id || conversationId}
+          targetType={reportTarget?.type || "GROUP"}
+          targetName={reportTarget?.name || conversationInfo?.displayName}
+          messages={messages}
           onSuccess={() => {
             setShowReportGroupModal(false);
             // Ask to leave

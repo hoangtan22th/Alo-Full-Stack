@@ -1,137 +1,36 @@
 import { create } from "zustand";
 
-interface Message {
-  _id: string;
-  type?: string;
-  isRevoked?: boolean;
-}
-
 interface ChatState {
-  typingUsers: Record<string, string[]>;
+  typingUsers: Record<string, string[]>; // conversationId -> userIds
+  onlineUsers: Record<string, { status: string; lastActive?: number }>;
   friendIds: Set<string>;
-  onlineUsers: Record<string, { status: string; last_active?: number }>;
-  isReportSelectionMode: boolean;
-  selectedMessagesForReport: string[];
+  
+  // --- V2.1 Report System State ---
   isReportModalOpen: boolean;
   reportTargetId: string | null;
   reportTargetName: string | null;
-  isCustomizeMode: boolean; // true when user came from "Tùy chỉnh bằng chứng"
+  reportAnchorId: string | null;
 
-  setReportSelectionMode: (isSelecting: boolean) => void;
-  toggleMessageForReport: (messageId: string) => void;
-  clearReportSelection: () => void;
-  autoSelectEvidence: (messages: Message[]) => void;
-  openReportModal: (targetId: string, targetName?: string) => void;
-  closeReportModal: () => void;
-  enterCustomizeMode: () => void;
-  exitCustomizeMode: () => void;
-
+  // --- Actions ---
   setTyping: (conversationId: string, userId: string, isTyping: boolean) => void;
-  setFriendIds: (ids: Set<string>) => void;
+  setBulkPresence: (presences: any) => void;
   setOnlineStatus: (userId: string, status: string, lastActive?: number) => void;
-  setBulkPresence: (presenceData: Record<string, any>) => void;
+  setFriendIds: (ids: Set<string>) => void;
+  
+  openReportModal: (targetId: string, targetName?: string | null, anchorId?: string) => void;
+  closeReportModal: () => void;
 }
 
-export const useChatStore = create<ChatState>((set, get) => ({
+export const useChatStore = create<ChatState>((set) => ({
   typingUsers: {},
-  friendIds: new Set(),
   onlineUsers: {},
-  isReportSelectionMode: false,
-  selectedMessagesForReport: [],
+  friendIds: new Set(),
+
+  // --- V2.1 Report System State ---
   isReportModalOpen: false,
   reportTargetId: null,
   reportTargetName: null,
-  isCustomizeMode: false,
-
-  setReportSelectionMode: (isSelecting) =>
-    set({ isReportSelectionMode: isSelecting }),
-
-  toggleMessageForReport: (messageId) =>
-    set((state) => {
-      const isSelected = state.selectedMessagesForReport.includes(messageId);
-      if (isSelected) {
-        return {
-          selectedMessagesForReport: state.selectedMessagesForReport.filter(
-            (id) => id !== messageId
-          ),
-        };
-      } else {
-        if (state.selectedMessagesForReport.length >= 40) return state;
-        return {
-          selectedMessagesForReport: [
-            ...state.selectedMessagesForReport,
-            messageId,
-          ],
-        };
-      }
-    }),
-
-  clearReportSelection: () =>
-    set({
-      selectedMessagesForReport: [],
-      isReportSelectionMode: false,
-      isReportModalOpen: false,
-      isCustomizeMode: false,
-    }),
-
-  /**
-   * Implements "20 oldest + 20 newest" logic.
-   * If total valid messages <= 40, takes all.
-   */
-  autoSelectEvidence: (messages) => {
-    const valid = messages.filter(
-      (m) =>
-        !m.isRevoked &&
-        (m.type === "text" || m.type === "image" || m.type === "file")
-    );
-    let ids: string[];
-    if (valid.length <= 40) {
-      ids = valid.map((m) => m._id);
-    } else {
-      const first20 = valid.slice(0, 20).map((m) => m._id);
-      const last20 = valid.slice(-20).map((m) => m._id);
-      ids = Array.from(new Set([...first20, ...last20]));
-    }
-    console.log(
-      "[autoSelectEvidence] input:", messages.length, "msgs →",
-      "valid:", valid.length, "→ auto-selected IDs:", ids
-    );
-    set({ selectedMessagesForReport: ids });
-  },
-
-  openReportModal: (targetId, targetName) =>
-    set({
-      isReportModalOpen: true,
-      reportTargetId: targetId,
-      reportTargetName: targetName ?? null,
-    }),
-
-  closeReportModal: () =>
-    set({
-      isReportModalOpen: false,
-      isCustomizeMode: false,
-    }),
-
-  /**
-   * Called when user clicks "Tùy chỉnh bằng chứng".
-   * Hides modal, enters selection mode keeping current evidence.
-   */
-  enterCustomizeMode: () =>
-    set({
-      isReportModalOpen: false,
-      isReportSelectionMode: true,
-      isCustomizeMode: true,
-    }),
-
-  /**
-   * Called when user clicks "Continue" in the toolbar.
-   * Re-opens modal in custom view.
-   */
-  exitCustomizeMode: () =>
-    set({
-      isReportSelectionMode: false,
-      isReportModalOpen: true,
-    }),
+  reportAnchorId: null,
 
   setTyping: (conversationId, userId, isTyping) => {
     set((state) => {
@@ -147,30 +46,46 @@ export const useChatStore = create<ChatState>((set, get) => ({
       };
     });
   },
-  setFriendIds: (ids) => set({ friendIds: ids }),
+
+  setBulkPresence: (presences) => {
+    const normalized: Record<string, { status: string; lastActive?: number }> = {};
+    Object.keys(presences).forEach((userId) => {
+      const p = presences[userId];
+      normalized[userId] = {
+        status: p.status || (p.isOnline ? "online" : "offline"),
+        lastActive: p.lastActive || p.lastActiveAt,
+      };
+    });
+    set({ onlineUsers: normalized });
+  },
 
   setOnlineStatus: (userId, status, lastActive) => {
     set((state) => ({
       onlineUsers: {
         ...state.onlineUsers,
-        [userId]: { status, last_active: lastActive },
+        [userId]: { status, lastActive: lastActive || state.onlineUsers[userId]?.lastActive },
       },
     }));
   },
 
-  setBulkPresence: (presenceData) => {
-    const formatted: Record<string, { status: string; last_active?: number }> = {};
-    Object.entries(presenceData).forEach(([userId, info]: [string, any]) => {
-      formatted[userId] = {
-        status: info.isOnline ? "online" : "offline",
-        last_active: info.lastActiveAt,
-      };
-    });
-    set((state) => ({
-      onlineUsers: {
-        ...state.onlineUsers,
-        ...formatted,
-      },
-    }));
+  setFriendIds: (ids) => {
+    set({ friendIds: ids });
   },
+
+  // --- V2.1 Reporting Actions ---
+  openReportModal: (targetId, targetName, anchorId) =>
+    set({
+      isReportModalOpen: true,
+      reportTargetId: targetId,
+      reportTargetName: targetName ?? null,
+      reportAnchorId: anchorId ?? null,
+    }),
+
+  closeReportModal: () =>
+    set({
+      isReportModalOpen: false,
+      reportTargetId: null,
+      reportTargetName: null,
+      reportAnchorId: null,
+    }),
 }));

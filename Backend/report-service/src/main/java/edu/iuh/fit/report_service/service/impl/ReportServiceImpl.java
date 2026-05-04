@@ -65,22 +65,28 @@ public class ReportServiceImpl implements ReportService {
 
         // 1. Spot-Check Validation (New in V2.1)
         if (request.getMessageSnapshots() != null && !request.getMessageSnapshots().isEmpty()) {
-            // Lọc ra các tin chưa bị revoke (trong đồ án này giả định tất cả là verifiable nếu có mặt trong snapshot)
-            List<MessageSnapshot> verifiable = request.getMessageSnapshots();
-            
-            // Chọn ngẫu nhiên 1 tin để đối soát với server
-            int randomIndex = ThreadLocalRandom.current().nextInt(verifiable.size());
-            MessageSnapshot sample = verifiable.get(randomIndex);
-
             try {
-                MessageDto actual = messageServiceClient.getMessageById(sample.getMessageId());
-                if (actual != null && !actual.getContent().equals(sample.getContent())) {
-                    log.warn("Tampered snapshot detected! Reporter: {}, MessageId: {}", request.getReporterId(), sample.getMessageId());
-                    throw new TamperedEvidenceException("Nội dung tin nhắn không khớp với hồ sơ máy chủ (Phát hiện giả mạo bằng chứng)");
+                List<MessageSnapshot> verifiable = request.getMessageSnapshots();
+                int randomIndex = ThreadLocalRandom.current().nextInt(verifiable.size());
+                MessageSnapshot sample = verifiable.get(randomIndex);
+
+                try {
+                    MessageDto actual = messageServiceClient.getMessageById(sample.getMessageId());
+                    if (actual != null && actual.getContent() != null && !actual.getContent().equals(sample.getContent())) {
+                        log.warn("Tampered snapshot detected! Reporter: {}, MessageId: {}", request.getReporterId(), sample.getMessageId());
+                        throw new TamperedEvidenceException("Nội dung tin nhắn không khớp với hồ sơ máy chủ (Phát hiện giả mạo bằng chứng)");
+                    }
+                } catch (FeignException.NotFound e) {
+                    log.info("Message {} was already revoked/deleted on server, skipping spot-check", sample.getMessageId());
+                } catch (FeignException e) {
+                    log.error("Feign error during spot-check for message {}: status {}", sample.getMessageId(), e.status());
+                    // Allow report to continue even if message-service is unreachable
                 }
-            } catch (FeignException.NotFound e) {
-                log.info("Message {} was already revoked/deleted on server, skipping spot-check for this one", sample.getMessageId());
-                // Theo thiết kế: nếu tin nhắn đã bị xóa trên server (null), snapshot được coi là hợp lệ (Core feature)
+            } catch (TamperedEvidenceException e) {
+                throw e; // Re-throw tampering detection
+            } catch (Exception e) {
+                log.error("Unexpected error during spot-check: {}", e.getMessage());
+                // Allow report to continue on random system errors
             }
         }
 
