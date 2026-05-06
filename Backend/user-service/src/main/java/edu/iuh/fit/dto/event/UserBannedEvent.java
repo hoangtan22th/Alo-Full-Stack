@@ -16,8 +16,13 @@ import java.time.LocalDateTime;
 public class UserBannedEvent {
 
     private String targetId;
+    private String targetType;
+    private String targetName;
     private String adminNotes;
-    private String resolvedBy;
-    private LocalDateTime timestamp;
     private String reason;
+    private String resolvedBy;
+    private String leaderId;
+    private String groupId;
+    private String groupName;
+    private LocalDateTime timestamp;
 }

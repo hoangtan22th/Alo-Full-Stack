@@ -553,6 +553,17 @@ export default function GlobalChatScreen() {
       });
     };
 
+    const handleGroupBanned = (data: any) => {
+      const updatedId = data.groupId || data.conversationId;
+      if (String(updatedId) === String(resolvedConversationId)) {
+        setGroupDetails((prev: any) => ({
+          ...prev,
+          status: data.status,
+          isBanned: data.status === "READ_ONLY"
+        }));
+      }
+    };
+
     socket.on("message-received", handleMessageReceived);
     socket.on("message-reaction-updated", handleReactionUpdated);
     socket.on("messages-read", handleMessagesRead);
@@ -562,6 +573,7 @@ export default function GlobalChatScreen() {
     socket.on("message-revoked", handleMessageRevoked);
     socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
     socket.on("GROUP_UPDATED", handleGroupUpdated);
+    socket.on("GROUP_BANNED", handleGroupBanned);
     socket.on("POLL_UPDATED", handlePollUpdated);
 
     return () => {
@@ -574,6 +586,7 @@ export default function GlobalChatScreen() {
       socket.off("message-revoked", handleMessageRevoked);
       socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
       socket.off("GROUP_UPDATED", handleGroupUpdated);
+      socket.off("GROUP_BANNED", handleGroupBanned);
       socket.off("POLL_UPDATED", handlePollUpdated);
     };
   }, [socket, resolvedConversationId, isGroupChat, targetUserId]);
@@ -1147,7 +1160,7 @@ export default function GlobalChatScreen() {
               replyingTo={replyingTo}
               onCancelReply={() => setReplyingToWithRef(null)}
               canSendMessage={canSendMessage}
-              isBanned={groupDetails?.isBanned}
+              isBanned={groupDetails?.isBanned || groupDetails?.status === "READ_ONLY"}
             />
           </View>
         ) : (
@@ -1251,7 +1264,7 @@ export default function GlobalChatScreen() {
         targetName={reportTarget ? reportTarget.name : "Người dùng"}
         selectedMessageIds={reportMessageIds}
         messages={messages}
-        getAvatarForUser={(senderId) => userCache[senderId]?.avatar || ""}
+        getAvatarForUser={(senderId) => userCache[senderId]?.avatar || userCache[senderId]?.avatarUrl || ""}
         conversationId={id as string}
         conversationType={isGroup === "true" || isGroup === true ? "GROUP" : "ONE_TO_ONE"}
         onSuccess={() => {
