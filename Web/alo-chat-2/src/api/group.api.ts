@@ -28,7 +28,7 @@ export interface IGroup {
   mutedBy: string[];
   hiddenBy: string[];
   joinRequests: IJoinRequest[];
-  isBanned: boolean;
+  status: 'ACTIVE' | 'READ_ONLY' | 'DISBANDED';
   isApprovalRequired: boolean;
   isLinkEnabled: boolean;
   createdAt: string;
