@@ -38,6 +38,9 @@ interface ReportModalProps {
   onSuccess?: () => void;
   messages?: MessageDTO[];
   anchorId?: string;
+  userCache?: Record<string, { avatar?: string }>;
+  conversationId: string;
+  conversationType: "ONE_TO_ONE" | "GROUP";
 }
 
 const REPORT_REASONS = [
@@ -58,6 +61,9 @@ export default function ReportModal({
   onSuccess,
   messages = [],
   anchorId,
+  userCache = {},
+  conversationId,
+  conversationType: initialConversationType,
 }: ReportModalProps) {
   const { user: currentUser } = useAuthStore();
   const [reason, setReason] = useState<string>('');
@@ -67,6 +73,14 @@ export default function ReportModal({
   const [uploadProgress, setUploadProgress] = useState(0);
   
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const reporterId = currentUser?.id || currentUser?._id || currentUser?.userId;
+  const snapshots = React.useMemo(() => {
+    if (!reporterId) return [];
+    return generateEvidenceSnapshot(anchorId, messages, String(reporterId), (senderId) => {
+      return userCache[senderId]?.avatar || "";
+    });
+  }, [anchorId, messages, reporterId, userCache]);
 
   const resetForm = () => {
     setReason('');
@@ -101,6 +115,11 @@ export default function ReportModal({
       return;
     }
 
+    if (reason === 'OTHER' && !description.trim()) {
+      toast.error('Vui lòng nhập mô tả chi tiết cho lý do "Khác"');
+      return;
+    }
+
     const reporterId = currentUser?.id || currentUser?._id || currentUser?.userId;
     if (!reporterId) {
       toast.error('Lỗi phiên đăng nhập');
@@ -119,14 +138,13 @@ export default function ReportModal({
         );
       }
 
-      const snapshots = (targetType === 'USER') 
-        ? generateEvidenceSnapshot(anchorId, messages, String(reporterId))
-        : [];
-
       const payload = {
         reporterId: String(reporterId),
         targetId,
         targetType,
+        targetName,
+        conversationId,
+        conversationType: initialConversationType,
         reason,
         description: description || '',
         imageUrls: finalImageUrls,
@@ -195,7 +213,7 @@ export default function ReportModal({
           </div>
 
           <AnimatePresence mode="popLayout">
-            {isUser && (
+            {snapshots.length > 0 && (
               <motion.div 
                 key="evidence"
                 initial={{ opacity: 0, y: 10 }}
@@ -206,7 +224,7 @@ export default function ReportModal({
                   <DocumentMagnifyingGlassIcon className="w-5 h-5 text-blue-400 shrink-0" />
                   <div className="min-w-0">
                     <p className="text-[12px] font-black">Bằng chứng tin nhắn</p>
-                    <p className="text-[10px] text-gray-400 truncate">Hệ thống đã tự động lưu vết tin nhắn</p>
+                    <p className="text-[10px] text-gray-400 truncate">Hệ thống đã tự động lưu vết {snapshots.length} tin nhắn</p>
                   </div>
                 </div>
               </motion.div>
@@ -215,7 +233,7 @@ export default function ReportModal({
             <motion.div key="form" className="space-y-3">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                  Mô tả chi tiết
+                  Mô tả chi tiết {reason === 'OTHER' && <span className="text-red-500">*</span>}
                 </label>
                 <Textarea
                   placeholder="Nhập nội dung vi phạm..."

@@ -130,7 +130,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const isGroup = conversationInfo?.isGroup;
-  const isBanned = conversationInfo?.isBanned;
+  const isReadOnly = conversationInfo?.status === 'READ_ONLY';
+  const isDisbanded = conversationInfo?.status === 'DISBANDED';
+  const isRestricted = isReadOnly || isDisbanded;
 
   // Lấy role của user hiện tại trong nhóm
   const currentUserRole = useMemo(() => {
@@ -152,13 +154,13 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   // Quyền hạn giống mobile
   const permissions = conversationInfo?.permissions;
   const canEdit =
-    isGroup && !isBanned && (isManager || permissions?.editGroupInfo === "EVERYONE");
+    isGroup && !isRestricted && (isManager || permissions?.editGroupInfo === "EVERYONE");
   const canCreatePoll =
-    isGroup && !isBanned && (isManager || permissions?.createPolls === "EVERYONE");
+    isGroup && !isRestricted && (isManager || permissions?.createPolls === "EVERYONE");
   const canCreateNote =
-    isGroup && !isBanned && (isManager || permissions?.createNotes === "EVERYONE");
+    isGroup && !isRestricted && (isManager || permissions?.createNotes === "EVERYONE");
   const canCreateReminder =
-    isGroup && !isBanned && (isManager || permissions?.createReminders === "EVERYONE");
+    isGroup && !isRestricted && (isManager || permissions?.createReminders === "EVERYONE");
 
   const handleUpdateName = async () => {
     if (!tempName.trim() || tempName === conversationInfo?.displayName) {
@@ -234,7 +236,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
   const handleReportUser = () => {
     if (!otherUserId) return;
-    openReportModal(otherUserId, conversationInfo?.displayName || "Người dùng");
+    openReportModal(otherUserId, conversationInfo?.displayName || "Người dùng", null, conversationInfo?.isGroup ? "GROUP" : "ONE_TO_ONE");
   };
 
   // Lọc file
@@ -352,7 +354,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                 <ActionButton
                   icon={<UserGroupIcon />}
                   label="Thành viên"
-                  onClick={!isBanned ? () => setShowMemberManagementModal(true) : undefined}
+                  onClick={!isRestricted ? () => setShowMemberManagementModal(true) : undefined}
                 />
               ) : (
                 <>
@@ -662,9 +664,16 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           isOpen={showReportTargetModal}
           onClose={() => setShowReportTargetModal(false)}
           groupName={conversationInfo?.displayName || "Nhóm"}
-          members={conversationInfo?.members || []}
+          members={(conversationInfo?.members || [])
+            .filter((m: any) => m.userId !== myId)
+            .map((m: any) => ({
+              userId: m.userId,
+              fullName: userCache[m.userId]?.name || m.fullName,
+              avatar: userCache[m.userId]?.avatar || m.avatar
+          }))}
           onSelectTarget={(type, id, name) => {
-            setReportTarget({ type, id: id || conversationId, name });
+            const finalName = type === "USER" ? `${name} (trong nhóm: ${conversationInfo?.displayName || "Không tên"})` : name;
+            setReportTarget({ type, id: id || conversationId, name: finalName });
             setShowReportTargetModal(false);
             setShowReportGroupModal(true);
           }}
@@ -678,7 +687,10 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           targetId={reportTarget?.id || conversationId}
           targetType={reportTarget?.type || "GROUP"}
           targetName={reportTarget?.name || conversationInfo?.displayName}
+          conversationId={conversationId}
+          conversationType={isGroup ? "GROUP" : "ONE_TO_ONE"}
           messages={messages}
+          userCache={userCache}
           onSuccess={() => {
             setShowReportGroupModal(false);
             // Ask to leave

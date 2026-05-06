@@ -10,6 +10,7 @@ interface ChatState {
   reportTargetId: string | null;
   reportTargetName: string | null;
   reportAnchorId: string | null;
+  reportConversationType: "ONE_TO_ONE" | "GROUP" | null;
 
   // --- Actions ---
   setTyping: (conversationId: string, userId: string, isTyping: boolean) => void;
@@ -17,7 +18,7 @@ interface ChatState {
   setOnlineStatus: (userId: string, status: string, lastActive?: number) => void;
   setFriendIds: (ids: Set<string>) => void;
   
-  openReportModal: (targetId: string, targetName?: string | null, anchorId?: string) => void;
+  openReportModal: (targetId: string, targetName?: string | null, anchorId?: string | null, conversationType?: "ONE_TO_ONE" | "GROUP") => void;
   closeReportModal: () => void;
 }
 
@@ -31,6 +32,7 @@ export const useChatStore = create<ChatState>((set) => ({
   reportTargetId: null,
   reportTargetName: null,
   reportAnchorId: null,
+  reportConversationType: null,
 
   setTyping: (conversationId, userId, isTyping) => {
     set((state) => {
@@ -73,12 +75,13 @@ export const useChatStore = create<ChatState>((set) => ({
   },
 
   // --- V2.1 Reporting Actions ---
-  openReportModal: (targetId, targetName, anchorId) =>
+  openReportModal: (targetId, targetName, anchorId, conversationType) =>
     set({
       isReportModalOpen: true,
       reportTargetId: targetId,
       reportTargetName: targetName ?? null,
       reportAnchorId: anchorId ?? null,
+      reportConversationType: conversationType ?? "ONE_TO_ONE",
     }),
 
   closeReportModal: () =>
@@ -87,5 +90,6 @@ export const useChatStore = create<ChatState>((set) => ({
       reportTargetId: null,
       reportTargetName: null,
       reportAnchorId: null,
+      reportConversationType: null,
     }),
 }));

@@ -126,11 +126,15 @@ export default function ReportTargetModal({
                       onClick={() => onSelectTarget("USER", member.userId, member.fullName)}
                       className="w-full flex items-center gap-4 p-4 rounded-2xl bg-gray-50/50 hover:bg-white border border-transparent hover:border-blue-100 hover:shadow-lg hover:shadow-blue-500/5 transition-all group"
                     >
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-lg border-2 border-white shadow-sm group-hover:scale-105 transition-transform">
-                        {member.fullName.charAt(0).toUpperCase()}
+                      <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-lg border-2 border-white shadow-sm group-hover:scale-105 transition-transform">
+                        {member.avatar ? (
+                          <img src={member.avatar} alt={member.fullName} className="w-full h-full object-cover" />
+                        ) : (
+                          (member.fullName || "U").charAt(0).toUpperCase()
+                        )}
                       </div>
                       <div className="text-left">
-                        <p className="font-black text-gray-900 group-hover:text-blue-600 transition-colors">{member.fullName}</p>
+                        <p className="font-black text-gray-900 group-hover:text-blue-600 transition-colors">{member.fullName || "Người dùng ẩn danh"}</p>
                         <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">Thành viên nhóm</p>
                       </div>
                     </button>

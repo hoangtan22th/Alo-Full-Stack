@@ -5,6 +5,9 @@ export interface ReportCreationRequest {
   reporterId: string;
   targetId: string;
   targetType: "USER" | "GROUP";
+  targetName?: string;
+  conversationType: "ONE_TO_ONE" | "GROUP";
+  conversationId: string;
   reason: string;
   description?: string;
   imageUrls?: string[];

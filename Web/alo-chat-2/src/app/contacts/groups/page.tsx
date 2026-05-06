@@ -219,6 +219,7 @@ interface IGroup {
   name: string;
   groupAvatar?: string;
   members: IMember[];
+  status: 'ACTIVE' | 'READ_ONLY' | 'DISBANDED';
   isApprovalRequired: boolean;
   isLinkEnabled: boolean;
   isQuestionEnabled?: boolean;

@@ -236,7 +236,7 @@ export default function ChatPage() {
 
   const handleReportUser = useCallback(() => {
     if (!otherUserId) return;
-    openReportModal(otherUserId, conversationInfo?.displayName || "Người dùng");
+    openReportModal(otherUserId, conversationInfo?.displayName || "Người dùng", null, conversationInfo?.isGroup ? "GROUP" : "ONE_TO_ONE");
   }, [otherUserId, openReportModal, conversationInfo?.displayName]);
 
   // Fetch presence when entering chat
@@ -667,12 +667,13 @@ export default function ChatPage() {
     }
   }, [currentUser]);
 
-  // Fetch thông tin cho tất cả thành viên trong nhóm
+  // Fetch thông tin cho tất cả thành viên (Nhóm hoặc 1-1)
   useEffect(() => {
-    if (conversationInfo?.isGroup && conversationInfo.members) {
+    if (conversationInfo?.members) {
       conversationInfo.members.forEach((m: any) => {
-        if (m.userId && !userCache[m.userId]) {
-          fetchUserInfo(m.userId);
+        const userId = m.userId || m._id || (typeof m === 'string' ? m : null);
+        if (userId && !userCache[userId]) {
+          fetchUserInfo(userId);
         }
       });
     }
@@ -861,6 +862,15 @@ export default function ChatPage() {
             const currentStatus = statusData?.relationStatus || "NOT_FRIEND";
             setRelationStatus(currentStatus);
             if (u) {
+              // Đồng bộ vào userCache để hiển thị avatar báo cáo/reply chính xác
+              setUserCache((prev) => ({
+                ...prev,
+                [String(otherId)]: {
+                  name: u.fullName || u.displayName || u.username || u.name || "Người dùng",
+                  avatar: u.avatar || "",
+                },
+              }));
+
               // Chỉ cập nhật tên nếu đây thực sự là chat 1-1
               displayName =
                 u.fullName ||
@@ -1057,9 +1067,29 @@ export default function ChatPage() {
       }),
       socketService.onGroupBanned((data: any) => {
         const activeConvoId = conversationIdRef.current;
+        console.log("📢 [Realtime] GROUP_BANNED event received:", data);
         if (String(data.groupId || data.conversationId) === String(activeConvoId)) {
-          console.log("[Realtime] Group BANNED, refreshing info...");
+          console.log("✅ [Realtime] This group was BANNED/UNBANNED, refreshing info...");
+          // Cập nhật state cục bộ ngay lập tức nếu có status trong data
+          if (data.status) {
+            setConversationInfo(prev => prev ? { ...prev, status: data.status } : null);
+          }
           fetchConversationInfo();
+        }
+      }),
+
+      socketService.onGroupDisbanded((data: any) => {
+        const activeConvoId = conversationIdRef.current;
+        console.log("📢 [Realtime] GROUP_DISBANDED event received:", data);
+        if (String(data.groupId || data.conversationId) === String(activeConvoId)) {
+          // Cập nhật state cục bộ để UI hiện banner "đã giải tán" ngay lập tức
+          setConversationInfo(prev => prev ? { ...prev, status: 'DISBANDED' } : null);
+          toast.error(data.message || "Nhóm này đã bị giải tán do vi phạm.");
+          
+          // Đợi 2 giây để người dùng kịp thấy banner rồi mới redirect
+          setTimeout(() => {
+             router.replace("/chat");
+          }, 2000);
         }
       }),
     ];
@@ -3275,7 +3305,7 @@ export default function ChatPage() {
                                                 <button
                                                   onClick={() => {
                                                     setActiveMenu(null);
-                                                    openReportModal(String(msg.senderId), getSenderDisplayName(String(msg.senderId), msg), msg._id);
+                                                    openReportModal(String(msg.senderId), getSenderDisplayName(String(msg.senderId), msg), msg._id, conversationInfo?.isGroup ? "GROUP" : "ONE_TO_ONE");
                                                   }}
                                                   className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-600 hover:bg-red-50 transition text-left"
                                                 >
@@ -3499,7 +3529,7 @@ export default function ChatPage() {
             )}
 
             {/* Message Input Container */}
-            {conversationInfo?.isBanned ? (
+            {conversationInfo?.status === 'DISBANDED' ? (
               <div className="bg-gray-50 border-t border-gray-200 p-8 flex flex-col items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500 shrink-0">
                 <div className="w-16 h-16 rounded-[24px] bg-red-50 flex items-center justify-center text-red-500 shadow-sm border border-red-100/50">
                   <NoSymbolIcon className="w-8 h-8" />
@@ -3510,6 +3540,20 @@ export default function ChatPage() {
                   </h3>
                   <p className="text-[13px] font-bold text-gray-500 max-w-[280px] leading-relaxed">
                     Hệ thống đã ngừng hoạt động nhóm này do vi phạm tiêu chuẩn cộng đồng. Bạn chỉ có thể xem lại lịch sử trò chuyện.
+                  </p>
+                </div>
+              </div>
+            ) : (conversationInfo?.status === 'READ_ONLY' || conversationInfo?.status === 'DISBANDED') ? (
+              <div className="bg-orange-50 border-t border-orange-200 p-8 flex flex-col items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500 shrink-0">
+                <div className="w-16 h-16 rounded-[24px] bg-orange-100 flex items-center justify-center text-orange-600 shadow-sm border border-orange-200/50">
+                  <ExclamationTriangleIcon className="w-8 h-8" />
+                </div>
+                <div className="text-center space-y-1">
+                  <h3 className="text-[17px] font-black text-orange-900 tracking-tight">
+                    Nhóm bị hạn chế (Chỉ đọc)
+                  </h3>
+                  <p className="text-[13px] font-bold text-orange-800 max-w-[280px] leading-relaxed">
+                    Nhóm này đã bị chuyển sang chế độ chỉ đọc do có dấu hiệu vi phạm. Bạn không thể gửi tin nhắn mới lúc này.
                   </p>
                 </div>
               </div>
@@ -4312,7 +4356,7 @@ export default function ChatPage() {
       {/* Global Report Selection Toolbar (message selection mode) */}
 
       {/* Global store-driven ReportModal for 1-1 user reports */}
-      <StoreReportModal messages={messages} />
+      <StoreReportModal messages={messages} userCache={userCache} />
 
       {/* Multi-Select Toolbar */}
       {isMultiSelectMode && (
@@ -4407,13 +4451,17 @@ export default function ChatPage() {
  * This is needed because the modal is triggered from ChatInfoPanel but
  * must survive outside the panel's render tree for the full customize flow.
  */
-function StoreReportModal({ messages }: { messages: MessageDTO[] }) {
+function StoreReportModal({ messages, userCache }: { messages: MessageDTO[], userCache: Record<string, any> }) {
+  const params = useParams();
+  const conversationId = params?.conversationId as string;
+  
   const {
     isReportModalOpen,
     reportTargetId,
     reportTargetName,
     closeReportModal,
     reportAnchorId,
+    reportConversationType,
   } = useChatStore(
     useShallow((s) => ({
       isReportModalOpen: s.isReportModalOpen,
@@ -4421,6 +4469,7 @@ function StoreReportModal({ messages }: { messages: MessageDTO[] }) {
       reportTargetName: s.reportTargetName,
       closeReportModal: s.closeReportModal,
       reportAnchorId: s.reportAnchorId,
+      reportConversationType: s.reportConversationType,
     }))
   );
 
@@ -4433,7 +4482,10 @@ function StoreReportModal({ messages }: { messages: MessageDTO[] }) {
       targetId={reportTargetId}
       targetType="USER"
       targetName={reportTargetName || undefined}
+      conversationId={conversationId}
+      conversationType={reportConversationType || "ONE_TO_ONE"}
       messages={messages}
+      userCache={userCache}
       anchorId={reportAnchorId || undefined}
     />
   );

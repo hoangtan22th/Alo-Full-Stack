@@ -469,11 +469,15 @@ export default function ConversationSidebar() {
         fetchGroups();
       }),
       socketService.onConversationRemoved(
-        (data: { conversationId: string }) => {
-          setConversations((prev) =>
-            prev.filter((c) => (c._id || c.id) !== data.conversationId),
-          );
+        (data: { conversationId: string; reason?: string; groupName?: string }) => {
+          console.log("📢 [Sidebar] CONVERSATION_REMOVED received:", data);
+          setConversations((prev) => {
+            const filtered = prev.filter((c) => (c._id || c.id) !== data.conversationId);
+            console.log(`✅ [Sidebar] Group ${data.conversationId} removed from list. Remaining: ${filtered.length}`);
+            return filtered;
+          });
           if (conversationIdRef.current === data.conversationId) {
+            console.log("🚀 [Sidebar] Active conversation removed, redirecting...");
             router.push("/chat");
           }
         },

@@ -10,6 +10,8 @@ export interface MessageSnapshot {
   sequenceIndex: number;
   totalMessagesInConversation: number;
   isByReporter: boolean;
+  senderName?: string;
+  senderAvatar?: string;
 }
 
 /**
@@ -21,7 +23,8 @@ export interface MessageSnapshot {
 export const generateEvidenceSnapshot = (
   anchorId: string | undefined,
   conversationMessages: MessageDTO[],
-  currentUserId: string
+  currentUserId: string,
+  getAvatarForUser: (senderId: string) => string = () => ""
 ): MessageSnapshot[] => {
   let startIndex = 0;
   let endIndex = 0;
@@ -29,25 +32,28 @@ export const generateEvidenceSnapshot = (
   if (anchorId) {
     const anchorIdx = conversationMessages.findIndex((m) => m._id === anchorId);
     if (anchorIdx !== -1) {
-      // Strictly clamp boundaries to avoid out-of-bounds and ensure contiguous slice
-      startIndex = Math.max(0, anchorIdx - 15);
-      endIndex = Math.min(conversationMessages.length - 1, anchorIdx + 15);
+      if (anchorIdx >= conversationMessages.length - 15) {
+        startIndex = Math.max(0, conversationMessages.length - 30);
+        endIndex = conversationMessages.length - 1;
+      } else if (anchorIdx < 15) {
+        startIndex = 0;
+        endIndex = Math.min(conversationMessages.length - 1, 29);
+      } else {
+        startIndex = anchorIdx - 15;
+        endIndex = anchorIdx + 15;
+      }
     } else {
-      // Fallback: Last 30 messages if anchor is missing for some reason
       startIndex = Math.max(0, conversationMessages.length - 30);
       endIndex = conversationMessages.length - 1;
     }
   } else {
-    // Menu-based flow (no anchor): Last 30 messages
     startIndex = Math.max(0, conversationMessages.length - 30);
     endIndex = conversationMessages.length - 1;
   }
 
-  // Slice includes the endIndex (+1 because slice is exclusive)
   const slicedMessages = conversationMessages.slice(startIndex, endIndex + 1);
 
   return slicedMessages.map((msg) => {
-    // Find index in original array for immutable sequencing
     const originalIndex = conversationMessages.findIndex((m) => m._id === msg._id);
 
     return {
@@ -60,6 +66,8 @@ export const generateEvidenceSnapshot = (
       sequenceIndex: originalIndex,
       totalMessagesInConversation: conversationMessages.length,
       isByReporter: msg.senderId === currentUserId,
+      senderName: msg.senderName,
+      senderAvatar: getAvatarForUser(msg.senderId),
     };
   });
 };
