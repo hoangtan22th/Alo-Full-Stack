@@ -23,7 +23,7 @@ const REASON_OPTIONS = [
   { value: "CHILD_ABUSE", label: "Xâm hại trẻ em" },
   { value: "SEXUAL_CONTENT", label: "Nội dung tình dục" },
   { value: "VIOLENCE_TERRORISM", label: "Bạo lực / Khủng bố" },
-  { value: "SPAM_HARRASSMENT", label: "Spam / Quấy rối" },
+  { value: "SPAM_HARASSMENT", label: "Spam / Quấy rối" },
   { value: "OTHER", label: "Khác" },
 ];
 
@@ -88,20 +88,13 @@ export default function ReportsModerationPage() {
     setCurrentPage(0);
   };
 
-  const handleModalSubmit = async (
-    reportId: string,
-    action: "DISMISS" | "WARN" | "BAN",
-    notes: string,
-  ) => {
-    const ok = await resolveReport(reportId, action, notes);
-    if (ok) {
-      setSelectedReport(null);
-      loadData();
-    }
-  };
-
   const handleModalClose = () => {
     setSelectedReport(null);
+  };
+
+  const handleModalSuccess = () => {
+    setSelectedReport(null);
+    loadData();
   };
 
   return (
@@ -244,6 +237,15 @@ export default function ReportsModerationPage() {
           Pending
         </button>
         <button
+          onClick={() => handleFilterStatusChange("IN_PROGRESS")}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${filterStatus === "IN_PROGRESS"
+              ? "bg-amber-500 text-white shadow-md shadow-amber-500/20 scale-105"
+              : "text-on-surface-variant hover:bg-surface-container-highest"
+            }`}
+        >
+          In Progress
+        </button>
+        <button
           onClick={() => handleFilterStatusChange("RESOLVED")}
           className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${filterStatus === "RESOLVED"
               ? "bg-primary text-white shadow-md shadow-secondary/20 scale-105"
@@ -352,7 +354,7 @@ export default function ReportsModerationPage() {
           isOpen={!!selectedReport}
           onClose={handleModalClose}
           report={selectedReport}
-          onSubmit={handleModalSubmit}
+          onSuccess={handleModalSuccess}
         />
       )}
     </>

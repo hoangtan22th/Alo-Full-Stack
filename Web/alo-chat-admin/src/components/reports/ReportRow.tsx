@@ -21,6 +21,8 @@ export function ReportRow({ report, onReview }: ReportRowProps) {
     switch (report.status) {
       case "PENDING":
         return { label: "Chờ xử lý", color: "text-amber-700 bg-amber-100 border-amber-200" };
+      case "IN_PROGRESS":
+        return { label: "Đang xử lý", color: "text-amber-600 bg-amber-50 border-amber-500/30" };
       case "RESOLVED":
         return { label: "Đã giải quyết", color: "text-green-700 bg-green-100 border-green-200" };
       case "REJECTED":
@@ -36,13 +38,25 @@ export function ReportRow({ report, onReview }: ReportRowProps) {
     locale: vi,
   });
 
+  const getMediaUrl = (url: string | undefined): string => {
+    if (!url) return "";
+    if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) return url;
+    const backendHost = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8888";
+    return `${backendHost}${url.startsWith("/") ? "" : "/"}${url}`;
+  };
+
+  const targetNameStr = report.targetName || report.targetUser?.fullName || report.targetId || "";
+  const matchGroupContext = targetNameStr.match(/(.*?)\s*\(trong\s+nhóm:\s*(.*)\)/i);
+  const cleanTargetName = matchGroupContext ? matchGroupContext[1] : targetNameStr;
+  const groupContextName = matchGroupContext ? matchGroupContext[2] : null;
+
   return (
     <tr className="hover:bg-surface-container-lowest/50 transition-colors group">
       {/* ── Reporter (With Avatar) ── */}
       <td className="px-4 py-4 w-[20%]">
         <div className="flex items-center gap-2.5">
           <img 
-            src={report.reporter?.avatar || "/placeholder.png"} 
+            src={getMediaUrl(report.reporter?.avatar) || "/placeholder.png"} 
             alt="Reporter"
             className="w-8 h-8 rounded-full object-cover border border-outline-variant/20 shrink-0"
             onError={(e) => {
@@ -72,11 +86,18 @@ export function ReportRow({ report, onReview }: ReportRowProps) {
           )}
           <div className="min-w-0 flex-1">
              <p className="text-[13px] font-medium text-on-surface truncate">
-               {report.targetName || report.targetUser?.fullName || report.targetId}
+               {cleanTargetName}
              </p>
-             <span className={`text-[8px] font-black uppercase tracking-tighter ${report.targetType === 'USER' ? 'text-blue-600' : 'text-purple-600'}`}>
-               {report.targetType}
-             </span>
+             <div className="flex flex-col gap-0.5 mt-0.5">
+               <span className={`text-[8px] font-black uppercase tracking-tighter ${report.targetType === 'USER' ? 'text-blue-600' : 'text-purple-600'}`}>
+                 {report.targetType}
+               </span>
+               {groupContextName && (
+                 <span className="text-[8px] font-black text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded w-fit truncate max-w-full uppercase">
+                   Nhóm: {groupContextName}
+                 </span>
+               )}
+             </div>
           </div>
         </div>
       </td>
@@ -132,14 +153,16 @@ export function ReportRow({ report, onReview }: ReportRowProps) {
         <Button
           size="sm"
           onClick={() => onReview(report)}
-          variant={report.status === "PENDING" ? "default" : "outline"}
+          variant={report.status === "PENDING" || report.status === "IN_PROGRESS" ? "default" : "outline"}
           className={`text-[9px] font-black uppercase tracking-[0.1em] px-3 h-7 rounded-lg transition-all group-hover:scale-105 ${
             report.status === "PENDING"
               ? "bg-primary text-on-primary hover:bg-primary/90 shadow-sm"
+              : report.status === "IN_PROGRESS"
+              ? "bg-amber-500 text-white hover:bg-amber-600 shadow-sm"
               : "border-outline-variant text-on-surface-variant hover:bg-surface-container-high"
           }`}
         >
-          {report.status === "PENDING" ? "Review" : "View"}
+          {report.status === "PENDING" ? "Review" : report.status === "IN_PROGRESS" ? "Reviewing" : "View"}
         </Button>
       </td>
     </tr>
