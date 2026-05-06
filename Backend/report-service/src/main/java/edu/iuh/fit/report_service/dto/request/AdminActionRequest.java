@@ -14,7 +14,7 @@ import lombok.Builder;
 public class AdminActionRequest {
 
     public enum AdminAction {
-        DISMISS, WARN, BAN
+        DISMISS, WARN, BAN, DISBAND_GROUP
     }
 
     @NotNull(message = "Action is required")
@@ -22,7 +22,6 @@ public class AdminActionRequest {
 
     private String adminNotes;
 
-    @NotBlank(message = "Admin ID is required")
     private String adminId;
 
     private String targetName;

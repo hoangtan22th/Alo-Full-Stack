@@ -51,6 +51,9 @@ import { GalleryViewerModal } from "../../components/chat/GalleryViewer";
 import { PinnedMessageBar } from "../../components/chat/PinnedMessageBar";
 import { ReactionDetailsSheet } from "../../components/chat/ReactionDetailsSheet";
 import { MessageContextMenu } from "../../components/chat/MessageContextMenu";
+import { ReportModal } from "../../components/ReportModal";
+import { ReportTargetModal } from "../../components/ReportTargetModal";
+import { TargetType } from "../../services/reportService";
 
 export default function GlobalChatScreen() {
   const {
@@ -106,6 +109,9 @@ export default function GlobalChatScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [groupDetails, setGroupDetails] = useState<any>(null);
   const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
+  const [isReportModalVisible, setIsReportModalVisible] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ type: TargetType; id: string; name: string } | null>(null);
+  const [reportMessageIds, setReportMessageIds] = useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(selectionMode === "true");
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>(() => {
     if (initialSelectedIds) {
@@ -1160,9 +1166,9 @@ export default function GlobalChatScreen() {
               <Text className="text-sm text-gray-500">Đã chọn</Text>
               <Text
                 className="text-lg font-bold"
-                style={{ color: selectedReportIds.length > 0 && (selectedReportIds.length < 3 || selectedReportIds.length > 40) ? '#ef4444' : '#111827' }}
+                style={{ color: selectedReportIds.length > 0 && (selectedReportIds.length < 1 || selectedReportIds.length > 40) ? '#ef4444' : '#111827' }}
               >
-                {selectedReportIds.length} <Text className="text-xs font-normal text-gray-400">(cần 3-40)</Text>
+                {selectedReportIds.length} <Text className="text-xs font-normal text-gray-400">(tối đa 40)</Text>
               </Text>
             </View>
             <View className="flex-row gap-3">
@@ -1177,8 +1183,8 @@ export default function GlobalChatScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
-                  if (selectedReportIds.length < 3 || selectedReportIds.length > 40) {
-                    Alert.alert("Thông báo", "Vui lòng chọn từ 3 đến 40 tin nhắn làm bằng chứng.");
+                  if (selectedReportIds.length < 1 || selectedReportIds.length > 40) {
+                    Alert.alert("Thông báo", "Vui lòng chọn từ 1 đến 40 tin nhắn làm bằng chứng.");
                     return;
                   }
 
@@ -1194,7 +1200,7 @@ export default function GlobalChatScreen() {
                   router.replace(`/chat/info?${query}` as any);
                 }}
                 className="px-6 py-2 rounded-full"
-                style={{ backgroundColor: selectedReportIds.length >= 3 && selectedReportIds.length <= 40 ? '#2563eb' : '#93c5fd' }}
+                style={{ backgroundColor: selectedReportIds.length >= 1 && selectedReportIds.length <= 40 ? '#2563eb' : '#93c5fd' }}
               >
                 <Text className="font-bold text-white">Xong</Text>
               </TouchableOpacity>
@@ -1218,9 +1224,41 @@ export default function GlobalChatScreen() {
         onPin={handlePinMessage}
         onUnpin={handleUnpinMessage}
         onReply={handleReply}
+        onReport={(msg) => {
+          closeModal();
+          setReportTarget({
+            type: TargetType.USER,
+            id: msg.senderId,
+            name: msg.senderName || "Người dùng",
+          });
+          setReportMessageIds([msg._id]);
+          setIsReportModalVisible(true);
+        }}
         isPinned={!!selectedMessageId && pinnedMessages.some((m: MessageDTO) => m._id === selectedMessageId)}
         canPin={canPinMessage}
         currentUserId={currentUserId as string}
+      />
+
+      <ReportModal
+        visible={isReportModalVisible}
+        onClose={() => {
+          setIsReportModalVisible(false);
+          setReportTarget(null);
+          setReportMessageIds([]);
+        }}
+        targetId={reportTarget ? reportTarget.id : ""}
+        targetType={reportTarget ? reportTarget.type : TargetType.USER}
+        targetName={reportTarget ? reportTarget.name : "Người dùng"}
+        selectedMessageIds={reportMessageIds}
+        messages={messages}
+        getAvatarForUser={(senderId) => userCache[senderId]?.avatar || ""}
+        conversationId={id as string}
+        conversationType={isGroup === "true" || isGroup === true ? "GROUP" : "ONE_TO_ONE"}
+        onSuccess={() => {
+          setIsReportModalVisible(false);
+          setReportTarget(null);
+          setReportMessageIds([]);
+        }}
       />
     </KeyboardAvoidingView>
   );

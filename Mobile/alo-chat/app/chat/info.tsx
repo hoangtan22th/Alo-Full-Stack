@@ -45,6 +45,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { ReportModal } from "../../components/ReportModal";
+import { ReportTargetModal } from "../../components/ReportTargetModal";
 import { TargetType } from "../../services/reportService";
 
 
@@ -99,6 +100,8 @@ export default function ChatInfoScreen() {
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
 
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
+  const [isReportTargetModalVisible, setIsReportTargetModalVisible] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ type: TargetType; id: string; name: string } | null>(null);
   const [pendingSelectionMode, setPendingSelectionMode] = useState(false);
 
 
@@ -882,7 +885,18 @@ export default function ChatInfoScreen() {
               icon={<ShieldExclamationIcon size={24} color="#ef4444" />}
               title={isGroup ? "Báo cáo nhóm" : "Báo cáo người dùng"}
               isDestructive
-              onPress={() => setIsReportModalVisible(true)}
+              onPress={() => {
+                if (isGroup) {
+                  setIsReportTargetModalVisible(true);
+                } else {
+                  setReportTarget({
+                    type: TargetType.USER,
+                    id: otherUserId as string,
+                    name: groupName || "Người dùng",
+                  });
+                  setIsReportModalVisible(true);
+                }
+              }}
             />
           </View>
         </View>
@@ -1183,16 +1197,39 @@ export default function ChatInfoScreen() {
         </View>
       </Modal>
 
+      <ReportTargetModal
+        visible={isReportTargetModalVisible}
+        onClose={() => setIsReportTargetModalVisible(false)}
+        groupName={groupName || (name as string)}
+        members={members.filter((m) => m.id !== currentUserId).map((m) => ({ id: m.id, name: m.name, avatar: m.avatar }))}
+        onSelectTarget={(targetType, targetId, targetName) => {
+          setIsReportTargetModalVisible(false);
+          setReportTarget({
+            type: targetType as TargetType,
+            id: targetType === "GROUP" ? (id as string) : targetId,
+            name: targetName,
+          });
+          setIsReportModalVisible(true);
+        }}
+      />
+
       <ReportModal
         visible={isReportModalVisible}
-        onClose={() => setIsReportModalVisible(false)}
-        targetId={(isGroup ? id : otherUserId) as string}
-        targetType={isGroup ? TargetType.GROUP : TargetType.USER}
-        targetName={groupName || (isGroup ? "Nhóm" : "Người dùng")}
+        onClose={() => {
+          setIsReportModalVisible(false);
+          setReportTarget(null);
+        }}
+        targetId={reportTarget ? reportTarget.id : ((isGroup ? id : otherUserId) as string)}
+        targetType={reportTarget ? reportTarget.type : (isGroup ? TargetType.GROUP : TargetType.USER)}
+        targetName={reportTarget ? reportTarget.name : (groupName || (isGroup ? "Nhóm" : "Người dùng"))}
         selectedMessageIds={selectedMessageIds}
+        getAvatarForUser={(senderId) => members.find((m) => m.id === senderId)?.avatar || ""}
         onSelectMessages={() => setPendingSelectionMode(true)}
+        conversationId={id as string}
+        conversationType={isGroup ? "GROUP" : "ONE_TO_ONE"}
         onSuccess={() => {
           setIsReportModalVisible(false);
+          setReportTarget(null);
           // Navigate back to chat WITHOUT selectionMode
           const isGroupStr = isGroup ? "true" : "false";
           const convId = id as string;

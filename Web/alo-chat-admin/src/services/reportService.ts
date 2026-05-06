@@ -14,20 +14,43 @@ export interface ReportUser {
   avatar?: string | null;
 }
 
+export interface MessageSnapshot {
+  messageId: string;
+  senderId: string;
+  content: string;
+  contentType: string;
+  sentAt: string;
+  isAnchor: boolean;
+  sequenceIndex: number;
+  totalMessagesInConversation: number;
+  isByReporter: boolean;
+  senderName?: string;
+  senderAvatar?: string;
+}
+
+export interface ReportGroup {
+  id: string;
+  name: string;
+  groupAvatar?: string | null;
+}
+
 export interface ReportItem {
   id: string;
   reporter?: ReportUser;
   targetId: string;
   targetName: string | null;
   targetUser?: ReportUser;
+  targetGroup?: ReportGroup;
   targetType: "USER" | "GROUP";
   reason: string;
   status: "PENDING" | "IN_PROGRESS" | "RESOLVED" | "REJECTED";
   description: string | null;
   imageUrls: string[];
-  messageIds: string[];
+  messageSnapshots?: MessageSnapshot[]; // New in V2.1
   adminNotes: string | null;
   resolvedBy: string | null;
+  lockedBy?: string | null;
+  lockedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -69,9 +92,6 @@ export const reportService = {
         return { content: [], totalPages: 0, totalElements: 0, page: 0, number: 0 };
       }
 
-      // Spring VIA_DTO wraps pagination metadata in a `page` sub-object:
-      // { content: [...], page: { size, number, totalElements, totalPages } }
-      // Fallback: old PageImpl serialization had totalPages/totalElements at root level.
       const meta = raw.page ?? raw;
 
       return {
@@ -87,125 +107,58 @@ export const reportService = {
     }
   },
 
-  resolveReport: async (
-    reportId: string,
-    actionPayload: {
-      action: "DISMISS" | "WARN" | "BAN";
-      adminNotes: string;
-      adminId: string;
-    },
-  ): Promise<ReportItem> => {
+  /**
+   * Lock a report for review.
+   * Uses X-Admin-Id header from current auth state.
+   */
+  lockReport: async (reportId: string, adminId: string): Promise<void> => {
     try {
-      const response = await axiosClient.patch(
-        `${API_URL}/${reportId}/action`,
-        actionPayload,
-      );
-      return response.data?.data;
+      await axiosClient.patch(`${API_URL}/${reportId}/lock`, null, {
+        headers: { "X-Admin-Id": adminId }
+      });
     } catch (error) {
-      console.error(`Error resolving report ${reportId}:`, error);
+      console.error(`Error locking report ${reportId}:`, error);
       throw error;
     }
   },
 
   /**
-   * Fetch messages by their IDs from message-service via Gateway.
-   * Returns messages sorted by createdAt ASC (backend handles this).
+   * Heartbeat to maintain the lock.
    */
-  fetchMessagesBulk: async (ids: string[]): Promise<MessageDTO[]> => {
+  heartbeatLock: async (reportId: string, adminId: string): Promise<void> => {
     try {
-      // Use plain axios with admin token from cookie — axiosClient baseURL is for /management
-      const getCookie = (name: string) => {
-        if (typeof document === "undefined") return null;
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop()?.split(";").shift() ?? null;
-        return null;
-      };
-      const token = getCookie("admin_token");
-
-      const response = await axios.post(
-        `${MESSAGES_URL}/bulk`,
-        { ids },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        },
-      );
-      return response.data?.data ?? [];
+      await axiosClient.patch(`${API_URL}/${reportId}/heartbeat`, null, {
+        headers: { "X-Admin-Id": adminId }
+      });
     } catch (error) {
-      console.error("Error fetching bulk messages:", error);
-      return []; // Return empty instead of throwing — modal can still show without evidence
+      console.error(`Error heartbeat for report ${reportId}:`, error);
+      throw error;
     }
   },
 
   /**
-   * Fetch Group Info by ID from group-service for Group Reports
+   * Resolve a report with an action.
    */
-  fetchGroupInfo: async (groupId: string): Promise<{ name?: string; avatar?: string | null } | null> => {
+  resolveReport: async (
+    reportId: string,
+    actionPayload: {
+      action: "DISMISS" | "WARN" | "BAN" | "DISBAND_GROUP";
+      adminNotes: string;
+    },
+    adminId: string
+  ): Promise<ReportItem> => {
     try {
-      const getCookie = (name: string) => {
-        if (typeof document === "undefined") return null;
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop()?.split(";").shift() ?? null;
-        return null;
-      };
-      const token = getCookie("admin_token");
-
-      const response = await axios.get(
-        `${GATEWAY_URL}/api/v1/groups/${groupId}`,
+      const response = await axiosClient.patch(
+        `${API_URL}/${reportId}/action`,
+        actionPayload,
         {
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
+          headers: { "X-Admin-Id": adminId }
         }
       );
-      return {
-        name: response.data?.data?.name,
-        avatar: response.data?.data?.avatar,
-      };
+      return response.data?.data;
     } catch (error) {
-      console.error(`Error fetching group info for ${groupId}:`, error);
-      return null;
-    }
-  },
- 
-  /**
-   * Fetch full conversation history for context auditing (Admin only).
-   */
-  fetchFullConversationHistory: async (
-    conversationId: string,
-    limit: number = 200,
-    skip: number = 0,
-  ): Promise<MessageDTO[]> => {
-    try {
-      const getCookie = (name: string) => {
-        if (typeof document === "undefined") return null;
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop()?.split(";").shift() ?? null;
-        return null;
-      };
-      const token = getCookie("admin_token");
- 
-      const response = await axios.get(
-        `${MESSAGES_URL}/conversation/${conversationId}/admin`,
-        {
-          params: { limit, skip },
-          headers: {
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        },
-      );
-      return response.data?.data ?? [];
-    } catch (error) {
-      console.error(
-        `Error fetching full history for conversation ${conversationId}:`,
-        error,
-      );
-      return [];
+      console.error(`Error resolving report ${reportId}:`, error);
+      throw error;
     }
   },
 

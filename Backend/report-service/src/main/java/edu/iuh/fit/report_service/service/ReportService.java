@@ -16,7 +16,11 @@ public interface ReportService {
 
     Page<ReportAdminResponse> getAdminReports(ReportStatus status, String targetName, TargetType targetType, ReportReason reason, Pageable pageable);
 
-    ReportAdminResponse resolveReport(String reportId, AdminActionRequest actionRequest);
+    ReportAdminResponse resolveReport(String reportId, AdminActionRequest actionRequest, String adminId);
+
+    void lockReport(String reportId, String adminId);
+
+    void heartbeatLock(String reportId, String adminId);
 
     ReportStatisticsResponse getStatistics();
 }

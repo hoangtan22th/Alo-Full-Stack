@@ -22,6 +22,27 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getStatus(), ex.getMessage()));
     }
 
+    @ExceptionHandler(RateLimitException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRateLimitException(RateLimitException ex) {
+        String friendlyMessage = switch (ex.getReason()) {
+            case "DUPLICATE_TARGET" -> "Bạn đã báo cáo đối tượng này rồi. Vui lòng đợi hệ thống xử lý.";
+            case "HOURLY_LIMIT" -> "Bạn đã gửi quá nhiều báo cáo trong 1 giờ. Vui lòng thử lại sau.";
+            case "DAILY_LIMIT" -> "Bạn đã đạt giới hạn báo cáo trong ngày.";
+            default -> "Tốc độ gửi yêu cầu quá nhanh. Vui lòng thử lại sau.";
+        };
+
+        return ResponseEntity.status(429)
+                .header("X-RateLimit-Reason", ex.getReason())
+                .header("Retry-After", String.valueOf(ex.getRetryAfter()))
+                .body(ApiResponse.error(429, friendlyMessage));
+    }
+
+    @ExceptionHandler(TamperedEvidenceException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTamperedEvidenceException(TamperedEvidenceException ex) {
+        return ResponseEntity.status(400)
+                .body(ApiResponse.error(400, ex.getMessage()));
+    }
+
     // Bắt lỗi validation (@Valid, @NotNull, @Size...)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Map<String, String>>> handleValidation(MethodArgumentNotValidException ex) {

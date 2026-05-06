@@ -8,15 +8,16 @@ import edu.iuh.fit.report_service.dto.event.ReportCreatedEvent;
 import edu.iuh.fit.report_service.dto.event.ReportResolvedEvent;
 import edu.iuh.fit.report_service.dto.event.UserBannedEvent;
 import edu.iuh.fit.report_service.dto.event.UserWarnedEvent;
+import edu.iuh.fit.report_service.dto.event.GroupDisbandedEvent;
+import edu.iuh.fit.report_service.dto.event.GroupWarnedEvent;
+import edu.iuh.fit.report_service.dto.event.GroupBannedEvent;
 import edu.iuh.fit.report_service.dto.request.AdminActionRequest;
 import edu.iuh.fit.report_service.dto.request.ReportCreationRequest;
 import edu.iuh.fit.report_service.dto.response.GroupResponse;
 import edu.iuh.fit.report_service.dto.response.ReportAdminResponse;
 import edu.iuh.fit.report_service.dto.response.ReportResponse;
 import edu.iuh.fit.report_service.dto.response.UserResponse;
-import edu.iuh.fit.report_service.entity.Report;
-import edu.iuh.fit.report_service.entity.ReportStatus;
-import edu.iuh.fit.report_service.entity.TargetType;
+import edu.iuh.fit.report_service.entity.*;
 import edu.iuh.fit.report_service.repository.ReportRepository;
 import edu.iuh.fit.report_service.service.ReportService;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,11 @@ import org.springframework.data.mongodb.core.aggregation.Aggregation;
 import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.domain.Sort;
 import edu.iuh.fit.report_service.dto.response.ReportStatisticsResponse;
+import edu.iuh.fit.report_service.client.MessageServiceClient;
+import edu.iuh.fit.report_service.dto.MessageDto;
+import edu.iuh.fit.common_service.exception.TamperedEvidenceException;
+
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
@@ -49,6 +55,7 @@ public class ReportServiceImpl implements ReportService {
     private final ReportRepository reportRepository;
     private final UserClient userClient;
     private final GroupClient groupClient;
+    private final MessageServiceClient messageServiceClient;
     private final RabbitTemplate rabbitTemplate;
     private final MongoTemplate mongoTemplate;
 
@@ -56,37 +63,41 @@ public class ReportServiceImpl implements ReportService {
     public ReportResponse createReport(ReportCreationRequest request) {
         log.info("Creating new report from reporter {} targeting {}", request.getReporterId(), request.getTargetId());
 
-        boolean hasImages = request.getImageUrls() != null && !request.getImageUrls().isEmpty();
-        boolean hasMessages = request.getMessageIds() != null && !request.getMessageIds().isEmpty();
+        // 1. Spot-Check Validation (New in V2.1)
+        if (request.getMessageSnapshots() != null && !request.getMessageSnapshots().isEmpty()) {
+            try {
+                List<MessageSnapshot> verifiable = request.getMessageSnapshots();
+                int randomIndex = ThreadLocalRandom.current().nextInt(verifiable.size());
+                MessageSnapshot sample = verifiable.get(randomIndex);
 
-        if (request.getTargetType() == TargetType.GROUP) {
-            if (hasImages || hasMessages) {
-                throw new IllegalArgumentException(
-                        "GROUP reports cannot contain image URLs or message IDs. Group reports are strictly about the group's existence/metadata.");
-            }
-        } else if (request.getTargetType() == TargetType.USER) {
-            if (request.getMessageIds() != null && !request.getMessageIds().isEmpty()) {
-                int messageCount = request.getMessageIds().size();
-                if (messageCount < 3 || messageCount > 40) {
-                    throw new IllegalArgumentException(
-                            "USER reports must contain between 1 and 40 message IDs if evidence is provided. Current count: "
-                                    + messageCount);
+                try {
+                    MessageDto actual = messageServiceClient.getMessageById(sample.getMessageId());
+                    if (actual != null && actual.getContent() != null && !actual.getContent().equals(sample.getContent())) {
+                        log.warn("Tampered snapshot detected! Reporter: {}, MessageId: {}", request.getReporterId(), sample.getMessageId());
+                        throw new TamperedEvidenceException("Nội dung tin nhắn không khớp với hồ sơ máy chủ (Phát hiện giả mạo bằng chứng)");
+                    }
+                } catch (FeignException.NotFound e) {
+                    log.info("Message {} was already revoked/deleted on server, skipping spot-check", sample.getMessageId());
+                } catch (FeignException e) {
+                    log.error("Feign error during spot-check for message {}: status {}", sample.getMessageId(), e.status());
+                    // Allow report to continue even if message-service is unreachable
                 }
+            } catch (TamperedEvidenceException e) {
+                throw e; // Re-throw tampering detection
+            } catch (Exception e) {
+                log.error("Unexpected error during spot-check: {}", e.getMessage());
+                // Allow report to continue on random system errors
             }
         }
 
-        boolean hasDescription = request.getDescription() != null && !request.getDescription().trim().isEmpty();
-        if (!hasDescription && !hasImages && !hasMessages && request.getTargetType() == TargetType.USER) {
-            throw new IllegalArgumentException(
-                    "At least one piece of evidence (description, images, or messages) is required for reporting a USER.");
-        }
-
-        // Fetch target name for persistence and events
-        String targetName = "Unknown";
-        if (request.getTargetType() == TargetType.USER) {
-            targetName = fetchUserSafe(request.getTargetId()).getFullName();
-        } else if (request.getTargetType() == TargetType.GROUP) {
-            targetName = fetchGroupNameSafe(request.getTargetId());
+        // 2. Fetch target name for persistence and events
+        String targetName = request.getTargetName();
+        if (targetName == null || targetName.isBlank()) {
+            if (request.getTargetType() == TargetType.USER) {
+                targetName = fetchUserSafe(request.getTargetId()).getFullName();
+            } else if (request.getTargetType() == TargetType.GROUP) {
+                targetName = fetchGroupNameSafe(request.getTargetId());
+            }
         }
 
         Report report = Report.builder()
@@ -94,10 +105,12 @@ public class ReportServiceImpl implements ReportService {
                 .targetId(request.getTargetId())
                 .targetType(request.getTargetType())
                 .targetName(targetName)
+                .conversationType(request.getConversationType())
+                .conversationId(request.getConversationId())
                 .reason(request.getReason())
                 .description(request.getDescription())
                 .imageUrls(request.getImageUrls())
-                .messageIds(request.getMessageIds())
+                .messageSnapshots(request.getMessageSnapshots())
                 .status(ReportStatus.PENDING)
                 .build();
 
@@ -147,9 +160,9 @@ public class ReportServiceImpl implements ReportService {
         if (targetName != null && !targetName.isEmpty()) {
             query.addCriteria(Criteria.where("targetName").regex(targetName, "i"));
         }
-
+        long count = mongoTemplate.count(query, Report.class);
+        query.with(pageable);
         List<Report> reports = mongoTemplate.find(query, Report.class);
-        long count = mongoTemplate.count(Query.of(query).limit(-1).skip(-1), Report.class);
 
         List<ReportAdminResponse> list = reports.stream()
                 .map(this::mapToAdminResponse)
@@ -159,13 +172,14 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    public ReportAdminResponse resolveReport(String reportId, AdminActionRequest actionRequest) {
+    public ReportAdminResponse resolveReport(String reportId, AdminActionRequest actionRequest, String adminId) {
         Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new RuntimeException("Report not found with ID: " + reportId));
 
         report.setAdminNotes(actionRequest.getAdminNotes());
-        report.setResolvedBy(actionRequest.getAdminId());
+        report.setResolvedBy(adminId);
         report.setResolvedAction(actionRequest.getAction());
+        report.setUpdatedAt(LocalDateTime.now());
 
         String targetName = actionRequest.getTargetName();
         String leaderId = null;
@@ -190,18 +204,44 @@ public class ReportServiceImpl implements ReportService {
             }
         }
 
-        switch (actionRequest.getAction()) {
-            case DISMISS:
-                report.setStatus(ReportStatus.REJECTED);
-                break;
-            case WARN:
-                report.setStatus(ReportStatus.RESOLVED);
-                publishWarnEvent(report, targetName, leaderId);
-                break;
-            case BAN:
-                report.setStatus(ReportStatus.RESOLVED);
-                publishBanEvent(report, targetName, leaderId);
-                break;
+        if (report.getTargetType() == TargetType.USER) {
+            switch (actionRequest.getAction()) {
+                case DISMISS:
+                    report.setStatus(ReportStatus.REJECTED);
+                    break;
+                case WARN:
+                    report.setStatus(ReportStatus.RESOLVED);
+                    publishWarnEvent(report, targetName, leaderId);
+                    break;
+                case BAN:
+                    report.setStatus(ReportStatus.RESOLVED);
+                    publishBanEvent(report, targetName, leaderId);
+                    break;
+                default:
+                    log.warn("Action {} not applicable for USER target", actionRequest.getAction());
+                    break;
+            }
+        } else if (report.getTargetType() == TargetType.GROUP) {
+            switch (actionRequest.getAction()) {
+                case DISMISS:
+                    report.setStatus(ReportStatus.REJECTED);
+                    break;
+                case WARN:
+                    report.setStatus(ReportStatus.RESOLVED);
+                    publishGroupWarnEvent(report, targetName);
+                    break;
+                case BAN:
+                    report.setStatus(ReportStatus.RESOLVED);
+                    publishGroupBanEvent(report, targetName);
+                    break;
+                case DISBAND_GROUP:
+                    report.setStatus(ReportStatus.RESOLVED);
+                    publishDisbandGroupEvent(report, targetName);
+                    break;
+                default:
+                    log.warn("Action {} not applicable for GROUP target", actionRequest.getAction());
+                    break;
+            }
         }
 
         Report savedReport = reportRepository.save(report);
@@ -219,18 +259,22 @@ public class ReportServiceImpl implements ReportService {
                         .reason(savedReport.getReason() != null ? savedReport.getReason().name() : "Không có lý do")
                         .build());
 
-        // AUTO-RESOLVE DUPLICATES (Strict Rules)
+        // AUTO-RESOLVE DUPLICATES
+        autoResolveDuplicates(reportId, report, actionRequest);
+
+        return mapToAdminResponse(savedReport);
+    }
+
+    private void autoResolveDuplicates(String reportId, Report report, AdminActionRequest actionRequest) {
         try {
             AdminActionRequest.AdminAction action = actionRequest.getAction();
             List<Report> duplicates = null;
             String autoNote;
 
             if (action == AdminActionRequest.AdminAction.BAN) {
-                // RULE 2: BAN -> Resolve ALL other pending reports for this target
                 duplicates = reportRepository.findByTargetIdAndStatus(report.getTargetId(), ReportStatus.PENDING);
                 autoNote = "Hệ thống tự động xử lý gộp: Đối tượng đã bị CẤM (BAN) trong báo cáo ID: " + reportId;
             } else if (action == AdminActionRequest.AdminAction.WARN) {
-                // RULE 3: WARN -> ONLY resolve reports with SAME REASON
                 duplicates = reportRepository.findByTargetIdAndStatusAndReason(report.getTargetId(),
                         ReportStatus.PENDING, report.getReason());
                 autoNote = "Hệ thống tự động xử lý gộp: Đối tượng đã nhận CẢNH CÁO cho cùng lý do này trong báo cáo ID: "
@@ -238,11 +282,8 @@ public class ReportServiceImpl implements ReportService {
             } else {
                 autoNote = "";
             }
-            // RULE 1: DISMISS -> duplicates remains null, nothing happens
 
             if (duplicates != null && !duplicates.isEmpty()) {
-                // Lọc bỏ chính báo cáo hiện tại (đã được lưu ở trên, nhưng findBy có thể lấy
-                // lại nếu DB chưa sync)
                 List<Report> toResolve = duplicates.stream()
                         .filter(dup -> !dup.getId().equals(reportId))
                         .collect(Collectors.toList());
@@ -254,6 +295,7 @@ public class ReportServiceImpl implements ReportService {
                         dup.setStatus(ReportStatus.RESOLVED);
                         dup.setAdminNotes(autoNote);
                         dup.setResolvedBy("SYSTEM");
+                        dup.setUpdatedAt(LocalDateTime.now());
                     });
                     reportRepository.saveAll(toResolve);
                 }
@@ -261,8 +303,36 @@ public class ReportServiceImpl implements ReportService {
         } catch (Exception e) {
             log.error("Failed to safely auto-resolve duplicate reports: {}", e.getMessage());
         }
+    }
 
-        return mapToAdminResponse(savedReport);
+    @Override
+    public void lockReport(String reportId, String adminId) {
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new RuntimeException("Report not found"));
+
+        if (report.getStatus() == ReportStatus.IN_PROGRESS && 
+            report.getLockedBy() != null && 
+            !report.getLockedBy().equals(adminId) && 
+            report.getLockedAt() != null && 
+            report.getLockedAt().isAfter(LocalDateTime.now().minusMinutes(30))) {
+            throw new RuntimeException("Report is currently being reviewed by another admin: " + report.getLockedBy());
+        }
+
+        report.setStatus(ReportStatus.IN_PROGRESS);
+        report.setLockedBy(adminId);
+        report.setLockedAt(LocalDateTime.now());
+        reportRepository.save(report);
+    }
+
+    @Override
+    public void heartbeatLock(String reportId, String adminId) {
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new RuntimeException("Report not found"));
+
+        if (adminId.equals(report.getLockedBy())) {
+            report.setLockedAt(LocalDateTime.now());
+            reportRepository.save(report);
+        }
     }
 
     @Override
@@ -281,7 +351,7 @@ public class ReportServiceImpl implements ReportService {
         // 2. Group By Reason
         Aggregation reasonAgg = Aggregation.newAggregation(
                 Aggregation.group("reason").count().as("value"),
-                Aggregation.project("value").and("name").previousOperation(),
+                Aggregation.project("value").and("_id").as("name"),
                 Aggregation.sort(Sort.Direction.DESC, "value")
         );
         List<ReportStatisticsResponse.DataPoint> byReason = mongoTemplate
@@ -291,7 +361,7 @@ public class ReportServiceImpl implements ReportService {
         // 3. Group By Target Type
         Aggregation targetTypeAgg = Aggregation.newAggregation(
                 Aggregation.group("targetType").count().as("value"),
-                Aggregation.project("value").and("name").previousOperation(),
+                Aggregation.project("value").and("_id").as("name"),
                 Aggregation.sort(Sort.Direction.DESC, "value")
         );
         List<ReportStatisticsResponse.DataPoint> byTargetType = mongoTemplate
@@ -327,7 +397,7 @@ public class ReportServiceImpl implements ReportService {
 
     private void publishBanEvent(Report report, String targetName, String leaderId) {
         try {
-            UserBannedEvent event = UserBannedEvent.builder()
+            UserBannedEvent.UserBannedEventBuilder eventBuilder = UserBannedEvent.builder()
                     .targetId(report.getTargetId())
                     .targetType(report.getTargetType().name())
                     .targetName(targetName)
@@ -335,11 +405,17 @@ public class ReportServiceImpl implements ReportService {
                     .reason(report.getReason() != null ? report.getReason().name() : "Không có lý do")
                     .resolvedBy(report.getResolvedBy())
                     .leaderId(leaderId)
-                    .timestamp(LocalDateTime.now())
-                    .build();
+                    .timestamp(LocalDateTime.now());
+
+            if (report.getConversationType() == ConversationType.GROUP) {
+                eventBuilder.groupId(report.getConversationId());
+                eventBuilder.groupName("Nhóm");
+            }
+
+            UserBannedEvent event = eventBuilder.build();
 
             rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY_USER_BANNED, event);
-            log.info("Published USER_BANNED_EVENT for TargetId: {}, LeaderId: {}", report.getTargetId(), leaderId);
+            log.info("Published USER_BANNED_EVENT for TargetId: {}, LeaderId: {}, GroupId: {}", report.getTargetId(), leaderId, event.getGroupId());
         } catch (Exception e) {
             log.error("Failed to publish BANNED event for TargetId: {}", report.getTargetId(), e);
         }
@@ -365,6 +441,59 @@ public class ReportServiceImpl implements ReportService {
         }
     }
 
+    private void publishDisbandGroupEvent(Report report, String targetName) {
+        try {
+            GroupDisbandedEvent event = GroupDisbandedEvent.builder()
+                    .groupId(report.getTargetId())
+                    .groupName(targetName)
+                    .adminNotes(report.getAdminNotes())
+                    .resolvedBy(report.getResolvedBy())
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+            rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY_GROUP_DISBANDED, event);
+            log.info("Published GROUP_DISBANDED_EVENT for GroupId: {}", report.getTargetId());
+        } catch (Exception e) {
+            log.error("Failed to publish DISBAND_GROUP event for GroupId: {}", report.getTargetId(), e);
+        }
+    }
+
+    private void publishGroupWarnEvent(Report report, String targetName) {
+        try {
+            GroupWarnedEvent event = GroupWarnedEvent.builder()
+                    .groupId(report.getTargetId())
+                    .groupName(targetName)
+                    .adminNotes(report.getAdminNotes())
+                    .resolvedBy(report.getResolvedBy())
+                    .reason(report.getReason() != null ? report.getReason().name() : "Không có lý do")
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+            rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY_GROUP_WARNED, event);
+            log.info("Published GROUP_WARNED_EVENT for GroupId: {}", report.getTargetId());
+        } catch (Exception e) {
+            log.error("Failed to publish GROUP_WARNED event for GroupId: {}", report.getTargetId(), e);
+        }
+    }
+
+    private void publishGroupBanEvent(Report report, String targetName) {
+        try {
+            GroupBannedEvent event = GroupBannedEvent.builder()
+                    .groupId(report.getTargetId())
+                    .groupName(targetName)
+                    .adminNotes(report.getAdminNotes())
+                    .resolvedBy(report.getResolvedBy())
+                    .reason(report.getReason() != null ? report.getReason().name() : "Không có lý do")
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+            rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY_GROUP_BANNED, event);
+            log.info("Published GROUP_BANNED_EVENT for GroupId: {}", report.getTargetId());
+        } catch (Exception e) {
+            log.error("Failed to publish GROUP_BANNED event for GroupId: {}", report.getTargetId(), e);
+        }
+    }
+
     private ReportAdminResponse mapToAdminResponse(Report report) {
 
         // Fetch reporter info
@@ -372,8 +501,18 @@ public class ReportServiceImpl implements ReportService {
 
         // Fetch target info ONLY if targetType is USER
         UserResponse targetUser = null;
+        GroupResponse.GroupData targetGroup = null;
         if (report.getTargetType() == TargetType.USER) {
             targetUser = fetchUserSafe(report.getTargetId());
+        } else if (report.getTargetType() == TargetType.GROUP) {
+            try {
+                GroupResponse gRes = groupClient.getGroupById(report.getTargetId());
+                if (gRes != null) {
+                    targetGroup = gRes.getData();
+                }
+            } catch (Exception e) {
+                log.error("Failed to fetch target group info for {}: {}", report.getTargetId(), e.getMessage());
+            }
         }
 
         return ReportAdminResponse.builder()
@@ -382,14 +521,19 @@ public class ReportServiceImpl implements ReportService {
                 .targetId(report.getTargetId())
                 .targetName(report.getTargetName())
                 .targetUser(targetUser)
+                .targetGroup(targetGroup)
                 .targetType(report.getTargetType())
                 .reason(report.getReason())
                 .status(report.getStatus())
+                .conversationType(report.getConversationType())
+                .conversationId(report.getConversationId())
                 .description(report.getDescription())
                 .imageUrls(report.getImageUrls())
-                .messageIds(report.getMessageIds())
+                .messageSnapshots(report.getMessageSnapshots())
                 .adminNotes(report.getAdminNotes())
                 .resolvedBy(report.getResolvedBy())
+                .lockedBy(report.getLockedBy())
+                .lockedAt(report.getLockedAt())
                 .createdAt(report.getCreatedAt())
                 .updatedAt(report.getUpdatedAt())
                 .build();

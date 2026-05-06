@@ -31,7 +31,6 @@ export interface IConversation extends Document {
   hiddenBy: string[];
   joinRequests: { userId: string; requestedAt: Date; answer?: string }[];
   invitations: { userId: string; invitedBy: string; invitedAt: Date }[];
-  isBanned: boolean;
   warningCount: number;
   isApprovalRequired: boolean;
   isLinkEnabled: boolean; // Add isLinkEnabled field
@@ -42,6 +41,7 @@ export interface IConversation extends Document {
   unreadCount: Map<string, number>; // userId -> count
   folders: Map<string, string>; // userId -> folderName ('priority' | 'other')
   isHighlightEnabled: boolean;
+  status: 'ACTIVE' | 'READ_ONLY' | 'DISBANDED';
   permissions: {
     editGroupInfo: "EVERYONE" | "ADMIN";
     createNotes: "EVERYONE" | "ADMIN";
@@ -109,7 +109,6 @@ const conversationSchema = new Schema<IConversation>(
     isApprovalRequired: { type: Boolean, default: false },
     isLinkEnabled: { type: Boolean, default: false }, // Add isLinkEnabled schema logic
     isHistoryVisible: { type: Boolean, default: true }, // Add isHistoryVisible schema logic
-    isBanned: { type: Boolean, default: false },
     warningCount: { type: Number, default: 0 },
     unreadCount: {
       type: Map,
@@ -127,6 +126,11 @@ const conversationSchema = new Schema<IConversation>(
       default: {},
     },
     isHighlightEnabled: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ["ACTIVE", "READ_ONLY", "DISBANDED"],
+      default: "ACTIVE",
+    },
     permissions: {
       editGroupInfo: {
         type: String,

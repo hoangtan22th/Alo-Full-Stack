@@ -39,6 +39,7 @@ import JoinLinkModal from "../ui/group/JoinLinkModal";
 import MemberManagementModal from "../ui/group/MemberManagementModal";
 import GroupSettingsModal from "../ui/group/GroupSettingsModal";
 import ReportModal from "@/components/ui/report/ReportModal";
+import ReportTargetModal from "@/components/ui/report/ReportTargetModal";
 import CreateGroupModal from "../ui/group/CreateGroupModal";
 import { groupService } from "@/services/groupService";
 import { useChatStore } from "@/store/useChatStore";
@@ -116,6 +117,8 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
     useState(false);
   const [showGroupSettingsModal, setShowGroupSettingsModal] = useState(false);
   const [showReportGroupModal, setShowReportGroupModal] = useState(false);
+  const [showReportTargetModal, setShowReportTargetModal] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ type: "USER" | "GROUP"; id: string; name: string } | null>(null);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [showCommonGroupsModal, setShowCommonGroupsModal] = useState(false);
   const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
@@ -127,7 +130,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const isGroup = conversationInfo?.isGroup;
-  const isBanned = conversationInfo?.isBanned;
+  const isReadOnly = conversationInfo?.status === 'READ_ONLY';
+  const isDisbanded = conversationInfo?.status === 'DISBANDED';
+  const isRestricted = isReadOnly || isDisbanded;
 
   // Lấy role của user hiện tại trong nhóm
   const currentUserRole = useMemo(() => {
@@ -149,13 +154,13 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   // Quyền hạn giống mobile
   const permissions = conversationInfo?.permissions;
   const canEdit =
-    isGroup && !isBanned && (isManager || permissions?.editGroupInfo === "EVERYONE");
+    isGroup && !isRestricted && (isManager || permissions?.editGroupInfo === "EVERYONE");
   const canCreatePoll =
-    isGroup && !isBanned && (isManager || permissions?.createPolls === "EVERYONE");
+    isGroup && !isRestricted && (isManager || permissions?.createPolls === "EVERYONE");
   const canCreateNote =
-    isGroup && !isBanned && (isManager || permissions?.createNotes === "EVERYONE");
+    isGroup && !isRestricted && (isManager || permissions?.createNotes === "EVERYONE");
   const canCreateReminder =
-    isGroup && !isBanned && (isManager || permissions?.createReminders === "EVERYONE");
+    isGroup && !isRestricted && (isManager || permissions?.createReminders === "EVERYONE");
 
   const handleUpdateName = async () => {
     if (!tempName.trim() || tempName === conversationInfo?.displayName) {
@@ -222,20 +227,16 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   }, [messages]);
 
   const {
-    autoSelectEvidence,
-    enterCustomizeMode,
     openReportModal,
   } = useChatStore(
     useShallow((s) => ({
-      autoSelectEvidence: s.autoSelectEvidence,
-      enterCustomizeMode: s.enterCustomizeMode,
       openReportModal: s.openReportModal,
     }))
   );
 
   const handleReportUser = () => {
-    autoSelectEvidence(messages);
-    openReportModal(otherUserId!, conversationInfo?.displayName);
+    if (!otherUserId) return;
+    openReportModal(otherUserId, conversationInfo?.displayName || "Người dùng", null, conversationInfo?.isGroup ? "GROUP" : "ONE_TO_ONE");
   };
 
   // Lọc file
@@ -353,7 +354,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                 <ActionButton
                   icon={<UserGroupIcon />}
                   label="Thành viên"
-                  onClick={!isBanned ? () => setShowMemberManagementModal(true) : undefined}
+                  onClick={!isRestricted ? () => setShowMemberManagementModal(true) : undefined}
                 />
               ) : (
                 <>
@@ -559,7 +560,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                     icon={<ExclamationCircleIcon />}
                     label="Báo xấu nhóm"
                     isDanger
-                    onClick={() => setShowReportGroupModal(true)}
+                    onClick={() => setShowReportTargetModal(true)}
                   />
                   <SettingItem
                     icon={<ArrowRightOnRectangleIcon />}
@@ -658,13 +659,38 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
         />
       )}
 
+      {showReportTargetModal && (
+        <ReportTargetModal
+          isOpen={showReportTargetModal}
+          onClose={() => setShowReportTargetModal(false)}
+          groupName={conversationInfo?.displayName || "Nhóm"}
+          members={(conversationInfo?.members || [])
+            .filter((m: any) => m.userId !== myId)
+            .map((m: any) => ({
+              userId: m.userId,
+              fullName: userCache[m.userId]?.name || m.fullName,
+              avatar: userCache[m.userId]?.avatar || m.avatar
+          }))}
+          onSelectTarget={(type, id, name) => {
+            const finalName = type === "USER" ? `${name} (trong nhóm: ${conversationInfo?.displayName || "Không tên"})` : name;
+            setReportTarget({ type, id: id || conversationId, name: finalName });
+            setShowReportTargetModal(false);
+            setShowReportGroupModal(true);
+          }}
+        />
+      )}
+
       {showReportGroupModal && (
         <ReportModal
           isOpen={showReportGroupModal}
           onClose={() => setShowReportGroupModal(false)}
-          targetId={conversationId}
-          targetType="GROUP"
-          targetName={conversationInfo?.displayName}
+          targetId={reportTarget?.id || conversationId}
+          targetType={reportTarget?.type || "GROUP"}
+          targetName={reportTarget?.name || conversationInfo?.displayName}
+          conversationId={conversationId}
+          conversationType={isGroup ? "GROUP" : "ONE_TO_ONE"}
+          messages={messages}
+          userCache={userCache}
           onSuccess={() => {
             setShowReportGroupModal(false);
             // Ask to leave

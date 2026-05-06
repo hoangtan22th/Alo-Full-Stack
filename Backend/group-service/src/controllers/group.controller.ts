@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import Conversation from "../models/Conversation";
 import { uploadImageToS3, deleteImageFromS3 } from "../services/s3Service";
-
 import rabbitMQProducer from "../services/rabbitMQProducer";
+import groupService from "../services/groupService";
 
 // Helper lấy danh sách bạn bè
 async function getFriendIds(
@@ -407,64 +407,33 @@ export const removeMember = async (
 
     let reason: "LEAVE" | "KICK" = "KICK";
 
-    // TRƯỜNG HỢP 1: TỰ RỜI NHÓM
-    // Sử dụng trim() và toString() để đảm bảo so sánh chính xác giữa Mongo ID và Header ID
     if (userId.toString().trim() === requesterId.toString().trim()) {
       if (requester.role === "LEADER") {
         res.status(400).json({
-          error:
-            "Trưởng nhóm không thể rời đi. Hãy trao quyền Trưởng nhóm cho người khác trước.",
+          error: "Trưởng nhóm không thể rời đi. Hãy trao quyền Trưởng nhóm cho người khác trước.",
         });
         return;
       }
       reason = "LEAVE";
-    }
-    // TRƯỜNG HỢP 2: BỊ KICK
-    else {
+    } else {
       if (requester.role === "MEMBER") {
         res.status(403).json({ error: "Bạn không có quyền kick thành viên" });
         return;
       }
       if (requester.role === "DEPUTY" && target.role !== "MEMBER") {
-        res
-          .status(403)
-          .json({ error: "Phó nhóm chỉ có thể kick Thành viên thường" });
+        res.status(403).json({ error: "Phó nhóm chỉ có thể kick Thành viên thường" });
         return;
       }
       reason = "KICK";
     }
 
-    // Cập nhật removedMembers
-    if (!group.removedMembers) group.removedMembers = [];
-
-    // Xóa thông tin cũ nếu có
-    group.removedMembers = group.removedMembers.filter(
-      (rm) => rm.userId.toString().trim() !== userId.toString().trim(),
-    );
-
-    group.removedMembers.push({
-      userId,
-      removedAt: new Date(),
-      reason,
-      isBanned: reason === "KICK" ? !!isBanned : false,
-      preventReinvite: reason === "LEAVE" ? !!preventReinvite : false,
+    // Call Service
+    await groupService.removeMember(groupId, userId, {
+      requesterId,
+      isBanned,
+      preventReinvite,
+      reason
     });
-
-    // Thực hiện xóa khỏi members
-    group.members = group.members.filter(
-      (m) => m.userId.toString().trim() !== userId.toString().trim(),
-    );
-    await group.save();
-
-    // Real-time Sync
-    rabbitMQProducer
-      .publishConversationRemoved(
-        groupId,
-        userId,
-        group.name || "Nhóm",
-        reason.toLowerCase() as "kick" | "leave" | "delete",
-      )
-      .catch(console.error);
 
     // Bắn tin nhắn hệ thống
     const targetName = await getUserFullName(userId, req.headers.authorization);
@@ -481,8 +450,7 @@ export const removeMember = async (
       isSilent ? { isSilentLeave: true } : {},
     );
 
-    rabbitMQProducer.publishGroupUpdated(group).catch(console.error);
-    res.status(200).json({ message: "Thao tác thành công", data: group });
+    res.status(200).json({ message: "Thao tác thành công" });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -631,27 +599,7 @@ export const deleteGroup = async (
       return;
     }
 
-    if (group.groupAvatar) {
-      await deleteImageFromS3(group.groupAvatar);
-    }
-
-    await Conversation.findByIdAndDelete(groupId);
-
-    // Real-time Sync: Thông báo cho tất cả thành viên rằng nhóm đã giải tán
-    if (group.members) {
-      for (const member of group.members) {
-        if (member.userId) {
-          rabbitMQProducer
-            .publishConversationRemoved(
-              groupId,
-              String(member.userId),
-              group.name || "Nhóm",
-              "delete",
-            )
-            .catch(console.error);
-        }
-      }
-    }
+    await groupService.disbandGroup(groupId, true);
 
     res.status(200).json({ message: "Nhóm đã được giải tán vĩnh viễn" });
   } catch (error: any) {
@@ -670,6 +618,7 @@ export const getMyGroups = async (
 
     const query: any = {
       "members.userId": currentUserId,
+      status: { $ne: "DISBANDED" },
     };
 
     if (type !== "all") {
@@ -1474,8 +1423,11 @@ export const searchGroupsAdmin = async (
       query.isGroup = isGroup === "true";
     }
 
-    if (isBanned !== undefined) {
-      query.isBanned = isBanned === "true";
+    // Filter by banned status: map legacy isBanned=true to status IN [READ_ONLY], false to ACTIVE
+    if (isBanned === "true") {
+      query.status = { $in: ["READ_ONLY", "DISBANDED"] };
+    } else if (isBanned === "false") {
+      query.status = "ACTIVE";
     }
 
     const p = Math.max(0, parseInt(page as string, 10));
@@ -1513,7 +1465,7 @@ export const toggleBanGroupAdmin = async (
 ): Promise<void> => {
   try {
     const groupId = String(req.params.groupId || "");
-    const { isBanned, reason } = req.body;
+    const { isBanned, action, reason } = req.body;
 
     const group = await Conversation.findById(groupId);
     if (!group) {
@@ -1521,13 +1473,28 @@ export const toggleBanGroupAdmin = async (
       return;
     }
 
-    if (typeof isBanned === "boolean") {
-      const wasBanned = group.isBanned;
-      group.isBanned = isBanned;
+    const wasRestricted = group.status !== "ACTIVE";
+
+    // Support both legacy isBanned boolean and new action string
+    if (action === 'DISBAND_GROUP') {
+      await groupService.disbandGroup(groupId, false); // Soft delete
+      res.status(200).json({ message: "Giải tán nhóm thành công" });
+      return;
+    }
+
+    if (typeof isBanned === "boolean" || action === 'BAN' || action === 'UNBAN') {
+      if (isBanned === true || action === 'BAN') {
+        group.status = "READ_ONLY";
+      } else {
+        group.status = "ACTIVE";
+        group.warningCount = 0; // Reset warnings when unbanning
+      }
+
       await group.save();
 
-      // Chỉ thực hiện thông báo nếu trạng thái thực sự thay đổi
-      if (wasBanned !== isBanned) {
+      // Only notify if the restriction state actually changed
+      const isNowRestricted = group.status !== "ACTIVE";
+      if (wasRestricted !== isNowRestricted) {
         const MESSAGE_SERVICE_URL = process.env.MESSAGE_SERVICE_URL || 'http://localhost:8083/api/v1/messages';
         const SYSTEM_BOT_ID = "00000000-0000-0000-0000-000000000000";
         const leaderId = group.members?.find((m: any) => m.role === "LEADER")?.userId;
@@ -1543,7 +1510,7 @@ export const toggleBanGroupAdmin = async (
               },
               body: JSON.stringify({
                 conversationId: groupId,
-                content: "⚠️ Nhóm này đã bị hệ thống giải tán do vi phạm Tiêu chuẩn cộng đồng.",
+                content: "⚠️ Nhóm này đã bị khóa bởi quản trị viên. Các thành viên chỉ có thể xem tin nhắn cũ (chỉ đọc).",
                 type: 'system'
               }),
             });
@@ -1613,8 +1580,9 @@ export const toggleBanGroupAdmin = async (
           }
         }
 
-        // 3. Phát sự kiện realtime đồng bộ UI (Dùng chung GROUP_BANNED để trigger refresh)
-        rabbitMQProducer.publishGroupBanned(groupId).catch(console.error);
+        // 3. Phát sự kiện realtime đồng bộ UI (Dùng chung GROUP_BANNED để trigger refresh info)
+        // Mặc dù tên là publishGroupBanned nhưng nó chỉ đơn giản là báo room_ID refresh conversationInfo
+        rabbitMQProducer.publishGroupBanned(groupId, group.status).catch(console.error);
       }
     }
 

@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
@@ -19,6 +21,12 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "reports")
+@CompoundIndexes({
+    @CompoundIndex(name = "reporter_target_reason_pending_idx", 
+                   def = "{'reporter_id': 1, 'target_id': 1, 'reason': 1}", 
+                   unique = true, 
+                   partialFilter = "{'status': 'PENDING'}")
+})
 public class Report {
 
     @Id
@@ -38,6 +46,12 @@ public class Report {
     @Field("target_name")
     private String targetName;
 
+    @Field("conversation_type")
+    private ConversationType conversationType;
+
+    @Field("conversation_id")
+    private String conversationId;
+
     @Field("reason")
     private ReportReason reason;
 
@@ -47,8 +61,8 @@ public class Report {
     @Field("image_urls")
     private List<String> imageUrls;
 
-    @Field("message_ids")
-    private List<String> messageIds;
+    @Field("message_snapshots")
+    private List<MessageSnapshot> messageSnapshots;
 
     @Indexed
     @Builder.Default
@@ -63,6 +77,12 @@ public class Report {
 
     @Field("resolved_action")
     private edu.iuh.fit.report_service.dto.request.AdminActionRequest.AdminAction resolvedAction;
+
+    @Field("locked_by")
+    private String lockedBy;
+
+    @Field("locked_at")
+    private LocalDateTime lockedAt;
 
     @CreatedDate
     @Field("created_at")

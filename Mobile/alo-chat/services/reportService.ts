@@ -21,7 +21,9 @@ export interface ReportRequest {
   reason: ReportReason;
   description?: string;
   imageUrls?: string[];
-  messageIds?: string[];
+  messageSnapshots?: any[];
+  conversationId?: string;
+  conversationType?: "ONE_TO_ONE" | "GROUP";
 }
 
 export const reportService = {

@@ -37,8 +37,10 @@ interface StatisticsData {
 export default function ReportAnalytics() {
   const [data, setData] = useState<StatisticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const fetchStats = async () => {
       try {
         const stats = await reportService.getStatistics();
@@ -54,7 +56,7 @@ export default function ReportAnalytics() {
     fetchStats();
   }, []);
 
-  if (loading) {
+  if (loading || !mounted) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 animate-pulse">
         {[1, 2, 3].map(i => (
@@ -130,28 +132,34 @@ export default function ReportAnalytics() {
               </div>
               <h4 className="font-headline font-bold text-lg text-on-surface">Phân phối theo lý do</h4>
             </div>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={data.byReason}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {data.byReason.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                  />
-                  <Legend verticalAlign="bottom" height={36}/>
-                </PieChart>
-              </ResponsiveContainer>
+            <div className="h-[300px] w-full min-h-[300px]">
+              {data.byReason && data.byReason.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={data.byReason}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {data.byReason.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    />
+                    <Legend verticalAlign="bottom" height={36}/>
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-on-surface-variant/40 italic text-sm">
+                  Chưa có dữ liệu phân loại
+                </div>
+              )}
             </div>
           </div>
 
@@ -163,19 +171,25 @@ export default function ReportAnalytics() {
               </div>
               <h4 className="font-headline font-bold text-lg text-on-surface">Người dùng vs Nhóm</h4>
             </div>
-            <div className="h-[250px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.byTargetType}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-                  <Tooltip 
-                    cursor={{ fill: '#f3f4f6' }}
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                  />
-                  <Bar dataKey="value" fill="#0ea5e9" radius={[8, 8, 0, 0]} barSize={50} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="h-[250px] w-full min-h-[250px]">
+              {data.byTargetType && data.byTargetType.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.byTargetType}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                    <Tooltip 
+                      cursor={{ fill: '#f3f4f6' }}
+                      contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    />
+                    <Bar dataKey="value" fill="#0ea5e9" radius={[8, 8, 0, 0]} barSize={50} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-on-surface-variant/40 italic text-sm">
+                  Chưa có dữ liệu so sánh
+                </div>
+              )}
             </div>
           </div>
         </div>
