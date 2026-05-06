@@ -160,4 +160,61 @@ export async function initRabbitMQ(io: Server) {
       amqpChannel.ack(msg);
     }
   });
+
+  // NEW: Group Moderation Consumers
+  const groupBannedQueue = "realtime.group.banned.queue";
+  const groupDisbandedQueue = "realtime.group.disbanded.queue";
+  
+  await amqpChannel.assertQueue(groupBannedQueue, { durable: true });
+  await amqpChannel.bindQueue(groupBannedQueue, adminExchange, "group.banned");
+  
+  await amqpChannel.assertQueue(groupDisbandedQueue, { durable: true });
+  await amqpChannel.bindQueue(groupDisbandedQueue, adminExchange, "group.disbanded");
+
+  amqpChannel.consume(groupBannedQueue, async (msg) => {
+    if (msg !== null) {
+      try {
+        const payload = JSON.parse(msg.content.toString());
+        const groupId = payload.groupId || payload.targetId;
+        if (groupId) {
+          const groupRoom = `room_${groupId}`;
+          console.log(`[Socket.IO] Group Banned: ${groupId}. Notifying room.`);
+          io.to(groupRoom).emit("GROUP_BANNED", { 
+            groupId, 
+            message: "Nhóm này đã bị hệ thống hạn chế hoạt động do vi phạm." 
+          });
+        }
+      } catch (error) {
+        console.error("Error processing group.banned", error);
+      }
+      amqpChannel.ack(msg);
+    }
+  });
+
+  amqpChannel.consume(groupDisbandedQueue, async (msg) => {
+    if (msg !== null) {
+      try {
+        const payload = JSON.parse(msg.content.toString());
+        const groupId = payload.groupId || payload.targetId;
+        if (groupId) {
+          const groupRoom = `room_${groupId}`;
+          console.log(`[Socket.IO] Group Disbanded: ${groupId}. Notifying room and forcing exit.`);
+          
+          io.to(groupRoom).emit("GROUP_DISBANDED", { 
+            groupId, 
+            message: "Nhóm này đã bị giải tán do vi phạm tiêu chuẩn cộng đồng." 
+          });
+
+          // Force all sockets to leave the room
+          const sockets = await io.in(groupRoom).fetchSockets();
+          sockets.forEach(s => {
+            s.leave(groupRoom);
+          });
+        }
+      } catch (error) {
+        console.error("Error processing group.disbanded", error);
+      }
+      amqpChannel.ack(msg);
+    }
+  });
 }

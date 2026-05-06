@@ -91,12 +91,10 @@ export function startReportWorker(channel: Channel) {
                   targetUserId = leader.userId;
                 } else {
                   console.warn(`[ReportWorker] No leader found for group ${targetId}`);
-                  channel.ack(msg);
                   return;
                 }
               } catch (err) {
                 console.error(`[ReportWorker] Failed to fetch group info for ${targetId}:`, err);
-                channel.ack(msg);
                 return;
               }
             }
@@ -112,20 +110,21 @@ export function startReportWorker(channel: Channel) {
               conversationId = (convoRes.data.data || convoRes.data)._id;
             } catch (err) {
               console.error(`[ReportWorker] Failed to get system conversation for user ${targetUserId}:`, err);
-              channel.ack(msg);
               return;
             }
 
-            // Prepare content
+            // Preparre content
             let content = '';
+            const groupContext = (payload.groupId && payload.groupName) ? ` trong nhóm "${payload.groupName}"` : "";
+
             if (action === 'WARN') {
               content = targetType === 'GROUP'
                 ? `Nhóm "${targetName}" của bạn vừa nhận 1 cảnh cáo từ hệ thống. Lý do: ${readableReason}. Lưu ý: Nếu tiếp tục vi phạm, nhóm sẽ bị giải tán.`
-                : `Tài khoản của bạn vừa nhận 1 cảnh cáo từ hệ thống. Lý do: ${readableReason}. Lưu ý: Đủ 3 cảnh cáo tài khoản sẽ bị khóa vĩnh viễn.`;
+                : `Tài khoản của bạn vừa nhận 1 cảnh cáo từ hệ thống do vi phạm${groupContext}. Lý do: ${readableReason}. Lưu ý: Đủ 3 cảnh cáo tài khoản sẽ bị khóa vĩnh viễn.`;
             } else if (action === 'BAN') {
               content = targetType === 'GROUP'
                 ? `Nhóm "${targetName}" của bạn đã bị giải tán/khóa do vi phạm tiêu chuẩn cộng đồng.`
-                : `Tài khoản của bạn đã bị khóa vĩnh viễn do vi phạm tiêu chuẩn cộng đồng quá nhiều lần.`;
+                : `Tài khoản của bạn đã bị khóa vĩnh viễn do vi phạm tiêu chuẩn cộng đồng${groupContext} quá nhiều lần.`;
             }
 
             // Create message
