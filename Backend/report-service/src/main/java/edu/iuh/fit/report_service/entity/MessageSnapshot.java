@@ -1,5 +1,6 @@
 package edu.iuh.fit.report_service.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,6 +21,12 @@ public class MessageSnapshot {
     @Field("sender_id")
     private String senderId;
 
+    @Field("sender_name")
+    private String senderName;
+
+    @Field("sender_avatar")
+    private String senderAvatar;
+
     @Field("content")
     private String content;
 
@@ -30,6 +37,7 @@ public class MessageSnapshot {
     private LocalDateTime sentAt;
 
     @Field("is_anchor")
+    @JsonProperty("isAnchor")
     private boolean isAnchor;
 
     @Field("sequence_index")
@@ -39,5 +47,6 @@ public class MessageSnapshot {
     private Integer totalMessagesInConversation;
 
     @Field("is_by_reporter")
+    @JsonProperty("isByReporter")
     private boolean isByReporter;
 }

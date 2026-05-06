@@ -22,17 +22,17 @@ public class RateLimitAspect {
         String reporterId = request.getReporterId();
         String targetId = request.getTargetId();
 
-        // 1. Target Limit (Max 1/day per target)
+        // 1. Target Limit (Max 5/day per target for testing)
         String targetKey = String.format("rate:report_target:%s:%s:day", reporterId, targetId);
-        checkAndIncr(targetKey, 1, Duration.ofDays(1), "DUPLICATE_TARGET");
+        checkAndIncr(targetKey, 5, Duration.ofDays(1), "DUPLICATE_TARGET");
 
-        // 2. Hourly Limit (Max 5/hour)
+        // 2. Hourly Limit (Max 50/hour for testing)
         String hourKey = String.format("rate:report:%s:hour", reporterId);
-        checkAndIncr(hourKey, 5, Duration.ofHours(1), "HOURLY_LIMIT");
+        checkAndIncr(hourKey, 50, Duration.ofHours(1), "HOURLY_LIMIT");
 
-        // 3. Daily Limit (Max 20/day)
+        // 3. Daily Limit (Max 200/day for testing)
         String dayKey = String.format("rate:report:%s:day", reporterId);
-        checkAndIncr(dayKey, 20, Duration.ofDays(1), "DAILY_LIMIT");
+        checkAndIncr(dayKey, 200, Duration.ofDays(1), "DAILY_LIMIT");
     }
 
     private void checkAndIncr(String key, int limit, Duration ttl, String reason) {

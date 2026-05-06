@@ -9,15 +9,15 @@ import edu.iuh.fit.report_service.dto.event.ReportResolvedEvent;
 import edu.iuh.fit.report_service.dto.event.UserBannedEvent;
 import edu.iuh.fit.report_service.dto.event.UserWarnedEvent;
 import edu.iuh.fit.report_service.dto.event.GroupDisbandedEvent;
+import edu.iuh.fit.report_service.dto.event.GroupWarnedEvent;
+import edu.iuh.fit.report_service.dto.event.GroupBannedEvent;
 import edu.iuh.fit.report_service.dto.request.AdminActionRequest;
 import edu.iuh.fit.report_service.dto.request.ReportCreationRequest;
 import edu.iuh.fit.report_service.dto.response.GroupResponse;
 import edu.iuh.fit.report_service.dto.response.ReportAdminResponse;
 import edu.iuh.fit.report_service.dto.response.ReportResponse;
 import edu.iuh.fit.report_service.dto.response.UserResponse;
-import edu.iuh.fit.report_service.entity.Report;
-import edu.iuh.fit.report_service.entity.ReportStatus;
-import edu.iuh.fit.report_service.entity.TargetType;
+import edu.iuh.fit.report_service.entity.*;
 import edu.iuh.fit.report_service.repository.ReportRepository;
 import edu.iuh.fit.report_service.service.ReportService;
 import lombok.RequiredArgsConstructor;
@@ -44,7 +44,7 @@ import edu.iuh.fit.report_service.dto.response.ReportStatisticsResponse;
 import edu.iuh.fit.report_service.client.MessageServiceClient;
 import edu.iuh.fit.report_service.dto.MessageDto;
 import edu.iuh.fit.common_service.exception.TamperedEvidenceException;
-import edu.iuh.fit.report_service.entity.MessageSnapshot;
+
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
@@ -91,11 +91,13 @@ public class ReportServiceImpl implements ReportService {
         }
 
         // 2. Fetch target name for persistence and events
-        String targetName = "Unknown";
-        if (request.getTargetType() == TargetType.USER) {
-            targetName = fetchUserSafe(request.getTargetId()).getFullName();
-        } else if (request.getTargetType() == TargetType.GROUP) {
-            targetName = fetchGroupNameSafe(request.getTargetId());
+        String targetName = request.getTargetName();
+        if (targetName == null || targetName.isBlank()) {
+            if (request.getTargetType() == TargetType.USER) {
+                targetName = fetchUserSafe(request.getTargetId()).getFullName();
+            } else if (request.getTargetType() == TargetType.GROUP) {
+                targetName = fetchGroupNameSafe(request.getTargetId());
+            }
         }
 
         Report report = Report.builder()
@@ -103,6 +105,8 @@ public class ReportServiceImpl implements ReportService {
                 .targetId(request.getTargetId())
                 .targetType(request.getTargetType())
                 .targetName(targetName)
+                .conversationType(request.getConversationType())
+                .conversationId(request.getConversationId())
                 .reason(request.getReason())
                 .description(request.getDescription())
                 .imageUrls(request.getImageUrls())
@@ -156,9 +160,9 @@ public class ReportServiceImpl implements ReportService {
         if (targetName != null && !targetName.isEmpty()) {
             query.addCriteria(Criteria.where("targetName").regex(targetName, "i"));
         }
-
+        long count = mongoTemplate.count(query, Report.class);
+        query.with(pageable);
         List<Report> reports = mongoTemplate.find(query, Report.class);
-        long count = mongoTemplate.count(Query.of(query).limit(-1).skip(-1), Report.class);
 
         List<ReportAdminResponse> list = reports.stream()
                 .map(this::mapToAdminResponse)
@@ -200,22 +204,44 @@ public class ReportServiceImpl implements ReportService {
             }
         }
 
-        switch (actionRequest.getAction()) {
-            case DISMISS:
-                report.setStatus(ReportStatus.REJECTED);
-                break;
-            case WARN:
-                report.setStatus(ReportStatus.RESOLVED);
-                publishWarnEvent(report, targetName, leaderId);
-                break;
-            case BAN:
-                report.setStatus(ReportStatus.RESOLVED);
-                publishBanEvent(report, targetName, leaderId);
-                break;
-            case DISBAND_GROUP:
-                report.setStatus(ReportStatus.RESOLVED);
-                publishDisbandGroupEvent(report, targetName);
-                break;
+        if (report.getTargetType() == TargetType.USER) {
+            switch (actionRequest.getAction()) {
+                case DISMISS:
+                    report.setStatus(ReportStatus.REJECTED);
+                    break;
+                case WARN:
+                    report.setStatus(ReportStatus.RESOLVED);
+                    publishWarnEvent(report, targetName, leaderId);
+                    break;
+                case BAN:
+                    report.setStatus(ReportStatus.RESOLVED);
+                    publishBanEvent(report, targetName, leaderId);
+                    break;
+                default:
+                    log.warn("Action {} not applicable for USER target", actionRequest.getAction());
+                    break;
+            }
+        } else if (report.getTargetType() == TargetType.GROUP) {
+            switch (actionRequest.getAction()) {
+                case DISMISS:
+                    report.setStatus(ReportStatus.REJECTED);
+                    break;
+                case WARN:
+                    report.setStatus(ReportStatus.RESOLVED);
+                    publishGroupWarnEvent(report, targetName);
+                    break;
+                case BAN:
+                    report.setStatus(ReportStatus.RESOLVED);
+                    publishGroupBanEvent(report, targetName);
+                    break;
+                case DISBAND_GROUP:
+                    report.setStatus(ReportStatus.RESOLVED);
+                    publishDisbandGroupEvent(report, targetName);
+                    break;
+                default:
+                    log.warn("Action {} not applicable for GROUP target", actionRequest.getAction());
+                    break;
+            }
         }
 
         Report savedReport = reportRepository.save(report);
@@ -325,7 +351,7 @@ public class ReportServiceImpl implements ReportService {
         // 2. Group By Reason
         Aggregation reasonAgg = Aggregation.newAggregation(
                 Aggregation.group("reason").count().as("value"),
-                Aggregation.project("value").and("name").previousOperation(),
+                Aggregation.project("value").and("_id").as("name"),
                 Aggregation.sort(Sort.Direction.DESC, "value")
         );
         List<ReportStatisticsResponse.DataPoint> byReason = mongoTemplate
@@ -335,7 +361,7 @@ public class ReportServiceImpl implements ReportService {
         // 3. Group By Target Type
         Aggregation targetTypeAgg = Aggregation.newAggregation(
                 Aggregation.group("targetType").count().as("value"),
-                Aggregation.project("value").and("name").previousOperation(),
+                Aggregation.project("value").and("_id").as("name"),
                 Aggregation.sort(Sort.Direction.DESC, "value")
         );
         List<ReportStatisticsResponse.DataPoint> byTargetType = mongoTemplate
@@ -371,7 +397,7 @@ public class ReportServiceImpl implements ReportService {
 
     private void publishBanEvent(Report report, String targetName, String leaderId) {
         try {
-            UserBannedEvent event = UserBannedEvent.builder()
+            UserBannedEvent.UserBannedEventBuilder eventBuilder = UserBannedEvent.builder()
                     .targetId(report.getTargetId())
                     .targetType(report.getTargetType().name())
                     .targetName(targetName)
@@ -379,11 +405,17 @@ public class ReportServiceImpl implements ReportService {
                     .reason(report.getReason() != null ? report.getReason().name() : "Không có lý do")
                     .resolvedBy(report.getResolvedBy())
                     .leaderId(leaderId)
-                    .timestamp(LocalDateTime.now())
-                    .build();
+                    .timestamp(LocalDateTime.now());
+
+            if (report.getConversationType() == ConversationType.GROUP) {
+                eventBuilder.groupId(report.getConversationId());
+                eventBuilder.groupName("Nhóm");
+            }
+
+            UserBannedEvent event = eventBuilder.build();
 
             rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY_USER_BANNED, event);
-            log.info("Published USER_BANNED_EVENT for TargetId: {}, LeaderId: {}", report.getTargetId(), leaderId);
+            log.info("Published USER_BANNED_EVENT for TargetId: {}, LeaderId: {}, GroupId: {}", report.getTargetId(), leaderId, event.getGroupId());
         } catch (Exception e) {
             log.error("Failed to publish BANNED event for TargetId: {}", report.getTargetId(), e);
         }
@@ -426,6 +458,42 @@ public class ReportServiceImpl implements ReportService {
         }
     }
 
+    private void publishGroupWarnEvent(Report report, String targetName) {
+        try {
+            GroupWarnedEvent event = GroupWarnedEvent.builder()
+                    .groupId(report.getTargetId())
+                    .groupName(targetName)
+                    .adminNotes(report.getAdminNotes())
+                    .resolvedBy(report.getResolvedBy())
+                    .reason(report.getReason() != null ? report.getReason().name() : "Không có lý do")
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+            rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY_GROUP_WARNED, event);
+            log.info("Published GROUP_WARNED_EVENT for GroupId: {}", report.getTargetId());
+        } catch (Exception e) {
+            log.error("Failed to publish GROUP_WARNED event for GroupId: {}", report.getTargetId(), e);
+        }
+    }
+
+    private void publishGroupBanEvent(Report report, String targetName) {
+        try {
+            GroupBannedEvent event = GroupBannedEvent.builder()
+                    .groupId(report.getTargetId())
+                    .groupName(targetName)
+                    .adminNotes(report.getAdminNotes())
+                    .resolvedBy(report.getResolvedBy())
+                    .reason(report.getReason() != null ? report.getReason().name() : "Không có lý do")
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+            rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_NAME, RabbitMQConfig.ROUTING_KEY_GROUP_BANNED, event);
+            log.info("Published GROUP_BANNED_EVENT for GroupId: {}", report.getTargetId());
+        } catch (Exception e) {
+            log.error("Failed to publish GROUP_BANNED event for GroupId: {}", report.getTargetId(), e);
+        }
+    }
+
     private ReportAdminResponse mapToAdminResponse(Report report) {
 
         // Fetch reporter info
@@ -433,8 +501,18 @@ public class ReportServiceImpl implements ReportService {
 
         // Fetch target info ONLY if targetType is USER
         UserResponse targetUser = null;
+        GroupResponse.GroupData targetGroup = null;
         if (report.getTargetType() == TargetType.USER) {
             targetUser = fetchUserSafe(report.getTargetId());
+        } else if (report.getTargetType() == TargetType.GROUP) {
+            try {
+                GroupResponse gRes = groupClient.getGroupById(report.getTargetId());
+                if (gRes != null) {
+                    targetGroup = gRes.getData();
+                }
+            } catch (Exception e) {
+                log.error("Failed to fetch target group info for {}: {}", report.getTargetId(), e.getMessage());
+            }
         }
 
         return ReportAdminResponse.builder()
@@ -443,9 +521,12 @@ public class ReportServiceImpl implements ReportService {
                 .targetId(report.getTargetId())
                 .targetName(report.getTargetName())
                 .targetUser(targetUser)
+                .targetGroup(targetGroup)
                 .targetType(report.getTargetType())
                 .reason(report.getReason())
                 .status(report.getStatus())
+                .conversationType(report.getConversationType())
+                .conversationId(report.getConversationId())
                 .description(report.getDescription())
                 .imageUrls(report.getImageUrls())
                 .messageSnapshots(report.getMessageSnapshots())

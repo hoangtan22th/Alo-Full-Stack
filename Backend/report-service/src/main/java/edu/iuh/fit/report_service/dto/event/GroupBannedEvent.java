@@ -11,16 +11,11 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserBannedEvent {
-
-    private String targetId;
-    private String targetType;
-    private String targetName;
-    private String adminNotes;
-    private String reason;
-    private String resolvedBy;
-    private String leaderId;
+public class GroupBannedEvent {
     private String groupId;
     private String groupName;
+    private String adminNotes;
+    private String resolvedBy;
+    private String reason;
     private LocalDateTime timestamp;
 }

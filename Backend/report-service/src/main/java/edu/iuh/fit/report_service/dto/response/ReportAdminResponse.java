@@ -1,5 +1,6 @@
 package edu.iuh.fit.report_service.dto.response;
 
+import edu.iuh.fit.report_service.entity.ConversationType;
 import edu.iuh.fit.report_service.entity.MessageSnapshot;
 import edu.iuh.fit.report_service.entity.ReportReason;
 import edu.iuh.fit.report_service.entity.ReportStatus;
@@ -26,7 +27,11 @@ public class ReportAdminResponse {
     private String targetId;
     private String targetName;
     private UserResponse targetUser; // Will be populated if targetType == USER
+    private GroupResponse.GroupData targetGroup; // Will be populated if targetType == GROUP
     private TargetType targetType;
+
+    private ConversationType conversationType;
+    private String conversationId;
 
     private ReportReason reason;
     private ReportStatus status;

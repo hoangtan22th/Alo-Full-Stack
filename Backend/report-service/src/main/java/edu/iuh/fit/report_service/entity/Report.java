@@ -46,6 +46,12 @@ public class Report {
     @Field("target_name")
     private String targetName;
 
+    @Field("conversation_type")
+    private ConversationType conversationType;
+
+    @Field("conversation_id")
+    private String conversationId;
+
     @Field("reason")
     private ReportReason reason;
 
