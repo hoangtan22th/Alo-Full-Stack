@@ -13,7 +13,18 @@ import {
   Platform,
   Image,
 } from "react-native";
-import { XMarkIcon, CameraIcon, TrashIcon, AdjustmentsHorizontalIcon } from "react-native-heroicons/outline";
+import { 
+  XMarkIcon, 
+  CameraIcon, 
+  TrashIcon, 
+  HandThumbDownIcon,
+  ChatBubbleBottomCenterTextIcon,
+  ShieldCheckIcon,
+  EyeSlashIcon,
+  NoSymbolIcon,
+  ExclamationTriangleIcon,
+  DocumentMagnifyingGlassIcon
+} from "react-native-heroicons/outline";
 
 import * as ImagePicker from "expo-image-picker";
 import {
@@ -21,8 +32,9 @@ import {
   TargetType,
   ReportReason,
 } from "../services/reportService";
-import { messageService } from "../services/messageService";
+import { messageService, MessageDTO } from "../services/messageService";
 import { useAuth } from "../contexts/AuthContext";
+import { generateEvidenceSnapshot } from "../utils/reportUtils";
 
 
 interface ReportModalProps {
@@ -32,18 +44,22 @@ interface ReportModalProps {
   targetType: TargetType;
   targetName: string;
   selectedMessageIds?: string[];
+  messages?: MessageDTO[];
+  getAvatarForUser?: (senderId: string) => string;
   onSelectMessages?: () => void;
   onSuccess?: () => void;
+  conversationId?: string;
+  conversationType?: "ONE_TO_ONE" | "GROUP";
 }
 
 
 const REASONS = [
-  { label: "Lừa đảo / Gian lận", value: ReportReason.SCAM_FRAUD },
-  { label: "Spam / Quấy rối", value: ReportReason.SPAM_HARRASSMENT },
-  { label: "Nội dung tình dục", value: ReportReason.SEXUAL_CONTENT },
-  { label: "Bạo lực / Khủng bố", value: ReportReason.VIOLENCE_TERRORISM },
-  { label: "Xâm hại trẻ em", value: ReportReason.CHILD_ABUSE },
-  { label: "Khác", value: ReportReason.OTHER },
+  { value: ReportReason.SCAM_FRAUD, label: "Lừa đảo", icon: HandThumbDownIcon, color: "#f97316", bg: "#fff7ed" },
+  { value: ReportReason.SPAM_HARRASSMENT, label: "Spam/Quấy rối", icon: ChatBubbleBottomCenterTextIcon, color: "#2563eb", bg: "#eff6ff" },
+  { value: ReportReason.CHILD_ABUSE, label: "Xâm hại trẻ em", icon: ShieldCheckIcon, color: "#dc2626", bg: "#fef2f2" },
+  { value: ReportReason.SEXUAL_CONTENT, label: "Nội dung tình dục", icon: EyeSlashIcon, color: "#db2777", bg: "#fdf2f8" },
+  { value: ReportReason.VIOLENCE_TERRORISM, label: "Bạo lực", icon: NoSymbolIcon, color: "#111827", bg: "#f3f4f6" },
+  { value: ReportReason.OTHER, label: "Khác", icon: ExclamationTriangleIcon, color: "#6b7280", bg: "#f9fafb" },
 ];
 
 
@@ -54,8 +70,11 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   targetType,
   targetName,
   selectedMessageIds,
-  onSelectMessages,
+  messages,
+  getAvatarForUser,
   onSuccess,
+  conversationId,
+  conversationType,
 }) => {
   const { user } = useAuth();
   const [selectedReason, setSelectedReason] = useState<ReportReason | null>(
@@ -65,9 +84,22 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const [selectedImages, setSelectedImages] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [isCustomizeMode, setIsCustomizeMode] = useState(false);
+  const [historyMessages, setHistoryMessages] = useState<any[]>([]);
 
-  const hasMessages = (selectedMessageIds || []).length > 0;
+  React.useEffect(() => {
+    if (visible && conversationId && !messages) {
+      messageService.getMessageHistory(conversationId, 30)
+        .then((res) => {
+          setHistoryMessages(res.messages || []);
+        })
+        .catch((err) => console.error("Lỗi lấy lịch sử tin nhắn báo cáo:", err));
+    } else if (!visible) {
+      setHistoryMessages([]);
+    }
+  }, [visible, conversationId, messages]);
+
+  const activeMessages = messages || historyMessages;
+  const hasMessages = (selectedMessageIds || []).length > 0 || activeMessages.length > 0;
 
 
   const handlePickImage = async () => {
@@ -112,36 +144,10 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       return;
     }
 
-    const hasDescription = description.trim().length > 0;
-    const hasImages = selectedImages.length > 0;
-    const hasMessages = (selectedMessageIds || []).length > 0;
-
-    if (targetType === TargetType.USER) {
-      if (!hasDescription && !hasImages && !hasMessages) {
-        Alert.alert("Lỗi", "Vui lòng cung cấp ít nhất một bằng chứng (mô tả, hình ảnh hoặc tin nhắn).");
-        return;
-      }
-      
-      if (hasMessages) {
-        const msgCount = selectedMessageIds!.length;
-        if (msgCount < 3 || msgCount > 40) {
-          Alert.alert("Lỗi", "Báo cáo người dùng yêu cầu từ 3 đến 40 tin nhắn làm bằng chứng.");
-          return;
-        }
-      }
-    } else {
-      // GROUP reports
-      if (hasImages || hasMessages) {
-        Alert.alert("Lỗi", "Báo cáo nhóm chỉ chấp nhận mô tả văn bản, không bao gồm hình ảnh hoặc tin nhắn.");
-        return;
-      }
-    }
-
     setLoading(true);
     try {
-      // 1. Upload images if any (Only for USER reports based on backend logic)
       let finalImageUrls: string[] = [];
-      if (hasImages && targetType === TargetType.USER) {
+      if (selectedImages.length > 0) {
         setUploadProgress(10);
         finalImageUrls = await messageService.uploadRawFiles(
           selectedImages,
@@ -154,14 +160,24 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         }
       }
 
+      const anchorId = selectedMessageIds && selectedMessageIds.length > 0 ? selectedMessageIds[0] : undefined;
+      const snapshots = generateEvidenceSnapshot(
+        anchorId,
+        activeMessages,
+        reporterId,
+        getAvatarForUser || (() => "")
+      );
+
       await reportService.createReport({
         reporterId,
         targetId,
         targetType,
         reason: selectedReason,
-        description: hasDescription ? description : "",
+        description: description.trim() || "",
         imageUrls: finalImageUrls,
-        messageIds: targetType === TargetType.USER ? (selectedMessageIds || []) : [],
+        messageSnapshots: snapshots,
+        conversationId,
+        conversationType,
       });
 
 
@@ -181,10 +197,8 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     setDescription("");
     setSelectedImages([]);
     setUploadProgress(0);
-    setIsCustomizeMode(false);
     onClose();
   };
-
 
 
   return (
@@ -200,133 +214,118 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       >
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>Báo cáo {targetType === TargetType.USER ? "người dùng" : "nhóm"}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={styles.badgeContainer}>
+                <ShieldCheckIcon size={20} color="#2563eb" />
+              </View>
+              <View>
+                <Text style={styles.title}>Báo cáo {targetType === TargetType.USER ? "người dùng" : "nhóm"}</Text>
+                <Text style={styles.targetInfo}>{targetName}</Text>
+              </View>
+            </View>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <XMarkIcon size={24} color="#000" />
+              <XMarkIcon size={22} color="#4b5563" />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-            <Text style={styles.targetInfo}>
-              Bạn đang báo cáo: <Text style={styles.targetName}>{targetName}</Text>
-            </Text>
+            {/* --- REASON GRID --- */}
+            <Text style={styles.sectionLabel}>LÝ DO BÁO CÁO</Text>
+            <View style={styles.gridContainer}>
+              {REASONS.map((item) => {
+                const IconComponent = item.icon;
+                const isSelected = selectedReason === item.value;
+                return (
+                  <TouchableOpacity
+                    key={item.value}
+                    style={[
+                      styles.gridItem,
+                      isSelected && { borderColor: "#2563eb", backgroundColor: "#f0f6ff" },
+                    ]}
+                    onPress={() => setSelectedReason(item.value)}
+                  >
+                    <View style={[styles.iconContainer, { backgroundColor: item.bg }]}>
+                      <IconComponent size={18} color={item.color} />
+                    </View>
+                    <Text style={[styles.gridLabel, isSelected && { color: "#2563eb" }]}>
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
-            <Text style={styles.sectionTitle}>Lý do báo cáo:</Text>
-            {REASONS.map((item) => (
-              <TouchableOpacity
-                key={item.value}
-                style={[
-                  styles.reasonItem,
-                  selectedReason === item.value && styles.reasonItemSelected,
-                ]}
-                onPress={() => setSelectedReason(item.value)}
-              >
-                <View style={styles.radioButton}>
-                  {selectedReason === item.value && <View style={styles.radioButtonInner} />}
-                </View>
-                <Text style={styles.reasonLabel}>{item.label}</Text>
-              </TouchableOpacity>
-            ))}
-
-            {targetType === TargetType.USER && !isCustomizeMode && selectedReason !== ReportReason.OTHER && (
-              <View style={styles.evidenceSummary}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.evidenceText}>
-                    {hasMessages ? (
-                      <>
-                        Hệ thống đã tự động chọn <Text style={{ fontWeight: 'bold' }}>{selectedMessageIds!.length}</Text> tin nhắn làm bằng chứng.
-                      </>
-                    ) : (
-                      "Chưa có bằng chứng nào được chọn."
-                    )}
+            {/* --- EVIDENCE BANNER --- */}
+            {hasMessages && (
+              <View style={styles.evidenceBanner}>
+                <DocumentMagnifyingGlassIcon size={22} color="#60a5fa" />
+                <View style={{ marginLeft: 10, flex: 1 }}>
+                  <Text style={styles.evidenceTitle}>Bằng chứng tin nhắn</Text>
+                  <Text style={styles.evidenceSub}>
+                    Hệ thống đã lưu vết {(() => {
+                      const anchorId = selectedMessageIds && selectedMessageIds.length > 0 ? selectedMessageIds[0] : undefined;
+                      const snapshots = generateEvidenceSnapshot(
+                        anchorId,
+                        activeMessages,
+                        user?.id || user?._id || "",
+                        () => ""
+                      );
+                      return snapshots.length;
+                    })()} tin nhắn làm bằng chứng.
                   </Text>
                 </View>
-                <TouchableOpacity 
-                  style={styles.customizeButton}
-                  onPress={() => setIsCustomizeMode(true)}
-                >
-                  <AdjustmentsHorizontalIcon size={16} color="#b45309" />
-                  <Text style={styles.customizeButtonText}>Tùy chỉnh</Text>
-                </TouchableOpacity>
               </View>
             )}
 
-            {isCustomizeMode && targetType === TargetType.USER && (
-              <View style={styles.evidenceSummary}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.evidenceText}>
-                    {hasMessages ? (
-                      <>
-                        Đã chọn <Text style={{ fontWeight: 'bold' }}>{selectedMessageIds!.length}</Text> tin nhắn làm bằng chứng.
-                      </>
-                    ) : (
-                      "Chưa có tin nhắn bằng chứng nào được chọn."
-                    )}
-                  </Text>
-                </View>
-                <TouchableOpacity 
-                  style={styles.primaryButton}
-                  onPress={onSelectMessages}
-                >
-                  <AdjustmentsHorizontalIcon size={16} color="#ffffff" />
-                  <Text style={styles.primaryButtonText}>{hasMessages ? "Thay đổi tin nhắn" : "Chọn tin nhắn bằng chứng"}</Text>
-                </TouchableOpacity>
+            {/* --- DETAILS INPUT --- */}
+            <View style={{ marginTop: 15 }}>
+              <Text style={styles.sectionLabel}>
+                MÔ TẢ CHI TIẾT {selectedReason === ReportReason.OTHER && <Text style={{ color: '#ef4444' }}>*</Text>}
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder={selectedReason === ReportReason.OTHER ? "Vui lòng mô tả chi tiết lý do bạn báo cáo..." : "Cung cấp thêm ngữ cảnh cho quản trị viên (tùy chọn)..."}
+                placeholderTextColor="#9ca3af"
+                multiline
+                numberOfLines={4}
+                value={description}
+                onChangeText={setDescription}
+                textAlignVertical="top"
+                maxLength={500}
+              />
+
+              {/* --- IMAGE ATTACHMENTS --- */}
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionLabel}>ẢNH ĐÍNH KÈM ({selectedImages.length}/5)</Text>
               </View>
-            )}
 
-            {(isCustomizeMode || selectedReason === ReportReason.OTHER) && (
-              <View style={{ marginTop: 10 }}>
-                <Text style={styles.sectionTitle}>Mô tả chi tiết {selectedReason === ReportReason.OTHER && <Text style={{color: '#ef4444'}}>*</Text>}:</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder={selectedReason === ReportReason.OTHER ? "Vui lòng mô tả chi tiết lý do bạn báo cáo..." : "Cung cấp thêm ngữ cảnh cho quản trị viên (tùy chọn)..."}
-                  multiline
-                  numberOfLines={4}
-                  value={description}
-                  onChangeText={setDescription}
-                  textAlignVertical="top"
-                  maxLength={500}
-                />
-
-                {targetType === TargetType.USER && (
-                  <>
-                    <View style={styles.sectionHeader}>
-                      <Text style={styles.sectionTitle}>Hình ảnh đính kèm (tối đa 5)</Text>
-                      <Text style={styles.imageCount}>{selectedImages.length}/5</Text>
-                    </View>
-
-                    <View style={styles.imageGrid}>
-                      {selectedImages.map((img, idx) => (
-                        <View key={idx} style={styles.imageWrapper}>
-                          <Image
-                            source={{ uri: img.uri }}
-                            style={styles.previewImage}
-                          />
-                          <TouchableOpacity
-                            style={styles.removeImageButton}
-                            onPress={() => removeImage(idx)}
-                          >
-                            <TrashIcon size={12} color="#fff" />
-                          </TouchableOpacity>
-                        </View>
-                      ))}
-                      {selectedImages.length < 5 && (
-                        <TouchableOpacity
-                          style={styles.uploadPlaceholder}
-                          onPress={handlePickImage}
-                        >
-                          <CameraIcon size={24} color="#9ca3af" />
-                          <Text style={styles.uploadText}>Thêm ảnh</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </>
+              <View style={styles.imageGrid}>
+                {selectedImages.map((img, idx) => (
+                  <View key={idx} style={styles.imageWrapper}>
+                    <Image
+                      source={{ uri: img.uri }}
+                      style={styles.previewImage}
+                    />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => removeImage(idx)}
+                    >
+                      <TrashIcon size={12} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {selectedImages.length < 5 && (
+                  <TouchableOpacity
+                    style={styles.uploadPlaceholder}
+                    onPress={handlePickImage}
+                  >
+                    <CameraIcon size={22} color="#9ca3af" />
+                    <Text style={styles.uploadText}>Thêm ảnh</Text>
+                  </TouchableOpacity>
                 )}
               </View>
-            )}
+            </View>
           </ScrollView>
-
-
 
           <View style={styles.footer}>
             <TouchableOpacity
@@ -334,7 +333,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
               onPress={handleClose}
               disabled={loading}
             >
-              <Text style={styles.cancelButtonText}>Hủy</Text>
+              <Text style={styles.cancelButtonText}>HỦY</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.submitButton, (!selectedReason || loading) && styles.submitButtonDisabled]}
@@ -345,14 +344,13 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <ActivityIndicator color="#fff" size="small" />
                   <Text style={[styles.submitButtonText, { marginLeft: 8 }]}>
-                    {uploadProgress > 0 && uploadProgress < 100 ? `Tải ảnh (${uploadProgress}%)` : "Đang gửi..."}
+                    {uploadProgress > 0 && uploadProgress < 100 ? `Tải ảnh (${uploadProgress}%)` : "ĐANG GỬI..."}
                   </Text>
                 </View>
               ) : (
-                <Text style={styles.submitButtonText}>Gửi báo cáo</Text>
+                <Text style={styles.submitButtonText}>GỬI BÁO CÁO</Text>
               )}
             </TouchableOpacity>
-
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -368,118 +366,131 @@ const styles = StyleSheet.create({
   },
   content: {
     backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "80%",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "85%",
     paddingBottom: Platform.OS === "ios" ? 34 : 20,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: 16,
+    padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    borderBottomColor: "#f3f4f6",
+  },
+  badgeContainer: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#eff6ff",
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#3b82f6',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    gap: 6,
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#111827',
   },
   closeButton: {
     padding: 4,
   },
   body: {
-    padding: 16,
+    padding: 20,
   },
   targetInfo: {
-    fontSize: 14,
-    color: "#666",
-    marginBottom: 20,
+    fontSize: 12,
+    color: "#6b7280",
+    fontWeight: "500",
+    marginTop: 1,
   },
-  targetName: {
-    fontWeight: "bold",
-    color: "#000",
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#9ca3af",
+    letterSpacing: 1,
+    marginBottom: 10,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginTop: 10,
-    marginBottom: 12,
-  },
-  reasonItem: {
+  gridContainer: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginBottom: 15,
+  },
+  gridItem: {
+    width: "48%",
+    flexDirection: "column",
     alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    backgroundColor: "#f9f9f9",
-  },
-  reasonItemSelected: {
-    backgroundColor: "#eef2ff",
-    borderColor: "#4f46e5",
-    borderWidth: 1,
-  },
-  radioButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    padding: 12,
+    borderRadius: 16,
     borderWidth: 2,
-    borderColor: "#4f46e5",
+    borderColor: "transparent",
+    backgroundColor: "#f9fafb",
+    marginBottom: 10,
+  },
+  iconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginBottom: 6,
   },
-  radioButtonInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#4f46e5",
+  gridLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#4b5563",
   },
-  reasonLabel: {
-    fontSize: 15,
+  evidenceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#111827',
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 5,
+    marginBottom: 15,
+  },
+  evidenceTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#fff',
+  },
+  evidenceSub: {
+    fontSize: 10,
+    color: '#9ca3af',
+    marginTop: 1,
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 12,
-    minHeight: 100,
-    fontSize: 15,
-    marginBottom: 20,
+    backgroundColor: "#f9fafb",
+    borderRadius: 16,
+    padding: 14,
+    minHeight: 80,
+    fontSize: 13,
+    color: "#111827",
+    fontWeight: "500",
+    marginBottom: 15,
   },
   footer: {
     flexDirection: "row",
-    padding: 16,
+    padding: 20,
+    backgroundColor: "#f9fafb",
     borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
+    borderTopColor: "#f3f4f6",
+    gap: 10,
   },
   cancelButton: {
     flex: 1,
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 8,
-    borderRadius: 8,
-    backgroundColor: "#f3f4f6",
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
   },
   cancelButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "700",
     color: "#4b5563",
   },
   submitButton: {
@@ -487,26 +498,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: "#ef4444",
+    borderRadius: 12,
+    backgroundColor: "#2563eb",
   },
   submitButtonDisabled: {
-    backgroundColor: "#fca5a5",
+    backgroundColor: "#93c5fd",
   },
   submitButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "900",
     color: "#fff",
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-  },
-  imageCount: {
-    fontSize: 12,
-    color: '#9ca3af',
+    marginBottom: 10,
   },
   imageGrid: {
     flexDirection: 'row',
@@ -515,11 +522,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   imageWrapper: {
-    width: (Platform.OS === 'ios' ? 70 : 65),
-    height: (Platform.OS === 'ios' ? 70 : 65),
-    borderRadius: 8,
+    width: 60,
+    height: 60,
+    borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   previewImage: {
     width: '100%',
@@ -534,9 +543,9 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   uploadPlaceholder: {
-    width: (Platform.OS === 'ios' ? 70 : 65),
-    height: (Platform.OS === 'ios' ? 70 : 65),
-    borderRadius: 8,
+    width: 60,
+    height: 60,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderStyle: 'dashed',
@@ -545,38 +554,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafb',
   },
   uploadText: {
-    fontSize: 10,
+    fontSize: 8,
+    fontWeight: "700",
     color: '#9ca3af',
     marginTop: 2,
   },
-  evidenceSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fffbeb',
-    borderColor: '#fef3c7',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 10,
-    marginBottom: 10,
-  },
-  evidenceText: {
-    fontSize: 12,
-    color: '#b45309',
-    lineHeight: 18,
-  },
-  customizeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 8,
-    paddingVertical: 4,
-  },
-  customizeButtonText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#b45309',
-    marginLeft: 4,
-  },
 });
-
-
