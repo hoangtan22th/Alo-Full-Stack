@@ -34,6 +34,7 @@ import {
 } from "../services/reportService";
 import { messageService, MessageDTO } from "../services/messageService";
 import { useAuth } from "../contexts/AuthContext";
+import { userService } from "../services/userService";
 import { generateEvidenceSnapshot } from "../utils/reportUtils";
 
 
@@ -161,11 +162,59 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       }
 
       const anchorId = selectedMessageIds && selectedMessageIds.length > 0 ? selectedMessageIds[0] : undefined;
+      
+      // Collect unique sender IDs from the messages that will be snapshotted
+      const slicedMessagesForSnapshot = (() => {
+        let startIndex = 0;
+        let endIndex = 0;
+        if (anchorId) {
+          const anchorIdx = activeMessages.findIndex((m) => m._id === anchorId);
+          if (anchorIdx !== -1) {
+            if (anchorIdx >= activeMessages.length - 15) {
+              startIndex = Math.max(0, activeMessages.length - 30);
+              endIndex = activeMessages.length - 1;
+            } else if (anchorIdx < 15) {
+              startIndex = 0;
+              endIndex = Math.min(activeMessages.length - 1, 29);
+            } else {
+              startIndex = anchorIdx - 15;
+              endIndex = anchorIdx + 15;
+            }
+          } else {
+            startIndex = Math.max(0, activeMessages.length - 30);
+            endIndex = activeMessages.length - 1;
+          }
+        } else {
+          startIndex = Math.max(0, activeMessages.length - 30);
+          endIndex = activeMessages.length - 1;
+        }
+        return activeMessages.slice(startIndex, endIndex + 1);
+      })();
+
+      const uniqueSenderIds = Array.from(new Set(slicedMessagesForSnapshot.map((m) => m.senderId).filter(Boolean)));
+      const localAvatarCache: Record<string, string> = {};
+
+      await Promise.all(
+        uniqueSenderIds.map(async (senderId) => {
+          let avatar = getAvatarForUser ? getAvatarForUser(senderId) : "";
+          if (!avatar) {
+            try {
+              const profile = await userService.getUserById(senderId);
+              const userData = profile && (profile as any).data ? (profile as any).data : profile;
+              avatar = userData?.avatar || userData?.avatarUrl || "";
+            } catch (err) {
+              console.error("Lỗi fetch avatar bổ sung cho báo cáo:", senderId, err);
+            }
+          }
+          localAvatarCache[senderId] = avatar;
+        })
+      );
+
       const snapshots = generateEvidenceSnapshot(
         anchorId,
         activeMessages,
         reporterId,
-        getAvatarForUser || (() => "")
+        (senderId) => localAvatarCache[senderId] || ""
       );
 
       await reportService.createReport({

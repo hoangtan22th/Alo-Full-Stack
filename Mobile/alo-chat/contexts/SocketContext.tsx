@@ -91,6 +91,26 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             DeviceEventEmitter.emit("force_logout");
           });
 
+          // Lắng nghe lệnh Tài Khoản Bị Khóa (Banned) từ Admin
+          newSocket.on("ACCOUNT_BANNED", (data: { reason?: string }) => {
+            console.warn("⚠️ Received ACCOUNT_BANNED from server:", data);
+            Alert.alert(
+              "Tài khoản bị khóa",
+              data.reason 
+                ? `Tài khoản của bạn đã bị khóa bởi Quản trị viên.\nLý do: ${data.reason}` 
+                : "Tài khoản của bạn đã bị khóa bởi Quản trị viên do vi phạm điều khoản.",
+              [
+                {
+                  text: "OK",
+                  onPress: () => {
+                    DeviceEventEmitter.emit("force_logout");
+                  }
+                }
+              ],
+              { cancelable: false }
+            );
+          });
+
           // Lắng nghe yêu cầu tham gia nhóm mới (Dành cho Admin)
           newSocket.on("NEW_JOIN_REQUEST", (data: { groupId: string, requesterName: string, groupName: string }) => {
             console.log("📥 [Mobile Socket] Received NEW_JOIN_REQUEST:", data);

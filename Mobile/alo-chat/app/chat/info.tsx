@@ -212,7 +212,7 @@ export default function ChatInfoScreen() {
             id: m.userId,
             name: userData?.fullName || "Người dùng",
             role: m.role.toLowerCase(),
-            avatar: userData?.avatar || "",
+            avatar: userData?.avatar || userData?.avatarUrl || "",
           };
         });
         const membersList = await Promise.all(memberPromises);
@@ -1223,7 +1223,7 @@ export default function ChatInfoScreen() {
         targetType={reportTarget ? reportTarget.type : (isGroup ? TargetType.GROUP : TargetType.USER)}
         targetName={reportTarget ? reportTarget.name : (groupName || (isGroup ? "Nhóm" : "Người dùng"))}
         selectedMessageIds={selectedMessageIds}
-        getAvatarForUser={(senderId) => members.find((m) => m.id === senderId)?.avatar || ""}
+        getAvatarForUser={(senderId) => members.find((m) => String(m.id) === String(senderId))?.avatar || ""}
         onSelectMessages={() => setPendingSelectionMode(true)}
         conversationId={id as string}
         conversationType={isGroup ? "GROUP" : "ONE_TO_ONE"}
