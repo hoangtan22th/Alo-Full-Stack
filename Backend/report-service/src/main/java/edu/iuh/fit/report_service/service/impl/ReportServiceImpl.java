@@ -559,6 +559,15 @@ public class ReportServiceImpl implements ReportService {
             log.warn("fetchUserSafe called with blank userId, skipping.");
             return UserResponse.builder().id("").fullName("Unknown User").build();
         }
+        if (userId.equalsIgnoreCase("SYSTEM")) {
+            return UserResponse.builder()
+                    .id("SYSTEM")
+                    .fullName("Hệ thống AI")
+                    .firstName("Hệ thống")
+                    .lastName("AI")
+                    .avatar(null)
+                    .build();
+        }
         try {
             ApiResponse<UserResponse> response = userClient.getUserById(userId);
             if (response != null && response.getData() != null) {
@@ -567,8 +576,7 @@ public class ReportServiceImpl implements ReportService {
         } catch (FeignException.NotFound e) {
             log.warn("User not found for ID: {} (404 from user-service)", userId);
         } catch (FeignException e) {
-            log.error("Feign error fetching user {} — status: {}, body: {}",
-                    userId, e.status(), e.contentUTF8());
+            log.error("Feign error fetching user {} — message: {}", userId, e.getMessage());
         } catch (Exception e) {
             log.error("Unexpected error fetching user {}: {}", userId, e.getMessage());
         }

@@ -20,6 +20,10 @@ public class RateLimitAspect {
     @Before("execution(* edu.iuh.fit.report_service.controller.ReportController.createReport(..)) && args(request)")
     public void checkRateLimit(ReportCreationRequest request) {
         String reporterId = request.getReporterId();
+        if (reporterId != null && reporterId.equalsIgnoreCase("SYSTEM")) {
+            return; // Skip rate limiting for automated AI system reports
+        }
+        
         String targetId = request.getTargetId();
 
         // 1. Target Limit (Max 5/day per target for testing)

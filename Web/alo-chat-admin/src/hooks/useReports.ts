@@ -63,16 +63,19 @@ export const useReports = () => {
 
   const resolveReport = async (
     reportId: string,
-    action: "DISMISS" | "WARN" | "BAN",
+    action: "DISMISS" | "WARN" | "BAN" | "DISBAND_GROUP",
     notes: string,
     onSuccess?: () => void,
   ) => {
     try {
-      await reportService.resolveReport(reportId, {
-        action,
-        adminNotes: notes,
-        adminId: adminEmail || "admin",
-      });
+      await reportService.resolveReport(
+        reportId,
+        {
+          action,
+          adminNotes: notes,
+        },
+        adminEmail || "admin"
+      );
       // Optimistically update the single item or just refetch
       toast.success(`Xử lý thành công (${action})`);
       if (onSuccess) onSuccess();

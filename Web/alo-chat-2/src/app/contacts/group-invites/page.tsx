@@ -132,7 +132,9 @@ export default function GroupInvitePage() {
         toast.error("Không tìm thấy thông tin nhóm");
       }
     } catch (err: any) {
-      console.error("❌ [SearchLink] Error:", err);
+      if (err.response?.status !== 404) {
+        console.error("❌ [SearchLink] Error:", err);
+      }
       const errMsg = err.response?.data?.error || err.response?.data?.message || "Không thể tìm thấy nhóm";
       toast.error(errMsg);
     } finally {

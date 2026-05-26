@@ -39,7 +39,7 @@ public class AdminReportController {
         return ResponseEntity.ok(ApiResponse.success(reports));
     }
 
-    @PatchMapping("/{reportId}/action")
+    @RequestMapping(value = "/{reportId}/action", method = {RequestMethod.PATCH, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<ReportAdminResponse>> resolveReport(
             @PathVariable String reportId,
             @RequestHeader("X-Admin-Id") String adminId,
