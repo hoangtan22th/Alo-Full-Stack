@@ -633,11 +633,88 @@ export async function sendMessage(
       status: "success",
       data: messageEvent,
     });
+
+    // 5. Chạy kiểm duyệt tin nhắn bằng AI ở chế độ nền (bất đồng bộ, không chặn client)
+    if (!type || type === "text") {
+      const contentStr = content || "";
+      if (SENSITIVE_KEYWORDS_REGEX.test(contentStr)) {
+        console.log(`[MessageService AI Moderation] Message matched sensitive keyword rules. Triggering AI scan for: "${contentStr.substring(0, 30)}..."`);
+        runAIModeration(messageEvent).catch((err) => {
+          console.error("[MessageController] Background AI moderation triggered error:", err);
+        });
+      } else {
+        console.log(`[MessageService AI Moderation] Message does not match sensitive keyword rules. Skipping AI scan.`);
+      }
+    }
   } catch (error) {
     console.error("[MessageController] POST sendMessage error:", error);
     next(error);
   }
 }
+
+/**
+ * Sensitive keywords pre-filter regex pattern.
+ */
+const SENSITIVE_KEYWORDS_REGEX = new RegExp(
+  "(" +
+  "otp|mã\\s*otp|mật\\s*khẩu|mat\\s*khau|cung\\s*cấp\\s*otp|gửi\\s*otp|trúng\\s*thưởng|nhận\\s*thưởng|trung\\s*thuong|nhan\\s*thuong|" +
+  "chuyển\\s*tiền\\s*gấp|chuyen\\s*tien\\s*gap|phạt\\s*nguội|công\\s*an|tòa\\s*án|viện\\s*kiểm\\s*sát|" +
+  "đm|dkm|đéo|lồn|cặc|óc\\s*chó|khốn\\s*nạn|mẹ\\s*kiếp|thằng\\s*chó|con\\s*chó|địt|dit\\s*me|vcl|đờ\\s*mờ|giết|đâm|chém|đánh\\s*chết|" +
+  "khiêu\\s*dâm|khieu\\s*dam|sex|gạ\\s*tình|ga\\s*tinh|chat\\s*sex|clip\\s*sex|phim\\s*heo|phim\\s*người\\s*lớn|phim\\s*18\\+|18\\s*cộng|" +
+  "bán\\s*dâm|ban\\s*dam|gái\\s*gọi|gai\\s*goi|phim\\s*sex|clip\\s*nóng|việc\\s*nhẹ\\s*lương\\s*cao|kiếm\\s*tiền\\s*online|" +
+  "nhà\\s*cái|cá\\s*cược|ca\\s*cuoc|đánh\\s*bạc|danh\\s*bac|tuyển\\s*dụng\\s*gấp|tuyen\\s*dung\\s*gap" +
+  ")",
+  "i"
+);
+
+/**
+ * Run AI Moderation asynchronously in the background.
+ */
+async function runAIModeration(messageEvent: any): Promise<void> {
+  if (messageEvent.type !== "text" || !messageEvent.content) {
+    return;
+  }
+
+  try {
+    const chatbotServiceUrl = process.env.CHATBOT_SERVICE_URL || "http://localhost:8085";
+    const baseUrl = chatbotServiceUrl.endsWith("/") 
+      ? chatbotServiceUrl.slice(0, -1) 
+      : chatbotServiceUrl;
+    const url = `${baseUrl}/api/v1/chatbot/moderate`;
+
+    console.log(`[MessageService AI Moderation] Sending message ${messageEvent._id} to chatbot-service for scanning...`);
+
+    const payload = {
+      messageId: messageEvent._id,
+      senderId: messageEvent.senderId,
+      senderName: messageEvent.senderName || "Unknown User",
+      content: messageEvent.content,
+      type: messageEvent.type,
+      conversationId: messageEvent.conversationId,
+      isGroup: !!messageEvent.isGroup,
+      timestamp: messageEvent.createdAt ? new Date(messageEvent.createdAt).toISOString() : new Date().toISOString()
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      console.warn(`[MessageService AI Moderation] Failed to moderate message ${messageEvent._id}: ${response.status} ${response.statusText}`);
+      return;
+    }
+
+    const result = await response.json();
+    console.log(`[MessageService AI Moderation] Scan completed for message ${messageEvent._id}:`, result?.data);
+  } catch (err: any) {
+    console.error(`[MessageService AI Moderation] Exception in background moderation thread for message ${messageEvent._id}:`, err.message);
+  }
+}
+
 
 /**
  * Upload a file and create a message
@@ -1299,7 +1376,7 @@ export async function getBulkMessages(
       if (index < messages.length - 1) {
         const nextMsg = messages[index + 1];
         // Only check gap if they belong to the same conversation
-        if (m.conversationId.toString() === nextMsg.conversationId.toString()) {
+        if (nextMsg && m.conversationId.toString() === nextMsg.conversationId.toString()) {
           hiddenAfterCount = await Message.countDocuments({
             conversationId: m.conversationId,
             createdAt: { $gt: m.createdAt, $lt: nextMsg.createdAt }
