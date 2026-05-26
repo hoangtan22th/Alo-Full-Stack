@@ -78,4 +78,31 @@ export const userService = {
       throw error;
     }
   },
+
+  getQuickStats: async (): Promise<{
+    totalUsers: number;
+    newToday: number;
+    onlineNow: number;
+    bannedUsers: number;
+  }> => {
+    try {
+      const response = await axiosClient.get(`${API_URL}/quick-stats`);
+      return response.data?.data || { totalUsers: 0, newToday: 0, onlineNow: 0, bannedUsers: 0 };
+    } catch (error) {
+      console.error("Error fetching user quick stats:", error);
+      return { totalUsers: 0, newToday: 0, onlineNow: 0, bannedUsers: 0 };
+    }
+  },
+
+  getGrowthStats: async (days: number = 7): Promise<Record<string, number>> => {
+    try {
+      const response = await axiosClient.get(`${API_URL}/growth-stats`, {
+        params: { days }
+      });
+      return response.data?.data || {};
+    } catch (error) {
+      console.error("Error fetching user growth stats:", error);
+      return {};
+    }
+  },
 };

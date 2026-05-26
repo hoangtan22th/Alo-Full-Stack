@@ -216,6 +216,14 @@ class SocketService {
     return this.subscribe("INVITATION_ACCEPTED", callback);
   }
 
+  onGroupBanned(callback: (data: any) => void) {
+    return this.subscribe("GROUP_BANNED", callback);
+  }
+
+  onGroupDisbanded(callback: (data: any) => void) {
+    return this.subscribe("GROUP_DISBANDED", callback);
+  }
+
   // --- Messaging ---
   joinRoom(conversationId: string) {
     if (this.socket?.connected) {

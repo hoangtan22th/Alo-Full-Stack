@@ -1,5 +1,7 @@
 package edu.iuh.fit.report_service.dto.request;
 
+import edu.iuh.fit.report_service.entity.ConversationType;
+import edu.iuh.fit.report_service.entity.MessageSnapshot;
 import edu.iuh.fit.report_service.entity.ReportReason;
 import edu.iuh.fit.report_service.entity.TargetType;
 import jakarta.validation.constraints.NotBlank;
@@ -26,6 +28,14 @@ public class ReportCreationRequest {
     @NotNull(message = "Target Type is required")
     private TargetType targetType;
 
+    private String targetName;
+
+    @NotNull(message = "Conversation Type is required")
+    private ConversationType conversationType;
+
+    @NotBlank(message = "Conversation ID is required")
+    private String conversationId;
+
     @NotNull(message = "Report Reason is required")
     private ReportReason reason;
 
@@ -33,5 +43,5 @@ public class ReportCreationRequest {
 
     private List<String> imageUrls;
 
-    private List<String> messageIds;
+    private List<MessageSnapshot> messageSnapshots;
 }

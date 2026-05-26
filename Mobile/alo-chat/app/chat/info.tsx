@@ -40,9 +40,14 @@ import {
   PencilSquareIcon,
   CalendarDaysIcon,
   PlusCircleIcon,
+  ShieldExclamationIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
+import { ReportModal } from "../../components/ReportModal";
+import { ReportTargetModal } from "../../components/ReportTargetModal";
+import { TargetType } from "../../services/reportService";
+
 
 export default function ChatInfoScreen() {
   const router = useRouter();
@@ -53,6 +58,8 @@ export default function ChatInfoScreen() {
     avatar,
     membersCount,
     isGroup: paramsIsGroup,
+    selectedMessageIds: paramsSelectedMessageIds,
+    showReport,
   } = useLocalSearchParams();
   const { user } = useAuth();
   const currentUserId = user?.id || user?._id || user?.userId || null;
@@ -89,10 +96,70 @@ export default function ChatInfoScreen() {
   const [blockReinvite, setBlockReinvite] = useState(false);
 
   // States cho Nhóm chung
+  const { socket, onlineUsers, fetchBulkPresence } = useSocket();
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
-  const [commonGroups, setCommonGroups] = useState<any[]>([]);
+
+  const [isReportModalVisible, setIsReportModalVisible] = useState(false);
+  const [isReportTargetModalVisible, setIsReportTargetModalVisible] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ type: TargetType; id: string; name: string } | null>(null);
+  const [pendingSelectionMode, setPendingSelectionMode] = useState(false);
+
+
+  const userStatus = !isGroup && otherUserId ? onlineUsers[String(otherUserId)] : null;
+  const isOnline = userStatus?.status === "online";
+
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  useEffect(() => {
+    if (paramsSelectedMessageIds) {
+      try {
+        const ids = typeof paramsSelectedMessageIds === 'string' ? JSON.parse(paramsSelectedMessageIds) : paramsSelectedMessageIds;
+        if (Array.isArray(ids)) {
+          setSelectedMessageIds(ids);
+          // Only auto-open if showReport is true
+          if (showReport === "true") {
+            setIsReportModalVisible(true);
+          }
+        }
+      } catch (e) {
+        console.error("Error parsing paramsSelectedMessageIds:", e);
+      }
+    }
+  }, [paramsSelectedMessageIds, showReport]);
+
+  useEffect(() => {
+    if (pendingSelectionMode) {
+      setPendingSelectionMode(false);
+      setIsReportModalVisible(false);
+      
+      const isGroupStr = isGroup ? "true" : "false";
+      // Use the original ID from params to ensure the path remains identical
+      const convId = id as string;
+      
+      const selectedIds = JSON.stringify(selectedMessageIds || []);
+      
+      // Pass EVERYTHING back so the UI doesn't reset
+      let query = `selectionMode=true&initialSelectedIds=${encodeURIComponent(selectedIds)}&name=${encodeURIComponent(groupName || name as string)}&avatar=${encodeURIComponent(groupAvatar || avatar as string)}&membersCount=${realtimeMembersCount}&isGroup=${isGroupStr}`;
+      
+      if (!isGroup && otherUserId) {
+        query += `&targetUserId=${otherUserId}`;
+      }
+      
+      router.replace(`/chat/${convId}?${query}` as any);
+    }
+  }, [pendingSelectionMode, id, otherUserId, isGroup, groupName, name, groupAvatar, avatar, realtimeMembersCount, selectedMessageIds]);
+
+  const getOfflineText = (lastActive?: number) => {
+    if (!lastActive) return "Chưa truy cập";
+    const diff = Math.floor((Date.now() - lastActive) / 60000);
+    if (diff < 1) return "Vừa mới truy cập";
+    if (diff < 60) return `Hoạt động ${diff} phút trước`;
+    const hours = Math.floor(diff / 60);
+    if (hours < 24) return `Hoạt động ${hours} giờ trước`;
+    return `Hoạt động ${Math.floor(hours / 24)} ngày trước`;
+  };
   const [isCommonGroupsModalVisible, setIsCommonGroupsModalVisible] = useState(false);
   const [isFetchingCommon, setIsFetchingCommon] = useState(false);
+  const [commonGroups, setCommonGroups] = useState<any[]>([]);
 
   const fetchGroupDetails = async () => {
     try {
@@ -108,10 +175,12 @@ export default function ChatInfoScreen() {
 
       if (!isGroup && groupData && groupData.members) {
         const otherMember = groupData.members.find(
-          (m: any) => m.userId !== currentUserId,
+          (m: any) => String(m.userId) !== String(currentUserId),
         );
         if (otherMember) {
           setOtherUserId(otherMember.userId);
+          // Fetch presence for this user
+          fetchBulkPresence([otherMember.userId]);
         }
       }
 
@@ -143,7 +212,7 @@ export default function ChatInfoScreen() {
             id: m.userId,
             name: userData?.fullName || "Người dùng",
             role: m.role.toLowerCase(),
-            avatar: userData?.avatar || "",
+            avatar: userData?.avatar || userData?.avatarUrl || "",
           };
         });
         const membersList = await Promise.all(memberPromises);
@@ -212,7 +281,7 @@ export default function ChatInfoScreen() {
     }, [id]),
   );
 
-  const { socket } = useSocket();
+
 
   useEffect(() => {
     if (!socket || !id) return;
@@ -532,7 +601,7 @@ export default function ChatInfoScreen() {
                 <CameraIcon size={16} color="#4b5563" />
               </TouchableOpacity>
             ) : (
-              !isGroup && (
+              !isGroup && isOnline && (
                 <View className="absolute bottom-1 right-2 w-[18px] h-[18px] bg-green-500 border-[3px] border-white rounded-full" />
               )
             )}
@@ -557,7 +626,9 @@ export default function ChatInfoScreen() {
           <Text className="text-[13px] text-gray-500 font-medium">
             {isGroup
               ? `${realtimeMembersCount || ""} thành viên`
-              : "Đang hoạt động"}
+              : isOnline
+                ? "Đang hoạt động"
+                : getOfflineText(userStatus?.last_active)}
           </Text>
         </View>
 
@@ -685,7 +756,7 @@ export default function ChatInfoScreen() {
             {fileList.length > 0 ? (
               fileList.slice(0, 3).map((file, index) => {
                 const uniqueKey = file._id
-                   ? `${file._id}-${index}`
+                  ? `${file._id}-${index}`
                   : `file-fallback-${index}-${Math.random().toString(36).substring(2)}`;
                 return (
                   <View key={uniqueKey}>
@@ -698,13 +769,12 @@ export default function ChatInfoScreen() {
                         )
                       }
                       title={file.metadata?.fileName || "Không tên"}
-                      info={`${
-                        file.metadata?.fileSize
+                      info={`${file.metadata?.fileSize
                           ? (file.metadata.fileSize / (1024 * 1024)).toFixed(
-                              1,
-                            ) + " MB"
+                            1,
+                          ) + " MB"
                           : "0 MB"
-                      } • ${file.createdAt ? new Date(file.createdAt).toLocaleDateString("vi-VN") : "Vừa xong"}`}
+                        } • ${file.createdAt ? new Date(file.createdAt).toLocaleDateString("vi-VN") : "Vừa xong"}`}
                     />
                     {index < Math.min(fileList.length, 3) - 1 && (
                       <View className="h-[1px] bg-white w-[90%] self-end" />
@@ -810,6 +880,24 @@ export default function ChatInfoScreen() {
               isDestructive
               onPress={handleClearHistory}
             />
+            <View className="h-[1px] bg-white w-full" />
+            <SettingItem
+              icon={<ShieldExclamationIcon size={24} color="#ef4444" />}
+              title={isGroup ? "Báo cáo nhóm" : "Báo cáo người dùng"}
+              isDestructive
+              onPress={() => {
+                if (isGroup) {
+                  setIsReportTargetModalVisible(true);
+                } else {
+                  setReportTarget({
+                    type: TargetType.USER,
+                    id: otherUserId as string,
+                    name: groupName || "Người dùng",
+                  });
+                  setIsReportModalVisible(true);
+                }
+              }}
+            />
           </View>
         </View>
 
@@ -839,6 +927,7 @@ export default function ChatInfoScreen() {
         )}
 
         {isGroup && (
+
           <>
             {/* SECTION: RỜI / GIẢI TÁN NHÓM */}
             <View className="px-5 mt-10 pb-12">
@@ -889,11 +978,10 @@ export default function ChatInfoScreen() {
                 .map((m) => (
                   <TouchableOpacity
                     key={m.id}
-                    className={`flex-row items-center p-3 rounded-xl mb-2 border ${
-                      selectedNewLeaderId === m.id
+                    className={`flex-row items-center p-3 rounded-xl mb-2 border ${selectedNewLeaderId === m.id
                         ? "border-[#007AFF] bg-[#007AFF]/10"
                         : "border-gray-200"
-                    }`}
+                      }`}
                     onPress={() => setSelectedNewLeaderId(m.id)}
                   >
                     <Image
@@ -904,11 +992,10 @@ export default function ChatInfoScreen() {
                     />
                     <Text className="ml-3 text-base flex-1">{m.name}</Text>
                     <View
-                      className={`w-5 h-5 rounded-full border items-center justify-center ${
-                        selectedNewLeaderId === m.id
+                      className={`w-5 h-5 rounded-full border items-center justify-center ${selectedNewLeaderId === m.id
                           ? "border-[#007AFF]"
                           : "border-gray-400"
-                      }`}
+                        }`}
                     >
                       {selectedNewLeaderId === m.id && (
                         <View className="w-3 h-3 rounded-full bg-[#007AFF]" />
@@ -1109,9 +1196,57 @@ export default function ChatInfoScreen() {
           </View>
         </View>
       </Modal>
+
+      <ReportTargetModal
+        visible={isReportTargetModalVisible}
+        onClose={() => setIsReportTargetModalVisible(false)}
+        groupName={groupName || (name as string)}
+        members={members.filter((m) => m.id !== currentUserId).map((m) => ({ id: m.id, name: m.name, avatar: m.avatar }))}
+        onSelectTarget={(targetType, targetId, targetName) => {
+          setIsReportTargetModalVisible(false);
+          setReportTarget({
+            type: targetType as TargetType,
+            id: targetType === "GROUP" ? (id as string) : targetId,
+            name: targetName,
+          });
+          setIsReportModalVisible(true);
+        }}
+      />
+
+      <ReportModal
+        visible={isReportModalVisible}
+        onClose={() => {
+          setIsReportModalVisible(false);
+          setReportTarget(null);
+        }}
+        targetId={reportTarget ? reportTarget.id : ((isGroup ? id : otherUserId) as string)}
+        targetType={reportTarget ? reportTarget.type : (isGroup ? TargetType.GROUP : TargetType.USER)}
+        targetName={reportTarget ? reportTarget.name : (groupName || (isGroup ? "Nhóm" : "Người dùng"))}
+        selectedMessageIds={selectedMessageIds}
+        getAvatarForUser={(senderId) => members.find((m) => String(m.id) === String(senderId))?.avatar || ""}
+        onSelectMessages={() => setPendingSelectionMode(true)}
+        conversationId={id as string}
+        conversationType={isGroup ? "GROUP" : "ONE_TO_ONE"}
+        onSuccess={() => {
+          setIsReportModalVisible(false);
+          setReportTarget(null);
+          // Navigate back to chat WITHOUT selectionMode
+          const isGroupStr = isGroup ? "true" : "false";
+          const convId = id as string;
+          
+          let query = `isGroup=${isGroupStr}&name=${encodeURIComponent(groupName || name as string)}&avatar=${encodeURIComponent(groupAvatar || avatar as string)}&membersCount=${realtimeMembersCount}`;
+          if (!isGroup && otherUserId) {
+            query += `&targetUserId=${otherUserId}`;
+          }
+          
+          // Use replace to ensure the stack doesn't grow
+          router.replace(`/chat/${convId}?${query}` as any);
+        }}
+      />
     </View>
   );
 }
+
 
 // --- Các Component Phụ ---
 
@@ -1196,9 +1331,8 @@ function SettingItem({
         {icon}
       </View>
       <Text
-        className={`ml-4 flex-1 text-[15px] font-medium ${
-          isDestructive ? "text-red-600" : "text-gray-800"
-        }`}
+        className={`ml-4 flex-1 text-[15px] font-medium ${isDestructive ? "text-red-600" : "text-gray-800"
+          }`}
       >
         {title}
       </Text>

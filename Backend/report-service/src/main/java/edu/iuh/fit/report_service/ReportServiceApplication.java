@@ -6,7 +6,7 @@ import org.springframework.data.mongodb.config.EnableMongoAuditing;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = "edu.iuh.fit")
 @EnableMongoAuditing
 @EnableDiscoveryClient
 @EnableFeignClients

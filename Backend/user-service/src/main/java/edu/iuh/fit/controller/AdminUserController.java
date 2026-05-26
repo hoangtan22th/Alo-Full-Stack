@@ -4,6 +4,7 @@ import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import edu.iuh.fit.common_service.dto.response.PageResponse;
 import edu.iuh.fit.dto.request.UserUpdateRequest;
 import edu.iuh.fit.dto.response.UserDto;
+import edu.iuh.fit.dto.response.UserQuickStatsResponse;
 import edu.iuh.fit.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -28,7 +29,7 @@ public class AdminUserController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Pageable pageable = PageRequest.of(page, size, Sort.by("isOnline").descending().and(Sort.by("createdAt").descending()));
         // Map chung từ khoá search vào tất cả các trường: Tên, Email, Số điện thoại
         Page<UserDto> users = userService.searchAdminUsers(search, status, pageable);
 
@@ -68,5 +69,21 @@ public class AdminUserController {
     public ResponseEntity<ApiResponse<Void>> unbanUser(@PathVariable String id) {
         userService.unbanUser(id);
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @GetMapping("/quick-stats")
+    public ResponseEntity<ApiResponse<UserQuickStatsResponse>> getQuickStats() {
+        return ResponseEntity.ok(ApiResponse.success(userService.getQuickStats()));
+    }
+
+    @GetMapping("/growth-stats")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getGrowthStats(
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(ApiResponse.success(userService.getGrowthStats(days)));
+    }
+
+    @GetMapping("/internal/ids")
+    public ResponseEntity<ApiResponse<java.util.List<String>>> getAllUserIds() {
+        return ResponseEntity.ok(ApiResponse.success(userService.getAllUserIds()));
     }
 }

@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DeviceEventEmitter, Alert } from "react-native";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "./AuthContext";
+import { presenceService } from "../services/presenceService";
 
 export type OnlineUser = {
   status: "online" | "offline";
@@ -13,12 +14,14 @@ type SocketContextType = {
   socket: Socket | null;
   isConnected: boolean;
   onlineUsers: Record<string, OnlineUser>;
+  fetchBulkPresence: (userIds: string[]) => Promise<void>;
 };
 
 const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
   onlineUsers: {},
+  fetchBulkPresence: async () => {},
 });
 
 export function useSocket() {
@@ -33,6 +36,21 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [onlineUsers, setOnlineUsers] = useState<Record<string, OnlineUser>>(
     {},
   );
+
+  const fetchBulkPresence = async (userIds: string[]) => {
+    if (!userIds || userIds.length === 0) return;
+    const result = await presenceService.getBulkPresence(userIds);
+    if (result) {
+      const formatted: Record<string, OnlineUser> = {};
+      Object.entries(result).forEach(([userId, info]) => {
+        formatted[userId] = {
+          status: info.isOnline ? "online" : "offline",
+          last_active: info.lastActiveAt,
+        };
+      });
+      setOnlineUsers((prev) => ({ ...prev, ...formatted }));
+    }
+  };
 
   useEffect(() => {
     let newSocket: Socket | null = null;
@@ -71,6 +89,26 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           newSocket.on("FORCE_LOGOUT", (data) => {
             console.warn("⚠️ Received FORCE_LOGOUT from server:", data);
             DeviceEventEmitter.emit("force_logout");
+          });
+
+          // Lắng nghe lệnh Tài Khoản Bị Khóa (Banned) từ Admin
+          newSocket.on("ACCOUNT_BANNED", (data: { reason?: string }) => {
+            console.warn("⚠️ Received ACCOUNT_BANNED from server:", data);
+            Alert.alert(
+              "Tài khoản bị khóa",
+              data.reason 
+                ? `Tài khoản của bạn đã bị khóa bởi Quản trị viên.\nLý do: ${data.reason}` 
+                : "Tài khoản của bạn đã bị khóa bởi Quản trị viên do vi phạm điều khoản.",
+              [
+                {
+                  text: "OK",
+                  onPress: () => {
+                    DeviceEventEmitter.emit("force_logout");
+                  }
+                }
+              ],
+              { cancelable: false }
+            );
           });
 
           // Lắng nghe yêu cầu tham gia nhóm mới (Dành cho Admin)
@@ -390,7 +428,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated]);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected, onlineUsers }}>
+    <SocketContext.Provider value={{ socket, isConnected, onlineUsers, fetchBulkPresence }}>
       {children}
     </SocketContext.Provider>
   );

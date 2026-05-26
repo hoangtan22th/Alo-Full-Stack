@@ -2,17 +2,17 @@
 
 import { useEffect, useState } from "react";
 import {
-  CheckCircleIcon,
-  ClockIcon,
-  ShieldCheckIcon,
-  PresentationChartLineIcon,
   MagnifyingGlassIcon,
   FunnelIcon,
   ArrowPathIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
+  ChartBarIcon,
 } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { ReportRow } from "@/components/reports/ReportRow";
 import { ReportActionModal } from "@/components/reports/ReportActionModal";
+import ReportAnalytics from "@/components/reports/ReportAnalytics";
 import { Pagination } from "@/components/ui/Pagination";
 import { useReports } from "@/hooks/useReports";
 import { ReportItem } from "@/services/reportService";
@@ -23,7 +23,7 @@ const REASON_OPTIONS = [
   { value: "CHILD_ABUSE", label: "Xâm hại trẻ em" },
   { value: "SEXUAL_CONTENT", label: "Nội dung tình dục" },
   { value: "VIOLENCE_TERRORISM", label: "Bạo lực / Khủng bố" },
-  { value: "SPAM_HARRASSMENT", label: "Spam / Quấy rối" },
+  { value: "SPAM_HARASSMENT", label: "Spam / Quấy rối" },
   { value: "OTHER", label: "Khác" },
 ];
 
@@ -33,6 +33,8 @@ export default function ReportsModerationPage() {
   const [filterStatus, setFilterStatus] = useState<string | null>("PENDING");
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [showAnalytics, setShowAnalytics] = useState(true);
 
   // Search & Filter states
   const [searchTerm, setSearchTerm] = useState("");
@@ -58,10 +60,19 @@ export default function ReportsModerationPage() {
       page: currentPage,
       size: 20,
     });
+    // Trigger statistics refresh
+    setRefreshKey(prev => prev + 1);
   };
 
   useEffect(() => {
-    loadData();
+    fetchReports({
+      status: filterStatus,
+      targetName: debouncedSearch || undefined,
+      targetType: filterTargetType !== "ALL" ? filterTargetType : undefined,
+      reason: filterReason !== "ALL" ? filterReason : undefined,
+      page: currentPage,
+      size: 20,
+    });
   }, [filterStatus, currentPage, debouncedSearch, filterTargetType, filterReason, fetchReports]);
 
   const handleReview = (report: ReportItem) => {
@@ -77,20 +88,13 @@ export default function ReportsModerationPage() {
     setCurrentPage(0);
   };
 
-  const handleModalSubmit = async (
-    reportId: string,
-    action: "DISMISS" | "WARN" | "BAN",
-    notes: string,
-  ) => {
-    const ok = await resolveReport(reportId, action, notes);
-    if (ok) {
-      setSelectedReport(null);
-      loadData();
-    }
-  };
-
   const handleModalClose = () => {
     setSelectedReport(null);
+  };
+
+  const handleModalSuccess = () => {
+    setSelectedReport(null);
+    loadData();
   };
 
   return (
@@ -105,28 +109,36 @@ export default function ReportsModerationPage() {
             restrictions.
           </p>
         </div>
+
+        <button
+          onClick={() => setShowAnalytics(!showAnalytics)}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-container-low hover:bg-surface-container-high border border-outline-variant/15 text-on-surface-variant text-sm font-bold transition-all shadow-sm active:scale-95"
+        >
+          {showAnalytics ? (
+            <>
+              <ChevronUpIcon className="w-4 h-4" />
+              Hide Statistics
+            </>
+          ) : (
+            <>
+              <ChartBarIcon className="w-4 h-4 text-primary" />
+              Show Statistics
+            </>
+          )}
+        </button>
       </div>
 
-      {/* Stats Cards - Keeping same UI */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-surface-container-lowest rounded-[1.5rem] p-6 shadow-minimal relative overflow-hidden group border border-outline-variant/10">
-          <div className="absolute top-0 left-0 w-full h-1 bg-error"></div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-on-surface-variant uppercase tracking-wider">Total Pending</h3>
-            <PresentationChartLineIcon className="w-8 h-8 text-error bg-error-container/20 p-1.5 rounded-full" />
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-extrabold text-on-surface font-headline">24</span>
-          </div>
+      {/* ── ANALYTICS DASHBOARD ── */}
+      {showAnalytics && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+          <ReportAnalytics key={refreshKey} />
         </div>
-        {/* ... Other stats (simplified for brevitiy in replace) ... */}
-      </div>
+      )}
 
       {/* ── SEARCH & FILTERS BAR ── */}
-      <div className="bg-surface-container-low rounded-2xl p-4 mb-6 flex flex-wrap gap-4 items-center border border-outline-variant/15 shadow-sm">
-        <div className="text-xs font-bold text-on-surface mr-2 tracking-widest uppercase flex items-center gap-2">
-          <FunnelIcon className="w-4 h-4" />
-          Bộ lọc
+      <div className="bg-surface-container-low rounded-xl p-4 mb-6 flex flex-wrap gap-4 items-center border border-outline-variant/15 shadow-sm">
+        <div className="text-xs font-bold text-on-surface mr-2 tracking-wide uppercase">
+          Filters
         </div>
 
         {/* Search by Target Name */}
@@ -136,10 +148,10 @@ export default function ReportsModerationPage() {
           </div>
           <input
             type="text"
-            placeholder="Tìm theo tên người dùng hoặc nhóm bị báo cáo..."
+            placeholder="Tìm theo tên người dùng hoặc nhóm..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-sm bg-surface-container-lowest border border-outline-variant/15 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            className="w-full pl-10 pr-4 py-2 text-sm bg-surface-container-lowest border border-outline-variant/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
           />
         </div>
 
@@ -150,7 +162,7 @@ export default function ReportsModerationPage() {
             setFilterTargetType(e.target.value);
             setCurrentPage(0);
           }}
-          className="bg-surface-container-lowest border border-outline-variant/15 rounded-xl px-3 py-2 text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+          className="bg-surface-container-lowest border border-outline-variant/15 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary transition-all"
         >
           <option value="ALL">Tất cả đối tượng</option>
           <option value="USER">Người dùng (USER)</option>
@@ -164,7 +176,7 @@ export default function ReportsModerationPage() {
             setFilterReason(e.target.value);
             setCurrentPage(0);
           }}
-          className="bg-surface-container-lowest border border-outline-variant/15 rounded-xl px-3 py-2 text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/20"
+          className="bg-surface-container-lowest border border-outline-variant/15 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary transition-all"
         >
           {REASON_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -173,92 +185,178 @@ export default function ReportsModerationPage() {
           ))}
         </select>
 
-        <Button
-          onClick={loadData}
-          variant="outline"
-          size="sm"
-          className="border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-highest rounded-xl px-4 flex items-center gap-2"
+        <button
+          onClick={() => {
+            setSearchTerm("");
+            setFilterStatus("PENDING");
+            setFilterTargetType("ALL");
+            setFilterReason("ALL");
+            setCurrentPage(0);
+            setRefreshKey(prev => prev + 1);
+            if (searchTerm === "" && filterStatus === "PENDING" && filterTargetType === "ALL" && filterReason === "ALL" && currentPage === 0) {
+              loadData();
+            }
+          }}
+          className="p-2 bg-surface-container-lowest border border-outline-variant/15 rounded-lg text-on-surface-variant hover:text-primary hover:border-primary transition-all shadow-sm"
+          title="Reset & Refresh"
         >
-          <ArrowPathIcon className={`w-4 h-4 ${loading && "animate-spin"}`} />
-          Làm mới
-        </Button>
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+        </button>
 
-        {/* Results count */}
-        <div className="ml-auto text-xs font-bold text-on-surface-variant bg-surface-container-high px-3 py-1.5 rounded-full">
-          {pagination.totalElements} báo cáo
+        <div className="ml-auto text-sm text-on-surface-variant font-medium">
+          Showing{" "}
+          <span className="text-on-surface font-bold">
+            {pagination.totalElements === 0
+              ? 0
+              : pagination.page * 20 + 1}
+            -
+            {Math.min(
+              (pagination.page + 1) * 20,
+              pagination.totalElements,
+            )}
+          </span>{" "}
+          of{" "}
+          <span className="text-on-surface font-bold">
+            {pagination.totalElements}
+          </span>{" "}
+          reports
         </div>
       </div>
 
-      {/* Reports List Queue */}
-      <div className="bg-surface-container-lowest rounded-[1.5rem] shadow-minimal border border-outline-variant/10 overflow-hidden">
-        <div className="p-6 border-b border-outline-variant/15 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <h2 className="text-xl font-bold text-on-surface font-headline flex items-center gap-2">
-            <ShieldCheckIcon className="w-6 h-6 text-primary" />
-            Danh sách Reports
-          </h2>
-          <div className="flex gap-2 bg-surface-container-low p-1.5 rounded-xl">
-            {[
-              { value: "PENDING", label: "Chờ xử lý" },
-              { value: "RESOLVED", label: "Đã giải quyết" },
-              { value: "REJECTED", label: "Đã từ chối" },
-              { value: null, label: "Tất cả" },
-            ].map((tab) => (
-              <Button
-                key={tab.value ?? "ALL"}
-                variant={filterStatus === tab.value ? "default" : "ghost"}
-                size="sm"
-                onClick={() => handleFilterStatusChange(tab.value)}
-                className={`text-xs font-bold rounded-lg px-4 ${
-                  filterStatus === tab.value
-                    ? "bg-white dark:bg-surface-container-highest shadow-sm text-primary"
-                    : "text-on-surface-variant"
-                }`}
-              >
-                {tab.label}
-              </Button>
-            ))}
+      {/* ── STATUS TABS ── */}
+      <div className="flex gap-2 mb-6 bg-surface-container-low p-1.5 rounded-2xl w-fit border border-outline-variant/10 shadow-sm">
+        <button
+          onClick={() => handleFilterStatusChange("PENDING")}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${filterStatus === "PENDING"
+              ? "bg-primary text-white shadow-md shadow-primary/20 scale-105"
+              : "text-on-surface-variant hover:bg-surface-container-highest"
+            }`}
+        >
+          Pending
+        </button>
+        <button
+          onClick={() => handleFilterStatusChange("IN_PROGRESS")}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${filterStatus === "IN_PROGRESS"
+              ? "bg-amber-500 text-white shadow-md shadow-amber-500/20 scale-105"
+              : "text-on-surface-variant hover:bg-surface-container-highest"
+            }`}
+        >
+          In Progress
+        </button>
+        <button
+          onClick={() => handleFilterStatusChange("RESOLVED")}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${filterStatus === "RESOLVED"
+              ? "bg-primary text-white shadow-md shadow-secondary/20 scale-105"
+              : "text-on-surface-variant hover:bg-surface-container-highest"
+            }`}
+        >
+          Resolved
+        </button>
+        <button
+          onClick={() => handleFilterStatusChange("REJECTED")}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${filterStatus === "REJECTED"
+              ? "bg-error text-white shadow-md shadow-error/20 scale-105"
+              : "text-on-surface-variant hover:bg-surface-container-highest"
+            }`}
+        >
+          Rejected
+        </button>
+        <button
+          onClick={() => handleFilterStatusChange(null)}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${filterStatus === null
+              ? "bg-on-surface text-surface shadow-md scale-105"
+              : "text-on-surface-variant hover:bg-surface-container-highest"
+            }`}
+        >
+          All Reports
+        </button>
+      </div>
+
+      {/* ── REPORTS LIST ── */}
+      <div className="bg-surface-container-lowest rounded-[2.5rem] border border-outline-variant/10 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse table-fixed">
+            <thead>
+              <tr className="bg-surface-container-low/50">
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+                  Reporter
+                </th>
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+                  Target (User/Group)
+                </th>
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+                  Reason
+                </th>
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+                  Evidence
+                </th>
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+                  Date
+                </th>
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10 text-right">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-outline-variant/10">
+              {reports.length > 0 ? (
+                reports.map((report) => (
+                  <ReportRow
+                    key={report.id}
+                    report={report}
+                    onReview={() => handleReview(report)}
+                  />
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="px-6 py-20 text-center">
+                    {loading ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+                        <p className="text-on-surface-variant font-medium animate-pulse">
+                          Loading reports...
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <p className="text-on-surface-variant text-lg">
+                          No reports found.
+                        </p>
+                        <p className="text-sm text-on-surface-variant/60">
+                          Try adjusting your filters or search term.
+                        </p>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {pagination.totalPages > 1 && (
+          <div className="px-6 py-6 border-t border-outline-variant/10 bg-surface-container-low/30">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={pagination.totalPages}
+              onPageChange={handlePageChange}
+            />
           </div>
-        </div>
-
-        <div className="flex flex-col min-h-[300px]">
-          {loading ? (
-            <div className="p-12 text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-primary border-t-transparent mb-4"></div>
-              <p className="text-sm text-on-surface-variant font-medium">Đang tải danh sách báo cáo...</p>
-            </div>
-          ) : error ? (
-            <div className="p-12 text-center text-error font-medium">{error}</div>
-          ) : reports.length === 0 ? (
-            <div className="p-12 text-center">
-              <p className="text-on-surface-variant font-medium">Không tìm thấy báo cáo nào khớp với tiêu chí.</p>
-            </div>
-          ) : (
-            <>
-              <div className="divide-y divide-outline-variant/10">
-                {reports.map((report) => (
-                  <ReportRow key={report.id} report={report} onReview={handleReview} />
-                ))}
-              </div>
-              <div className="p-4 bg-surface-container-low/30">
-                <Pagination
-                  currentPage={pagination.page}
-                  totalPages={pagination.totalPages}
-                  totalElements={pagination.totalElements}
-                  onPageChange={handlePageChange}
-                  loading={loading}
-                />
-              </div>
-            </>
-          )}
-        </div>
+        )}
       </div>
 
-      <ReportActionModal
-        isOpen={!!selectedReport}
-        report={selectedReport}
-        onClose={handleModalClose}
-        onSubmit={handleModalSubmit}
-      />
+      {/* Modals */}
+      {selectedReport && (
+        <ReportActionModal
+          isOpen={!!selectedReport}
+          onClose={handleModalClose}
+          report={selectedReport}
+          onSuccess={handleModalSuccess}
+        />
+      )}
     </>
   );
 }

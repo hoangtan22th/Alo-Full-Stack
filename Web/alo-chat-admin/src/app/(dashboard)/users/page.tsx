@@ -13,6 +13,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { UserRow } from "@/components/users/UserRow";
+import { UserQuickStats } from "@/components/users/UserQuickStats";
 import { UserDetailModal } from "@/components/users/UserDetailModal";
 import { UserEditModal } from "@/components/users/UserEditModal";
 import { Pagination } from "@/components/ui/Pagination";
@@ -52,17 +53,25 @@ export default function UserManagementPage() {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  const loadData = () => {
+  const loadData = (isSilent = false) => {
     fetchUsers({
       page: currentPage,
       size: pageSize,
       search: debouncedSearch || undefined,
       status: activeStatus !== "ALL" ? activeStatus : undefined,
+      silent: isSilent,
     });
   };
 
   useEffect(() => {
     loadData();
+
+    // Tự động cập nhật trạng thái mỗi 15 giây (chạy ngầm không hiện loading)
+    const interval = setInterval(() => {
+      loadData(true);
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, [currentPage, debouncedSearch, activeStatus, fetchUsers]);
 
   const handleBanToggle = (id: string, currentStatus: boolean) => {
@@ -97,7 +106,7 @@ export default function UserManagementPage() {
             User Management
           </h2>
           <p className="text-on-surface-variant mt-1 font-medium text-sm">
-            Manage and monitor all active users across the platform.
+            Monitor user growth, activity, and manage community safety.
           </p>
         </div>
         <div className="flex gap-3">
@@ -115,6 +124,8 @@ export default function UserManagementPage() {
         </div>
       </div>
 
+      <UserQuickStats />
+
       <div className="bg-surface-container-low rounded-xl p-4 mb-6 flex flex-wrap gap-4 items-center border border-outline-variant/15">
         <div className="text-xs font-bold text-on-surface mr-2 tracking-wide uppercase">
           Filters
@@ -126,7 +137,7 @@ export default function UserManagementPage() {
           </div>
           <input
             type="text"
-            placeholder="Search by name, email or phone..."
+            placeholder="Search by ID, name, email or phone..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 text-sm bg-surface-container-lowest border border-outline-variant/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
@@ -151,6 +162,23 @@ export default function UserManagementPage() {
             </button>
           ))}
         </div>
+
+        <button
+          onClick={() => {
+            setSearchTerm("");
+            setActiveStatus("ALL");
+            setCurrentPage(0);
+            if (searchTerm === "" && activeStatus === "ALL" && currentPage === 0) {
+              loadData();
+            }
+          }}
+          className="p-2 bg-surface-container-lowest border border-outline-variant/15 rounded-lg text-on-surface-variant hover:text-primary hover:border-primary transition-all shadow-sm"
+          title="Reset & Refresh"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+        </button>
 
         <div className="ml-auto text-sm text-on-surface-variant font-medium">
           Showing{" "}

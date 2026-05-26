@@ -8,6 +8,9 @@ import {
   ArrowsUpDownIcon,
 } from "@heroicons/react/24/outline";
 import FriendProfileModal from "@/components/ui/FriendProfileModal";
+import { useChatStore } from "@/store/useChatStore";
+import { presenceService } from "@/services/presenceService";
+import { useShallow } from "zustand/react/shallow";
 
 export default function FriendListPage() {
   const [friends, setFriends] = useState<any[]>([]);
@@ -17,6 +20,23 @@ export default function FriendListPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+
+  const { onlineUsers, setBulkPresence } = useChatStore(
+    useShallow((s) => ({
+      onlineUsers: s.onlineUsers,
+      setBulkPresence: s.setBulkPresence,
+    }))
+  );
+
+  const getOfflineText = (lastActive?: number) => {
+    if (!lastActive) return "Ngoại tuyến";
+    const diff = Math.floor((Date.now() - lastActive) / 60000);
+    if (diff < 1) return "Vừa truy cập";
+    if (diff < 60) return `${diff} phút trước`;
+    const hours = Math.floor(diff / 60);
+    if (hours < 24) return `${hours} giờ trước`;
+    return `${Math.floor(hours / 24)} ngày trước`;
+  };
 
   const lastFetchTime = useRef(0);
   const isFetching = useRef(false);
@@ -49,6 +69,14 @@ export default function FriendListPage() {
       });
 
       setFriends(formattedFriends);
+
+      // Fetch presence for all friends
+      const userIds = formattedFriends.map((f) => String(f.displayId));
+      if (userIds.length > 0) {
+        presenceService.getBulkPresence(userIds).then((res) => {
+          if (res) setBulkPresence(res);
+        });
+      }
     } catch (err) {
       console.error("Lỗi lấy danh sách bạn bè:", err);
     } finally {
@@ -89,7 +117,7 @@ export default function FriendListPage() {
       acc[key].push(friend);
       return acc;
     }, {});
-  }, [friends, searchQuery, sortOrder]);
+  }, [friends, searchQuery, sortOrder, onlineUsers]);
 
   const groupKeys = Object.keys(groupedFriends).sort((a, b) =>
     sortOrder === "asc" ? a.localeCompare(b) : b.localeCompare(a),
@@ -135,7 +163,21 @@ export default function FriendListPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className="font-bold text-[14px] text-gray-900 truncate">{friend.displayName}</h3>
-                        <div className="flex items-center gap-1 mt-0.5"><div className="w-1.5 h-1.5 bg-green-500 rounded-full" /><p className="text-[10px] text-gray-400 font-bold uppercase">Online</p></div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          {onlineUsers[String(friend.displayId)]?.status === "online" ? (
+                            <>
+                              <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
+                              <p className="text-[10px] text-green-500 font-bold uppercase">Trực tuyến</p>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-1.5 h-1.5 bg-gray-300 rounded-full" />
+                              <p className="text-[10px] text-gray-400 font-bold uppercase">
+                                {getOfflineText(onlineUsers[String(friend.displayId)]?.last_active)}
+                              </p>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}

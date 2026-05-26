@@ -745,6 +745,47 @@ export async function uploadFile(
 }
 
 /**
+ * Upload files to S3 WITHOUT creating messages (for reports, profile, etc.)
+ */
+export async function uploadRawFiles(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      res.status(400).json({ error: "No files provided" });
+      return;
+    }
+
+    const uploadPromises = files.map(async (file) => {
+      // Fix Vietnamese encoding for originalname
+      const originalName = Buffer.from(file.originalname, "latin1").toString("utf8");
+      
+      // Upload to S3
+      const fileUrl = await uploadFileToS3(
+        file.buffer,
+        file.mimetype,
+        originalName
+      );
+      
+      return fileUrl;
+    });
+
+    const urls = await Promise.all(uploadPromises);
+
+    res.status(201).json({
+      status: "success",
+      data: urls,
+    });
+  } catch (error) {
+    console.error("[MessageController] POST uploadRawFiles error:", error);
+    next(error);
+  }
+}
+
+/**
  * Đánh dấu đã xem tất cả tin nhắn trong một cuộc hội thoại
  */
 export async function markMessagesAsRead(
@@ -1235,19 +1276,48 @@ export async function getBulkMessages(
       return;
     }
 
-    const messages = await Message.find({ _id: { $in: ids } })
-      .sort({ createdAt: 1 }) // ASC — chronological order for chat log rendering
-      .select("_id senderId senderName type content createdAt isRevoked")
+    const validIds = ids.filter((id: string) => Types.ObjectId.isValid(id));
+
+    if (validIds.length === 0) {
+      res.json({
+        status: "success",
+        data: [],
+      });
+      return;
+    }
+
+    const messages = await Message.find({ _id: { $in: validIds } })
+      .sort({ createdAt: 1 }) // ASC — chronological order
+      .select("_id conversationId senderId senderName type content createdAt isRevoked")
       .lean();
 
-    const result = messages.map((m) => ({
-      id: m._id.toString(),
-      senderId: m.senderId,
-      senderName: m.senderName ?? "Unknown",
-      type: m.type,
-      content: m.isRevoked ? "[Tin nhắn đã bị thu hồi]" : m.content,
-      createdAt: m.createdAt,
-      isRevoked: m.isRevoked,
+    // --- INVISIBLE MESSAGE COUNT ALGORITHM ---
+    const result = await Promise.all(messages.map(async (m, index) => {
+      let hiddenAfterCount = 0;
+      
+      // If there is a next message in the evidence list, check for gaps in the DB
+      if (index < messages.length - 1) {
+        const nextMsg = messages[index + 1];
+        // Only check gap if they belong to the same conversation
+        if (m.conversationId.toString() === nextMsg.conversationId.toString()) {
+          hiddenAfterCount = await Message.countDocuments({
+            conversationId: m.conversationId,
+            createdAt: { $gt: m.createdAt, $lt: nextMsg.createdAt }
+          });
+        }
+      }
+
+      return {
+        id: m._id.toString(),
+        conversationId: m.conversationId.toString(),
+        senderId: m.senderId,
+        senderName: m.senderName ?? "Unknown",
+        type: m.type,
+        content: m.isRevoked ? "[Tin nhắn đã bị thu hồi]" : m.content,
+        createdAt: m.createdAt,
+        isRevoked: m.isRevoked,
+        hiddenAfterCount, // The "Anti-Cherry-Picking" payload
+      };
     }));
 
     res.json({
@@ -1338,6 +1408,59 @@ export async function bulkDeleteMessagesForMe(
     });
   } catch (error) {
     console.error("[MessageController] Bulk DELETE for me error:", error);
+    next(error);
+  }
+}
+
+/**
+ * Admin only: Fetch full conversation history for context auditing.
+ * GET /api/v1/messages/conversation/:conversationId/admin
+ */
+export async function getAdminConversationHistory(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationId } = req.params;
+    const limit = Math.min(parseInt(req.query.limit as string) || 200, 500);
+    const skip = Math.max(parseInt(req.query.skip as string) || 0, 0);
+
+    if (typeof conversationId !== "string") {
+      res.status(400).json({ error: "Invalid conversationId" });
+      return;
+    }
+
+    // Admin fetch: ignore clearedAt, joinedAt, etc.
+    const messages = await Message.find({
+      conversationId: new Types.ObjectId(conversationId),
+    })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const result = messages.map((m) => ({
+      id: m._id.toString(),
+      conversationId: m.conversationId.toString(),
+      senderId: m.senderId,
+      senderName: m.senderName ?? "Unknown",
+      type: m.type,
+      content: m.isRevoked ? "[Tin nhắn đã bị thu hồi]" : m.content,
+      createdAt: m.createdAt,
+      isRevoked: m.isRevoked,
+    }));
+
+    res.json({
+      status: "success",
+      data: result.reverse(), // Send in chronological order
+      count: result.length,
+    });
+  } catch (error) {
+    console.error(
+      "[MessageController] getAdminConversationHistory error:",
+      error,
+    );
     next(error);
   }
 }

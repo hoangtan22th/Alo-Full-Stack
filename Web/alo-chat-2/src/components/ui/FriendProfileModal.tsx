@@ -21,6 +21,8 @@ import { groupService } from "@/services/groupService";
 import { socketService } from "@/services/socketService";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useChatStore } from "@/store/useChatStore";
+import { presenceService } from "@/services/presenceService";
+import { useShallow } from "zustand/react/shallow";
 
 export default function FriendProfileModal({
   isOpen,
@@ -41,6 +43,25 @@ export default function FriendProfileModal({
   });
   const router = useRouter();
   const { user: currentUser } = useAuthStore();
+  const { onlineUsers, setBulkPresence } = useChatStore(
+    useShallow((s) => ({
+      onlineUsers: s.onlineUsers,
+      setBulkPresence: s.setBulkPresence,
+    }))
+  );
+
+  const getOfflineText = (lastActive?: number) => {
+    if (!lastActive) return "Ngoại tuyến";
+    const diff = Math.floor((Date.now() - lastActive) / 60000);
+    if (diff < 1) return "Vừa mới truy cập";
+    if (diff < 60) return `Hoạt động ${diff} phút trước`;
+    const hours = Math.floor(diff / 60);
+    if (hours < 24) return `Hoạt động ${hours} giờ trước`;
+    return `Hoạt động ${Math.floor(hours / 24)} ngày trước`;
+  };
+
+  const userStatus = userId ? onlineUsers[String(userId)] : null;
+  const isOnline = userStatus?.status === "online";
 
   useEffect(() => {
     if (isOpen && userId && userId !== "undefined" && userId !== "null") {
@@ -88,6 +109,11 @@ export default function FriendProfileModal({
     try {
       const res: any = await axiosClient.get(`/users/${userId}`);
       setUserData(res.data || res);
+
+      // Fetch presence
+      presenceService.getBulkPresence([userId]).then(res => {
+        if (res) setBulkPresence(res);
+      });
     } catch (error) {
       toast.error("Lỗi tải thông tin cá nhân");
     } finally {
@@ -347,6 +373,9 @@ export default function FriendProfileModal({
             <h1 className="text-[17px] font-black text-gray-900">
               {userData?.fullName || "Đang tải..."}
             </h1>
+            <p className={`text-[11px] font-bold mt-0.5 ${isOnline ? "text-green-500" : "text-gray-400"}`}>
+              {isOnline ? "Đang hoạt động" : getOfflineText(userStatus?.last_active)}
+            </p>
 
             {/* ✅ KHU VỰC NÚT BẤM CHÍNH ĐÃ FIX LOGIC */}
             <div className="mt-4 space-y-2">

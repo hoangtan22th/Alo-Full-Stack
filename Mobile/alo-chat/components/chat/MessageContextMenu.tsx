@@ -14,6 +14,7 @@ import {
   MapPinIcon,
   TrashIcon,
   XMarkIcon,
+  ShieldExclamationIcon,
 } from "react-native-heroicons/outline";
 import { MessageDTO } from "../../services/messageService";
 import { EMOJI_MAP } from "../../constants/Chat";
@@ -31,6 +32,7 @@ interface MessageContextMenuProps {
   onPin: () => void;
   onUnpin: () => void;
   onReply: (msg: MessageDTO) => void;
+  onReport?: (msg: MessageDTO) => void;
   isPinned: boolean;
   canPin?: boolean;
   currentUserId: string;
@@ -49,6 +51,7 @@ export const MessageContextMenu = ({
   onPin,
   onUnpin,
   onReply,
+  onReport,
   isPinned,
   canPin = true,
   currentUserId,
@@ -258,13 +261,25 @@ export const MessageContextMenu = ({
 
               <TouchableOpacity
                 onPress={onDeleteLocal}
-                className="flex-row items-center gap-3 px-4 py-3 active:bg-red-50"
+                className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-red-50"
               >
                 <TrashIcon size={18} color="#ef4444" />
                 <Text className="text-[14px] font-medium text-red-500">
                   Xóa tin nhắn
                 </Text>
               </TouchableOpacity>
+
+              {!isSender && onReport && (
+                <TouchableOpacity
+                  onPress={() => onReport(selectedMsg)}
+                  className="flex-row items-center gap-3 px-4 py-3 active:bg-red-50"
+                >
+                  <ShieldExclamationIcon size={18} color="#ef4444" />
+                  <Text className="text-[14px] font-medium text-red-500">
+                    Báo cáo tin nhắn
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>

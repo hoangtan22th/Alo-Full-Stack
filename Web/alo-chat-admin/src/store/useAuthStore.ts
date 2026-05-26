@@ -1,10 +1,11 @@
-﻿import { create } from "zustand";
+import { create } from "zustand";
 
 interface AuthState {
   isAdmin: boolean;
   isSuperAdmin: boolean;
   adminEmail: string | null;
   adminName: string | null;
+  adminId: string | null;
   checkAuth: () => void;
   logout: () => void;
 }
@@ -14,6 +15,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   isSuperAdmin: false,
   adminEmail: null,
   adminName: null,
+  adminId: null,
 
   checkAuth: () => {
     if (typeof window === "undefined") return;
@@ -47,14 +49,16 @@ export const useAuthStore = create<AuthState>((set) => ({
       const adminEmail = payload.email || payload.sub || "Admin";
       const adminName =
         payload.fullName || payload.name || adminEmail.split("@")[0];
+      const adminId = payload.sub || payload.id || null;
 
-      set({ isAdmin, isSuperAdmin, adminEmail, adminName });
+      set({ isAdmin, isSuperAdmin, adminEmail, adminName, adminId });
     } catch (e) {
       set({
         isAdmin: false,
         isSuperAdmin: false,
         adminEmail: null,
         adminName: null,
+        adminId: null,
       });
     }
   },
@@ -67,6 +71,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         isSuperAdmin: false,
         adminEmail: null,
         adminName: null,
+        adminId: null,
       });
       window.location.href = "/login";
     }

@@ -18,8 +18,9 @@ export const useUsers = () => {
       status?: string;
       page?: number;
       size?: number;
+      silent?: boolean;
     }) => {
-      setLoading(true);
+      if (!query?.silent) setLoading(true);
       setError(null);
       try {
         const data = await userService.getAllUsers(query);

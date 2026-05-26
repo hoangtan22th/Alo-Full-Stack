@@ -97,6 +97,30 @@ export class RabbitMQProducerService {
   }
 
   /**
+   * Phát sự kiện khi nhóm bị BAN (khóa) bởi Admin.
+   * Gửi đến room của nhóm để Client cập nhật trạng thái read-only.
+   */
+  async publishGroupBanned(groupId: string, status: string = 'READ_ONLY') {
+    await this.publishToRealtimeService('GROUP_BANNED', {
+      room: groupId,
+      data: { groupId, status, isBanned: status === 'READ_ONLY' }
+    });
+    console.log(`[RabbitMQProducer] Event 'GROUP_BANNED' published to room: ${groupId} (Status: ${status})`);
+  }
+
+  /**
+   * Phát sự kiện khi nhóm bị GIẢI TÁN (soft delete) bởi Admin.
+   * Gửi đến room của nhóm để Client kích member khỏi room.
+   */
+  async publishGroupDisbanded(groupId: string) {
+    await this.publishToRealtimeService('GROUP_DISBANDED', {
+      room: groupId,
+      data: { groupId, message: "Nhóm này đã bị giải tán do vi phạm tiêu chuẩn cộng đồng." }
+    });
+    console.log(`[RabbitMQProducer] Event 'GROUP_DISBANDED' published to room: ${groupId}`);
+  }
+
+  /**
    * Phát sự kiện khi có người yêu cầu tham gia nhóm (cần duyệt).
    * Gửi riêng cho các quản trị viên (LEADER, DEPUTY).
    */

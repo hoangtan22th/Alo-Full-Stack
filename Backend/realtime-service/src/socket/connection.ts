@@ -2,6 +2,7 @@ import { Server, Socket } from "socket.io";
 import axios from "axios";
 import { presenceClient } from "../config/redis";
 import { SOCKET_EVENTS } from "../constants/events";
+import { amqpChannel } from "../config/rabbitmq";
 
 // Fetch groups from group-service via API Gateway
 async function fetchUserGroups(
@@ -43,6 +44,14 @@ export function initSocketConnection(io: Server) {
     // 1. Join Personal Room for 1v1 messages
     socket.join(`user_${userId}`);
 
+    // 1.1 Join Admin Notifications Room if user is an admin
+    const roles = socket.data.roles || [];
+    const isAdmin = roles.includes("ROLE_ADMIN") || roles.includes("ROLE_SUPER_ADMIN");
+    if (isAdmin) {
+      socket.join("admin_notifications");
+      console.log(`Admin ${userId} joined admin_notifications room`);
+    }
+
     // 2. Auto join all Group Chat rooms
     try {
       const gIds = await fetchUserGroups(userId, token);
@@ -70,6 +79,15 @@ export function initSocketConnection(io: Server) {
       userId,
       status: "online",
     });
+
+    // 3.1 Sync with User Service via RabbitMQ
+    if (amqpChannel) {
+      amqpChannel.publish(
+        "presence_events",
+        "user.online",
+        Buffer.from(JSON.stringify({ userId, timestamp: Date.now() })),
+      );
+    }
 
     // ============================================
     // REAL-TIME INTERACTION EVENTS (< 10ms)
@@ -203,8 +221,15 @@ export function initSocketConnection(io: Server) {
     socket.on("disconnect", async () => {
       console.log(`User disconnected: ${userId}`);
 
-      // Remove presence
-      await presenceClient.hDel(`presence:users`, userId);
+      // Update presence to offline instead of deleting
+      await presenceClient.hSet(
+        `presence:users`,
+        userId,
+        JSON.stringify({
+          status: "offline",
+          last_active: Date.now(),
+        }),
+      );
 
       // Broadcast Offline status
       socket.broadcast.emit(SOCKET_EVENTS.USER_OFFLINE, {
@@ -212,6 +237,15 @@ export function initSocketConnection(io: Server) {
         status: "offline",
         last_active: Date.now(),
       });
+
+      // Sync with User Service via RabbitMQ
+      if (amqpChannel) {
+        amqpChannel.publish(
+          "presence_events",
+          "user.offline",
+          Buffer.from(JSON.stringify({ userId, timestamp: Date.now() })),
+        );
+      }
     });
   });
 }
