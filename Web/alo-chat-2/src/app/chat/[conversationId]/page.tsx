@@ -201,6 +201,9 @@ export default function ChatPage() {
   // Group Link Info Cache
   const [groupLinkCache, setGroupLinkCache] = useState<Record<string, any>>({});
 
+  // Client-side Chat Particle Effects (Rain, Snow, Birthday Cake)
+  const [activeEffect, setActiveEffect] = useState<"RAIN" | "CAKE" | "SNOW" | null>(null);
+
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const myRole = useMemo(() => {
     if (!conversationInfo || !myId) return "MEMBER";
@@ -506,7 +509,39 @@ export default function ChatPage() {
   useEffect(() => {
     setShowMentionIndicator(false);
     setMentionToScrollId(null);
+    setActiveEffect(null); // Reset effect when changing chat
   }, [conversationId]);
+
+  // Trigger client-side particle effects based on message content
+  useEffect(() => {
+    if (!messages || messages.length === 0) return;
+    const latestMsg = messages[messages.length - 1];
+    if (!latestMsg || !latestMsg.content || latestMsg.isRevoked) return;
+    
+    // Check if the latest message was added within the last 5 seconds (avoid history load triggers)
+    const msgTime = latestMsg.createdAt ? new Date(latestMsg.createdAt).getTime() : Date.now();
+    const diff = Math.abs(Date.now() - msgTime);
+    if (diff > 5000) return;
+    
+    const text = latestMsg.content.toLowerCase();
+    let effect: "RAIN" | "CAKE" | "SNOW" | null = null;
+    
+    if (/mưa|rain|mưa rơi|trời mưa/i.test(text)) {
+      effect = "RAIN";
+    } else if (/sinh nhật|birthday|chúc mừng sinh nhật|sn vui vẻ/i.test(text)) {
+      effect = "CAKE";
+    } else if (/tuyết|snow|tuyết rơi|lạnh quá/i.test(text)) {
+      effect = "SNOW";
+    }
+    
+    if (effect) {
+      setActiveEffect(effect);
+      const timer = setTimeout(() => {
+        setActiveEffect(null);
+      }, 6000); // Effect runs for 6 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [messages]);
 
   // Use global call state
   const {
@@ -4443,6 +4478,7 @@ export default function ChatPage() {
           currentUser={currentUser}
         />
       )}
+      <ChatEffects type={activeEffect} />
     </>
   );
 }
@@ -4489,5 +4525,77 @@ function StoreReportModal({ messages, userCache }: { messages: MessageDTO[], use
       userCache={userCache}
       anchorId={reportAnchorId || undefined}
     />
+  );
+}
+
+/**
+ * ChatEffects Component: Renders falling particles for Rain, Snow, or Birthday Cake
+ */
+function ChatEffects({ type }: { type: "RAIN" | "CAKE" | "SNOW" | null }) {
+  if (!type) return null;
+
+  const emojis = type === "RAIN"
+    ? ["🌧️", "💧", "🌧️", "💧", "🌧️"]
+    : type === "SNOW"
+    ? ["❄️", "⛄", "❄️", "❄️", "☃️"]
+    : ["🎂", "🎉", "🎈", "🎁", "🎉"];
+
+  const particles = Array.from({ length: 30 });
+
+  return (
+    <>
+      <style>{`
+        @keyframes fallEffect {
+          0% {
+            transform: translateY(-50px) rotate(0deg);
+            opacity: 0;
+          }
+          10% {
+            opacity: 1;
+          }
+          90% {
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(105vh) rotate(360deg);
+            opacity: 0;
+          }
+        }
+        .falling-particle {
+          position: fixed;
+          top: -50px;
+          pointer-events: none;
+          z-index: 99999;
+          animation: fallEffect linear forwards;
+          font-size: 24px;
+        }
+      `}</style>
+      <div className="fixed inset-0 pointer-events-none z-[99999] overflow-hidden">
+        {particles.map((_, i) => {
+          const emoji = emojis[i % emojis.length];
+          const left = Math.random() * 100;
+          const delay = Math.random() * 5; // Stagger drops over 5 seconds
+          const duration = 2.5 + Math.random() * 2.5; // Ranging from 2.5s to 5s fall time
+          const scale = 0.5 + Math.random() * 0.8;
+          const blur = Math.random() > 0.85 ? "blur(1px)" : "none";
+
+          return (
+            <div
+              key={i}
+              className="falling-particle"
+              style={{
+                left: `${left}%`,
+                animationDelay: `${delay}s`,
+                animationDuration: `${duration}s`,
+                transform: `scale(${scale})`,
+                filter: blur,
+              }}
+            >
+              {emoji}
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
