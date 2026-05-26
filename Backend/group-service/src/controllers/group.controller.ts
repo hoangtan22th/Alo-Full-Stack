@@ -707,8 +707,8 @@ export const getGroupInfoForLink = async (
 ): Promise<void> => {
   try {
     const groupId = String(req.params.groupId || "").trim();
-    if (!groupId || groupId.length !== 24) {
-      res.status(400).json({ error: `Mã nhóm không hợp lệ` });
+    if (!groupId || !/^[0-9a-fA-F]{24}$/.test(groupId)) {
+      res.status(404).json({ error: `Không tìm thấy nhóm` });
       return;
     }
 
@@ -740,6 +740,10 @@ export const getGroupInfoForLink = async (
 
     res.status(200).json({ data: groupObj });
   } catch (error: any) {
+    if (error.name === "CastError") {
+      res.status(404).json({ error: "Không tìm thấy nhóm" });
+      return;
+    }
     res.status(500).json({ error: error.message });
   }
 };

@@ -83,8 +83,10 @@ export const groupService = {
     try {
       const data = await api.get<any, any>(`/groups/${groupId}/link-info`);
       return data;
-    } catch (error) {
-      console.error("Lỗi lấy thông tin nhóm cho link:", error);
+    } catch (error: any) {
+      if (error.response?.status !== 404) {
+        console.error("Lỗi lấy thông tin nhóm cho link:", error);
+      }
       throw error;
     }
   },

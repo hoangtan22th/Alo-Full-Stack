@@ -11,7 +11,7 @@ export type MessageDTO = {
 
 interface Props {
   message: MessageDTO;
-  currentUserId?: string;
+  currentUserId?: string; 
 }
 
 export default function MessageBubble({ message, currentUserId }: Props) {

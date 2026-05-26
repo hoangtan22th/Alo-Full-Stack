@@ -274,9 +274,10 @@ export default function ChatPage() {
           setGroupLinkCache((prev) => ({ ...prev, [groupId]: groupInfo }));
         }
       } catch (err: any) {
-        console.error("Lỗi lấy thông tin nhóm từ link:", err);
         if (err.response?.status === 404) {
           setGroupLinkCache((prev) => ({ ...prev, [groupId]: { notFound: true } }));
+        } else {
+          console.error("Lỗi lấy thông tin nhóm từ link:", err);
         }
       }
     },
