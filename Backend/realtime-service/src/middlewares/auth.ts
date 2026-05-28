@@ -23,6 +23,7 @@ export const socketAuthMiddleware = (
     // Spring Boot Jwts thường đẩy UserId vào Subject (sub) thay vì userId.
     const userId = decoded.sub || decoded.userId;
     const sessionId = (decoded as any).sessionId;
+    const roles = (decoded as any).roles || (decoded as any).authorities || [];
 
     if (!userId) {
       return next(
@@ -33,6 +34,7 @@ export const socketAuthMiddleware = (
     }
 
     socket.data.userId = String(userId);
+    socket.data.roles = Array.isArray(roles) ? roles : [roles];
     if (sessionId) {
       socket.data.sessionId = String(sessionId);
     }

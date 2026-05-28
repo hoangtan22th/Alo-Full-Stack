@@ -65,13 +65,29 @@ export function useGroups() {
     try {
       await groupService.toggleBanGroup(id, isBanned);
       setGroups((prev) =>
-        prev.map((g) => (g._id === id ? { ...g, isBanned } : g)),
+        prev.map((g) =>
+          g._id === id ? { ...g, status: isBanned ? "READ_ONLY" : "ACTIVE" } : g
+        ),
       );
       toast.success(
         isBanned ? "Group banned successfully" : "Group unbanned successfully",
       );
     } catch (err: any) {
       toast.error(err.message || "Failed to update group status");
+    }
+  };
+
+  const disbandGroup = async (id: string) => {
+    try {
+      await groupService.disbandGroup(id);
+      setGroups((prev) =>
+        prev.map((g) =>
+          g._id === id ? { ...g, status: "DISBANDED" } : g
+        ),
+      );
+      toast.success("Group disbanded successfully");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to disband group");
     }
   };
 
@@ -84,5 +100,6 @@ export function useGroups() {
     fetchGroups,
     fetchGroupStats,
     toggleBanGroup,
+    disbandGroup,
   };
 }

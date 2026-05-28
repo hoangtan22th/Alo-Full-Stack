@@ -15,6 +15,9 @@ import { toast } from "sonner";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useRouter } from "next/navigation";
 import { groupService } from "@/services/groupService";
+import { useChatStore } from "@/store/useChatStore";
+import { presenceService } from "@/services/presenceService";
+import { useShallow } from "zustand/react/shallow";
 
 const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
   const router = useRouter();
@@ -26,6 +29,13 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
   const [loading, setLoading] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
+
+  const { onlineUsers, setBulkPresence } = useChatStore(
+    useShallow((s) => ({
+      onlineUsers: s.onlineUsers,
+      setBulkPresence: s.setBulkPresence,
+    }))
+  );
 
   useEffect(() => {
     const savedHistory = localStorage.getItem("search_phone_history");
@@ -62,6 +72,14 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
       const data = res?.data?.data || res?.data || res;
       setFoundUser(data);
       saveToHistory(targetPhone);
+      
+      // Fetch presence
+      if (data?.userId) {
+        presenceService.getBulkPresence([data.userId]).then(res => {
+          if (res) setBulkPresence(res);
+        });
+      }
+
       if (phoneToSearch) setPhone(targetPhone);
     } catch (err) {
       setFoundUser(null);
@@ -170,6 +188,9 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
                         alt=""
                       />
                     </div>
+                    {onlineUsers[foundUser.userId]?.status === "online" && (
+                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-black rounded-full" />
+                    )}
                     {foundUser.userId === currentUserId && (
                       <div className="absolute -top-1 -right-1 bg-blue-500 text-[8px] font-black px-1.5 py-0.5 rounded-full border border-black shadow-sm">
                         TÔI

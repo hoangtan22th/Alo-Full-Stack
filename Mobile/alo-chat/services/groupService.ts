@@ -28,12 +28,15 @@ export const groupService = {
     }
   },
 
-  createGroup: async (name: string, userIds: string[], imageUri?: string) => {
+  createGroup: async (name: string, userIds: string[], imageUri?: string, isCopy?: boolean) => {
     try {
       if (imageUri) {
         const formData = new FormData();
         formData.append("name", name);
         formData.append("userIds", JSON.stringify(userIds));
+        if (isCopy) {
+          formData.append("isCopy", "true");
+        }
 
         const filename = imageUri.split("/").pop() || "avatar.jpg";
         const match = /\.(\w+)$/.exec(filename);
@@ -56,6 +59,7 @@ export const groupService = {
       const data = await api.post<any, any>(`/groups`, {
         name,
         userIds,
+        isCopy,
       });
       return data;
     } catch (error) {
@@ -103,14 +107,99 @@ export const groupService = {
     }
   },
 
-  removeMember: async (groupId: string, userId: string) => {
+  removeMember: async (
+    groupId: string,
+    userId: string,
+    options?: {
+      isSilent?: boolean;
+      isBanned?: boolean;
+      preventReinvite?: boolean;
+    },
+  ) => {
     try {
       const data = await api.delete<any, any>(
         `/groups/${groupId}/members/${userId}`,
+        { data: options }, // DELETE request with body needs to be in data field for some clients
       );
       return data;
     } catch (error) {
       console.error("Lỗi xoá thành viên:", error);
+      throw error;
+    }
+  },
+
+  unblockMember: async (groupId: string, userId: string) => {
+    try {
+      const data = await api.delete<any, any>(
+        `/groups/${groupId}/members/${userId}/unblock`,
+      );
+      return data;
+    } catch (error) {
+      console.error("Lỗi gỡ chặn thành viên:", error);
+      throw error;
+    }
+  },
+
+  // --- Invitations & Join Requests ---
+  inviteToGroup: async (groupId: string, userId: string) => {
+    try {
+      return await api.post(`/groups/${groupId}/invitations`, { userId });
+    } catch (error) {
+      console.error("Lỗi mời vào nhóm:", error);
+      throw error;
+    }
+  },
+
+  getMyInvitations: async () => {
+    try {
+      return await api.get(`/groups/invitations/me`);
+    } catch (error) {
+      console.error("Lỗi lấy danh sách lời mời:", error);
+      throw error;
+    }
+  },
+
+  acceptInvitation: async (groupId: string) => {
+    try {
+      return await api.post(`/groups/${groupId}/invitations/accept`);
+    } catch (error) {
+      console.error("Lỗi chấp nhận lời mời:", error);
+      throw error;
+    }
+  },
+
+  declineInvitation: async (groupId: string) => {
+    try {
+      return await api.post(`/groups/${groupId}/invitations/decline`);
+    } catch (error) {
+      console.error("Lỗi từ chối lời mời:", error);
+      throw error;
+    }
+  },
+
+  getMySentJoinRequests: async () => {
+    try {
+      return await api.get(`/groups/join-requests/me`);
+    } catch (error) {
+      console.error("Lỗi lấy danh sách yêu cầu đã gửi:", error);
+      throw error;
+    }
+  },
+
+  cancelJoinRequest: async (groupId: string) => {
+    try {
+      return await api.delete(`/groups/${groupId}/join-requests/me`);
+    } catch (error) {
+      console.error("Lỗi hủy yêu cầu tham gia:", error);
+      throw error;
+    }
+  },
+
+  getMySentInvitations: async () => {
+    try {
+      return await api.get(`/groups/invitations/sent`);
+    } catch (error) {
+      console.error("Lỗi lấy danh sách lời mời đã gửi:", error);
       throw error;
     }
   },
@@ -362,6 +451,15 @@ export const groupService = {
       return data;
     } catch (error) {
       console.error("Lỗi cập nhật cấu hình nhóm:", error);
+      throw error;
+    }
+  },
+  getCommonGroups: async (otherUserId: string) => {
+    try {
+      const res = await api.get<any, any>(`/groups/common/${otherUserId}`);
+      return res?.data?.data ? res.data.data : res?.data ? res.data : res;
+    } catch (error) {
+      console.error("Lỗi lấy danh sách nhóm chung:", error);
       throw error;
     }
   },

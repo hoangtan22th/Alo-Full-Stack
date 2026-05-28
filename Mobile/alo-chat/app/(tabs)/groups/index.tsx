@@ -1,5 +1,5 @@
 import { useRouter, useFocusEffect } from "expo-router";
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   Image,
   Modal,
@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
+  DeviceEventEmitter,
 } from "react-native";
 import {
   AdjustmentsHorizontalIcon,
@@ -17,6 +18,7 @@ import {
   BellSlashIcon,
   ChatBubbleLeftIcon,
   CheckCircleIcon,
+  ClockIcon,
   EnvelopeIcon,
   EyeSlashIcon,
   MagnifyingGlassIcon,
@@ -39,6 +41,8 @@ export default function GroupsScreen() {
   const [groups, setGroups] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [invitationCount, setInvitationCount] = useState(0);
+  const [sentRequestCount, setSentRequestCount] = useState(0);
 
   const filteredGroups = groups.filter((group) =>
     group.name.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -49,6 +53,19 @@ export default function GroupsScreen() {
       fetchGroups();
     }, []),
   );
+
+  useEffect(() => {
+    const listener = DeviceEventEmitter.addListener(
+      "refresh_group_badges",
+      () => {
+        console.log("🔄 GroupsScreen: Refreshing badges due to real-time event");
+        fetchGroups();
+      },
+    );
+    return () => {
+      listener.remove();
+    };
+  }, []);
 
   const fetchGroups = async () => {
     try {
@@ -74,11 +91,23 @@ export default function GroupsScreen() {
         subtitle: `${g.members?.length || 0} thành viên`,
       }));
       setGroups(formattedGroups);
-    } catch (error) {
-      console.error("Lỗi lấy danh sách nhóm", error);
-    } finally {
-      setIsLoading(false);
-    }
+ 
+       // Lấy số lượng lời mời và yêu cầu
+       const [invitations, sentRequests] = await Promise.all([
+         groupService.getMyInvitations(),
+         groupService.getMySentJoinRequests(),
+       ]);
+ 
+       const invList = (invitations as any)?.data || invitations || [];
+       const sentList = (sentRequests as any)?.data || sentRequests || [];
+ 
+       setInvitationCount(Array.isArray(invList) ? invList.length : 0);
+       setSentRequestCount(Array.isArray(sentList) ? sentList.length : 0);
+     } catch (error) {
+       console.error("Lỗi lấy danh sách nhóm", error);
+     } finally {
+       setIsLoading(false);
+     }
   };
 
   return (
@@ -122,6 +151,8 @@ export default function GroupsScreen() {
           <ActionItem
             icon={<EnvelopeIcon size={24} color="#374151" />}
             label="Lời mời vào nhóm"
+            onPress={() => router.push("/groups/invitations")}
+            badge={invitationCount}
           />
           <ActionItem
             icon={<QrCodeIcon size={24} color="#374151" />}
@@ -129,8 +160,10 @@ export default function GroupsScreen() {
             onPress={() => router.push("/(tabs)/groups/scan-qr")}
           />
           <ActionItem
-            icon={<StarIcon size={24} color="#374151" />}
-            label="Yêu thích"
+            icon={<ClockIcon size={24} color="#374151" />}
+            label="Yêu cầu đã gửi"
+            onPress={() => router.push("/groups/sent-requests")}
+            badge={sentRequestCount}
           />
         </View>
 
@@ -194,15 +227,24 @@ function ActionItem({
   icon,
   label,
   onPress,
+  badge,
 }: {
   icon: React.ReactNode;
   label: string;
   onPress?: () => void;
+  badge?: number;
 }) {
   return (
     <TouchableOpacity className="items-center w-20" onPress={onPress}>
       <View className="w-14 h-14 bg-gray-50 rounded-full items-center justify-center mb-2">
         {icon}
+        {badge !== undefined && badge > 0 && (
+          <View className="absolute -top-1 -right-1 bg-red-500 rounded-full min-w-[20px] h-5 items-center justify-center px-1 border-2 border-white">
+            <Text className="text-white text-[10px] font-bold">
+              {badge > 99 ? "99+" : badge}
+            </Text>
+          </View>
+        )}
       </View>
       <Text className="text-xs text-center text-gray-600 font-medium leading-4">
         {label.replace("\\n", "\n")}

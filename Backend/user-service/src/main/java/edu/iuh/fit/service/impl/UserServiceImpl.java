@@ -1,8 +1,10 @@
 package edu.iuh.fit.service.impl;
 
+import edu.iuh.fit.common_service.exception.AppException;
 import edu.iuh.fit.common_service.exception.DuplicateResourceException;
 import edu.iuh.fit.dto.request.UserUpdateRequest;
 import edu.iuh.fit.dto.response.UserDto;
+import edu.iuh.fit.dto.response.UserQuickStatsResponse;
 import edu.iuh.fit.entity.UserProfile;
 import edu.iuh.fit.repository.UserProfileRepository;
 import edu.iuh.fit.service.RabbitMQPublisher;
@@ -15,7 +17,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,7 +38,8 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserDto getUserById(String id) {
         UserProfile user = userProfileRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("UserProfile not found with id: " + id));
+                .orElseThrow(() -> new edu.iuh.fit.common_service.exception.AppException(
+                        404, "Không tìm thấy người dùng với ID: " + id));
         return UserDto.fromEntity(user);
     }
 
@@ -63,7 +70,8 @@ public class UserServiceImpl implements UserService {
 
         String reqPhone = request.getPhoneNumber();
         if (reqPhone != null && !reqPhone.trim().isEmpty() && !reqPhone.equals(user.getPhoneNumber())) {
-            throw new edu.iuh.fit.common_service.exception.AppException(400, "Số điện thoại không được phép thay đổi sau khi đăng ký");
+            throw new AppException(400,
+                    "Số điện thoại không được phép thay đổi sau khi đăng ký");
         }
         if (request.getGender() != null) {
             user.setGender(UserProfile.Gender.values()[Math.min(Math.max(0, request.getGender()),
@@ -92,7 +100,7 @@ public class UserServiceImpl implements UserService {
         userProfileRepository.save(user);
 
         // Phát sự kiện sang auth-service để ban account
-        rabbitMQPublisher.publishUserBannedEvent(id);
+        rabbitMQPublisher.publishUserBannedEvent(id, "Banned by Admin manually from Dashboard");
     }
 
     @Override
@@ -155,5 +163,42 @@ public class UserServiceImpl implements UserService {
         return userProfileRepository.findAllById(ids).stream()
                 .map(UserDto::fromEntity)
                 .toList();
+    }
+
+    @Override
+    public UserQuickStatsResponse getQuickStats() {
+        long totalUsers = userProfileRepository.count();
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        long newToday = userProfileRepository.countByCreatedAtAfter(startOfToday);
+        long bannedUsers = userProfileRepository.countByStatus(UserProfile.UserStatus.BANNED);
+        long onlineNow = userProfileRepository.countByIsOnline(true);
+
+        return UserQuickStatsResponse.builder()
+                .totalUsers(totalUsers)
+                .newToday(newToday)
+                .onlineNow(onlineNow)
+                .bannedUsers(bannedUsers)
+                .build();
+    }
+
+    @Override
+    public Map<String, Long> getGrowthStats(int days) {
+        LocalDateTime startDate = LocalDateTime.now().minusDays(days);
+        List<Object[]> results = userProfileRepository.getRegistrationStats(startDate);
+
+        Map<String, Long> stats = new LinkedHashMap<>();
+        for (Object[] row : results) {
+            String date = row[0].toString();
+            Long count = ((Number) row[1]).longValue();
+            stats.put(date, count);
+        }
+        return stats;
+    }
+
+    @Override
+    public List<String> getAllUserIds() {
+        return userProfileRepository.findAll().stream()
+                .map(UserProfile::getId)
+                .collect(Collectors.toList());
     }
 }

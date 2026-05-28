@@ -135,7 +135,9 @@ public class ContactTool {
 
     // Thêm hàm Từ chối nếu cần
     @Tool(description = "Từ chối lời mời kết bạn.")
-    public String declineFriendRequestByPhone(String phone, String userId) {
+    public String declineFriendRequestByPhone(
+            @ToolParam(description = "Số điện thoại người gửi", required = true) String phone,
+            @ToolParam(description = "Mã userId hệ thống", required = true) String userId) {
         try {
             var searchResp = contactClient.searchUserByPhone(phone, userId);
             if (searchResp.getData() == null) return "Không tìm thấy số " + phone;

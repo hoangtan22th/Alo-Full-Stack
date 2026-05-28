@@ -97,6 +97,30 @@ export class RabbitMQProducerService {
   }
 
   /**
+   * Phát sự kiện khi nhóm bị BAN (khóa) bởi Admin.
+   * Gửi đến room của nhóm để Client cập nhật trạng thái read-only.
+   */
+  async publishGroupBanned(groupId: string, status: string = 'READ_ONLY') {
+    await this.publishToRealtimeService('GROUP_BANNED', {
+      room: groupId,
+      data: { groupId, status, isBanned: status === 'READ_ONLY' }
+    });
+    console.log(`[RabbitMQProducer] Event 'GROUP_BANNED' published to room: ${groupId} (Status: ${status})`);
+  }
+
+  /**
+   * Phát sự kiện khi nhóm bị GIẢI TÁN (soft delete) bởi Admin.
+   * Gửi đến room của nhóm để Client kích member khỏi room.
+   */
+  async publishGroupDisbanded(groupId: string) {
+    await this.publishToRealtimeService('GROUP_DISBANDED', {
+      room: groupId,
+      data: { groupId, message: "Nhóm này đã bị giải tán do vi phạm tiêu chuẩn cộng đồng." }
+    });
+    console.log(`[RabbitMQProducer] Event 'GROUP_DISBANDED' published to room: ${groupId}`);
+  }
+
+  /**
    * Phát sự kiện khi có người yêu cầu tham gia nhóm (cần duyệt).
    * Gửi riêng cho các quản trị viên (LEADER, DEPUTY).
    */
@@ -141,6 +165,30 @@ export class RabbitMQProducerService {
       }
     });
     console.log(`[RabbitMQProducer] Event 'ADDED_TO_GROUP' published to user: ${userId} for group: ${group._id}`);
+  }
+
+  /**
+   * Phát sự kiện khi có lời mời vào nhóm mới.
+   */
+  async publishNewInvitation(userId: string, group: any, invitedBy: string) {
+    await this.publishToRealtimeService('NEW_INVITATION', {
+      target: userId,
+      data: {
+        groupId: group._id.toString(),
+        groupName: group.name,
+        groupAvatar: group.groupAvatar || '',
+        invitedBy
+      }
+    });
+    console.log(`[RabbitMQProducer] Event 'NEW_INVITATION' published to user: ${userId} for group: ${group._id}`);
+  }
+
+  async publishInvitationAccepted(userId: string, groupName: string, accepterName: string) {
+    await this.publishToRealtimeService('INVITATION_ACCEPTED', {
+      target: userId,
+      data: { groupName, accepterName }
+    });
+    console.log(`[RabbitMQProducer] Event 'INVITATION_ACCEPTED' published to user: ${userId} for group: ${groupName}`);
   }
 
   /**

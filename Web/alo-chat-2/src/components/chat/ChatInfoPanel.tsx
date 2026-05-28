@@ -17,6 +17,7 @@ import {
   TrashIcon,
   ChevronRightIcon,
   ArrowRightOnRectangleIcon,
+  UserPlusIcon,
   XMarkIcon,
   PencilIcon,
   CameraIcon,
@@ -32,11 +33,17 @@ import { MessageDTO } from "@/services/messageService";
 import AddMemberModal from "../ui/group/AddMemberModal";
 import PollModal from "../ui/group/PollModal";
 import NoteModal from "../ui/group/NoteModal";
+import CommonGroupsModal from "../ui/group/CommonGroupsModal";
 import ReminderModal from "../ui/group/ReminderModal";
 import JoinLinkModal from "../ui/group/JoinLinkModal";
 import MemberManagementModal from "../ui/group/MemberManagementModal";
 import GroupSettingsModal from "../ui/group/GroupSettingsModal";
+import ReportModal from "@/components/ui/report/ReportModal";
+import ReportTargetModal from "@/components/ui/report/ReportTargetModal";
+import CreateGroupModal from "../ui/group/CreateGroupModal";
 import { groupService } from "@/services/groupService";
+import { useChatStore } from "@/store/useChatStore";
+import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
 import { getMediaUrl } from "../../utils/media";
 
@@ -57,6 +64,8 @@ interface ChatInfoPanelProps {
   onAssignLeader: (userId: string) => void;
   onRefreshData?: () => void;
   userCache?: Record<string, { name: string; avatar: string }>;
+  otherUserId?: string | null;
+  onOpenPollDetails?: (pollId: string) => void;
 }
 
 const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
@@ -76,7 +85,28 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   onAssignLeader,
   onRefreshData,
   userCache = {},
+  otherUserId,
+  onOpenPollDetails,
 }) => {
+  const { onlineUsers } = useChatStore(
+    useShallow((s) => ({
+      onlineUsers: s.onlineUsers,
+    }))
+  );
+
+  const userStatus = !conversationInfo?.isGroup && otherUserId ? onlineUsers[String(otherUserId)] : null;
+  const isOnline = userStatus?.status === "online";
+
+  const getOfflineText = (lastActive?: number) => {
+    if (!lastActive) return "Chưa truy cập";
+    const diff = Math.floor((Date.now() - lastActive) / 60000);
+    if (diff < 1) return "Vừa mới truy cập";
+    if (diff < 60) return `Hoạt động ${diff} phút trước`;
+    const hours = Math.floor(diff / 60);
+    if (hours < 24) return `Hoạt động ${hours} giờ trước`;
+    return `Hoạt động ${Math.floor(hours / 24)} ngày trước`;
+  };
+
   const [showMembers, setShowMembers] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showPollModal, setShowPollModal] = useState(false);
@@ -86,6 +116,11 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   const [showMemberManagementModal, setShowMemberManagementModal] =
     useState(false);
   const [showGroupSettingsModal, setShowGroupSettingsModal] = useState(false);
+  const [showReportGroupModal, setShowReportGroupModal] = useState(false);
+  const [showReportTargetModal, setShowReportTargetModal] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{ type: "USER" | "GROUP"; id: string; name: string } | null>(null);
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [showCommonGroupsModal, setShowCommonGroupsModal] = useState(false);
   const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
 
   // Group Info Editing State
@@ -95,6 +130,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
   const myId = currentUser?.id || currentUser?._id || currentUser?.userId;
   const isGroup = conversationInfo?.isGroup;
+  const isReadOnly = conversationInfo?.status === 'READ_ONLY';
+  const isDisbanded = conversationInfo?.status === 'DISBANDED';
+  const isRestricted = isReadOnly || isDisbanded;
 
   // Lấy role của user hiện tại trong nhóm
   const currentUserRole = useMemo(() => {
@@ -107,17 +145,22 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   const isAdmin = currentUserRole === "leader";
   const isDeputy = currentUserRole === "deputy";
   const isManager = isAdmin || isDeputy;
+  
+  const otherMember = useMemo(() => {
+    if (isGroup) return null;
+    return conversationInfo?.members?.find((m: any) => m.userId !== myId);
+  }, [isGroup, conversationInfo, myId]);
 
   // Quyền hạn giống mobile
   const permissions = conversationInfo?.permissions;
   const canEdit =
-    isGroup && (isManager || permissions?.editGroupInfo === "EVERYONE");
+    isGroup && !isRestricted && (isManager || permissions?.editGroupInfo === "EVERYONE");
   const canCreatePoll =
-    isGroup && (isManager || permissions?.createPolls === "EVERYONE");
+    isGroup && !isRestricted && (isManager || permissions?.createPolls === "EVERYONE");
   const canCreateNote =
-    isGroup && (isManager || permissions?.createNotes === "EVERYONE");
+    isGroup && !isRestricted && (isManager || permissions?.createNotes === "EVERYONE");
   const canCreateReminder =
-    isGroup && (isManager || permissions?.createReminders === "EVERYONE");
+    isGroup && !isRestricted && (isManager || permissions?.createReminders === "EVERYONE");
 
   const handleUpdateName = async () => {
     if (!tempName.trim() || tempName === conversationInfo?.displayName) {
@@ -158,7 +201,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   const mediaList = useMemo(() => {
     const list: any[] = [];
     messages.forEach((m) => {
-      if (m.type === "image") {
+      if (m.type === "image" && !m.metadata?.isSticker) {
         if (m.metadata?.imageGroup) {
           list.push(
             ...m.metadata.imageGroup
@@ -183,6 +226,20 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
       .slice(0, 5);
   }, [messages]);
 
+  const {
+    openReportModal,
+  } = useChatStore(
+    useShallow((s) => ({
+      openReportModal: s.openReportModal,
+    }))
+  );
+
+
+  const handleReportUser = () => {
+    if (!otherUserId) return;
+    openReportModal(otherUserId, conversationInfo?.displayName || "Người dùng", null, conversationInfo?.isGroup ? "GROUP" : "ONE_TO_ONE");
+  };
+
   // Lọc file
   const fileList = useMemo(() => {
     return messages
@@ -195,9 +252,8 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
   return (
     <div
-      className={`flex flex-col shrink-0 bg-white h-full transition-all duration-300 ease-in-out border-l border-gray-100 shadow-xl z-[100] overflow-hidden ${
-        show ? "w-[340px] xl:w-90 opacity-100" : "w-0 opacity-0"
-      }`}
+      className={`flex flex-col shrink-0 bg-white h-full transition-all duration-300 ease-in-out border-l border-gray-100 shadow-xl z-[100] overflow-hidden ${show ? "w-[340px] xl:w-90 opacity-100" : "w-0 opacity-0"
+        }`}
     >
       <div className="flex h-full flex-col">
         {/* Header */}
@@ -244,7 +300,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                     <CameraIcon className="w-4 h-4" />
                   </button>
                 )}
-                {!isGroup && (
+                {!isGroup && isOnline && (
                   <div className="absolute bottom-1 right-2 w-4 h-4 bg-green-500 border-2 border-white rounded-full" />
                 )}
               </div>
@@ -285,7 +341,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
             <p className="text-[12px] font-bold text-gray-400 mt-1 uppercase tracking-wider">
               {isGroup
                 ? `${conversationInfo?.members?.length ?? 0} thành viên`
-                : "Đang hoạt động"}
+                : isOnline
+                  ? "Đang hoạt động"
+                  : getOfflineText(userStatus?.lastActive)}
             </p>
 
             {/* Quick Actions */}
@@ -297,10 +355,21 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                 <ActionButton
                   icon={<UserGroupIcon />}
                   label="Thành viên"
-                  onClick={() => setShowMemberManagementModal(true)}
+                  onClick={!isRestricted ? () => setShowMemberManagementModal(true) : undefined}
                 />
               ) : (
-                <ActionButton icon={<UserGroupIcon />} label="Nhóm chung" />
+                <>
+                  <ActionButton
+                    icon={<UserGroupIcon />}
+                    label="Nhóm chung"
+                    onClick={() => setShowCommonGroupsModal(true)}
+                  />
+                  <ActionButton
+                    icon={<UserPlusIcon className="w-5 h-5" />}
+                    label="Tạo nhóm"
+                    onClick={() => setShowCreateGroupModal(true)}
+                  />
+                </>
               )}
             </div>
           </div>
@@ -398,7 +467,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
                         {m.metadata?.fileSize
                           ? (m.metadata.fileSize / (1024 * 1024)).toFixed(1) +
-                            " MB"
+                          " MB"
                           : "0 MB"}{" "}
                         •{" "}
                         {new Date(m.createdAt || "").toLocaleDateString(
@@ -452,9 +521,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
               </h3>
               <div className="space-y-1">
                 {isManager && (
-                  <SettingItem 
-                    icon={<Cog6ToothIcon />} 
-                    label="Cài đặt nhóm" 
+                  <SettingItem
+                    icon={<Cog6ToothIcon />}
+                    label="Cài đặt nhóm"
                     onClick={() => setShowGroupSettingsModal(true)}
                   />
                 )}
@@ -489,6 +558,13 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
               {isGroup && (
                 <>
                   <SettingItem
+                    icon={<ExclamationCircleIcon />}
+                    label="Báo xấu nhóm"
+                    isDanger
+                    onClick={() => setShowReportTargetModal(true)}
+
+                  />
+                  <SettingItem
                     icon={<ArrowRightOnRectangleIcon />}
                     label="Rời khỏi nhóm"
                     isDanger
@@ -503,6 +579,14 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                     />
                   )}
                 </>
+              )}
+              {!isGroup && otherUserId && (
+                <SettingItem
+                  icon={<ExclamationCircleIcon />}
+                  label="Báo xấu người dùng"
+                  isDanger
+                  onClick={handleReportUser}
+                />
               )}
             </div>
           </div>
@@ -526,6 +610,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           conversationId={conversationId}
           canCreate={canCreatePoll}
           onClose={() => setShowPollModal(false)}
+          onOpenDetails={onOpenPollDetails}
         />
       )}
 
@@ -571,9 +656,53 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
             setShowMemberManagementModal(false);
             setShowAddMemberModal(true);
           }}
+          groupName={conversationInfo?.displayName}
+          groupAvatar={conversationInfo?.displayAvatar}
         />
       )}
 
+      {showReportTargetModal && (
+        <ReportTargetModal
+          isOpen={showReportTargetModal}
+          onClose={() => setShowReportTargetModal(false)}
+          groupName={conversationInfo?.displayName || "Nhóm"}
+          members={(conversationInfo?.members || [])
+            .filter((m: any) => m.userId !== myId)
+            .map((m: any) => ({
+              userId: m.userId,
+              fullName: userCache[m.userId]?.name || m.fullName,
+              avatar: userCache[m.userId]?.avatar || m.avatar
+          }))}
+          onSelectTarget={(type, id, name) => {
+            const finalName = type === "USER" ? `${name} (trong nhóm: ${conversationInfo?.displayName || "Không tên"})` : name;
+            setReportTarget({ type, id: id || conversationId, name: finalName });
+            setShowReportTargetModal(false);
+            setShowReportGroupModal(true);
+          }}
+        />
+      )}
+
+      {showReportGroupModal && (
+        <ReportModal
+          isOpen={showReportGroupModal}
+          onClose={() => setShowReportGroupModal(false)}
+          targetId={reportTarget?.id || conversationId}
+          targetType={reportTarget?.type || "GROUP"}
+          targetName={reportTarget?.name || conversationInfo?.displayName}
+          conversationId={conversationId}
+          conversationType={isGroup ? "GROUP" : "ONE_TO_ONE"}
+          messages={messages}
+          userCache={userCache}
+          onSuccess={() => {
+            setShowReportGroupModal(false);
+            // Ask to leave
+            if (confirm("Bạn muốn rời nhóm này sau khi báo cáo không?")) {
+              onLeaveGroup();
+            }
+          }}
+        />
+      )}
+      {/* User Report Modal - driven by store state; rendered in page.tsx */}
       {showGroupSettingsModal && (
         <GroupSettingsModal
           groupId={conversationId}
@@ -594,6 +723,28 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           onDisbandGroup={onDisbandGroup}
         />
       )}
+
+      {showCreateGroupModal && (
+        <CreateGroupModal
+          onClose={() => setShowCreateGroupModal(false)}
+          onSuccess={() => {
+            setShowCreateGroupModal(false);
+            if (onRefreshData) onRefreshData();
+          }}
+          initialSelectedIds={otherMember?.userId ? [otherMember.userId] : []}
+        />
+      )}
+
+      {showCommonGroupsModal && otherMember && (
+        <CommonGroupsModal
+          isOpen={showCommonGroupsModal}
+          onClose={() => setShowCommonGroupsModal(false)}
+          otherUserId={otherMember.userId}
+          friendName={
+            otherMember.fullName || conversationInfo.displayName || "Bạn bè"
+          }
+        />
+      )}
     </div>
   );
 };
@@ -606,17 +757,17 @@ const ActionButton: React.FC<{
   onClick?: () => void;
 }> = ({ icon, label, onClick }) => (
   <div
-    className="flex flex-col items-center gap-1.5 cursor-pointer group"
+    className={`flex flex-col items-center gap-1.5 transition-all ${onClick ? "cursor-pointer group active:scale-95" : "cursor-not-allowed opacity-40"}`}
     onClick={onClick}
   >
-    <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition shadow-sm ring-1 ring-gray-100">
+    <div className={`w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 transition shadow-sm ring-1 ring-gray-100 ${onClick ? "group-hover:bg-blue-50 group-hover:text-blue-600" : ""}`}>
       {React.isValidElement(icon)
         ? React.cloneElement(icon as React.ReactElement<any>, {
-            className: "w-5 h-5",
-          })
+          className: "w-5 h-5",
+        })
         : icon}
     </div>
-    <span className="text-[10px] font-bold text-gray-400 group-hover:text-gray-600">
+    <span className={`text-[10px] font-bold ${onClick ? "text-gray-400 group-hover:text-gray-600" : "text-gray-300"}`}>
       {label}
     </span>
   </div>
@@ -639,8 +790,8 @@ const SettingItem: React.FC<{
       >
         {React.isValidElement(icon)
           ? React.cloneElement(icon as React.ReactElement<any>, {
-              className: "w-5 h-5",
-            })
+            className: "w-5 h-5",
+          })
           : icon}
       </div>
       <span

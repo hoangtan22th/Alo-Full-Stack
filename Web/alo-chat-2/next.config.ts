@@ -5,3 +5,17 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+
+// Châu sài, để test, ai sài mở ở trên ra đóng ở dưới hộ, cmt phòng trường hợp quên mở lại
+// /** @type {import('next').NextConfig} */
+// const nextConfig = {
+//   typescript: {
+//     // !! CẢNH BÁO !!
+//     // Lệnh này cho phép production builds hoàn tất kể cả khi
+//     // dự án của bạn đang có lỗi TypeScript.
+//     ignoreBuildErrors: true,
+//   },
+// };
+
+// module.exports = nextConfig;

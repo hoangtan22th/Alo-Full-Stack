@@ -1,0 +1,4 @@
+# Bỏ qua folder Backend khi build mobile
+../../Backend
+../../.vscode
+node_modules

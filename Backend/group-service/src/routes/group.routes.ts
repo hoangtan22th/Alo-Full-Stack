@@ -44,6 +44,7 @@ router.post(
   groupController.createGroup,
 );
 router.get("/api/v1/groups/me", groupController.getMyGroups);
+router.get("/api/v1/groups/common/:otherUserId", groupController.getCommonGroups);
 router.post(
   "/api/v1/groups/direct",
   groupController.getOrCreateDirectConversation,
@@ -72,6 +73,10 @@ router.put(
   groupController.updateConversationFolder,
 );
 
+router.get(
+  "/api/v1/groups/:groupId/blocked",
+  groupController.getBlockedMembers,
+);
 // Quản lý thành viên trong nhóm
 router.post("/api/v1/groups/:groupId/members", groupController.addMember);
 router.delete(
@@ -81,6 +86,10 @@ router.delete(
 router.put(
   "/api/v1/groups/:groupId/members/:userId/role",
   groupController.updateRole,
+);
+router.delete(
+  "/api/v1/groups/:groupId/members/:userId/unblock",
+  groupController.unblockMember,
 );
 router.delete("/api/v1/groups/:groupId", groupController.deleteGroup);
 
@@ -109,6 +118,10 @@ router.get(
 router.post(
   "/api/v1/groups/:groupId/join-requests",
   groupController.requestJoinGroup,
+);
+router.delete(
+  "/api/v1/groups/:groupId/join-requests/me",
+  groupController.cancelJoinRequest,
 );
 router.get(
   "/api/v1/groups/:groupId/join-requests",

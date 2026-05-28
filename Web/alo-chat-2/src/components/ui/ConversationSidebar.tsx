@@ -9,6 +9,8 @@ import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useChatStore } from "@/store/useChatStore";
 import { contactService } from "@/services/contactService";
+import { userService } from "@/services/userService";
+import { presenceService } from "@/services/presenceService";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -249,7 +251,7 @@ export default function ConversationSidebar() {
   const [menuView, setMenuView] = useState<"main" | "labels">("main");
   const [showManageLabelsModal, setShowManageLabelsModal] = useState(false);
 
-  const [onlineUsers, setOnlineUsers] = useState<Record<string, boolean>>({});
+  const { onlineUsers, setOnlineStatus, setBulkPresence } = useChatStore();
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const { typingUsers, friendIds, setFriendIds } = useChatStore();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -397,6 +399,16 @@ export default function ConversationSidebar() {
           },
           ...formattedGroups,
         ]);
+
+        // Fetch presence for all users in the list
+        const userIds = formattedGroups
+          .filter((g) => !g.isGroup && g.otherMemberUserId)
+          .map((g) => g.otherMemberUserId as string);
+        if (userIds.length > 0) {
+          presenceService.getBulkPresence(userIds).then((res) => {
+            if (res) setBulkPresence(res);
+          });
+        }
       }
     } catch (error) {
       console.error("Lỗi lấy danh sách nhóm:", error);
@@ -407,9 +419,10 @@ export default function ConversationSidebar() {
     try {
       setLoading(true);
       const friends = await contactService.getFriendsList();
+      const myId = String(currentUser?.id || currentUser?._id || currentUser?.userId);
       const fIds = new Set(
         friends.map((f) =>
-          f.requesterId === currentUser?.id ? f.recipientId : f.requesterId,
+          String(f.requesterId) === myId ? String(f.recipientId) : String(f.requesterId),
         ),
       );
       setFriendIds(fIds);
@@ -452,32 +465,19 @@ export default function ConversationSidebar() {
           });
         },
       ),
-      socketService.onConversationCreated(async (newConvo: any) => {
-        setConversations((prev) => {
-          const convoId = newConvo._id || newConvo.id;
-          const exists = prev.some((c) => (c.id || c._id) === convoId);
-          if (exists) return prev;
-
-          const formatted = {
-            ...newConvo,
-            id: convoId,
-            time: new Date(newConvo.updatedAt || new Date()).toLocaleTimeString(
-              [],
-              {
-                hour: "2-digit",
-                minute: "2-digit",
-              },
-            ),
-          };
-          return [formatted, ...prev];
-        });
+      socketService.onConversationCreated(async () => {
+        fetchGroups();
       }),
       socketService.onConversationRemoved(
-        (data: { conversationId: string }) => {
-          setConversations((prev) =>
-            prev.filter((c) => (c._id || c.id) !== data.conversationId),
-          );
+        (data: { conversationId: string; reason?: string; groupName?: string }) => {
+          console.log("📢 [Sidebar] CONVERSATION_REMOVED received:", data);
+          setConversations((prev) => {
+            const filtered = prev.filter((c) => (c._id || c.id) !== data.conversationId);
+            console.log(`✅ [Sidebar] Group ${data.conversationId} removed from list. Remaining: ${filtered.length}`);
+            return filtered;
+          });
           if (conversationIdRef.current === data.conversationId) {
+            console.log("🚀 [Sidebar] Active conversation removed, redirecting...");
             router.push("/chat");
           }
         },
@@ -535,20 +535,6 @@ export default function ConversationSidebar() {
               ),
             );
           }
-        },
-      ),
-      socketService.onUserOnline((data: { userId: string }) => {
-        setOnlineUsers((prev) => ({ ...prev, [data.userId]: true }));
-      }),
-      socketService.onUserOffline((data: { userId: string }) => {
-        setOnlineUsers((prev) => ({ ...prev, [data.userId]: false }));
-      }),
-      socketService.onUserStatusResult(
-        (data: { userId: string; status: string }) => {
-          setOnlineUsers((prev) => ({
-            ...prev,
-            [data.userId]: data.status === "online",
-          }));
         },
       ),
     ];
@@ -732,11 +718,16 @@ export default function ConversationSidebar() {
           !friendIds.has(chat.otherMemberUserId);
 
         const isPriority =
-          folder === "priority" || (!folder && !isStrangerConvo);
+          folder === "priority" ||
+          (!folder && !isStrangerConvo) ||
+          chat.isGroup === true ||
+          chat.id === BOT_ID;
         const isOther =
-          folder === "other" ||
-          folder === "stranger" ||
-          (!folder && isStrangerConvo);
+          (folder === "other" ||
+            folder === "stranger" ||
+            (!folder && isStrangerConvo)) &&
+          chat.isGroup !== true &&
+          chat.id !== BOT_ID;
 
         if (isPriority) pCount++;
         else if (isOther) oCount++;
@@ -977,7 +968,7 @@ export default function ConversationSidebar() {
                     </span>
                   )}
                   {chat.otherMemberUserId &&
-                    onlineUsers[chat.otherMemberUserId] && (
+                    onlineUsers[chat.otherMemberUserId]?.status === "online" && (
                       <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
                     )}
                   {chat.id === BOT_ID && (

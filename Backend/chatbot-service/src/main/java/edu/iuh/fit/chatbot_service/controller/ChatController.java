@@ -3,20 +3,25 @@ package edu.iuh.fit.chatbot_service.controller;
 import edu.iuh.fit.chatbot_service.entity.ChatHistory;
 import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import edu.iuh.fit.chatbot_service.dto.ChatRequest;
+import edu.iuh.fit.chatbot_service.dto.ModerationRequest;
 import edu.iuh.fit.chatbot_service.service.ChatService;
+import edu.iuh.fit.chatbot_service.service.ModerationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/chatbot")
 public class ChatController {
 
     private final ChatService chatService;
+    private final ModerationService moderationService;
 
-    public ChatController(ChatService chatService) {
+    public ChatController(ChatService chatService, ModerationService moderationService) {
         this.chatService = chatService;
+        this.moderationService = moderationService;
     }
 
     @PostMapping("/ask")
@@ -55,5 +60,12 @@ public class ChatController {
     public ResponseEntity<ApiResponse<List<ChatHistory>>> getHistory(@PathVariable String userId) {
         List<ChatHistory> history = chatService.getHistory(userId);
         return ResponseEntity.ok(ApiResponse.success(history));
+    }
+
+    // API kiểm duyệt tin nhắn tự động từ các dịch vụ khác (như message-service)
+    @PostMapping("/moderate")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> moderateMessage(@RequestBody ModerationRequest request) {
+        Map<String, Object> result = moderationService.moderateMessage(request);
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 }

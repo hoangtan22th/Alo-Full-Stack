@@ -11,6 +11,7 @@ import { pollService, PollDTO, PollResultDTO } from "@/services/pollService";
 import { useAuthStore } from "@/store/useAuthStore";
 import { socketService } from "@/services/socketService";
 import api from "@/services/api";
+import CreateGroupFromPollModal from "./CreateGroupFromPollModal";
 
 interface PollDetailsModalProps {
   pollId: string;
@@ -28,6 +29,16 @@ export default function PollDetailsModal({ pollId, onClose }: PollDetailsModalPr
   const [initialVotes, setInitialVotes] = useState<string[]>([]);
   const [newOptionText, setNewOptionText] = useState("");
   const [isAddingOption, setIsAddingOption] = useState(false);
+  const [creatorName, setCreatorName] = useState("");
+
+  // Tab: "vote" or "stats"
+  const [activeTab, setActiveTab] = useState<"vote" | "stats">("vote");
+
+  // Create group from poll
+  const [createGroupData, setCreateGroupData] = useState<{
+    voterIds: string[];
+    optionText: string;
+  } | null>(null);
 
   const { user } = useAuthStore();
   const currentUserId = user?.id || user?._id || user?.userId;
@@ -39,7 +50,15 @@ export default function PollDetailsModal({ pollId, onClose }: PollDetailsModalPr
         pollService.getPollResults(pollId)
       ]);
       
-      if (pollData) setPoll(pollData);
+      if (pollData) {
+        setPoll(pollData);
+        // Fetch creator name
+        try {
+          const userRes: any = await api.get(`/users/${pollData.creatorId}`);
+          const profile = userRes?.data || userRes;
+          setCreatorName(profile?.fullName || profile?.username || "Người dùng");
+        } catch { setCreatorName("Người dùng"); }
+      }
       if (resultsData) setResults(resultsData);
       
       if (resultsData && currentUserId) {
@@ -191,200 +210,321 @@ export default function PollDetailsModal({ pollId, onClose }: PollDetailsModalPr
   const totalVotersCount = totalUniqueVotersObj.size;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
-        
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-          <div>
-            <h2 className="text-lg font-black text-gray-900">Chi tiết bình chọn</h2>
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Thăm dò ý kiến</p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-white hover:shadow-sm rounded-full transition-all text-gray-400 hover:text-gray-600">
-            <XMarkIcon className="w-6 h-6" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-6 py-5 custom-scrollbar">
-          {/* Question Area */}
-          <div className="mb-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-3">{poll.question}</h3>
-            
-            <div className="flex flex-wrap gap-2">
-              <div className="flex items-center bg-gray-100 px-2.5 py-1 rounded-lg">
-                <UserGroupIcon className="w-3.5 h-3.5 text-gray-500 mr-1.5" />
-                <span className="text-xs font-semibold text-gray-600">{totalVotersCount} người đã vote</span>
-              </div>
-              
-              {poll.settings.allowMultipleAnswers && (
-                <span className="text-xs font-semibold bg-blue-50 text-blue-600 px-2.5 py-1 rounded-lg">
-                  Nhiều lựa chọn
-                </span>
-              )}
-              
-              {poll.settings.hideVoters && (
-                <span className="text-xs font-semibold bg-orange-50 text-orange-600 px-2.5 py-1 rounded-lg">
-                  Ẩn danh
-                </span>
-              )}
-              
-              {isClosed && (
-                <div className="flex items-center bg-red-50 px-2.5 py-1 rounded-lg">
-                  <LockClosedIcon className="w-3.5 h-3.5 text-red-600 mr-1" />
-                  <span className="text-xs font-semibold text-red-600">Đã khóa</span>
-                </div>
-              )}
-
-              {!isClosed && poll.expiresAt && (
-                <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-lg">
-                  Hết hạn: {new Date(poll.expiresAt).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}
-                </span>
+    <>
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+          
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+            <div>
+              <h2 className="text-lg font-black text-gray-900">Chi tiết bình chọn</h2>
+              {creatorName && (
+                <p className="text-[11px] font-bold text-gray-400 mt-0.5">Tạo bởi: {creatorName}</p>
               )}
             </div>
+            <button onClick={onClose} className="p-2 hover:bg-white hover:shadow-sm rounded-full transition-all text-gray-400 hover:text-gray-600">
+              <XMarkIcon className="w-6 h-6" />
+            </button>
           </div>
 
-          {/* Options */}
-          <div className="space-y-3 mb-6">
-            {poll.options.map(opt => {
-              const res = results.find(r => r.optionId === opt._id);
-              const count = res ? res.count : 0;
-              const voters = res ? res.voters : [];
-              const percentage = Math.round((count / totalVotes) * 100);
-              const isSelected = opt._id ? selectedOptions.includes(opt._id) : false;
+          {/* Tab Bar */}
+          <div className="flex border-b border-gray-100">
+            <button
+              onClick={() => setActiveTab("vote")}
+              className={`flex-1 py-3 text-sm font-bold transition-colors ${
+                activeTab === "vote"
+                  ? "text-blue-600 border-b-2 border-blue-600"
+                  : "text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              Bình chọn
+            </button>
+            <button
+              onClick={() => setActiveTab("stats")}
+              className={`flex-1 py-3 text-sm font-bold transition-colors flex items-center justify-center gap-1.5 ${
+                activeTab === "stats"
+                  ? "text-blue-600 border-b-2 border-blue-600"
+                  : "text-gray-400 hover:text-gray-600"
+              }`}
+            >
+              <ChartBarIcon className="w-4 h-4" />
+              Thống kê
+            </button>
+          </div>
 
-              return (
-                <div 
-                  key={opt._id}
-                  onClick={() => !readonly && opt._id && toggleOption(opt._id)}
-                  className={`relative p-4 rounded-2xl border-2 transition-all ${!readonly && 'cursor-pointer hover:shadow-md'} ${isSelected ? 'border-blue-500 bg-blue-50/30' : 'border-gray-100 bg-white hover:border-gray-200'}`}
-                >
-                  <div className="flex items-start z-10 relative">
-                    <div className="mt-0.5 mr-3">
-                      {isSelected ? (
-                        <div className={`w-5 h-5 flex items-center justify-center bg-blue-500 text-white ${poll.settings.allowMultipleAnswers ? 'rounded-md' : 'rounded-full'}`}>
-                          <CheckIcon className="w-3.5 h-3.5" />
+          <div className="flex-1 overflow-y-auto px-6 py-5 custom-scrollbar">
+            {/* Question Area */}
+            <div className="mb-6">
+              <h3 className="text-xl font-bold text-gray-900 mb-3">{poll.question}</h3>
+              
+              <div className="flex flex-wrap gap-2">
+                <div className="flex items-center bg-gray-100 px-2.5 py-1 rounded-lg">
+                  <UserGroupIcon className="w-3.5 h-3.5 text-gray-500 mr-1.5" />
+                  <span className="text-xs font-semibold text-gray-600">{totalVotersCount} người đã vote</span>
+                </div>
+                
+                {poll.settings.allowMultipleAnswers && (
+                  <span className="text-xs font-semibold bg-blue-50 text-blue-600 px-2.5 py-1 rounded-lg">
+                    Nhiều lựa chọn
+                  </span>
+                )}
+                
+                {poll.settings.hideVoters && (
+                  <span className="text-xs font-semibold bg-orange-50 text-orange-600 px-2.5 py-1 rounded-lg">
+                    Ẩn danh
+                  </span>
+                )}
+                
+                {isClosed && (
+                  <div className="flex items-center bg-red-50 px-2.5 py-1 rounded-lg">
+                    <LockClosedIcon className="w-3.5 h-3.5 text-red-600 mr-1" />
+                    <span className="text-xs font-semibold text-red-600">Đã khóa</span>
+                  </div>
+                )}
+
+                {!isClosed && poll.expiresAt && (
+                  <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-lg">
+                    Hết hạn: {new Date(poll.expiresAt).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* ===== TAB: VOTE ===== */}
+            {activeTab === "vote" && (
+              <>
+                <div className="space-y-3 mb-6">
+                  {poll.options.map(opt => {
+                    const res = results.find(r => r.optionId === opt._id);
+                    const count = res ? res.count : 0;
+                    const voters = res ? res.voters : [];
+                    const percentage = Math.round((count / totalVotes) * 100);
+                    const isSelected = opt._id ? selectedOptions.includes(opt._id) : false;
+
+                    return (
+                      <div 
+                        key={opt._id}
+                        onClick={() => !readonly && opt._id && toggleOption(opt._id)}
+                        className={`relative p-4 rounded-2xl border-2 transition-all ${!readonly && 'cursor-pointer hover:shadow-md'} ${isSelected ? 'border-blue-500 bg-blue-50/30' : 'border-gray-100 bg-white hover:border-gray-200'}`}
+                      >
+                        <div className="flex items-start z-10 relative">
+                          <div className="mt-0.5 mr-3">
+                            {isSelected ? (
+                              <div className={`w-5 h-5 flex items-center justify-center bg-blue-500 text-white ${poll.settings.allowMultipleAnswers ? 'rounded-md' : 'rounded-full'}`}>
+                                <CheckIcon className="w-3.5 h-3.5" />
+                              </div>
+                            ) : (
+                              <div className={`w-5 h-5 border-2 border-gray-300 ${poll.settings.allowMultipleAnswers ? 'rounded-md' : 'rounded-full'}`} />
+                            )}
+                          </div>
+                          
+                          <div className="flex-1">
+                            <div className="flex justify-between items-start mb-1.5">
+                              <span className={`text-[15px] font-medium pr-3 ${isSelected ? 'text-gray-900 font-bold' : 'text-gray-700'}`}>{opt.text}</span>
+                              <span className="text-[15px] font-black text-gray-900">{count}</span>
+                            </div>
+                            
+                            {/* Progress bar */}
+                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden w-full">
+                              <div 
+                                className={`h-full rounded-full transition-all duration-500 ${isSelected ? 'bg-blue-500' : 'bg-gray-400'}`} 
+                                style={{ width: `${percentage}%` }}
+                              />
+                            </div>
+
+                            {/* Voters Avatars */}
+                            {!poll.settings.hideVoters && count > 0 && (
+                              <div className="flex items-center mt-3">
+                                {voters.slice(0, 5).map((v, i) => {
+                                  const profile = userCache[v.userId];
+                                  const avatarUri = profile?.avatar;
+                                  const name = profile?.fullName || profile?.username || profile?.name || '?';
+                                  
+                                  return (
+                                    <div key={v.userId} className={`w-6 h-6 rounded-full border-2 border-white overflow-hidden bg-gray-200 flex items-center justify-center ${i > 0 ? '-ml-2' : ''}`} title={name}>
+                                      {avatarUri ? (
+                                        <img src={avatarUri} alt={name} className="w-full h-full object-cover" />
+                                      ) : (
+                                        <span className="text-[9px] font-bold text-gray-500 uppercase">{name.charAt(0)}</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                {count > 5 && (
+                                  <div className="w-6 h-6 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center -ml-2">
+                                    <span className="text-[9px] font-bold text-gray-600">+{count - 5}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      ) : (
-                        <div className={`w-5 h-5 border-2 border-gray-300 ${poll.settings.allowMultipleAnswers ? 'rounded-md' : 'rounded-full'}`} />
-                      )}
-                    </div>
-                    
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start mb-1.5">
-                        <span className={`text-[15px] font-medium pr-3 ${isSelected ? 'text-gray-900 font-bold' : 'text-gray-700'}`}>{opt.text}</span>
-                        <span className="text-[15px] font-black text-gray-900">{count}</span>
                       </div>
-                      
-                      {/* Progress bar */}
-                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden w-full">
+                    );
+                  })}
+                </div>
+
+                {/* Add Option */}
+                {poll.settings.allowAddOptions && !readonly && (
+                  <div className="flex items-center bg-gray-50 rounded-xl p-2 border border-gray-100 mb-6 focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+                    <input 
+                      type="text"
+                      placeholder="Thêm lựa chọn mới..."
+                      className="flex-1 bg-transparent border-none text-sm px-3 py-2 focus:outline-none"
+                      value={newOptionText}
+                      onChange={(e) => setNewOptionText(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddOption()}
+                    />
+                    <button 
+                      onClick={handleAddOption}
+                      disabled={isAddingOption || !newOptionText.trim()}
+                      className={`p-2 rounded-lg transition-colors ${newOptionText.trim() ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-400'}`}
+                    >
+                      {isAddingOption ? (
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <PlusIcon className="w-5 h-5" />
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Admin Action: Close Poll */}
+                {isCreator && !readonly && (
+                  <button 
+                    onClick={handleClosePoll}
+                    className="w-full mt-2 py-3 rounded-xl border border-red-200 bg-red-50 text-red-600 font-bold text-sm hover:bg-red-100 transition-colors"
+                  >
+                    Khóa bình chọn
+                  </button>
+                )}
+              </>
+            )}
+
+            {/* ===== TAB: STATISTICS ===== */}
+            {activeTab === "stats" && (
+              <div className="space-y-5">
+                {poll.options.map(opt => {
+                  const res = results.find(r => r.optionId === opt._id);
+                  const count = res ? res.count : 0;
+                  const voters = res ? res.voters : [];
+                  const percentage = Math.round((count / totalVotes) * 100);
+
+                  return (
+                    <div key={opt._id} className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                      {/* Option header */}
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-[15px] font-bold text-gray-900 flex-1">{opt.text}</h4>
+                        <div className="flex items-center gap-2 ml-3">
+                          <span className="text-sm font-black text-blue-600">{count}</span>
+                          <span className="text-xs font-bold text-gray-400">({percentage}%)</span>
+                        </div>
+                      </div>
+
+                      {/* Progress */}
+                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden mb-4">
                         <div 
-                          className={`h-full rounded-full transition-all duration-500 ${isSelected ? 'bg-blue-500' : 'bg-gray-400'}`} 
+                          className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500" 
                           style={{ width: `${percentage}%` }}
                         />
                       </div>
 
-                      {/* Voters Avatars */}
-                      {!poll.settings.hideVoters && count > 0 && (
-                        <div className="flex items-center mt-3">
-                          {voters.slice(0, 5).map((v, i) => {
+                      {/* Full voter list */}
+                      {!poll.settings.hideVoters && count > 0 ? (
+                        <div className="space-y-2 mb-3">
+                          {voters.map(v => {
                             const profile = userCache[v.userId];
+                            const name = profile?.fullName || profile?.username || "Người dùng";
                             const avatarUri = profile?.avatar;
-                            const name = profile?.fullName || profile?.username || profile?.name || '?';
-                            
+
                             return (
-                              <div key={v.userId} className={`w-6 h-6 rounded-full border-2 border-white overflow-hidden bg-gray-200 flex items-center justify-center ${i > 0 ? '-ml-2' : ''}`} title={name}>
+                              <div key={v.userId} className="flex items-center p-2 rounded-xl bg-white">
                                 {avatarUri ? (
-                                  <img src={avatarUri} alt={name} className="w-full h-full object-cover" />
+                                  <img src={avatarUri} alt={name} className="w-8 h-8 rounded-full object-cover mr-3" />
                                 ) : (
-                                  <span className="text-[9px] font-bold text-gray-500 uppercase">{name.charAt(0)}</span>
+                                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+                                    <span className="text-xs font-bold text-blue-600">{name.charAt(0).toUpperCase()}</span>
+                                  </div>
                                 )}
+                                <span className="text-sm font-medium text-gray-700 flex-1">{name}</span>
+                                <span className="text-[10px] text-gray-400">
+                                  {new Date(v.votedAt).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}
+                                </span>
                               </div>
                             );
                           })}
-                          {count > 5 && (
-                            <div className="w-6 h-6 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center -ml-2">
-                              <span className="text-[9px] font-bold text-gray-600">+{count - 5}</span>
-                            </div>
-                          )}
                         </div>
+                      ) : poll.settings.hideVoters && count > 0 ? (
+                        <p className="text-xs text-gray-400 italic mb-3">Ẩn danh — {count} người đã chọn</p>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic mb-3">Chưa có ai chọn phương án này</p>
+                      )}
+
+                      {/* Create group button */}
+                      {!poll.settings.hideVoters && count >= 2 && (
+                        <button
+                          onClick={() => setCreateGroupData({
+                            voterIds: voters.map(v => v.userId),
+                            optionText: opt.text,
+                          })}
+                          className="w-full py-2.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-600 font-bold text-xs hover:bg-blue-100 transition-colors flex items-center justify-center gap-1.5"
+                        >
+                          <UserGroupIcon className="w-4 h-4" />
+                          Tạo nhóm từ phương án này ({count} người)
+                        </button>
                       )}
                     </div>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Add Option */}
-          {poll.settings.allowAddOptions && !readonly && (
-            <div className="flex items-center bg-gray-50 rounded-xl p-2 border border-gray-100 mb-6 focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
-              <input 
-                type="text"
-                placeholder="Thêm lựa chọn mới..."
-                className="flex-1 bg-transparent border-none text-sm px-3 py-2 focus:outline-none"
-                value={newOptionText}
-                onChange={(e) => setNewOptionText(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddOption()}
-              />
+          {/* Footer actions */}
+          {activeTab === "vote" && !readonly && (
+            <div className="p-4 border-t border-gray-100 bg-white">
+              {selectedOptions.length > 0 && (
+                <div className="flex justify-end mb-2">
+                  <button 
+                    onClick={() => setSelectedOptions([])} 
+                    className="text-[13px] font-bold text-red-500 hover:text-red-600"
+                  >
+                    Bỏ chọn tất cả
+                  </button>
+                </div>
+              )}
               <button 
-                onClick={handleAddOption}
-                disabled={isAddingOption || !newOptionText.trim()}
-                className={`p-2 rounded-lg transition-colors ${newOptionText.trim() ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-400'}`}
+                onClick={handleVote}
+                disabled={submitting || (selectedOptions.length === 0 && initialVotes.length === 0)}
+                className={`w-full py-3.5 rounded-xl font-bold text-[15px] shadow-sm transition-all ${
+                  (selectedOptions.length > 0 || initialVotes.length > 0)
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
               >
-                {isAddingOption ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                {submitting ? (
+                  <div className="flex justify-center items-center">
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                    Đang gửi...
+                  </div>
                 ) : (
-                  <PlusIcon className="w-5 h-5" />
+                  selectedOptions.length === 0 && initialVotes.length > 0 ? "Gỡ bình chọn" : "Gửi bình chọn"
                 )}
               </button>
             </div>
           )}
-
-          {/* Admin Action: Close Poll */}
-          {isCreator && !readonly && (
-            <button 
-              onClick={handleClosePoll}
-              className="w-full mt-2 py-3 rounded-xl border border-red-200 bg-red-50 text-red-600 font-bold text-sm hover:bg-red-100 transition-colors"
-            >
-              Khóa bình chọn
-            </button>
-          )}
         </div>
-
-        {/* Footer actions */}
-        {!readonly && (
-          <div className="p-4 border-t border-gray-100 bg-white">
-            {selectedOptions.length > 0 && (
-              <div className="flex justify-end mb-2">
-                <button 
-                  onClick={() => setSelectedOptions([])} 
-                  className="text-[13px] font-bold text-red-500 hover:text-red-600"
-                >
-                  Bỏ chọn tất cả
-                </button>
-              </div>
-            )}
-            <button 
-              onClick={handleVote}
-              disabled={submitting || (selectedOptions.length === 0 && initialVotes.length === 0)}
-              className={`w-full py-3.5 rounded-xl font-bold text-[15px] shadow-sm transition-all ${
-                (selectedOptions.length > 0 || initialVotes.length > 0)
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-md'
-                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              {submitting ? (
-                <div className="flex justify-center items-center">
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                  Đang gửi...
-                </div>
-              ) : (
-                selectedOptions.length === 0 && initialVotes.length > 0 ? "Gỡ bình chọn" : "Gửi bình chọn"
-              )}
-            </button>
-          </div>
-        )}
       </div>
-    </div>
+
+      {/* Create Group Modal */}
+      {createGroupData && (
+        <CreateGroupFromPollModal
+          voterIds={createGroupData.voterIds}
+          optionText={createGroupData.optionText}
+          pollQuestion={poll.question}
+          onClose={() => setCreateGroupData(null)}
+        />
+      )}
+    </>
   );
 }

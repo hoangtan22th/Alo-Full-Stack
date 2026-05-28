@@ -9,12 +9,11 @@ import {
 } from "@heroicons/react/24/outline";
 import axiosClient from "@/services/api";
 import { messageService, MessageDTO } from "@/services/messageService";
-import { useAuthStore } from "@/store/useAuthStore";
 
 interface ForwardMessageModalProps {
   isOpen: boolean;
   onClose: () => void;
-  message: MessageDTO;
+  messages: MessageDTO[];
   currentUser: any;
 }
 
@@ -28,7 +27,7 @@ interface ConversationItem {
 export default function ForwardMessageModal({
   isOpen,
   onClose,
-  message,
+  messages,
   currentUser,
 }: ForwardMessageModalProps) {
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
@@ -124,7 +123,7 @@ export default function ForwardMessageModal({
 
   // Gửi tin nhắn chuyển tiếp
   const handleForward = async () => {
-    if (selectedIds.size === 0 || sending) return;
+    if (selectedIds.size === 0 || messages.length === 0 || sending) return;
     setSending(true);
 
     const senderName =
@@ -135,23 +134,26 @@ export default function ForwardMessageModal({
 
     try {
       const targets = Array.from(selectedIds);
+      // Gửi từng message tới từng target conversation
       await Promise.all(
-        targets.map((targetId) =>
-          messageService.sendMessage({
-            conversationId: targetId,
-            content: message.content,
-            type: message.type as "text" | "image" | "file",
-            senderName,
-            metadata: message.metadata?.isSticker
-              ? { isSticker: true }
-              : message.type === "file"
-                ? {
-                    fileName: message.metadata?.fileName,
-                    fileSize: message.metadata?.fileSize,
-                    fileType: message.metadata?.fileType,
-                  }
-                : {},
-          }),
+        targets.flatMap((targetId) =>
+          messages.map((msg) =>
+            messageService.sendMessage({
+              conversationId: targetId,
+              content: msg.content,
+              type: msg.type as any,
+              senderName,
+              metadata: msg.metadata?.isSticker
+                ? { isSticker: true }
+                : msg.type === "file"
+                  ? {
+                      fileName: msg.metadata?.fileName,
+                      fileSize: msg.metadata?.fileSize,
+                      fileType: msg.metadata?.fileType,
+                    }
+                  : {},
+            }),
+          ),
         ),
       );
       onClose();
@@ -170,6 +172,10 @@ export default function ForwardMessageModal({
 
   // Preview nội dung tin nhắn
   const getPreviewContent = () => {
+    if (messages.length === 0) return "";
+    if (messages.length > 1) return `[${messages.length} tin nhắn được chọn]`;
+
+    const message = messages[0];
     if (message.metadata?.isSticker) return "[Sticker]";
     if (message.type === "image") return "[Hình ảnh]";
     if (message.type === "file")

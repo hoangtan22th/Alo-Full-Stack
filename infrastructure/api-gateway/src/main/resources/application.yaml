@@ -38,7 +38,7 @@ spring:
             - id: message-service
               uri: lb://MESSAGE-SERVICE
               predicates:
-                - Path=/api/v1/messages/**
+                - Path=/api/v1/messages/**, /api/v1/admin/messages/**
 
             - id: notification-service
               uri: lb://NOTIFICATION-SERVICE
@@ -54,11 +54,16 @@ spring:
               uri: lb://VOTING-SERVICE
               predicates:
                 - Path=/api/v1/polls/**, /api/v1/polls
+
+            - id: report-service
+              uri: lb://REPORT-SERVICE
+              predicates:
+                - Path=/api/v1/reports/**, /api/v1/admin/reports/**
                 
             - id: realtime-service
               uri: lb://REALTIME-SERVICE
               predicates:
-                - Path=/socket.io/**
+                - Path=/socket.io/**, /api/v1/realtime/**
 
 eureka:
   client:

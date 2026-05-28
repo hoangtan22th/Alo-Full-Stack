@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "201142582497",
+    "project_id": "alo-chat-492616",
+    "storage_bucket": "alo-chat-492616.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:201142582497:android:6f1e6a5c9a616a97148ba0",
+        "android_client_info": {
+          "package_name": "com.tvhow.alochat"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "201142582497-rpb2m19t9hf928rg3dtsftd53phfmroe.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC389edI0AnOGyixRsajjnd3cPaX4xzw8A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "201142582497-rpb2m19t9hf928rg3dtsftd53phfmroe.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "201142582497-g4kps9uontafgrufhvl9cmem5hprgf5k.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.tvhow.alochat"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

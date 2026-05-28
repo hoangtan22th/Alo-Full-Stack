@@ -16,7 +16,7 @@ export interface Group {
   groupAvatar: string;
   isGroup: boolean;
   members: GroupMember[];
-  isBanned: boolean;
+  status: 'ACTIVE' | 'READ_ONLY' | 'DISBANDED';
   isApprovalRequired: boolean;
   isLinkEnabled: boolean;
   isHistoryVisible: boolean;
@@ -91,6 +91,15 @@ export const groupService = {
       await axiosClient.put(`${API_URL}/${id}/ban`, { isBanned });
     } catch (error) {
       console.error("Error toggling ban group:", error);
+      throw error;
+    }
+  },
+
+  disbandGroup: async (id: string): Promise<void> => {
+    try {
+      await axiosClient.put(`${API_URL}/${id}/ban`, { action: "DISBAND_GROUP" });
+    } catch (error) {
+      console.error("Error disbanding group:", error);
       throw error;
     }
   },

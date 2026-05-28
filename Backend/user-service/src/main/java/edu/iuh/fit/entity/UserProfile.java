@@ -54,10 +54,18 @@ public class UserProfile {
     @Column(name = "last_active_at")
     private LocalDateTime lastActiveAt;
 
+    @Column(name = "is_online")
+    @Builder.Default
+    private Boolean isOnline = false;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "account_status")
     @Builder.Default
     private UserStatus status = UserStatus.ACTIVE;
+
+    @Column(name = "warning_count")
+    @Builder.Default
+    private Integer warningCount = 0;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

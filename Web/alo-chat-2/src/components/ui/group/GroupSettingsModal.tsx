@@ -20,6 +20,7 @@ import {
   ShareIcon,
   ArrowDownTrayIcon,
   DocumentDuplicateIcon,
+  NoSymbolIcon,
 } from "@heroicons/react/24/outline";
 import { groupService } from "@/services/groupService";
 import { socketService } from "@/services/socketService";
@@ -93,6 +94,9 @@ export default function GroupSettingsModal({
   const [showTransferLeader, setShowTransferLeader] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [selectedNewLeaderId, setSelectedNewLeaderId] = useState<string | null>(null);
+  const [showBlockedUsersModal, setShowBlockedUsersModal] = useState(false);
+  const [blockedMembers, setBlockedMembers] = useState<any[]>([]);
+  const [loadingBlocked, setLoadingBlocked] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -314,6 +318,35 @@ export default function GroupSettingsModal({
     }
   };
 
+  const fetchBlockedMembers = async () => {
+    try {
+      setLoadingBlocked(true);
+      const res = await groupService.getBlockedMembers(groupId);
+      setBlockedMembers(res || []);
+    } catch (err) {
+      toast.error("Không thể tải danh sách bị chặn");
+    } finally {
+      setLoadingBlocked(false);
+    }
+  };
+
+  const handleUnblockMember = async (userId: string) => {
+    try {
+      await groupService.unblockMember(groupId, userId);
+      toast.success("Đã gỡ chặn người dùng");
+      setBlockedMembers(prev => prev.filter(m => m.userId !== userId));
+      if (onRefreshData) onRefreshData();
+    } catch (err) {
+      toast.error("Lỗi gỡ chặn người dùng");
+    }
+  };
+
+  useEffect(() => {
+    if (showBlockedUsersModal) {
+      fetchBlockedMembers();
+    }
+  }, [showBlockedUsersModal]);
+
   const shareUrl = `https://alo.chat/g/${groupId}`;
 
   const handleCopyLink = () => {
@@ -473,6 +506,25 @@ export default function GroupSettingsModal({
                   </div>
                   <ChevronRightIcon className="w-5 h-5 text-gray-300" />
                 </button>
+
+                {/* Blocked Members NavItem (Only for Admin) */}
+                {isAdmin && (
+                  <button 
+                    onClick={() => setShowBlockedUsersModal(true)}
+                    className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition active:scale-[0.98] group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-11 h-11 rounded-2xl bg-gray-50 flex items-center justify-center text-black border border-gray-100 shadow-sm group-hover:bg-black group-hover:text-white transition-all">
+                        <NoSymbolIcon className="w-6 h-6" />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-[15px] font-bold text-gray-800 tracking-tight">Danh sách bị chặn</p>
+                        <p className="text-[11px] text-gray-400 font-medium">Người dùng bị cấm tham gia nhóm</p>
+                      </div>
+                    </div>
+                    <ChevronRightIcon className="w-5 h-5 text-gray-300" />
+                  </button>
+                )}
              </div>
           </div>
 
@@ -709,6 +761,64 @@ export default function GroupSettingsModal({
                        )}
                     </>
                  )}
+              </div>
+           </div>
+        </div>
+      )}
+      {/* Blocked Users Modal Overlay */}
+      {showBlockedUsersModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+           <div className="bg-white w-full max-w-sm rounded-[32px] shadow-2xl flex flex-col h-[70vh] animate-in slide-in-from-bottom-10 duration-300 overflow-hidden">
+              <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
+                 <h3 className="text-lg font-black text-gray-900">Danh sách bị chặn</h3>
+                 <button onClick={() => setShowBlockedUsersModal(false)} className="p-2 hover:bg-white rounded-full transition shadow-sm"><XMarkIcon className="w-6 h-6 text-gray-400" /></button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4">
+                  {loadingBlocked ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-3">
+                       <div className="w-8 h-8 border-4 border-gray-100 border-t-black rounded-full animate-spin" />
+                       <p className="text-[12px] font-bold text-gray-400 uppercase tracking-widest">Đang tải...</p>
+                    </div>
+                  ) : blockedMembers.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center p-6">
+                       <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-200 mb-4">
+                          <NoSymbolIcon className="w-10 h-10" />
+                       </div>
+                       <p className="text-[15px] font-bold text-gray-800">Không có ai bị chặn</p>
+                       <p className="text-[12px] text-gray-400 mt-1">Danh sách các thành viên đã bị Admin mời ra khỏi nhóm và chặn tham gia lại sẽ hiện ở đây.</p>
+                    </div>
+                  ) : (
+                    blockedMembers.map(m => (
+                      <div 
+                        key={m.userId}
+                        className="w-full flex items-center gap-4 p-4 rounded-2xl border border-gray-50 bg-white hover:bg-gray-50 transition-all group"
+                      >
+                         <div className="w-12 h-12 rounded-2xl bg-gray-900 flex items-center justify-center text-white overflow-hidden shadow-sm">
+                            {m.avatar ? <img src={getMediaUrl(m.avatar)} className="w-full h-full object-cover" /> : m.name?.charAt(0).toUpperCase()}
+                         </div>
+                         <div className="text-left flex-1 min-w-0">
+                            <p className="text-[15px] font-black text-gray-900 truncate">{m.name || "Thành viên"}</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">Bị chặn vào {new Date(m.removedAt).toLocaleDateString('vi-VN')}</p>
+                         </div>
+                         <button 
+                           onClick={() => handleUnblockMember(m.userId)}
+                           className="px-4 py-2 bg-black text-white text-[11px] font-black rounded-xl shadow-sm hover:bg-gray-800 active:scale-95 transition-all uppercase tracking-wider"
+                         >
+                            Gỡ chặn
+                         </button>
+                      </div>
+                    ))
+                  )}
+              </div>
+
+              <div className="p-6 border-t border-gray-100 bg-gray-50/50">
+                 <button
+                    onClick={() => setShowBlockedUsersModal(false)}
+                    className="w-full py-4 bg-white border border-gray-100 rounded-2xl font-black text-[14px] text-gray-900 shadow-sm active:scale-[0.98] transition-all"
+                 >
+                    QUAY LẠI
+                 </button>
               </div>
            </div>
         </div>

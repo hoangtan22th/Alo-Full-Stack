@@ -11,8 +11,11 @@ import {
   ChevronDownIcon,
   UserIcon,
   BellIcon,
+  NoSymbolIcon,
+  DocumentDuplicateIcon,
 } from "@heroicons/react/24/outline";
 import MemberApprovalModal from "./MemberApprovalModal";
+import CreateGroupModal from "./CreateGroupModal";
 import { groupService } from "@/services/groupService";
 import { socketService } from "@/services/socketService";
 import { contactService } from "@/services/contactService";
@@ -29,6 +32,8 @@ interface MemberManagementModalProps {
   userCache?: Record<string, { name: string; avatar: string }>;
   onRefreshData?: () => void;
   onOpenAddMember: () => void;
+  groupName?: string;
+  groupAvatar?: string;
 }
 
 export default function MemberManagementModal({
@@ -40,11 +45,14 @@ export default function MemberManagementModal({
   userCache = {},
   onRefreshData,
   onOpenAddMember,
+  groupName,
+  groupAvatar,
 }: MemberManagementModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "managers">("all");
   const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [showCopyModal, setShowCopyModal] = useState(false);
   const [hasPendingRequests, setHasPendingRequests] = useState(false);
   
   // Friendship state
@@ -166,14 +174,18 @@ export default function MemberManagementModal({
     }
   };
 
-  const handleRemoveMember = async (userId: string) => {
-    if (!confirm("Bạn có chắc chắn muốn mời thành viên này ra khỏi nhóm?")) return;
+  const handleRemoveMember = async (userId: string, isBanned: boolean = false) => {
+    const confirmMsg = isBanned 
+      ? "Bạn có chắc chắn muốn mời thành viên này ra khỏi nhóm và CHẶN không cho tham gia lại?" 
+      : "Bạn có chắc chắn muốn mời thành viên này ra khỏi nhóm?";
+      
+    if (!confirm(confirmMsg)) return;
     try {
-      await groupService.removeMember(conversationId, userId);
-      toast.success("Đã xóa thành viên khỏi nhóm");
+      await groupService.removeMember(conversationId, userId, { isBanned });
+      toast.success(isBanned ? "Đã mời ra và chặn thành viên" : "Đã mời thành viên ra khỏi nhóm");
       if (onRefreshData) onRefreshData();
     } catch (err) {
-      toast.error("Không thể xóa thành viên");
+      toast.error(isBanned ? "Không thể chặn thành viên" : "Không thể xóa thành viên");
     }
   };
 
@@ -224,6 +236,13 @@ export default function MemberManagementModal({
                 )}
               </button>
             )}
+            <button
+              onClick={() => setShowCopyModal(true)}
+              className="p-2 hover:bg-gray-50 text-gray-700 rounded-full transition-all"
+              title="Copy Nhóm"
+            >
+              <DocumentDuplicateIcon className="w-6 h-6" />
+            </button>
             <button
               onClick={onClose}
               className="p-2 hover:bg-white hover:shadow-sm rounded-full transition-all text-gray-400 hover:text-gray-600"
@@ -401,6 +420,14 @@ export default function MemberManagementModal({
                               <TrashIcon className="w-4 h-4" />
                               Mời ra khỏi nhóm
                             </button>
+
+                            <button
+                              onClick={() => { handleRemoveMember(m.userId, true); setActiveMemberMenu(null); }}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-bold text-red-700 hover:bg-red-100 transition-colors"
+                            >
+                              <NoSymbolIcon className="w-4 h-4" />
+                              Mời ra & Chặn
+                            </button>
                           </div>
                         </>
                       )}
@@ -456,10 +483,28 @@ export default function MemberManagementModal({
                 setFriendsList(friends);
                 setSentRequests(sent);
                 setPendingRequests(pending);
-              } catch (err) {}
+              } catch (err) {
+                console.error("Error refreshing friendship data:", err);
+              }
             };
             fetchFriendshipData();
           }}
+        />
+      )}
+
+      {showCopyModal && (
+        <CreateGroupModal
+          onClose={() => setShowCopyModal(false)}
+          onSuccess={() => {
+            setShowCopyModal(false);
+            if (onRefreshData) onRefreshData();
+          }}
+          initialSelectedIds={members
+            .filter(m => m.userId !== myId && getRelationStatus(m.userId) === "ACCEPTED")
+            .map(m => m.userId)
+          }
+          initialName={groupName ? `${groupName} (Copy)` : ""}
+          initialAvatarUrl={groupAvatar}
         />
       )}
     </div>

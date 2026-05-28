@@ -1,244 +1,362 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import {
-  CheckCircleIcon,
-  ClockIcon,
-  ShieldCheckIcon,
-  ArrowTrendingUpIcon,
   MagnifyingGlassIcon,
-  BellIcon,
-  UserCircleIcon,
-  ExclamationTriangleIcon,
-  FlagIcon,
-  ChatBubbleLeftEllipsisIcon,
-  PresentationChartLineIcon,
+  FunnelIcon,
+  ArrowPathIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
+  ChartBarIcon,
 } from "@heroicons/react/24/outline";
 import { Button } from "@/components/ui/button";
 import { ReportRow } from "@/components/reports/ReportRow";
-import { ModeratorRow } from "@/components/reports/ModeratorRow";
-import { BarColumn } from "@/components/reports/BarColumn";
+import { ReportActionModal } from "@/components/reports/ReportActionModal";
+import ReportAnalytics from "@/components/reports/ReportAnalytics";
+import { Pagination } from "@/components/ui/Pagination";
+import { useReports } from "@/hooks/useReports";
+import { ReportItem } from "@/services/reportService";
+
+const REASON_OPTIONS = [
+  { value: "ALL", label: "Tất cả lý do" },
+  { value: "SCAM_FRAUD", label: "Lừa đảo / Gian lận" },
+  { value: "CHILD_ABUSE", label: "Xâm hại trẻ em" },
+  { value: "SEXUAL_CONTENT", label: "Nội dung tình dục" },
+  { value: "VIOLENCE_TERRORISM", label: "Bạo lực / Khủng bố" },
+  { value: "SPAM_HARASSMENT", label: "Spam / Quấy rối" },
+  { value: "OTHER", label: "Khác" },
+];
 
 export default function ReportsModerationPage() {
+  const { reports, pagination, loading, error, fetchReports, resolveReport } =
+    useReports();
+  const [filterStatus, setFilterStatus] = useState<string | null>("PENDING");
+  const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [showAnalytics, setShowAnalytics] = useState(true);
+
+  // Search & Filter states
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [filterTargetType, setFilterTargetType] = useState<string>("ALL");
+  const [filterReason, setFilterReason] = useState<string>("ALL");
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(0);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const loadData = () => {
+    fetchReports({
+      status: filterStatus,
+      targetName: debouncedSearch || undefined,
+      targetType: filterTargetType !== "ALL" ? filterTargetType : undefined,
+      reason: filterReason !== "ALL" ? filterReason : undefined,
+      page: currentPage,
+      size: 20,
+    });
+    // Trigger statistics refresh
+    setRefreshKey(prev => prev + 1);
+  };
+
+  useEffect(() => {
+    fetchReports({
+      status: filterStatus,
+      targetName: debouncedSearch || undefined,
+      targetType: filterTargetType !== "ALL" ? filterTargetType : undefined,
+      reason: filterReason !== "ALL" ? filterReason : undefined,
+      page: currentPage,
+      size: 20,
+    });
+  }, [filterStatus, currentPage, debouncedSearch, filterTargetType, filterReason, fetchReports]);
+
+  const handleReview = (report: ReportItem) => {
+    setSelectedReport(report);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleFilterStatusChange = (status: string | null) => {
+    setFilterStatus(status);
+    setCurrentPage(0);
+  };
+
+  const handleModalClose = () => {
+    setSelectedReport(null);
+  };
+
+  const handleModalSuccess = () => {
+    setSelectedReport(null);
+    loadData();
+  };
+
   return (
     <>
-      <div className="mb-8">
-        <h1 className="text-3xl font-extrabold text-on-surface tracking-tight mb-2 font-headline">
-          Reports &amp; Moderation
-        </h1>
-        <p className="text-on-surface-variant text-base">
-          Monitor platform safety, review flagged content, and manage user
-          restrictions.
-        </p>
+      <div className="mb-8 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-extrabold text-on-surface tracking-tight mb-2 font-headline">
+            Reports &amp; Moderation
+          </h1>
+          <p className="text-on-surface-variant text-base">
+            Monitor platform safety, review flagged content, and manage user
+            restrictions.
+          </p>
+        </div>
+
+        <button
+          onClick={() => setShowAnalytics(!showAnalytics)}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-container-low hover:bg-surface-container-high border border-outline-variant/15 text-on-surface-variant text-sm font-bold transition-all shadow-sm active:scale-95"
+        >
+          {showAnalytics ? (
+            <>
+              <ChevronUpIcon className="w-4 h-4" />
+              Hide Statistics
+            </>
+          ) : (
+            <>
+              <ChartBarIcon className="w-4 h-4 text-primary" />
+              Show Statistics
+            </>
+          )}
+        </button>
       </div>
 
-      {/* Top Row: Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {/* Stat Card 1 */}
-        <div className="bg-surface-container-lowest rounded-[1.5rem] p-6 shadow-minimal relative overflow-hidden group border border-outline-variant/10">
-          <div className="absolute top-0 left-0 w-full h-1 bg-error"></div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-on-surface-variant uppercase tracking-wider text-label-md">
-              Total Pending
-            </h3>
-            <PresentationChartLineIcon className="w-8 h-8 text-error bg-error-container/20 p-1.5 rounded-full" />
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-extrabold text-on-surface font-headline">
-              24
-            </span>
-            <span className="text-xs font-medium text-error flex items-center bg-error-container/20 px-2 py-0.5 rounded-full">
-              <ArrowTrendingUpIcon className="w-3.5 h-3.5 mr-1" />
-              +5 today
-            </span>
-          </div>
+      {/* ── ANALYTICS DASHBOARD ── */}
+      {showAnalytics && (
+        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+          <ReportAnalytics key={refreshKey} />
+        </div>
+      )}
+
+      {/* ── SEARCH & FILTERS BAR ── */}
+      <div className="bg-surface-container-low rounded-xl p-4 mb-6 flex flex-wrap gap-4 items-center border border-outline-variant/15 shadow-sm">
+        <div className="text-xs font-bold text-on-surface mr-2 tracking-wide uppercase">
+          Filters
         </div>
 
-        {/* Stat Card 2 */}
-        <div className="bg-surface-container-lowest rounded-[1.5rem] p-6 shadow-minimal relative overflow-hidden group border border-outline-variant/10">
-          <div className="absolute top-0 left-0 w-full h-1 bg-primary"></div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-on-surface-variant uppercase tracking-wider text-label-md">
-              Resolved Today
-            </h3>
-            <CheckCircleIcon className="w-8 h-8 text-primary bg-primary-container/20 p-1.5 rounded-full" />
+        {/* Search by Target Name */}
+        <div className="relative flex-1 min-w-[250px] max-w-[400px]">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <MagnifyingGlassIcon className="h-5 w-5 text-on-surface-variant" />
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-extrabold text-on-surface font-headline">
-              142
-            </span>
-            <span className="text-xs font-medium text-secondary flex items-center">
-              On track
-            </span>
-          </div>
-        </div>
-
-        {/* Stat Card 3 */}
-        <div className="bg-surface-container-lowest rounded-[1.5rem] p-6 shadow-minimal relative overflow-hidden group border border-outline-variant/10">
-          <div className="absolute top-0 left-0 w-full h-1 bg-secondary"></div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-on-surface-variant uppercase tracking-wider text-label-md">
-              Avg. Response
-            </h3>
-            <ClockIcon className="w-8 h-8 text-secondary bg-secondary-container/30 p-1.5 rounded-full" />
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-extrabold text-on-surface font-headline">
-              12m
-            </span>
-            <span className="text-xs font-medium text-tertiary flex items-center">
-              -2m vs yesterday
-            </span>
-          </div>
-        </div>
-
-        {/* Stat Card 4 */}
-        <div className="bg-surface-container-lowest rounded-[1.5rem] p-6 shadow-minimal relative overflow-hidden group border border-outline-variant/10">
-          <div className="absolute top-0 left-0 w-full h-1 bg-primary"></div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-on-surface-variant uppercase tracking-wider text-label-md">
-              Accuracy
-            </h3>
-            <ShieldCheckIcon className="w-8 h-8 text-primary bg-primary-container/20 p-1.5 rounded-full" />
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-extrabold text-on-surface font-headline">
-              98.5%
-            </span>
-            <span className="text-xs font-medium text-secondary flex items-center">
-              Peer reviewed
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Middle Row: Charts & Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Bar Chart (Visual Fake) */}
-        <div className="bg-surface-container-lowest rounded-[1.5rem] p-6 shadow-minimal border border-outline-variant/10 lg:col-span-2">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
-            <h2 className="text-xl font-bold text-on-surface font-headline">
-              System Traffic &amp; Moderation Actions
-            </h2>
-            <select className="bg-surface-container-low border-none rounded-lg text-sm text-on-surface-variant py-1.5 pl-3 pr-8 focus:ring-1 focus:ring-primary outline-none">
-              <option>Last 7 Days</option>
-              <option>Last 30 Days</option>
-            </select>
-          </div>
-
-          <div className="h-64 flex items-end gap-2 mt-4 px-2">
-            {/* Simulated Bar Chart Columns */}
-            <BarColumn day="Mon" b1="40%" b2="60%" />
-            <BarColumn day="Tue" b1="50%" b2="45%" />
-            <BarColumn day="Wed" b1="30%" b2="80%" />
-            <BarColumn day="Thu" b1="60%" b2="55%" />
-            <BarColumn day="Fri" b1="80%" b2="40%" />
-            <BarColumn day="Sat" b1="20%" b2="30%" />
-            <BarColumn day="Sun" b1="25%" b2="20%" />
-          </div>
-
-          <div className="flex items-center gap-6 mt-8 justify-center">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-primary"></span>
-              <span className="text-sm text-on-surface-variant font-medium">
-                Auto-Resolved
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-secondary-container"></span>
-              <span className="text-sm text-on-surface-variant font-medium">
-                Manual Review
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Moderator Activity List */}
-        <div className="bg-surface-container-lowest rounded-[1.5rem] p-6 shadow-minimal border border-outline-variant/10 lg:col-span-1 flex flex-col">
-          <h2 className="text-xl font-bold text-on-surface font-headline mb-6">
-            Moderator Activity
-          </h2>
-          <div className="flex-1 space-y-4">
-            <ModeratorRow
-              name="Sarah Jenkins"
-              status="Active now"
-              count={64}
-              image="https://lh3.googleusercontent.com/aida-public/AB6AXuDS8QvuFKgEJhqf8TxSe3HkOu7syUGYvS0tuVhnWL9ATihmkq7iRGwWOEhyKgSjpV8z1PHNSrwua5zXibez40Hlmfs8JJa5k7wNy29Ejl2cnK6E_Fo4BMsLr-g8BOygQCfNTbeGBzFMuQcxwap9_OFdiqEC3y2LJtlIiYvvrYkeTo98qrIIY7I73HgEQ36_JnmBMyB9sk2_LdaJ0D71TCW52egspc4GXTnT-L8OSGLXg26Q5tA7xPs0LY_i88j0pY2GTyLtXfx-J7Mv"
-              initials="SJ"
-            />
-            <ModeratorRow
-              name="Marcus Chen"
-              status="Active now"
-              count={52}
-              image="https://lh3.googleusercontent.com/aida-public/AB6AXuAoYCsM3edQns2QwQzr24SLm3z20yV364vFJD4lEM7fN_S7q6ZzHQGey57KsCOeU5a4CqKHQUcyJjWr8DA8JrkByJ3W2J8m1KuzBpBnIbhdqbMs0ybnYfqB65_QUsKtebXtGL3QhKWauZe_wN5IF6wpjUsde-mD7j-rfi3UzyAUDURjL0DbMWQfisoC2JFF6hfpI_yoT6WsZHZ-CmPN2ITrUv2bro95QUPgP7ZKt0mP6fzVueEK6s9GTxfk_RsDC0UOxcbkZCmCA6kg"
-              initials="MC"
-            />
-            <ModeratorRow
-              name="Elena Rodriguez"
-              status="Away 2h"
-              count={28}
-              initials="EL"
-            />
-            <ModeratorRow
-              name="David Kim"
-              status="Offline"
-              count={14}
-              initials="DK"
-            />
-          </div>
-          <Button
-            variant="ghost"
-            className="w-full mt-4 text-primary font-bold hover:bg-primary/10"
-          >
-            View All Staff
-          </Button>
-        </div>
-      </div>
-
-      {/* Reports Queue */}
-      <div className="bg-surface-container-lowest rounded-[1.5rem] shadow-minimal border border-outline-variant/10 overflow-hidden">
-        <div className="p-6 border-b border-outline-variant/15 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-on-surface font-headline">
-            Pending Queue{" "}
-          </h2>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs font-semibold"
-            >
-              Filter
-            </Button>
-            <Button
-              size="sm"
-              className="bg-primary text-on-primary text-xs font-semibold hover:bg-primary-dim"
-            >
-              Auto-Assign
-            </Button>
-          </div>
-        </div>
-
-        <div className="divide-y divide-outline-variant/10">
-          <ReportRow
-            type="Harassment"
-            target="User Profile"
-            time="10 mins ago"
-            severity="High"
-            reporter="User-8921"
-          />
-          <ReportRow
-            type="Spam"
-            target="Group Chat #41"
-            time="25 mins ago"
-            severity="Medium"
-            reporter="System Auto"
-          />
-          <ReportRow
-            type="Scam"
-            target="Direct Message"
-            time="1 hour ago"
-            severity="Critical"
-            reporter="User-1042"
+          <input
+            type="text"
+            placeholder="Tìm theo tên người dùng hoặc nhóm..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 text-sm bg-surface-container-lowest border border-outline-variant/15 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
           />
         </div>
+
+        {/* Target Type Filter */}
+        <select
+          value={filterTargetType}
+          onChange={(e) => {
+            setFilterTargetType(e.target.value);
+            setCurrentPage(0);
+          }}
+          className="bg-surface-container-lowest border border-outline-variant/15 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary transition-all"
+        >
+          <option value="ALL">Tất cả đối tượng</option>
+          <option value="USER">Người dùng (USER)</option>
+          <option value="GROUP">Nhóm (GROUP)</option>
+        </select>
+
+        {/* Reason Filter */}
+        <select
+          value={filterReason}
+          onChange={(e) => {
+            setFilterReason(e.target.value);
+            setCurrentPage(0);
+          }}
+          className="bg-surface-container-lowest border border-outline-variant/15 rounded-lg px-3 py-2 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary transition-all"
+        >
+          {REASON_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+
+        <button
+          onClick={() => {
+            setSearchTerm("");
+            setFilterStatus("PENDING");
+            setFilterTargetType("ALL");
+            setFilterReason("ALL");
+            setCurrentPage(0);
+            setRefreshKey(prev => prev + 1);
+            if (searchTerm === "" && filterStatus === "PENDING" && filterTargetType === "ALL" && filterReason === "ALL" && currentPage === 0) {
+              loadData();
+            }
+          }}
+          className="p-2 bg-surface-container-lowest border border-outline-variant/15 rounded-lg text-on-surface-variant hover:text-primary hover:border-primary transition-all shadow-sm"
+          title="Reset & Refresh"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
+        </button>
+
+        <div className="ml-auto text-sm text-on-surface-variant font-medium">
+          Showing{" "}
+          <span className="text-on-surface font-bold">
+            {pagination.totalElements === 0
+              ? 0
+              : pagination.page * 20 + 1}
+            -
+            {Math.min(
+              (pagination.page + 1) * 20,
+              pagination.totalElements,
+            )}
+          </span>{" "}
+          of{" "}
+          <span className="text-on-surface font-bold">
+            {pagination.totalElements}
+          </span>{" "}
+          reports
+        </div>
       </div>
+
+      {/* ── STATUS TABS ── */}
+      <div className="flex gap-2 mb-6 bg-surface-container-low p-1.5 rounded-2xl w-fit border border-outline-variant/10 shadow-sm">
+        <button
+          onClick={() => handleFilterStatusChange("PENDING")}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${filterStatus === "PENDING"
+              ? "bg-primary text-white shadow-md shadow-primary/20 scale-105"
+              : "text-on-surface-variant hover:bg-surface-container-highest"
+            }`}
+        >
+          Pending
+        </button>
+        <button
+          onClick={() => handleFilterStatusChange("IN_PROGRESS")}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${filterStatus === "IN_PROGRESS"
+              ? "bg-amber-500 text-white shadow-md shadow-amber-500/20 scale-105"
+              : "text-on-surface-variant hover:bg-surface-container-highest"
+            }`}
+        >
+          In Progress
+        </button>
+        <button
+          onClick={() => handleFilterStatusChange("RESOLVED")}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${filterStatus === "RESOLVED"
+              ? "bg-primary text-white shadow-md shadow-secondary/20 scale-105"
+              : "text-on-surface-variant hover:bg-surface-container-highest"
+            }`}
+        >
+          Resolved
+        </button>
+        <button
+          onClick={() => handleFilterStatusChange("REJECTED")}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${filterStatus === "REJECTED"
+              ? "bg-error text-white shadow-md shadow-error/20 scale-105"
+              : "text-on-surface-variant hover:bg-surface-container-highest"
+            }`}
+        >
+          Rejected
+        </button>
+        <button
+          onClick={() => handleFilterStatusChange(null)}
+          className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${filterStatus === null
+              ? "bg-on-surface text-surface shadow-md scale-105"
+              : "text-on-surface-variant hover:bg-surface-container-highest"
+            }`}
+        >
+          All Reports
+        </button>
+      </div>
+
+      {/* ── REPORTS LIST ── */}
+      <div className="bg-surface-container-lowest rounded-[2.5rem] border border-outline-variant/10 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse table-fixed">
+            <thead>
+              <tr className="bg-surface-container-low/50">
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+                  Reporter
+                </th>
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+                  Target (User/Group)
+                </th>
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+                  Reason
+                </th>
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+                  Evidence
+                </th>
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+                  Date
+                </th>
+                <th className="px-6 py-5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10 text-right">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-outline-variant/10">
+              {reports.length > 0 ? (
+                reports.map((report) => (
+                  <ReportRow
+                    key={report.id}
+                    report={report}
+                    onReview={() => handleReview(report)}
+                  />
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="px-6 py-20 text-center">
+                    {loading ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+                        <p className="text-on-surface-variant font-medium animate-pulse">
+                          Loading reports...
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <p className="text-on-surface-variant text-lg">
+                          No reports found.
+                        </p>
+                        <p className="text-sm text-on-surface-variant/60">
+                          Try adjusting your filters or search term.
+                        </p>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {pagination.totalPages > 1 && (
+          <div className="px-6 py-6 border-t border-outline-variant/10 bg-surface-container-low/30">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={pagination.totalPages}
+              onPageChange={handlePageChange}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Modals */}
+      {selectedReport && (
+        <ReportActionModal
+          isOpen={!!selectedReport}
+          onClose={handleModalClose}
+          report={selectedReport}
+          onSuccess={handleModalSuccess}
+        />
+      )}
     </>
   );
 }
