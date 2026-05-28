@@ -60,6 +60,8 @@ import { useShallow } from "zustand/react/shallow";
 import ChatInfoPanel from "@/components/chat/ChatInfoPanel";
 import PollMessagePreview from "@/components/chat/PollMessagePreview";
 import PollDetailsModal from "@/components/ui/group/PollDetailsModal";
+import FileMessageBubble from "@/components/chat/FileMessageBubble";
+import TxtFileViewerModal from "@/components/chat/TxtFileViewerModal";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -197,6 +199,7 @@ export default function ChatPage() {
   const [mediaMessages, setMediaMessages] = useState<MessageDTO[]>([]);
   const [messageText, setMessageText] = useState("");
   const [conversationInfo, setConversationInfo] = useState<any>(null);
+  const [previewingTxtFile, setPreviewingTxtFile] = useState<{ fileName: string; content: string } | null>(null);
 
   // Group Link Info Cache
   const [groupLinkCache, setGroupLinkCache] = useState<Record<string, any>>({});
@@ -2517,7 +2520,11 @@ export default function ChatPage() {
                                   )
                                 ) : (
                                   <div
-                                    className={`relative max-w-full flex flex-col p-1.5 px-2 border shadow-sm ${isMine
+                                    className={`relative max-w-full flex flex-col p-1.5 px-2 border shadow-sm ${
+                                      msg.type === "file" && !isRevoked
+                                        ? "w-[65%] min-w-[320px] max-w-[480px]"
+                                        : ""
+                                    } ${isMine
                                       ? "bg-blue-50/80 shadow-blue-900/5 items-end"
                                       : "bg-white shadow-gray-900/5 items-start"
                                       } ${conversationInfo?.isHighlightEnabled &&
@@ -2969,42 +2976,16 @@ export default function ChatPage() {
                                       msg.metadata
                                         ?.callType ? null /* Rendered outside bubble wrapper above */ : msg.type ===
                                           "file" ? (
-                                      <div
-                                        className={`flex items-center justify-between gap-4 px-2 py-1 transition w-80 max-w-full group`}
-                                      >
-                                        <div
-                                          className="flex items-center gap-3 flex-1 min-w-0"
-                                          onClick={() => {
-                                            if (isMultiSelectMode) return;
-                                            window.open(
-                                              getMediaUrl(msg.content),
-                                              "_blank",
-                                            );
-                                          }}
-                                        >
-                                          <div className="w-10 h-12 bg-blue-500 rounded-lg flex items-center justify-center shrink-0 shadow-sm relative overflow-hidden">
-                                            <DocumentIcon className="w-6 h-6 text-white" />
-                                          </div>
-                                          <div className="min-w-0 flex-1">
-                                            <p className="text-[14px] font-bold text-gray-800 truncate leading-tight">
-                                              {msg.metadata?.fileName ||
-                                                "Tệp đính kèm"}
-                                            </p>
-                                          </div>
-                                        </div>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDownload(
-                                              getMediaUrl(msg.content),
-                                              msg.metadata?.fileName || "file",
-                                            );
-                                          }}
-                                          className="w-8 h-8 bg-white border border-gray-100 rounded-md flex items-center justify-center text-gray-600 hover:bg-gray-50 transition"
-                                        >
-                                          <ArrowDownTrayIcon className="w-4 h-4" />
-                                        </button>
-                                      </div>
+                                      // Đây là định dạng hiển thị file theo đuôi file (word, pdf, excel, image, etc.)
+                                      <FileMessageBubble
+                                        msg={msg as any} senderName={senderName} senderAvatar={senderAvatar}
+                                        isMultiSelectMode={isMultiSelectMode}
+                                        getMediaUrl={getMediaUrl}
+                                        handleDownload={handleDownload}
+                                        onPreviewTxt={(fileName, content) => {
+                                          setPreviewingTxtFile({ fileName, content });
+                                        }}
+                                      />
                                     ) : (
                                       (() => {
                                         const groupMatch =
@@ -4476,6 +4457,14 @@ export default function ChatPage() {
           }}
           messages={forwardingMessage ? [forwardingMessage] : forwardingMessages}
           currentUser={currentUser}
+        />
+      )}
+      {previewingTxtFile && (
+        <TxtFileViewerModal
+          isOpen={!!previewingTxtFile}
+          onClose={() => setPreviewingTxtFile(null)}
+          fileName={previewingTxtFile.fileName}
+          content={previewingTxtFile.content}
         />
       )}
       <ChatEffects type={activeEffect} />
