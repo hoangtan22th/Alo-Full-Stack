@@ -15,6 +15,8 @@ import {
   TrashIcon,
   XMarkIcon,
   ShieldExclamationIcon,
+  ArrowUturnRightIcon,
+  QueueListIcon,
 } from "react-native-heroicons/outline";
 import { MessageDTO } from "../../services/messageService";
 import { EMOJI_MAP } from "../../constants/Chat";
@@ -33,6 +35,8 @@ interface MessageContextMenuProps {
   onUnpin: () => void;
   onReply: (msg: MessageDTO) => void;
   onReport?: (msg: MessageDTO) => void;
+  onForward?: (msg: MessageDTO) => void;
+  onSelectMultiple?: (msg: MessageDTO) => void;
   isPinned: boolean;
   canPin?: boolean;
   currentUserId: string;
@@ -52,6 +56,8 @@ export const MessageContextMenu = ({
   onUnpin,
   onReply,
   onReport,
+  onForward,
+  onSelectMultiple,
   isPinned,
   canPin = true,
   currentUserId,
@@ -61,7 +67,9 @@ export const MessageContextMenu = ({
   const screenHeight = Dimensions.get("window").height;
   const isTopHalf = layout.y < screenHeight / 2;
   const isSender = selectedMsg.senderId === currentUserId;
-  const hasMyReaction = selectedMsg.reactions?.some((r: any) => r.userId === currentUserId);
+  const hasMyReaction = selectedMsg.reactions?.some(
+    (r: any) => r.userId === currentUserId,
+  );
 
   return (
     <Modal
@@ -156,11 +164,11 @@ export const MessageContextMenu = ({
                     layout.y -
                       (isSender
                         ? selectedMsg.type === "image"
-                          ? 200
-                          : 230
+                          ? 310
+                          : 350
                         : selectedMsg.type === "image"
-                          ? 150
-                          : 190),
+                          ? 310
+                          : 350),
                   ),
               alignItems: isSender ? "flex-end" : "flex-start",
             }}
@@ -201,15 +209,35 @@ export const MessageContextMenu = ({
                 onPress={() => onReply(selectedMsg)}
                 className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
               >
-                <ArrowUturnLeftIcon
-                  size={18}
-                  color="#4b5563"
-                  style={{ transform: [{ scaleX: -1 }] }}
-                />
+                <ArrowUturnLeftIcon size={18} color="#4b5563" />
                 <Text className="text-[14px] font-medium text-gray-700">
                   Trả lời
                 </Text>
               </TouchableOpacity>
+
+              {!selectedMsg.isRevoked && onForward && (
+                <TouchableOpacity
+                  onPress={() => onForward(selectedMsg)}
+                  className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
+                >
+                  <ArrowUturnRightIcon size={18} color="#4b5563" />
+                  <Text className="text-[14px] font-medium text-gray-700">
+                    Chuyển tiếp
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {onSelectMultiple && (
+                <TouchableOpacity
+                  onPress={() => onSelectMultiple(selectedMsg)}
+                  className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
+                >
+                  <QueueListIcon size={18} color="#4b5563" />
+                  <Text className="text-[14px] font-medium text-gray-700">
+                    Chọn nhiều
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               {!selectedMsg.isRevoked && selectedMsg.type === "text" && (
                 <TouchableOpacity
@@ -223,8 +251,8 @@ export const MessageContextMenu = ({
                 </TouchableOpacity>
               )}
 
-              {canPin && (
-                isPinned ? (
+              {canPin &&
+                (isPinned ? (
                   <TouchableOpacity
                     onPress={onUnpin}
                     className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
@@ -244,8 +272,7 @@ export const MessageContextMenu = ({
                       Ghim tin nhắn
                     </Text>
                   </TouchableOpacity>
-                )
-              )}
+                ))}
 
               {isSender && !selectedMsg.isRevoked && (
                 <TouchableOpacity
