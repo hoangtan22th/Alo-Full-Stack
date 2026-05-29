@@ -27,6 +27,7 @@ export interface MessageDTO {
     fileSize?: number;
     fileType?: string;
     pollId?: string;
+    imageGroup?: any[];
   };
   isRead: boolean;
   isRevoked?: boolean;
@@ -407,6 +408,72 @@ export const messageService = {
     } catch (error) {
       console.error("Lỗi upload files thuần túy:", error);
       return [];
+    }
+  },
+
+  async sendImagesMessage({
+    conversationId,
+    files,
+    senderName,
+    replyTo,
+  }: {
+    conversationId: string;
+    files: any[];
+    senderName?: string;
+    replyTo?: any;
+  }): Promise<MessageDTO | null> {
+    try {
+      const formData = new FormData();
+      formData.append("conversationId", conversationId);
+      if (senderName) formData.append("senderName", senderName);
+      if (replyTo) formData.append("replyTo", JSON.stringify(replyTo));
+
+      const widths: number[] = [];
+      const heights: number[] = [];
+
+      files.forEach((file) => {
+        const name = file.name || file.fileName || `image_${Date.now()}.jpg`;
+        const type = file.mimeType || file.type || "image/jpeg";
+        formData.append("files", {
+          uri: file.uri,
+          name,
+          type,
+        } as any);
+
+        widths.push(file.width || 0);
+        heights.push(file.height || 0);
+      });
+
+      formData.append("widths", JSON.stringify(widths));
+      formData.append("heights", JSON.stringify(heights));
+
+      const raw = await api.post<any, any>(`/messages/upload/images`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return extractSentMessage(raw);
+    } catch (error) {
+      console.error("Lỗi gửi album ảnh:", error);
+      return null;
+    }
+  },
+
+  async revokeImageInGroup(messageId: string, index: number): Promise<boolean> {
+    try {
+      await api.patch(`/messages/${messageId}/images/${index}/revoke`);
+      return true;
+    } catch (error) {
+      console.error("Lỗi thu hồi ảnh trong nhóm:", error);
+      return false;
+    }
+  },
+
+  async deleteImageInGroupForMe(messageId: string, index: number): Promise<boolean> {
+    try {
+      await api.delete(`/messages/${messageId}/images/${index}/me`);
+      return true;
+    } catch (error) {
+      console.error("Lỗi xóa ảnh phía tôi:", error);
+      return false;
     }
   },
 };

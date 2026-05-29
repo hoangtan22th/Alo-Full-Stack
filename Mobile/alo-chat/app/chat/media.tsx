@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { messageService, MessageDTO } from "../../services/messageService";
 import { openRemoteFile } from "../../utils/fileUtils";
+import { useAuth } from "../../contexts/AuthContext";
 
 const { width } = Dimensions.get("window");
 const COLUMN_WIDTH = width / 3;
@@ -42,11 +43,40 @@ export default function MediaScreen() {
   const { id, tab } = useLocalSearchParams();
   const initialTab = tab === "file" ? "file" : "media";
 
+  const { user } = useAuth();
+  const currentUserId = user?.id || user?._id || user?.userId || null;
+
   const [activeTab, setActiveTab] = useState<"media" | "file">(initialTab);
-  const [mediaList, setMediaList] = useState<MessageDTO[]>([]);
+  const [mediaList, setMediaList] = useState<any[]>([]);
   const [fileList, setFileList] = useState<MessageDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+
+  const flattenMedia = useCallback((msgs: MessageDTO[]) => {
+    const list: any[] = [];
+    msgs.forEach((m) => {
+      if (m.isRevoked) return;
+      if (m.metadata?.imageGroup) {
+        m.metadata.imageGroup.forEach((img: any, idx: number) => {
+          if (img.isRevoked) return;
+          if (img.deletedByUsers?.includes(currentUserId)) return;
+          list.push({
+            _id: `${m._id}_img_${idx}`,
+            content: img.url,
+            type: "image",
+            createdAt: m.createdAt,
+            senderId: m.senderId,
+            parentMessageId: m._id,
+            albumIndex: idx,
+            isRevoked: img.isRevoked,
+          });
+        });
+      } else {
+        list.push(m);
+      }
+    });
+    return list;
+  }, [currentUserId]);
 
   const fetchMedia = async () => {
     try {
@@ -60,7 +90,7 @@ export default function MediaScreen() {
       const sortedRes = [...messages].sort((a, b) =>
         (b.createdAt || "").localeCompare(a.createdAt || ""),
       );
-      setMediaList(sortedRes);
+      setMediaList(flattenMedia(sortedRes));
     } catch (error) {
       console.error("Lỗi lấy media:", error);
     } finally {
@@ -102,13 +132,15 @@ export default function MediaScreen() {
       if (newMsg.conversationId === id && !newMsg.isRevoked) {
         if (newMsg.type === "image") {
           setMediaList((prev) => {
-            if (prev.find((m) => m._id === newMsg._id)) return prev;
-            const updated = [newMsg, ...prev];
+            const filtered = prev.filter(item => 
+              item.parentMessageId ? item.parentMessageId !== newMsg._id : item._id !== newMsg._id
+            );
+            const flattenedNew = flattenMedia([newMsg]);
+            const updated = [...flattenedNew, ...filtered];
             return updated
               .sort((a, b) =>
                 (b.createdAt || "").localeCompare(a.createdAt || ""),
-              )
-              .slice(0, 200);
+              );
           });
         } else if (newMsg.type === "file") {
           setFileList((prev) => {
@@ -124,9 +156,29 @@ export default function MediaScreen() {
       }
     };
 
+    const handleMessageUpdated = (data: any) => {
+      const updatedMsg = data.message || data;
+      if (updatedMsg && updatedMsg.conversationId === id) {
+        if (updatedMsg.type === "image") {
+          setMediaList((prev) => {
+            const filtered = prev.filter(item => 
+              item.parentMessageId ? item.parentMessageId !== updatedMsg._id : item._id !== updatedMsg._id
+            );
+            const flattenedNew = flattenMedia([updatedMsg]);
+            const updated = [...flattenedNew, ...filtered];
+            return updated.sort((a, b) =>
+              (b.createdAt || "").localeCompare(a.createdAt || ""),
+            );
+          });
+        }
+      }
+    };
+
     socket.on("message-received", handleMessageReceived);
+    socket.on("message-updated", handleMessageUpdated);
     return () => {
       socket.off("message-received", handleMessageReceived);
+      socket.off("message-updated", handleMessageUpdated);
     };
   }, [socket, id]);
 

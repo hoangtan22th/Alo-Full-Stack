@@ -25,6 +25,7 @@ interface MessageContextMenuProps {
   visible: boolean;
   selectedMsg: MessageDTO | null;
   layout: { x: number; y: number; width: number; height: number } | null;
+  selectedImageIndex?: number | null;
   onClose: () => void;
   onReact: (emojiKey: string) => void;
   onClearReactions: () => void;
@@ -46,6 +47,7 @@ export const MessageContextMenu = ({
   visible,
   selectedMsg,
   layout,
+  selectedImageIndex,
   onClose,
   onReact,
   onClearReactions,
@@ -121,7 +123,7 @@ export const MessageContextMenu = ({
                   >
                     {selectedMsg.replyTo.type === "text"
                       ? selectedMsg.replyTo.content
-                      : selectedMsg.replyTo.type === "image"
+                      : selectedMsg.replyTo.type === "image" || (selectedMsg.replyTo.type === "file" && ["jpg", "jpeg", "png", "gif", "webp", "heic", "heif"].includes(selectedMsg.replyTo.content.split(".").pop()?.toLowerCase() || ""))
                         ? selectedMsg.replyTo.content === "[Album Ảnh]"
                           ? "[Album Ảnh]"
                           : "[Hình ảnh]"
@@ -134,11 +136,25 @@ export const MessageContextMenu = ({
                   Tin nhắn đã bị thu hồi
                 </Text>
               ) : selectedMsg.type === "image" ? (
-                <Image
-                  source={{ uri: selectedMsg.content }}
-                  className="w-[260px] h-[200px] rounded-[22px] border border-gray-100/50"
-                  resizeMode="cover"
-                />
+                (() => {
+                  let imageUri = selectedMsg.content;
+                  if (selectedMsg.metadata?.imageGroup && selectedImageIndex !== undefined && selectedImageIndex !== null) {
+                    const groupItem = selectedMsg.metadata.imageGroup[selectedImageIndex];
+                    if (groupItem && !groupItem.isRevoked) {
+                      imageUri = groupItem.url;
+                    }
+                  } else if (selectedMsg.metadata?.imageGroup && selectedMsg.metadata.imageGroup.length > 0) {
+                    const active = selectedMsg.metadata.imageGroup.find((img: any) => !img.isRevoked);
+                    if (active) imageUri = active.url;
+                  }
+                  return (
+                    <Image
+                      source={{ uri: imageUri }}
+                      className="w-[260px] h-[200px] rounded-[22px] border border-gray-100/50"
+                      resizeMode="cover"
+                    />
+                  );
+                })()
               ) : (
                 <Text
                   className={`text-base leading-6 ${
