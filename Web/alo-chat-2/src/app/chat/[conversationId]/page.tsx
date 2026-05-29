@@ -207,6 +207,16 @@ export default function ChatPage() {
   const [mediaMessages, setMediaMessages] = useState<MessageDTO[]>([]);
   const [messageText, setMessageText] = useState("");
   const [conversationInfo, setConversationInfo] = useState<any>(null);
+  const latestReminderMessageId = useMemo(() => {
+    if (!messages || messages.length === 0 || !conversationInfo?.isGroup) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.type === "text" && !m.isRevoked && parseReminderFromText(m.content) !== null) {
+        return m._id;
+      }
+    }
+    return null;
+  }, [messages, conversationInfo?.isGroup]);
   const [previewingTxtFile, setPreviewingTxtFile] = useState<{ fileName: string; content: string } | null>(null);
 
   // Group Link Info Cache
@@ -3081,33 +3091,38 @@ export default function ChatPage() {
                                         const parsed = conversationInfo?.isGroup ? parseReminderFromText(msg.content) : null;
 
                                         return (
-                                          <div className="flex flex-col gap-1.5">
+                                          <div className="flex flex-col">
                                             <div
                                               className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap text-justify"
                                             >
                                               {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
                                             </div>
-                                            {parsed && (
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setQuickReminderPreset({
-                                                    title: parsed.title,
-                                                    date: parsed.date,
-                                                    time: parsed.time
-                                                  });
-                                                  setShowQuickReminderModal(true);
-                                                }}
-                                                className={`mt-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all duration-200 select-none shadow-sm active:scale-[0.98]
-                                                  ${isMine 
-                                                    ? "bg-white/15 border border-white/10 hover:bg-white/25 text-white active:bg-white/30" 
-                                                    : "bg-blue-50/80 border border-blue-100 hover:bg-blue-100/80 text-blue-600 active:bg-blue-150"
-                                                  }
+                                            {parsed && msg._id === latestReminderMessageId && (
+                                              <div 
+                                                className={`mt-2 pt-2 border-t-2 w-full flex justify-center
+                                                  ${isMine ? "border-blue-200" : "border-gray-300"}
                                                 `}
                                               >
-                                                <span>📅</span>
-                                                <span>Tạo nhắc hẹn: {parsed.originalMatch}</span>
-                                              </button>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setQuickReminderPreset({
+                                                      title: parsed.title,
+                                                      date: parsed.date,
+                                                      time: parsed.time
+                                                    });
+                                                    setShowQuickReminderModal(true);
+                                                  }}
+                                                  className={`text-[12px] font-black tracking-wide hover:underline transition-all select-none active:opacity-80 py-0.5
+                                                    ${isMine 
+                                                      ? "text-blue-800 hover:text-blue-950" 
+                                                      : "text-blue-800 hover:text-blue-950"
+                                                    }
+                                                  `}
+                                                >
+                                                  Tạo nhắc hẹn
+                                                </button>
+                                              </div>
                                             )}
                                           </div>
                                         );
