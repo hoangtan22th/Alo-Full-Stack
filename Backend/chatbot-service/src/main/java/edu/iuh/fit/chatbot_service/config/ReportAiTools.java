@@ -4,7 +4,7 @@ import edu.iuh.fit.chatbot_service.client.ReportClient;
 import edu.iuh.fit.common_service.dto.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.tool.ToolDefinition;
+import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.stereotype.Component;
 
 @Component("reportAiTools")
