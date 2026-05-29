@@ -4036,7 +4036,7 @@ export default function ChatPage() {
                       </>
                     )}
 
-                    <div className="max-w-4xl max-h-[85vh] flex flex-col items-center">
+                    <div className="max-w-4xl max-h-[85vh] flex flex-col items-center justify-center">
                       {currentImg?.isRevoked ? (
                         <div className="flex flex-col items-center justify-center text-gray-500">
                           <ArrowUturnLeftIcon className="w-20 h-20 mb-4 opacity-20" />
@@ -4048,7 +4048,7 @@ export default function ChatPage() {
                         currentImg && (
                           <img
                             src={getMediaUrl(currentImg.url)}
-                            className="max-w-full max-h-full object-contain shadow-2xl rounded-sm"
+                            className="max-w-full max-h-[70vh] object-contain shadow-2xl rounded-sm"
                             alt="preview"
                           />
                         )
