@@ -30,7 +30,7 @@ public class ReportAnalysisService {
             - Giả danh người quen nhờ chuyển khoản khẩn cấp vào số tài khoản lạ, có biểu hiện bất thường.
             
             SỬ DỤNG CÔNG CỤ TRA CỨU TIỀN ÁN (FUNCTION CALLING):
-            - Bạn bắt buộc phải gọi công cụ `countTargetViolationsTool` truyền vào `targetId` để lấy số lần vi phạm trong quá khứ của đối tượng bị báo cáo.
+            - Bạn bắt buộc phải gọi công cụ `countTargetViolations` truyền vào `targetId` để lấy số lần vi phạm trong quá khứ của đối tượng bị báo cáo.
             - Nếu đối tượng đã có tiền án vi phạm cũ trước đó >= 1 lần, bạn BẮT BUỘC đề xuất mức phạt cao nhất là "BAN" (nếu là User) hoặc "DISBAND_GROUP" (nếu là Group lừa đảo).
             
             CÁC HÀNH ĐỘNG ĐỀ XUẤT (suggestedAction):
@@ -80,13 +80,13 @@ public class ReportAnalysisService {
                 userPrompt.append("(Không có tin nhắn bằng chứng nào được đính kèm)\n");
             }
 
-            log.info("[AI Report Analysis] Invoking ChatModel with countTargetViolationsTool function calling...");
+            log.info("[AI Report Analysis] Invoking ChatModel with countTargetViolations function calling...");
 
             // Call ChatModel with Function Tool calling
             String llmResponse = chatClient.prompt()
                     .system(REPORT_ANALYSIS_SYSTEM_PROMPT)
                     .user(userPrompt.toString())
-                    .tools("countTargetViolationsTool") // Register the count violations tool bean
+                    .tools("reportAiTools") // Register the reportAiTools bean containing the @Tool method
                     .call()
                     .content();
 
