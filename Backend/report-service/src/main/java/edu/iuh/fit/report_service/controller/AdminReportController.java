@@ -72,4 +72,10 @@ public class AdminReportController {
         ReportStatisticsResponse statistics = reportService.getStatistics();
         return ResponseEntity.ok(ApiResponse.success(statistics));
     }
+
+    @GetMapping("/count/violations")
+    public ResponseEntity<ApiResponse<Long>> countViolations(@RequestParam String targetId) {
+        long count = reportService.countTargetViolations(targetId);
+        return ResponseEntity.ok(ApiResponse.success(count));
+    }
 }

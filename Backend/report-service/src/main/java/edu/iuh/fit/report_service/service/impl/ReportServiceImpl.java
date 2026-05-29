@@ -561,6 +561,11 @@ public class ReportServiceImpl implements ReportService {
                 .lockedAt(report.getLockedAt())
                 .createdAt(report.getCreatedAt())
                 .updatedAt(report.getUpdatedAt())
+                .snapshotHash(report.getSnapshotHash())
+                .aiSummary(report.getAiSummary())
+                .aiSuggestedAction(report.getAiSuggestedAction())
+                .aiConfidence(report.getAiConfidence())
+                .aiAnalyzedAt(report.getAiAnalyzedAt())
                 .build();
     }
 
@@ -606,5 +611,10 @@ public class ReportServiceImpl implements ReportService {
             log.error("Unexpected error fetching user {}: {}", userId, e.getMessage());
         }
         return UserResponse.builder().id(userId).fullName("Unknown User").build();
+    }
+
+    @Override
+    public long countTargetViolations(String targetId) {
+        return reportRepository.countByTargetIdAndStatus(targetId, ReportStatus.RESOLVED);
     }
 }
