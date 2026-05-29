@@ -35,6 +35,7 @@ interface StatsData {
 }
 
 export default function YearInReviewModal({ isOpen, onClose }: YearInReviewModalProps) {
+  const CURRENT_YEAR = new Date().getFullYear();
   const { userId } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<StatsData | null>(null);
@@ -72,7 +73,7 @@ export default function YearInReviewModal({ isOpen, onClose }: YearInReviewModal
     if (!userId) return;
     try {
       setLoading(true);
-      const res = await groupService.getUserYearlyStats(userId, 2026);
+      const res = await groupService.getUserYearlyStats(userId, CURRENT_YEAR);
       if (res) {
         setStats(res);
         // If there's a top chat partner, fetch their profile details
@@ -320,7 +321,7 @@ export default function YearInReviewModal({ isOpen, onClose }: YearInReviewModal
               </div>
               <h2 className="text-2xl font-black">Chưa sẵn sàng!</h2>
               <p className="text-white/70 text-sm">
-                Bạn chưa có đủ hoạt động trong năm 2026 để tổng hợp Nhìn lại Wrapped. Hãy nhắn tin và chia sẻ nhiều hơn nhé!
+                Bạn chưa có đủ hoạt động trong năm {CURRENT_YEAR} để tổng hợp Nhìn lại Wrapped. Hãy nhắn tin và chia sẻ nhiều hơn nhé!
               </p>
               <button
                 onClick={onClose}
@@ -352,7 +353,7 @@ export default function YearInReviewModal({ isOpen, onClose }: YearInReviewModal
                     </motion.div>
                     <div className="space-y-4">
                       <h1 className="text-4xl font-extrabold tracking-tight uppercase">
-                        Alo-Chat <span className="text-yellow-300 block text-5xl mt-2 filter drop-shadow-[0_4px_6px_rgba(0,0,0,0.3)]">2026</span> Wrapped
+                        Alo-Chat <span className="text-yellow-300 block text-5xl mt-2 filter drop-shadow-[0_4px_6px_rgba(0,0,0,0.3)]">{CURRENT_YEAR}</span> Wrapped
                       </h1>
                       <p className="text-white/80 font-medium text-base px-2 max-w-sm leading-relaxed">
                         Sẵn sàng nhìn lại một hành trình trò chuyện đầy cảm xúc, thói quen thú vị và những người bạn thân thiết nhất của bạn chứ?
@@ -493,7 +494,7 @@ export default function YearInReviewModal({ isOpen, onClose }: YearInReviewModal
                     )}
 
                     <p className="text-white/80 text-sm max-w-[280px] leading-relaxed font-semibold">
-                      Hai bạn đã cùng chia sẻ vô vàn câu chuyện, cảm xúc và đồng hành qua những cột mốc đáng nhớ suốt năm 2026!
+                      Hai bạn đã cùng chia sẻ vô vàn câu chuyện, cảm xúc và đồng hành qua những cột mốc đáng nhớ suốt năm {CURRENT_YEAR}!
                     </p>
                   </div>
                 )}
@@ -506,7 +507,7 @@ export default function YearInReviewModal({ isOpen, onClose }: YearInReviewModal
                         <SparklesIcon className="w-8 h-8 text-yellow-300" />
                       </div>
                       <h2 className="text-2xl font-black uppercase tracking-tight text-white">
-                        Alo-Chat 2026 Wrapped
+                        Alo-Chat {CURRENT_YEAR} Wrapped
                       </h2>
                     </div>
 

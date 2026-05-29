@@ -70,7 +70,7 @@ export default function UserMenu({
           className="w-full text-left px-3 py-2 text-sm text-purple-700 hover:bg-purple-50 hover:text-purple-800 rounded-md transition-colors flex items-center gap-3 font-semibold group"
         >
           <SparklesIcon className="w-5 h-5 text-purple-600 group-hover:scale-110 transition-transform animate-pulse" />
-          Nhìn lại 2026 (Wrapped)
+          Nhìn lại {new Date().getFullYear()} (Wrapped)
         </button>
 
         <button

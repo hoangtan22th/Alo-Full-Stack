@@ -17,6 +17,7 @@ import { groupService } from "../services/groupService";
 import { userService, UserProfileDTO } from "../services/userService";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const CURRENT_YEAR = new Date().getFullYear();
 const SLIDE_DURATION = 5000; // ms per slide
 
 interface StatsData {
@@ -79,7 +80,7 @@ export default function YearInReviewModal({ isOpen, onClose, userId }: Props) {
 
   const fetchStats = async () => {
     try {
-      const res = await groupService.getUserYearlyStats(userId, 2026);
+      const res = await groupService.getUserYearlyStats(userId, CURRENT_YEAR);
       if (res) {
         setStats(res);
         if (res.yearlyTopChatPartnerId) {
@@ -236,7 +237,7 @@ function SlideIntro({ onStart }: { onStart: () => void }) {
         <Text style={{ fontSize: 52 }}>✨</Text>
       </View>
       <Text style={styles.mainTitle}>Alo-Chat{"\n"}
-        <Text style={styles.yearText}>2026</Text>{"\n"}Wrapped
+        <Text style={styles.yearText}>{CURRENT_YEAR}</Text>{"\n"}Wrapped
       </Text>
       <Text style={styles.subText}>
         Sẵn sàng nhìn lại một hành trình trò chuyện đầy cảm xúc và những người bạn thân thiết nhất?
@@ -344,7 +345,7 @@ function SlideSummary({
       <View style={styles.iconBox}>
         <Text style={{ fontSize: 36 }}>✨</Text>
       </View>
-      <Text style={[styles.mainTitle, { fontSize: 22, marginBottom: 16 }]}>Alo-Chat 2026 Wrapped</Text>
+      <Text style={[styles.mainTitle, { fontSize: 22, marginBottom: 16 }]}>Alo-Chat {CURRENT_YEAR} Wrapped</Text>
 
       <View style={styles.summaryCard}>
         <View style={styles.summaryGrid}>

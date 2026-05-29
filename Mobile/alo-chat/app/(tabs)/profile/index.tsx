@@ -137,7 +137,7 @@ export default function MainProfileScreen() {
           {/* Year in Review — Wrapped */}
           <MenuOption
             icon={<Ionicons name="sparkles" size={22} color="#7c3aed" />}
-            title="Nhìn lại 2026 (Wrapped)"
+            title={`Nhìn lại ${new Date().getFullYear()} (Wrapped)`}
             onPress={() => setIsWrappedOpen(true)}
             titleStyle={{ color: "#7c3aed", fontWeight: "700" }}
           />
