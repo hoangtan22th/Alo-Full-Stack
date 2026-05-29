@@ -85,7 +85,11 @@ export const MessageItem = ({
           if (r) messageRefs.current[msg._id] = r as any;
         }}
         activeOpacity={0.8}
-        onLongPress={() => onLongPress()}
+        onLongPress={() => {
+          if (!msg.isRevoked) {
+            onLongPress();
+          }
+        }}
         onPress={() => {
           if (onPress) {
             onPress();
@@ -110,7 +114,7 @@ export const MessageItem = ({
           } ${isAdminHighlighted ? "border-amber-200" : isSelected ? "border-blue-500" : "border-transparent"}`}
           style={[
             msg.type === "poll" ? { width: "100%", alignItems: "center" } : {},
-            isSelected ? { backgroundColor: 'rgba(59, 130, 246, 0.1)' } : {}
+            isSelected ? { backgroundColor: "rgba(59, 130, 246, 0.1)" } : {},
           ]}
         >
           {msg.replyTo && msg.replyTo.messageId && (
@@ -136,7 +140,20 @@ export const MessageItem = ({
               >
                 {msg.replyTo.type === "text"
                   ? msg.replyTo.content
-                  : msg.replyTo.type === "image" || (msg.replyTo.type === "file" && ["jpg", "jpeg", "png", "gif", "webp", "heic", "heif"].includes(msg.replyTo.content.split(".").pop()?.toLowerCase() || ""))
+                  : msg.replyTo.type === "image" ||
+                      (msg.replyTo.type === "file" &&
+                        [
+                          "jpg",
+                          "jpeg",
+                          "png",
+                          "gif",
+                          "webp",
+                          "heic",
+                          "heif",
+                        ].includes(
+                          msg.replyTo.content.split(".").pop()?.toLowerCase() ||
+                            "",
+                        ))
                     ? msg.replyTo.content === "[Album Ảnh]"
                       ? "[Album Ảnh]"
                       : "[Hình ảnh]"
@@ -157,10 +174,14 @@ export const MessageItem = ({
           ) : msg.type === "image" ? (
             msg.metadata?.imageGroup ? (
               (() => {
-                const visibleImages = (msg.metadata.imageGroup || []).map((img: any, idx: number) => ({
-                  ...img,
-                  originalIndex: idx
-                })).filter((img: any) => !img.deletedByUsers?.includes(currentUserId));
+                const visibleImages = (msg.metadata.imageGroup || [])
+                  .map((img: any, idx: number) => ({
+                    ...img,
+                    originalIndex: idx,
+                  }))
+                  .filter(
+                    (img: any) => !img.deletedByUsers?.includes(currentUserId),
+                  );
 
                 if (visibleImages.length === 0) return null;
 
@@ -182,7 +203,8 @@ export const MessageItem = ({
                 return (
                   <View className="flex-row flex-wrap gap-1 justify-start w-[260px] p-1 bg-gray-50 rounded-2xl">
                     {visibleImages.map((img: any, idx: number) => {
-                      const shouldShowPlaceholder = msg.isRevoked || img.isRevoked;
+                      const shouldShowPlaceholder =
+                        msg.isRevoked || img.isRevoked;
                       return (
                         <TouchableOpacity
                           key={idx}
@@ -193,21 +215,26 @@ export const MessageItem = ({
                             if (onPress) {
                               onPress();
                             } else if (!shouldShowPlaceholder) {
-                              const albumPhotos = visibleImages.map((p: any) => ({
-                                _id: `${msg._id}_img_${p.originalIndex}`,
-                                content: p.url,
-                                type: "image",
-                                createdAt: msg.createdAt,
-                                senderId: msg.senderId,
-                                parentMessageId: msg._id,
-                                albumIndex: p.originalIndex,
-                                isRevoked: p.isRevoked,
-                              }));
+                              const albumPhotos = visibleImages.map(
+                                (p: any) => ({
+                                  _id: `${msg._id}_img_${p.originalIndex}`,
+                                  content: p.url,
+                                  type: "image",
+                                  createdAt: msg.createdAt,
+                                  senderId: msg.senderId,
+                                  parentMessageId: msg._id,
+                                  albumIndex: p.originalIndex,
+                                  isRevoked: p.isRevoked,
+                                }),
+                              );
                               if (onOpenGallery) {
                                 onOpenGallery(albumPhotos, idx);
                               } else {
-                                const indexInChatImages = chatImages.findIndex((img) => img._id === msg._id);
-                                if (indexInChatImages !== -1) setViewerIndex(indexInChatImages);
+                                const indexInChatImages = chatImages.findIndex(
+                                  (img) => img._id === msg._id,
+                                );
+                                if (indexInChatImages !== -1)
+                                  setViewerIndex(indexInChatImages);
                               }
                             }
                           }}
@@ -215,7 +242,9 @@ export const MessageItem = ({
                         >
                           {shouldShowPlaceholder ? (
                             <View className="items-center justify-center">
-                              <Text className="text-[10px] text-gray-400 italic">Đã thu hồi</Text>
+                              <Text className="text-[10px] text-gray-400 italic">
+                                Đã thu hồi
+                              </Text>
                             </View>
                           ) : (
                             <Image
@@ -238,14 +267,18 @@ export const MessageItem = ({
                     onPress();
                   } else {
                     if (onOpenGallery) {
-                      const idx = chatImages.findIndex((img) => img._id === msg._id);
+                      const idx = chatImages.findIndex(
+                        (img) => img._id === msg._id,
+                      );
                       if (idx !== -1) {
                         onOpenGallery(chatImages, idx);
                       } else {
                         onOpenGallery([msg], 0);
                       }
                     } else {
-                      const idx = chatImages.findIndex((img) => img._id === msg._id);
+                      const idx = chatImages.findIndex(
+                        (img) => img._id === msg._id,
+                      );
                       if (idx !== -1) setViewerIndex(idx);
                     }
                   }
@@ -261,9 +294,17 @@ export const MessageItem = ({
             )
           ) : msg.type === "file" ? (
             (() => {
-              const fileName = msg.metadata?.fileName || msg.content.split("/").pop() || "";
+              const fileName =
+                msg.metadata?.fileName || msg.content.split("/").pop() || "";
               const ext = fileName.split(".").pop()?.toLowerCase();
-              const isVideo = ["mp4", "mov", "m4v", "avi", "3gp", "mkv"].includes(ext || "");
+              const isVideo = [
+                "mp4",
+                "mov",
+                "m4v",
+                "avi",
+                "3gp",
+                "mkv",
+              ].includes(ext || "");
 
               if (isVideo) {
                 return (
@@ -284,7 +325,10 @@ export const MessageItem = ({
                         <PlayIcon size={30} color="white" />
                       </View>
                     </View>
-                    <Text className="absolute bottom-2 left-2 right-2 text-white text-[10px] font-bold z-20" numberOfLines={1}>
+                    <Text
+                      className="absolute bottom-2 left-2 right-2 text-white text-[10px] font-bold z-20"
+                      numberOfLines={1}
+                    >
                       {fileName}
                     </Text>
                   </TouchableOpacity>
@@ -350,10 +394,14 @@ export const MessageItem = ({
                       style={{
                         backgroundColor: (() => {
                           if (ext === "pdf") return "#ef4444";
-                          if (["doc", "docx"].includes(ext || "")) return "#3b82f6";
-                          if (["xls", "xlsx"].includes(ext || "")) return "#22c55e";
-                          if (["ppt", "pptx"].includes(ext || "")) return "#f97316";
-                          if (["zip", "rar", "tar", "7z"].includes(ext || "")) return "#7c3aed";
+                          if (["doc", "docx"].includes(ext || ""))
+                            return "#3b82f6";
+                          if (["xls", "xlsx"].includes(ext || ""))
+                            return "#22c55e";
+                          if (["ppt", "pptx"].includes(ext || ""))
+                            return "#f97316";
+                          if (["zip", "rar", "tar", "7z"].includes(ext || ""))
+                            return "#7c3aed";
                           return "#6b7280";
                         })(),
                       }}
@@ -375,8 +423,9 @@ export const MessageItem = ({
                         {msg.metadata?.fileSize
                           ? msg.metadata.fileSize < 1024 * 1024
                             ? (msg.metadata.fileSize / 1024).toFixed(0) + " KB"
-                            : (msg.metadata.fileSize / (1024 * 1024)).toFixed(1) +
-                              " MB"
+                            : (msg.metadata.fileSize / (1024 * 1024)).toFixed(
+                                1,
+                              ) + " MB"
                           : "0 KB"}
                       </Text>
                     </View>
@@ -458,7 +507,8 @@ const FileTextPreview = ({ url }: { url: string }) => {
     fetch(url)
       .then((res) => res.text())
       .then((text) => {
-        if (isMounted) setContent(text.slice(0, 1000).trim() || "Tệp tin trống");
+        if (isMounted)
+          setContent(text.slice(0, 1000).trim() || "Tệp tin trống");
       })
       .catch((err) => {
         console.error("[FilePreview] Fetch error:", err);
@@ -470,7 +520,10 @@ const FileTextPreview = ({ url }: { url: string }) => {
   }, [url]);
 
   return (
-    <View className="flex-1 p-3 bg-gray-50/80 relative" style={{ minHeight: 140 }}>
+    <View
+      className="flex-1 p-3 bg-gray-50/80 relative"
+      style={{ minHeight: 140 }}
+    >
       <TouchableOpacity
         onPress={() => setWrap(!wrap)}
         className="absolute top-2 right-2 px-2 py-1 bg-gray-200/80 rounded-md z-10"
@@ -483,7 +536,10 @@ const FileTextPreview = ({ url }: { url: string }) => {
         <Text
           className="text-[10px] text-gray-500 leading-4"
           style={{
-            fontFamily: Platform.select({ ios: "Courier", android: "monospace" }),
+            fontFamily: Platform.select({
+              ios: "Courier",
+              android: "monospace",
+            }),
           }}
           numberOfLines={wrap ? undefined : 7}
         >
