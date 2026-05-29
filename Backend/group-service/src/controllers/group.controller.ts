@@ -5,6 +5,7 @@ import rabbitMQProducer from "../services/rabbitMQProducer";
 import groupService from "../services/groupService";
 import { redisClient } from "../config/redis";
 import UserDailyStat from "../models/UserDailyStat";
+import { findMostFrequent } from "../utils/stats.util";
 
 // Helper lấy danh sách bạn bè
 async function getFriendIds(
@@ -1760,27 +1761,6 @@ export const getGroupStatsAdmin = async (
     res.status(500).json({ error: error.message });
   }
 };
-
-// Helper function to find the most frequent element (mode) in an array
-function findMostFrequent<T>(arr: T[]): T | null {
-  const filtered = arr.filter((x) => x !== null && x !== undefined && x !== "");
-  if (filtered.length === 0) return null;
-
-  const frequencyMap: Map<T, number> = new Map();
-  let maxElement = filtered[0] as T;
-  let maxCount = 0;
-
-  for (const element of filtered) {
-    const count = (frequencyMap.get(element) || 0) + 1;
-    frequencyMap.set(element, count);
-    if (count > maxCount) {
-      maxCount = count;
-      maxElement = element;
-    }
-  }
-
-  return maxElement;
-}
 
 // 23. User: Lấy thống kê hoạt động cả năm
 export const getUserYearlyStats = async (
