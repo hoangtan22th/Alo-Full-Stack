@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import React, { useCallback, useState } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
+import YearInReviewModal from "../../../components/YearInReviewModal";
 import {
   Alert,
   Image,
@@ -19,6 +20,7 @@ export default function MainProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
+  const [isWrappedOpen, setIsWrappedOpen] = useState(false);
 
   const { signOut, user, refreshUser } = useAuth();
 
@@ -128,11 +130,16 @@ export default function MainProfileScreen() {
             onPress={() => router.push("/profile/account-security")}
           />
           <MenuOption
-            icon={
-              <Ionicons name="lock-closed-outline" size={22} color="#4b5563" />
-            }
+            icon={<Ionicons name="lock-closed-outline" size={22} color="#4b5563" />}
             title="Quyền riêng tư"
             onPress={() => router.push("/profile/privacy")}
+          />
+          {/* Year in Review — Wrapped */}
+          <MenuOption
+            icon={<Ionicons name="sparkles" size={22} color="#7c3aed" />}
+            title="Nhìn lại 2026 (Wrapped)"
+            onPress={() => setIsWrappedOpen(true)}
+            titleStyle={{ color: "#7c3aed", fontWeight: "700" }}
           />
         </View>
 
@@ -147,6 +154,13 @@ export default function MainProfileScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Year in Review Modal */}
+      <YearInReviewModal
+        isOpen={isWrappedOpen}
+        onClose={() => setIsWrappedOpen(false)}
+        userId={user?.id || user?._id || ""}
+      />
     </View>
   );
 }
@@ -156,10 +170,12 @@ function MenuOption({
   icon,
   title,
   onPress,
+  titleStyle,
 }: {
   icon: any;
   title: string;
   onPress?: () => void;
+  titleStyle?: object;
 }) {
   return (
     <TouchableOpacity
@@ -170,7 +186,7 @@ function MenuOption({
         <View className="w-10 h-10 bg-gray-100 rounded-full items-center justify-center mr-4">
           {icon}
         </View>
-        <Text className="text-base font-medium text-gray-900">{title}</Text>
+        <Text className="text-base font-medium text-gray-900" style={titleStyle}>{title}</Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
     </TouchableOpacity>
