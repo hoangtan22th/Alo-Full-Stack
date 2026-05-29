@@ -62,6 +62,8 @@ import PollMessagePreview from "@/components/chat/PollMessagePreview";
 import PollDetailsModal from "@/components/ui/group/PollDetailsModal";
 import FileMessageBubble from "@/components/chat/FileMessageBubble";
 import TxtFileViewerModal from "@/components/chat/TxtFileViewerModal";
+import { parseReminderFromText } from "@/utils/reminderParser";
+import ReminderModal from "@/components/ui/group/ReminderModal";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -174,6 +176,12 @@ export default function ChatPage() {
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
   const [showPinnedModal, setShowPinnedModal] = useState(false);
   const [activePollId, setActivePollId] = useState<string | null>(null);
+  const [quickReminderPreset, setQuickReminderPreset] = useState<{
+    title: string;
+    date: string;
+    time: string;
+  } | null>(null);
+  const [showQuickReminderModal, setShowQuickReminderModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveOptions, setLeaveOptions] = useState({
@@ -3070,11 +3078,37 @@ export default function ChatPage() {
                                           );
                                         }
 
+                                        const parsed = conversationInfo?.isGroup ? parseReminderFromText(msg.content) : null;
+
                                         return (
-                                          <div
-                                            className={`px-2 py-1 text-[15px] font-medium leading-relaxed text-gray-900 break-words whitespace-pre-wrap text-justify`}
-                                          >
-                                            {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
+                                          <div className="flex flex-col gap-1.5">
+                                            <div
+                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap text-justify"
+                                            >
+                                              {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
+                                            </div>
+                                            {parsed && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setQuickReminderPreset({
+                                                    title: parsed.title,
+                                                    date: parsed.date,
+                                                    time: parsed.time
+                                                  });
+                                                  setShowQuickReminderModal(true);
+                                                }}
+                                                className={`mt-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all duration-200 select-none shadow-sm active:scale-[0.98]
+                                                  ${isMine 
+                                                    ? "bg-white/15 border border-white/10 hover:bg-white/25 text-white active:bg-white/30" 
+                                                    : "bg-blue-50/80 border border-blue-100 hover:bg-blue-100/80 text-blue-600 active:bg-blue-150"
+                                                  }
+                                                `}
+                                              >
+                                                <span>📅</span>
+                                                <span>Tạo nhắc hẹn: {parsed.originalMatch}</span>
+                                              </button>
+                                            )}
                                           </div>
                                         );
                                       })()
@@ -4465,6 +4499,19 @@ export default function ChatPage() {
           onClose={() => setPreviewingTxtFile(null)}
           fileName={previewingTxtFile.fileName}
           content={previewingTxtFile.content}
+        />
+      )}
+      {showQuickReminderModal && quickReminderPreset && (
+        <ReminderModal
+          conversationId={conversationId}
+          initialTitle={quickReminderPreset.title}
+          initialDate={quickReminderPreset.date}
+          initialTime={quickReminderPreset.time}
+          initialShowCreate={true}
+          onClose={() => {
+            setShowQuickReminderModal(false);
+            setQuickReminderPreset(null);
+          }}
         />
       )}
       <ChatEffects type={activeEffect} />
