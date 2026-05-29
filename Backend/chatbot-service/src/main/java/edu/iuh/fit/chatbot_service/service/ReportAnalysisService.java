@@ -86,7 +86,7 @@ public class ReportAnalysisService {
             String llmResponse = chatClient.prompt()
                     .system(REPORT_ANALYSIS_SYSTEM_PROMPT)
                     .user(userPrompt.toString())
-                    .functions("countTargetViolationsTool") // Register the count violations tool bean
+                    .tools("countTargetViolationsTool") // Register the count violations tool bean
                     .call()
                     .content();
 
