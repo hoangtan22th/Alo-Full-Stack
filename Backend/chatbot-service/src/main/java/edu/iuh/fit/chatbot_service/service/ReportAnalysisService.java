@@ -13,6 +13,7 @@ public class ReportAnalysisService {
 
     private final ChatClient chatClient;
     private final ObjectMapper objectMapper;
+    private final edu.iuh.fit.chatbot_service.config.ReportAiTools reportAiTools;
 
     private static final String REPORT_ANALYSIS_SYSTEM_PROMPT = """
             Bạn là một hệ thống AI Trợ lý Thẩm phán chuyên nghiệp chạy ngầm cho ứng dụng Alo Chat.
@@ -46,9 +47,10 @@ public class ReportAnalysisService {
             }
             """;
 
-    public ReportAnalysisService(ChatClient.Builder chatClientBuilder, ObjectMapper objectMapper) {
+    public ReportAnalysisService(ChatClient.Builder chatClientBuilder, ObjectMapper objectMapper, edu.iuh.fit.chatbot_service.config.ReportAiTools reportAiTools) {
         this.chatClient = chatClientBuilder.build();
         this.objectMapper = objectMapper;
+        this.reportAiTools = reportAiTools;
     }
 
     public AiAnalysisResponseDTO analyzeReport(ReportAnalysisRequestDTO request) {
@@ -86,7 +88,7 @@ public class ReportAnalysisService {
             String llmResponse = chatClient.prompt()
                     .system(REPORT_ANALYSIS_SYSTEM_PROMPT)
                     .user(userPrompt.toString())
-                    .tools("reportAiTools") // Register the reportAiTools bean containing the @Tool method
+                    .toolCallbacks(reportAiTools) // Register the programmatic ToolCallback bean
                     .call()
                     .content();
 
