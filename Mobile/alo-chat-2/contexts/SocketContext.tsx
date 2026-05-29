@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DeviceEventEmitter, Alert } from "react-native";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "./AuthContext";
+import { presenceService } from "../services/presenceService";
 
 export type OnlineUser = {
   status: "online" | "offline";
@@ -13,12 +14,14 @@ type SocketContextType = {
   socket: Socket | null;
   isConnected: boolean;
   onlineUsers: Record<string, OnlineUser>;
+  fetchBulkPresence: (userIds: string[]) => Promise<void>;
 };
 
 const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
   onlineUsers: {},
+  fetchBulkPresence: async () => {},
 });
 
 export function useSocket() {
@@ -26,12 +29,28 @@ export function useSocket() {
 }
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const currentUserId = user?.id || user?._id || user?.userId;
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Record<string, OnlineUser>>(
     {},
   );
+
+  const fetchBulkPresence = async (userIds: string[]) => {
+    if (!userIds || userIds.length === 0) return;
+    const result = await presenceService.getBulkPresence(userIds);
+    if (result) {
+      const formatted: Record<string, OnlineUser> = {};
+      Object.entries(result).forEach(([userId, info]) => {
+        formatted[userId] = {
+          status: info.isOnline ? "online" : "offline",
+          last_active: info.lastActiveAt,
+        };
+      });
+      setOnlineUsers((prev) => ({ ...prev, ...formatted }));
+    }
+  };
 
   useEffect(() => {
     let newSocket: Socket | null = null;
@@ -70,6 +89,26 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           newSocket.on("FORCE_LOGOUT", (data) => {
             console.warn("⚠️ Received FORCE_LOGOUT from server:", data);
             DeviceEventEmitter.emit("force_logout");
+          });
+
+          // Lắng nghe lệnh Tài Khoản Bị Khóa (Banned) từ Admin
+          newSocket.on("ACCOUNT_BANNED", (data: { reason?: string }) => {
+            console.warn("⚠️ Received ACCOUNT_BANNED from server:", data);
+            Alert.alert(
+              "Tài khoản bị khóa",
+              data.reason 
+                ? `Tài khoản của bạn đã bị khóa bởi Quản trị viên.\nLý do: ${data.reason}` 
+                : "Tài khoản của bạn đã bị khóa bởi Quản trị viên do vi phạm điều khoản.",
+              [
+                {
+                  text: "OK",
+                  onPress: () => {
+                    DeviceEventEmitter.emit("force_logout");
+                  }
+                }
+              ],
+              { cancelable: false }
+            );
           });
 
           // Lắng nghe yêu cầu tham gia nhóm mới (Dành cho Admin)
@@ -147,6 +186,22 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             });
           });
 
+          // Nhận lời mời vào nhóm mới
+          newSocket.on("NEW_INVITATION", (data: { groupId: string, groupName: string, groupAvatar: string, invitedBy: string }) => {
+            console.log("📥 [Mobile Socket] Received NEW_INVITATION:", data);
+            DeviceEventEmitter.emit("show_in_app_notification", {
+              title: "Lời mời vào nhóm",
+              message: `Bạn được mời tham gia nhóm ${data.groupName}`,
+              avatar: data.groupAvatar,
+              data: { groupId: data.groupId },
+              type: "INVITATION",
+            });
+            // Bắn event để màn hình invitations refresh
+            DeviceEventEmitter.emit("refresh_invitations");
+            // Bắn event để tab group (index.tsx) refresh badge
+            DeviceEventEmitter.emit("refresh_group_badges");
+          });
+
           // Bị mời khỏi nhóm / Giải tán nhóm
           newSocket.on(
             "CONVERSATION_REMOVED",
@@ -189,13 +244,94 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             // Chỉ hiện notify nếu là tin nhắn hệ thống loại nhắc hẹn và có metadata
             if (message.type === "system" && message.metadata?.isReminder) {
               console.log("📥 [Mobile Socket] Received Group REMINDER:", message);
+              // Bỏ gỡ message cho chính mình (message-received đã có filter ở Chat screen, 
+              // nhưng ở đây là Notify toàn cục nên cũng nên check)
+              if (String(message.senderId) !== String(currentUserId)) {
+                  DeviceEventEmitter.emit("show_in_app_notification", {
+                    title: "Nhắc hẹn nhóm",
+                    message: message.metadata.title || message.content,
+                    data: { groupId: message.conversationId },
+                    type: "REMINDER",
+                  });
+              }
+            }
+          });
+
+          // Tiện ích: Ghi chú (Notes)
+          newSocket.on("NOTE_CREATED", (data: any) => {
+            if (String(data.creatorId) !== String(currentUserId)) {
               DeviceEventEmitter.emit("show_in_app_notification", {
-                title: "Nhắc hẹn nhóm",
-                message: message.metadata.title || message.content,
-                data: { groupId: message.conversationId },
+                title: "Ghi chú mới",
+                message: `Một ghi chú mới đã được tạo: "${data.content.substring(0, 30)}${data.content.length > 30 ? "..." : ""}"`,
+                data: { groupId: data.conversationId },
+                type: "NOTE",
+              });
+            }
+          });
+
+          newSocket.on("NOTE_UPDATED", (data: any) => {
+            if (String(data.creatorId) !== String(currentUserId)) {
+              DeviceEventEmitter.emit("show_in_app_notification", {
+                title: "Ghi chú cập nhật",
+                message: "Một ghi chú vừa được chỉnh sửa",
+                data: { groupId: data.conversationId },
+                type: "NOTE",
+              });
+            }
+          });
+
+          newSocket.on("NOTE_DELETED", (data: any) => {
+            // Note: NOTE_DELETED payload often doesn't have actorId, but we can still notify others
+            DeviceEventEmitter.emit("show_in_app_notification", {
+              title: "Ghi chú đã xóa",
+              message: "Một ghi chú trong nhóm đã bị gỡ bỏ",
+              data: { groupId: data.conversationId },
+              type: "NOTE",
+            });
+          });
+
+          // Tiện ích: Nhắc hẹn (Reminders)
+          newSocket.on("REMINDER_CREATED", (data: any) => {
+            if (String(data.creatorId) !== String(currentUserId)) {
+              DeviceEventEmitter.emit("show_in_app_notification", {
+                title: "Nhắc hẹn mới",
+                message: `Nhắc hẹn: "${data.title}"`,
+                data: { groupId: data.conversationId },
                 type: "REMINDER",
               });
             }
+          });
+
+          newSocket.on("REMINDER_UPDATED", (data: any) => {
+            if (String(data.creatorId) !== String(currentUserId)) {
+              DeviceEventEmitter.emit("show_in_app_notification", {
+                title: "Nhắc hẹn cập nhật",
+                message: `Nhắc hẹn "${data.title}" đã được thay đổi`,
+                data: { groupId: data.conversationId },
+                type: "REMINDER",
+              });
+            }
+          });
+
+          newSocket.on("REMINDER_DELETED", (data: any) => {
+            DeviceEventEmitter.emit("show_in_app_notification", {
+              title: "Nhắc hẹn đã xóa",
+              message: "Một nhắc hẹn trong nhóm đã bị hủy",
+              data: { groupId: data.conversationId },
+              type: "REMINDER",
+            });
+          });
+
+          // Tiện ích: Bình chọn (Polls)
+          newSocket.on("POLL_UPDATED", (data: any) => {
+             // data typically { pollId, conversationId }
+             // We don't necessarily know the actor here, but we can notify
+             DeviceEventEmitter.emit("show_in_app_notification", {
+               title: "Bình chọn cập nhật",
+               message: "Có thay đổi mới trong cuộc bình chọn",
+               data: { groupId: data.conversationId },
+               type: "POLL",
+             });
           });
 
           // Lắng nghe trạng thái Online/Offline chung của các User khác
@@ -292,7 +428,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated]);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected, onlineUsers }}>
+    <SocketContext.Provider value={{ socket, isConnected, onlineUsers, fetchBulkPresence }}>
       {children}
     </SocketContext.Provider>
   );

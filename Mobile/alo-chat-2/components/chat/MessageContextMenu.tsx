@@ -14,6 +14,9 @@ import {
   MapPinIcon,
   TrashIcon,
   XMarkIcon,
+  ShieldExclamationIcon,
+  ArrowUturnRightIcon,
+  QueueListIcon,
 } from "react-native-heroicons/outline";
 import { MessageDTO } from "../../services/messageService";
 import { EMOJI_MAP } from "../../constants/Chat";
@@ -22,6 +25,7 @@ interface MessageContextMenuProps {
   visible: boolean;
   selectedMsg: MessageDTO | null;
   layout: { x: number; y: number; width: number; height: number } | null;
+  selectedImageIndex?: number | null;
   onClose: () => void;
   onReact: (emojiKey: string) => void;
   onClearReactions: () => void;
@@ -31,6 +35,9 @@ interface MessageContextMenuProps {
   onPin: () => void;
   onUnpin: () => void;
   onReply: (msg: MessageDTO) => void;
+  onReport?: (msg: MessageDTO) => void;
+  onForward?: (msg: MessageDTO) => void;
+  onSelectMultiple?: (msg: MessageDTO) => void;
   isPinned: boolean;
   canPin?: boolean;
   currentUserId: string;
@@ -40,6 +47,7 @@ export const MessageContextMenu = ({
   visible,
   selectedMsg,
   layout,
+  selectedImageIndex,
   onClose,
   onReact,
   onClearReactions,
@@ -49,6 +57,9 @@ export const MessageContextMenu = ({
   onPin,
   onUnpin,
   onReply,
+  onReport,
+  onForward,
+  onSelectMultiple,
   isPinned,
   canPin = true,
   currentUserId,
@@ -58,7 +69,9 @@ export const MessageContextMenu = ({
   const screenHeight = Dimensions.get("window").height;
   const isTopHalf = layout.y < screenHeight / 2;
   const isSender = selectedMsg.senderId === currentUserId;
-  const hasMyReaction = selectedMsg.reactions?.some((r: any) => r.userId === currentUserId);
+  const hasMyReaction = selectedMsg.reactions?.some(
+    (r: any) => r.userId === currentUserId,
+  );
 
   return (
     <Modal
@@ -110,7 +123,7 @@ export const MessageContextMenu = ({
                   >
                     {selectedMsg.replyTo.type === "text"
                       ? selectedMsg.replyTo.content
-                      : selectedMsg.replyTo.type === "image"
+                      : selectedMsg.replyTo.type === "image" || (selectedMsg.replyTo.type === "file" && ["jpg", "jpeg", "png", "gif", "webp", "heic", "heif"].includes(selectedMsg.replyTo.content.split(".").pop()?.toLowerCase() || ""))
                         ? selectedMsg.replyTo.content === "[Album Ảnh]"
                           ? "[Album Ảnh]"
                           : "[Hình ảnh]"
@@ -123,11 +136,25 @@ export const MessageContextMenu = ({
                   Tin nhắn đã bị thu hồi
                 </Text>
               ) : selectedMsg.type === "image" ? (
-                <Image
-                  source={{ uri: selectedMsg.content }}
-                  className="w-[260px] h-[200px] rounded-[22px] border border-gray-100/50"
-                  resizeMode="cover"
-                />
+                (() => {
+                  let imageUri = selectedMsg.content;
+                  if (selectedMsg.metadata?.imageGroup && selectedImageIndex !== undefined && selectedImageIndex !== null) {
+                    const groupItem = selectedMsg.metadata.imageGroup[selectedImageIndex];
+                    if (groupItem && !groupItem.isRevoked) {
+                      imageUri = groupItem.url;
+                    }
+                  } else if (selectedMsg.metadata?.imageGroup && selectedMsg.metadata.imageGroup.length > 0) {
+                    const active = selectedMsg.metadata.imageGroup.find((img: any) => !img.isRevoked);
+                    if (active) imageUri = active.url;
+                  }
+                  return (
+                    <Image
+                      source={{ uri: imageUri }}
+                      className="w-[260px] h-[200px] rounded-[22px] border border-gray-100/50"
+                      resizeMode="cover"
+                    />
+                  );
+                })()
               ) : (
                 <Text
                   className={`text-base leading-6 ${
@@ -153,11 +180,11 @@ export const MessageContextMenu = ({
                     layout.y -
                       (isSender
                         ? selectedMsg.type === "image"
-                          ? 200
-                          : 230
+                          ? 310
+                          : 350
                         : selectedMsg.type === "image"
-                          ? 150
-                          : 190),
+                          ? 310
+                          : 350),
                   ),
               alignItems: isSender ? "flex-end" : "flex-start",
             }}
@@ -198,15 +225,35 @@ export const MessageContextMenu = ({
                 onPress={() => onReply(selectedMsg)}
                 className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
               >
-                <ArrowUturnLeftIcon
-                  size={18}
-                  color="#4b5563"
-                  style={{ transform: [{ scaleX: -1 }] }}
-                />
+                <ArrowUturnLeftIcon size={18} color="#4b5563" />
                 <Text className="text-[14px] font-medium text-gray-700">
                   Trả lời
                 </Text>
               </TouchableOpacity>
+
+              {!selectedMsg.isRevoked && onForward && (
+                <TouchableOpacity
+                  onPress={() => onForward(selectedMsg)}
+                  className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
+                >
+                  <ArrowUturnRightIcon size={18} color="#4b5563" />
+                  <Text className="text-[14px] font-medium text-gray-700">
+                    Chuyển tiếp
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {onSelectMultiple && (
+                <TouchableOpacity
+                  onPress={() => onSelectMultiple(selectedMsg)}
+                  className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
+                >
+                  <QueueListIcon size={18} color="#4b5563" />
+                  <Text className="text-[14px] font-medium text-gray-700">
+                    Chọn nhiều
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               {!selectedMsg.isRevoked && selectedMsg.type === "text" && (
                 <TouchableOpacity
@@ -220,8 +267,8 @@ export const MessageContextMenu = ({
                 </TouchableOpacity>
               )}
 
-              {canPin && (
-                isPinned ? (
+              {canPin &&
+                (isPinned ? (
                   <TouchableOpacity
                     onPress={onUnpin}
                     className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
@@ -241,8 +288,7 @@ export const MessageContextMenu = ({
                       Ghim tin nhắn
                     </Text>
                   </TouchableOpacity>
-                )
-              )}
+                ))}
 
               {isSender && !selectedMsg.isRevoked && (
                 <TouchableOpacity
@@ -258,13 +304,25 @@ export const MessageContextMenu = ({
 
               <TouchableOpacity
                 onPress={onDeleteLocal}
-                className="flex-row items-center gap-3 px-4 py-3 active:bg-red-50"
+                className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-red-50"
               >
                 <TrashIcon size={18} color="#ef4444" />
                 <Text className="text-[14px] font-medium text-red-500">
                   Xóa tin nhắn
                 </Text>
               </TouchableOpacity>
+
+              {!isSender && onReport && (
+                <TouchableOpacity
+                  onPress={() => onReport(selectedMsg)}
+                  className="flex-row items-center gap-3 px-4 py-3 active:bg-red-50"
+                >
+                  <ShieldExclamationIcon size={18} color="#ef4444" />
+                  <Text className="text-[14px] font-medium text-red-500">
+                    Báo cáo tin nhắn
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>

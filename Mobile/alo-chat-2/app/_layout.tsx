@@ -62,12 +62,9 @@ function RootLayoutNav() {
           const queryId = searchParams.id;
 
           // Nếu đang ở màn hình chat của nhóm đó hoặc màn hình info của nhóm đó
-          // ['chat', 'id'] hoặc ['chat', 'info'] với ?id=...
+          // ['chat', 'id'] hoặc ['chat', 'info']
           const isAtChat = segments[0] === "chat" && currentPathId === groupId;
-          const isAtInfo =
-            segments[0] === "chat" &&
-            currentPathId === "info" &&
-            queryId === groupId;
+          const isAtInfo = segments[0] === "chat" && currentPathId === "info";
 
           if (isAtChat || isAtInfo) {
             console.log(
@@ -115,6 +112,9 @@ function RootLayoutNav() {
         <Stack.Screen name="register" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="chat/[id]" />
+        <Stack.Screen name="chat/info" />
+        <Stack.Screen name="chat/media" />
+        <Stack.Screen name="chat/forward" />
         <Stack.Screen name="groups/create-group" />
       </Stack>
 

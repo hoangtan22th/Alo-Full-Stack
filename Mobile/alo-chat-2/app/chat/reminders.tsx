@@ -141,6 +141,7 @@ export default function RemindersManagementScreen() {
           const success = await reminderService.deleteReminder(reminderId);
           if (success) {
             setReminders((prev) => prev.filter((r) => r._id !== reminderId));
+            Alert.alert("Thành công", "Nhắc hẹn đã được xóa.");
           } else {
             Alert.alert("Lỗi", "Không thể xóa nhắc hẹn.");
           }
