@@ -4,6 +4,7 @@ import { uploadImageToS3, deleteImageFromS3 } from "../services/s3Service";
 import rabbitMQProducer from "../services/rabbitMQProducer";
 import groupService from "../services/groupService";
 import { redisClient } from "../config/redis";
+import UserDailyStat from "../models/UserDailyStat";
 
 // Helper lấy danh sách bạn bè
 async function getFriendIds(
@@ -1753,6 +1754,107 @@ export const getGroupStatsAdmin = async (
     }
 
     res.status(200).json({
+      data: responseData,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Helper function to find the most frequent element (mode) in an array
+function findMostFrequent<T>(arr: T[]): T | null {
+  const filtered = arr.filter((x) => x !== null && x !== undefined && x !== "");
+  if (filtered.length === 0) return null;
+
+  const frequencyMap: Map<T, number> = new Map();
+  let maxElement = filtered[0] as T;
+  let maxCount = 0;
+
+  for (const element of filtered) {
+    const count = (frequencyMap.get(element) || 0) + 1;
+    frequencyMap.set(element, count);
+    if (count > maxCount) {
+      maxCount = count;
+      maxElement = element;
+    }
+  }
+
+  return maxElement;
+}
+
+// 23. User: Lấy thống kê hoạt động cả năm
+export const getUserYearlyStats = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { userId, year } = req.query;
+
+    if (!userId || !year) {
+      res.status(400).json({ error: "Missing required parameters: userId and year" });
+      return;
+    }
+
+    const requestedYear = parseInt(year as string, 10);
+    if (isNaN(requestedYear)) {
+      res.status(400).json({ error: "Invalid parameter: year must be a number" });
+      return;
+    }
+
+    const startOfYear = new Date(requestedYear, 0, 1, 0, 0, 0, 0);
+    const endOfYear = new Date(requestedYear, 11, 31, 23, 59, 59, 999);
+
+    const stats = await UserDailyStat.aggregate([
+      {
+        $match: {
+          userId: userId as string,
+          date: { $gte: startOfYear, $lte: endOfYear },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalMessagesSent: { $sum: "$messagesSent" },
+          totalGroupsJoined: { $sum: "$groupsJoined" },
+          totalCallMinutes: { $sum: "$totalCallMinutes" },
+          newFriendsAdded: { $sum: "$newFriendsAdded" },
+          dailyTopPartners: { $push: "$topChatPartnerId" },
+          dailyActiveHours: { $push: "$mostActiveHour" },
+        },
+      },
+    ]);
+
+    let responseData;
+    if (stats.length > 0) {
+      const data = stats[0];
+      const yearlyTopChatPartnerId = findMostFrequent<string>(data.dailyTopPartners);
+      const yearlyMostActiveHour = findMostFrequent<number>(data.dailyActiveHours);
+
+      responseData = {
+        userId,
+        year: requestedYear,
+        totalMessagesSent: data.totalMessagesSent,
+        totalGroupsJoined: data.totalGroupsJoined,
+        totalCallMinutes: data.totalCallMinutes,
+        newFriendsAdded: data.newFriendsAdded,
+        yearlyTopChatPartnerId,
+        yearlyMostActiveHour,
+      };
+    } else {
+      responseData = {
+        userId,
+        year: requestedYear,
+        totalMessagesSent: 0,
+        totalGroupsJoined: 0,
+        totalCallMinutes: 0,
+        newFriendsAdded: 0,
+        yearlyTopChatPartnerId: null,
+        yearlyMostActiveHour: null,
+      };
+    }
+
+    res.status(200).json({
+      status: 200,
       data: responseData,
     });
   } catch (error: any) {
