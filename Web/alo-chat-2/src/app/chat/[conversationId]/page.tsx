@@ -15,6 +15,7 @@ import ChatSummaryButton from "@/components/ui/chatbot/ChatSummaryButton";
 import { CallSystemMessage } from "@/components/ui/call/CallSystemMessage";
 import { useCall } from "@/components/layout/CallProvider";
 import GroupCallSelector from "@/components/ui/call/GroupCallSelector";
+import { AlertTriangle } from "lucide-react";
 
 import JSZip from "jszip";
 import {
@@ -368,6 +369,32 @@ export default function ChatPage() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
 
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    title: string;
+    description: string;
+    actionText: string;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
+
+  const showConfirm = (config: {
+    title: string;
+    description: string;
+    actionText: string;
+    onConfirm: () => void | Promise<void>;
+  }) => {
+    setConfirmModalConfig({
+      title: config.title,
+      description: config.description,
+      actionText: config.actionText,
+      onConfirm: async () => {
+        await config.onConfirm();
+        setConfirmModalOpen(false);
+      }
+    });
+    setConfirmModalOpen(true);
+  };
+
 
   const selectedMessages = useMemo(() => {
     return messages.filter((m) => selectedMessageIds.has(m._id));
@@ -425,29 +452,43 @@ export default function ChatPage() {
 
   const handleBulkRevoke = async () => {
     if (selectedMessages.length === 0) return;
-    const ids = selectedMessages.map((m) => m._id);
-    const success = await messageService.bulkRevokeMessages(ids);
-    if (success) {
-      toast.success("Đã thu hồi các tin nhắn được chọn");
-      setIsMultiSelectMode(false);
-      setSelectedMessageIds(new Set());
-    } else {
-      toast.error("Có lỗi xảy ra khi thu hồi tin nhắn");
-    }
+    showConfirm({
+      title: `Thu hồi ${selectedMessages.length} tin nhắn?`,
+      description: "Các tin nhắn được chọn sẽ bị thu hồi đối với tất cả thành viên trong cuộc trò chuyện.",
+      actionText: "Thu hồi",
+      onConfirm: async () => {
+        const ids = selectedMessages.map((m) => m._id);
+        const success = await messageService.bulkRevokeMessages(ids);
+        if (success) {
+          toast.success("Đã thu hồi các tin nhắn được chọn");
+          setIsMultiSelectMode(false);
+          setSelectedMessageIds(new Set());
+        } else {
+          toast.error("Có lỗi xảy ra khi thu hồi tin nhắn");
+        }
+      }
+    });
   };
 
   const handleBulkDeleteForMe = async () => {
     if (selectedMessages.length === 0) return;
-    const ids = selectedMessages.map((m) => m._id);
-    const success = await messageService.bulkDeleteMessagesForMe(ids);
-    if (success) {
-      toast.success("Đã xóa tin nhắn ở phía bạn");
-      setMessages((prev) => prev.filter((m) => !selectedMessageIds.has(m._id)));
-      setIsMultiSelectMode(false);
-      setSelectedMessageIds(new Set());
-    } else {
-      toast.error("Có lỗi xảy ra khi xóa tin nhắn");
-    }
+    showConfirm({
+      title: `Xóa ${selectedMessages.length} tin nhắn?`,
+      description: "Các tin nhắn được chọn sẽ bị xóa khỏi lịch sử trò chuyện của bạn. Người khác vẫn có thể thấy chúng.",
+      actionText: "Xóa",
+      onConfirm: async () => {
+        const ids = selectedMessages.map((m) => m._id);
+        const success = await messageService.bulkDeleteMessagesForMe(ids);
+        if (success) {
+          toast.success("Đã xóa tin nhắn ở phía bạn");
+          setMessages((prev) => prev.filter((m) => !selectedMessageIds.has(m._id)));
+          setIsMultiSelectMode(false);
+          setSelectedMessageIds(new Set());
+        } else {
+          toast.error("Có lỗi xảy ra khi xóa tin nhắn");
+        }
+      }
+    });
   };
 
   // Reaction viewers
@@ -1336,32 +1377,46 @@ export default function ChatPage() {
   /* ─── Revoke Message (Thu hồi) ─── */
   const handleRevoke = async (messageId: string) => {
     setActiveMenu(null);
-    try {
-      const ok = await messageService.revokeMessage(messageId);
-      if (ok) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m._id === messageId
-              ? { ...m, isRevoked: true, revokedAt: new Date().toISOString() }
-              : m,
-          ),
-        );
+    showConfirm({
+      title: "Thu hồi tin nhắn?",
+      description: "Tin nhắn này sẽ bị thu hồi đối với tất cả thành viên trong cuộc trò chuyện.",
+      actionText: "Thu hồi",
+      onConfirm: async () => {
+        try {
+          const ok = await messageService.revokeMessage(messageId);
+          if (ok) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m._id === messageId
+                  ? { ...m, isRevoked: true, revokedAt: new Date().toISOString() }
+                  : m,
+              ),
+            );
+          }
+        } catch (error) {
+          console.error("Lỗi thu hồi tin nhắn:", error);
+        }
       }
-    } catch (error) {
-      console.error("Lỗi thu hồi tin nhắn:", error);
-    }
+    });
   };
 
   /* ─── Delete Message For Me (Xóa 1 phía) ─── */
   const handleDeleteForMe = async (messageId: string) => {
     setActiveMenu(null);
-    try {
-      // Optimistic Update: Xóa ngay ở local UI
-      setMessages((prev) => prev.filter((m) => m._id !== messageId));
-      await messageService.deleteMessageForMe(messageId);
-    } catch (error) {
-      console.error("Lỗi xóa tin nhắn phía tôi:", error);
-    }
+    showConfirm({
+      title: "Xóa tin nhắn?",
+      description: "Tin nhắn này sẽ bị xóa khỏi lịch sử trò chuyện của bạn. Người khác vẫn có thể thấy nó.",
+      actionText: "Xóa",
+      onConfirm: async () => {
+        try {
+          // Optimistic Update: Xóa ngay ở local UI
+          setMessages((prev) => prev.filter((m) => m._id !== messageId));
+          await messageService.deleteMessageForMe(messageId);
+        } catch (error) {
+          console.error("Lỗi xóa tin nhắn phía tôi:", error);
+        }
+      }
+    });
   };
 
   // /* ─── Download File/Image ─── */
@@ -2812,59 +2867,44 @@ export default function ChatPage() {
                                                               {isMine &&
                                                                 !img.isRevoked && (
                                                                   <button
-                                                                    onClick={async (
-                                                                      e,
-                                                                    ) => {
+                                                                    onClick={(e) => {
                                                                       e.stopPropagation();
-                                                                      if (
-                                                                        confirm(
-                                                                          "Thu hồi ảnh này?",
-                                                                        )
-                                                                      ) {
-                                                                        // Optimistic Update
-                                                                        setMessages(
-                                                                          (
-                                                                            prev,
-                                                                          ) =>
-                                                                            prev.map(
-                                                                              (
-                                                                                m,
-                                                                              ) =>
-                                                                                m._id ===
-                                                                                  msg._id
+                                                                      showConfirm({
+                                                                        title: "Thu hồi ảnh này?",
+                                                                        description: "Ảnh này sẽ bị thu hồi đối với tất cả thành viên trong cuộc trò chuyện.",
+                                                                        actionText: "Thu hồi",
+                                                                        onConfirm: async () => {
+                                                                          // Optimistic Update
+                                                                          setMessages(
+                                                                            (prev) =>
+                                                                              prev.map((m) =>
+                                                                                m._id === msg._id
                                                                                   ? {
                                                                                     ...m,
-                                                                                    metadata:
-                                                                                    {
+                                                                                    metadata: {
                                                                                       ...m.metadata,
                                                                                       imageGroup:
-                                                                                        m.metadata?.imageGroup?.map(
-                                                                                          (
-                                                                                            ig: any,
-                                                                                            i: number,
-                                                                                          ) =>
-                                                                                            i ===
-                                                                                              originalIdx
-                                                                                              ? {
-                                                                                                ...ig,
-                                                                                                isRevoked: true,
-                                                                                                revokedAt:
-                                                                                                  new Date().toISOString(),
-                                                                                              }
-                                                                                              : ig,
+                                                                                        m.metadata?.imageGroup?.map((ig: any, i: number) =>
+                                                                                          i === originalIdx
+                                                                                            ? {
+                                                                                              ...ig,
+                                                                                              isRevoked: true,
+                                                                                              revokedAt: new Date().toISOString(),
+                                                                                            }
+                                                                                            : ig,
                                                                                         ),
                                                                                     },
                                                                                   }
                                                                                   : m,
-                                                                            ),
-                                                                        );
+                                                                              ),
+                                                                          );
 
-                                                                        await messageService.revokeImageInGroup(
-                                                                          msg._id,
-                                                                          originalIdx ??
-                                                                          0,
-                                                                        );
-                                                                      }
+                                                                          await messageService.revokeImageInGroup(
+                                                                            msg._id,
+                                                                            originalIdx ?? 0,
+                                                                          );
+                                                                        }
+                                                                      });
                                                                     }}
                                                                     className="p-1 bg-black/50 rounded text-white hover:bg-black/70"
                                                                     title="Thu hồi"
@@ -2873,59 +2913,44 @@ export default function ChatPage() {
                                                                   </button>
                                                                 )}
                                                               <button
-                                                                onClick={async (
-                                                                  e,
-                                                                ) => {
+                                                                onClick={(e) => {
                                                                   e.stopPropagation();
-                                                                  if (
-                                                                    confirm(
-                                                                      "Xóa ảnh này phía bạn?",
-                                                                    )
-                                                                  ) {
-                                                                    await messageService.deleteImageInGroupForMe(
-                                                                      msg._id,
-                                                                      originalIdx ??
-                                                                      0,
-                                                                    );
-                                                                    // Local update
-                                                                    setMessages(
-                                                                      (prev) =>
-                                                                        prev.map(
-                                                                          (
-                                                                            m,
-                                                                          ) =>
-                                                                            m._id ===
-                                                                              msg._id
-                                                                              ? {
-                                                                                ...m,
-                                                                                metadata:
-                                                                                {
-                                                                                  ...m.metadata,
-                                                                                  imageGroup:
-                                                                                    m.metadata?.imageGroup?.map(
-                                                                                      (
-                                                                                        ig: any,
-                                                                                        i: number,
-                                                                                      ) =>
-                                                                                        i ===
-                                                                                          originalIdx
-                                                                                          ? {
-                                                                                            ...ig,
-                                                                                            deletedByUsers:
-                                                                                              [
-                                                                                                ...(ig.deletedByUsers ||
-                                                                                                  []),
-                                                                                                myId,
-                                                                                              ],
-                                                                                          }
-                                                                                          : ig,
-                                                                                    ),
-                                                                                },
-                                                                              }
-                                                                              : m,
+                                                                  showConfirm({
+                                                                    title: "Xóa ảnh này?",
+                                                                    description: "Ảnh này sẽ bị xóa khỏi lịch sử trò chuyện của bạn. Người khác vẫn có thể thấy nó.",
+                                                                    actionText: "Xóa",
+                                                                    onConfirm: async () => {
+                                                                      await messageService.deleteImageInGroupForMe(
+                                                                        msg._id,
+                                                                        originalIdx ?? 0,
+                                                                      );
+                                                                      // Local update
+                                                                      setMessages((prev) =>
+                                                                        prev.map((m) =>
+                                                                          m._id === msg._id
+                                                                            ? {
+                                                                              ...m,
+                                                                              metadata: {
+                                                                                ...m.metadata,
+                                                                                imageGroup:
+                                                                                  m.metadata?.imageGroup?.map((ig: any, i: number) =>
+                                                                                    i === originalIdx
+                                                                                      ? {
+                                                                                        ...ig,
+                                                                                        deletedByUsers: [
+                                                                                          ...(ig.deletedByUsers || []),
+                                                                                          myId,
+                                                                                        ],
+                                                                                      }
+                                                                                      : ig,
+                                                                                  ),
+                                                                              },
+                                                                            }
+                                                                            : m,
                                                                         ),
-                                                                    );
-                                                                  }
+                                                                      );
+                                                                    }
+                                                                  });
                                                                 }}
                                                                 className="p-1 bg-black/50 rounded text-white hover:bg-black/70"
                                                                 title="Xóa phía tôi"
@@ -3395,6 +3420,7 @@ export default function ChatPage() {
                                       {/* 4. Redo Button */}
                                       {isMounted &&
                                         isMine &&
+                                        msg.type === "text" &&
                                         msg.isRevoked &&
                                         msg.revokedAt &&
                                         new Date().getTime() -
@@ -4085,7 +4111,7 @@ export default function ChatPage() {
                       </>
                     )}
 
-                    <div className="max-w-4xl max-h-[85vh] flex flex-col items-center">
+                    <div className="max-w-4xl max-h-[85vh] flex flex-col items-center justify-center">
                       {currentImg?.isRevoked ? (
                         <div className="flex flex-col items-center justify-center text-gray-500">
                           <ArrowUturnLeftIcon className="w-20 h-20 mb-4 opacity-20" />
@@ -4097,7 +4123,7 @@ export default function ChatPage() {
                         currentImg && (
                           <img
                             src={getMediaUrl(currentImg.url)}
-                            className="max-w-full max-h-full object-contain shadow-2xl rounded-sm"
+                            className="max-w-full max-h-[70vh] object-contain shadow-2xl rounded-sm"
                             alt="preview"
                           />
                         )
@@ -4539,6 +4565,48 @@ export default function ChatPage() {
         />
       )}
       <ChatEffects type={activeEffect} />
+
+      {/* Confirmation Modal */}
+      {confirmModalOpen && confirmModalConfig && (
+        <div 
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-4" 
+          onClick={() => setConfirmModalOpen(false)}
+        >
+          <div
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+          />
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative z-10 animate-in fade-in zoom-in duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">
+                {confirmModalConfig.title}
+              </h3>
+              <p className="text-slate-500 text-sm font-medium">
+                {confirmModalConfig.description}
+              </p>
+            </div>
+            <div className="p-4 bg-slate-50 flex gap-3">
+              <button
+                onClick={() => setConfirmModalOpen(false)}
+                className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-white transition-colors text-sm cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={confirmModalConfig.onConfirm}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-200 text-sm cursor-pointer"
+              >
+                {confirmModalConfig.actionText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
