@@ -2598,13 +2598,22 @@ export default function ChatPage() {
                                     {msg.type === "image" &&
                                       msg.metadata?.isSticker ? (
                                       /* RENDER STICKER */
-                                      <div className="p-1">
-                                        <img
-                                          src={msg.content}
-                                          alt="sticker"
-                                          className="w-[150px] h-[150px] object-contain"
-                                        />
-                                      </div>
+                                      isRevoked ? (
+                                        <div className="flex flex-col items-center justify-center gap-1.5 w-[140px] h-[140px] select-none py-2">
+                                          <FaceSmileIcon className="w-10 h-10 text-gray-300 stroke-[1.5]" />
+                                          <span className="text-xs font-semibold text-gray-400">
+                                            Đã thu hồi
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <div className="p-1">
+                                          <img
+                                            src={msg.content}
+                                            alt="sticker"
+                                            className="w-[150px] h-[150px] object-contain"
+                                          />
+                                        </div>
+                                      )
                                     ) : msg.type === "image" ? (
                                       <div className="w-full">
                                         {msg.metadata?.imageGroup ? (
