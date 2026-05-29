@@ -18,10 +18,12 @@ public class ChatController {
 
     private final ChatService chatService;
     private final ModerationService moderationService;
+    private final edu.iuh.fit.chatbot_service.service.ReportAnalysisService reportAnalysisService;
 
-    public ChatController(ChatService chatService, ModerationService moderationService) {
+    public ChatController(ChatService chatService, ModerationService moderationService, edu.iuh.fit.chatbot_service.service.ReportAnalysisService reportAnalysisService) {
         this.chatService = chatService;
         this.moderationService = moderationService;
+        this.reportAnalysisService = reportAnalysisService;
     }
 
     @PostMapping("/ask")
@@ -67,5 +69,13 @@ public class ChatController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> moderateMessage(@RequestBody ModerationRequest request) {
         Map<String, Object> result = moderationService.moderateMessage(request);
         return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    // API phân tích chi tiết report vi phạm bằng AI Agent ngầm kết hợp đếm tiền án
+    @PostMapping("/analyze-report")
+    public ResponseEntity<ApiResponse<edu.iuh.fit.chatbot_service.dto.AiAnalysisResponseDTO>> analyzeReport(
+            @RequestBody edu.iuh.fit.chatbot_service.dto.ReportAnalysisRequestDTO request) {
+        edu.iuh.fit.chatbot_service.dto.AiAnalysisResponseDTO response = reportAnalysisService.analyzeReport(request);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }
