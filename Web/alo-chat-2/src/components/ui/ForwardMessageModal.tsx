@@ -151,7 +151,13 @@ export default function ForwardMessageModal({
                       fileSize: msg.metadata?.fileSize,
                       fileType: msg.metadata?.fileType,
                     }
-                  : {},
+                  : msg.type === "image"
+                    ? {
+                        imageGroup: msg.metadata?.imageGroup,
+                        width: msg.metadata?.width,
+                        height: msg.metadata?.height,
+                      }
+                    : {},
             }),
           ),
         ),
