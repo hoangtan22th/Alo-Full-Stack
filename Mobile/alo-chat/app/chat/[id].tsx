@@ -428,7 +428,9 @@ export default function GlobalChatScreen() {
     return messages.find((m) => m._id === selectedMessageId);
   }, [selectedMessageId, messages]);
 
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
+    null,
+  );
 
   const onLongPressMessage = (msgId: string, albumIndex?: number) => {
     const ref = messageRefs.current[msgId];
@@ -1149,7 +1151,10 @@ export default function GlobalChatScreen() {
               });
               setTimeout(
                 () =>
-                  flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
+                  flatListRef.current?.scrollToOffset({
+                    offset: 0,
+                    animated: true,
+                  }),
                 100,
               );
             }
@@ -1316,10 +1321,10 @@ export default function GlobalChatScreen() {
             }}
             onHeaderClick={() => {
               if (isGroupChat) {
-                router.replace({
+                router.push({
                   pathname: "/chat/info",
                   params: {
-                    id: id as string,
+                    id: resolvedConversationId || id,
                     name: realtimeGroupName,
                     avatar: realtimeAvatar,
                     membersCount: realtimeMembersCount,
@@ -1328,17 +1333,11 @@ export default function GlobalChatScreen() {
                   },
                 });
               } else {
-                const autoIds = getAutoSelectedMessageIds();
                 router.push({
-                  pathname: "/chat/info",
+                  pathname: "/(tabs)/contacts/send-request",
                   params: {
-                    id: resolvedConversationId || id,
-                    name: realtimeGroupName,
-                    avatar: realtimeAvatar,
-                    membersCount: realtimeMembersCount,
-                    isGroup: "false",
-                    targetUserId,
-                    selectedMessageIds: JSON.stringify(autoIds),
+                    userId: targetUserId,
+                    from: "chat",
                   },
                 });
               }
@@ -1475,9 +1474,14 @@ export default function GlobalChatScreen() {
                           isSender={group.isSender}
                           isLastInBlock={idx === group.messages.length - 1}
                           onLongPress={(albumIndex) =>
-                            !isSelectionMode && onLongPressMessage(msg._id, albumIndex)
+                            !isSelectionMode &&
+                            onLongPressMessage(msg._id, albumIndex)
                           }
-                          onPress={isSelectionMode ? () => toggleMessageSelection(msg._id) : undefined}
+                          onPress={
+                            isSelectionMode
+                              ? () => toggleMessageSelection(msg._id)
+                              : undefined
+                          }
                           isSelected={
                             isSelectionMode &&
                             selectedReportIds.includes(msg._id)
