@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +22,16 @@ public interface FriendshipRepository extends JpaRepository<Friendship, String> 
 
     @Query("SELECT f FROM Friendship f WHERE (f.requesterId = :userId OR f.recipientId = :userId) AND f.status = 'ACCEPTED'")
     List<Friendship> findFriendsByUserId(@Param("userId") String userId);
+
+    @Query("SELECT COUNT(f) FROM Friendship f WHERE " +
+           "(f.requesterId = :userId OR f.recipientId = :userId) " +
+           "AND f.status = 'ACCEPTED' " +
+           "AND f.updateAt BETWEEN :startDate AND :endDate")
+    long countNewFriendsAdded(
+            @Param("userId") String userId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 
     // Gộp thành một hàm duy nhất để tìm quan hệ 2 chiều
     @Query("SELECT f FROM Friendship f WHERE " +

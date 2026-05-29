@@ -46,6 +46,14 @@ app.listen(PORT, async () => {
   // 1. Kết nối MongoDB
   await connectDB();
 
+  // 1.1 Kết nối Redis
+  try {
+    const { initRedis } = require("./src/config/redis");
+    await initRedis();
+  } catch (err) {
+    console.error("❌ Lỗi kết nối Redis:", err);
+  }
+
   try {
     const { connectRabbitMQ } = require("./src/config/rabbitmq");
     await connectRabbitMQ();
@@ -77,4 +85,12 @@ app.listen(PORT, async () => {
       console.log("✅ Đã đăng ký thành công với Eureka Server");
     }
   });
+
+  // 3. Khởi tạo Cron Job
+  try {
+    const { initDailyAggregatorJob } = require("./src/jobs/dailyAggregator");
+    initDailyAggregatorJob();
+  } catch (err) {
+    console.error("Lỗi khởi tạo Cron Job:", err);
+  }
 });

@@ -22,10 +22,10 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState('general');
   // quản lý trạng thái của trang view Security
   const [securityView, setSecurityView] = useState<'list' | 'changePassword'>('list');
-   // Mỗi khi đổi Tab lớn, hãy reset view con về 'list'
-    useEffect(() => {
-      setSecurityView('list');
-    }, [activeTab])
+  // Mỗi khi đổi Tab lớn, hãy reset view con về 'list'
+  useEffect(() => {
+    setSecurityView('list');
+  }, [activeTab])
 
 
   if (!isOpen) return null;
@@ -41,7 +41,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     { id: 'utilities', name: 'Tiện ích', icon: CommandLineIcon },
   ];
 
- 
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
       {/* 1. Sửa bg-[#1a1d21] -> bg-white
@@ -49,7 +49,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
          3. Sửa border-gray-700 -> border-gray-200 (viền nhẹ hơn)
       */}
       <div className="flex w-[850px] h-[600px] bg-white text-gray-900 rounded-lg overflow-hidden shadow-2xl border border-gray-200">
-        
+
         {/* SIDEBAR BÊN TRÁI */}
         {/* 4. Sửa bg-[#24272b] -> bg-[#f4f5f7] (nền sidebar xám nhẹ)
            5. Sửa border-gray-700 -> border-gray-200
@@ -61,11 +61,10 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`flex items-center w-full px-3 py-2.5 rounded-md text-sm transition-all ${
-                  activeTab === item.id 
-                  ? 'bg-blue-100 text-blue-700 font-semibold' // 6. Màu khi Active (xanh dương nhẹ)
-                  : 'text-gray-700 hover:bg-gray-100 hover:text-gray-950' // 7. Màu thường & hover
-                }`}
+                className={`flex items-center w-full px-3 py-2.5 rounded-md text-sm transition-all ${activeTab === item.id
+                    ? 'bg-blue-100 text-blue-700 font-semibold' // 6. Màu khi Active (xanh dương nhẹ)
+                    : 'text-gray-700 hover:bg-gray-100 hover:text-gray-950' // 7. Màu thường & hover
+                  }`}
               >
                 <item.icon className={`w-5 h-5 mr-3 ${activeTab === item.id ? 'text-blue-600' : 'text-gray-500'}`} />
                 {item.name}
@@ -78,7 +77,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         {/* 8. Sửa bg-[#1a1d21] -> bg-white */}
         <div className="flex-1 flex flex-col bg-white relative">
           {/* Nút đóng */}
-          <button 
+          <button
             onClick={onClose}
             // 9. Sửa hover:bg-gray-700 -> hover:bg-gray-100
             className="absolute top-4 right-4 p-1.5 hover:bg-gray-100 rounded-full transition-colors group"
@@ -99,7 +98,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       <input type="radio" name="contacts" className="w-4 h-4 accent-blue-600 cursor-pointer" />
                     </label>
                     <label className="flex items-center justify-between cursor-pointer group py-1">
-                      <span className="text-gray-800 group-hover:text-gray-950">Chỉ hiển thị bạn bè đang sử dụng Z-Chat</span>
+                      <span className="text-gray-800 group-hover:text-gray-950">Chỉ hiển thị bạn bè đang sử dụng Alo-Chat</span>
                       <input type="radio" name="contacts" defaultChecked className="w-4 h-4 accent-blue-600 cursor-pointer" />
                     </label>
                   </div>
@@ -121,30 +120,30 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             )}
 
             {activeTab === 'security' && (
-            <div className="h-full">
-              {securityView === 'list' ? (
-                <div className="animate-in fade-in duration-300">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-950 px-2">Mật khẩu</h3>
-                  <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
-                    <button 
-                      onClick={() => setSecurityView('changePassword')}
-                      className="flex items-center justify-between w-full px-5 py-5 hover:bg-gray-50 transition-colors group rounded-xl"
-                    >
-                      <div className="text-left">
-                        <p className="text-[15px] text-gray-800 font-bold group-hover:text-blue-600 transition-colors">Đổi mật khẩu</p>
-                        <p className="text-sm text-gray-500">Thay đổi mật khẩu định kỳ để bảo mật tài khoản</p>
-                      </div>
-                      <ChevronRightIcon className="w-5 h-5 text-gray-400 group-hover:text-blue-600" />
-                    </button>
+              <div className="h-full">
+                {securityView === 'list' ? (
+                  <div className="animate-in fade-in duration-300">
+                    <h3 className="text-lg font-semibold mb-4 text-gray-950 px-2">Mật khẩu</h3>
+                    <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+                      <button
+                        onClick={() => setSecurityView('changePassword')}
+                        className="flex items-center justify-between w-full px-5 py-5 hover:bg-gray-50 transition-colors group rounded-xl"
+                      >
+                        <div className="text-left">
+                          <p className="text-[15px] text-gray-800 font-bold group-hover:text-blue-600 transition-colors">Đổi mật khẩu</p>
+                          <p className="text-sm text-gray-500">Thay đổi mật khẩu định kỳ để bảo mật tài khoản</p>
+                        </div>
+                        <ChevronRightIcon className="w-5 h-5 text-gray-400 group-hover:text-blue-600" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                // GỌI COMPONENT ĐÃ TÁCH Ở ĐÂY
-                <ResetPasswordView onBack={() => setSecurityView('list')} />
-              )}
-            </div>
-          )}
-            
+                ) : (
+                  // GỌI COMPONENT ĐÃ TÁCH Ở ĐÂY
+                  <ResetPasswordView onBack={() => setSecurityView('list')} />
+                )}
+              </div>
+            )}
+
             {activeTab !== 'general' && (
               // 14. Sửa text-gray-500 -> text-gray-400
               <div className="flex items-center justify-center h-full text-gray-400">

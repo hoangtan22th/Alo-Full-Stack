@@ -169,6 +169,9 @@ const conversationSchema = new Schema<IConversation>(
   },
 );
 
+// Add compound index to speed up countDocuments
+conversationSchema.index({ isGroup: 1, createdAt: -1 });
+
 // 4. Export Model chuẩn TypeScript
 export default mongoose.model<IConversation>(
   "Conversation",

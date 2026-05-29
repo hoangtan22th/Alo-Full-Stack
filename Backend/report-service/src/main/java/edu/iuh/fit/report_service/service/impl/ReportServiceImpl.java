@@ -44,6 +44,9 @@ import edu.iuh.fit.report_service.dto.response.ReportStatisticsResponse;
 import edu.iuh.fit.report_service.client.MessageServiceClient;
 import edu.iuh.fit.report_service.dto.MessageDto;
 import edu.iuh.fit.common_service.exception.TamperedEvidenceException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.concurrent.TimeUnit;
 
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -58,6 +61,8 @@ public class ReportServiceImpl implements ReportService {
     private final MessageServiceClient messageServiceClient;
     private final RabbitTemplate rabbitTemplate;
     private final MongoTemplate mongoTemplate;
+    private final StringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper;
 
     @Override
     public ReportResponse createReport(ReportCreationRequest request) {
@@ -337,6 +342,17 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     public ReportStatisticsResponse getStatistics() {
+        String cacheKey = "admin:stats:reports";
+        try {
+            String cachedData = redisTemplate.opsForValue().get(cacheKey);
+            if (cachedData != null) {
+                log.info("Returning cached report statistics...");
+                return objectMapper.readValue(cachedData, ReportStatisticsResponse.class);
+            }
+        } catch (Exception e) {
+            log.error("Redis cache get error in ReportServiceImpl", e);
+        }
+
         log.info("Calculating report statistics...");
 
         // 1. Overview Metrics
@@ -383,7 +399,7 @@ public class ReportServiceImpl implements ReportService {
                 .aggregate(topOffendersAgg, Report.class, ReportStatisticsResponse.OffenderInfo.class)
                 .getMappedResults();
 
-        return ReportStatisticsResponse.builder()
+        ReportStatisticsResponse statsResponse = ReportStatisticsResponse.builder()
                 .overview(ReportStatisticsResponse.Overview.builder()
                         .totalPending(totalPending)
                         .resolvedToday(resolvedToday)
@@ -393,6 +409,15 @@ public class ReportServiceImpl implements ReportService {
                 .byTargetType(byTargetType)
                 .topOffenders(topOffenders)
                 .build();
+
+        try {
+            String jsonStr = objectMapper.writeValueAsString(statsResponse);
+            redisTemplate.opsForValue().set(cacheKey, jsonStr, 300, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.error("Redis cache set error in ReportServiceImpl", e);
+        }
+
+        return statsResponse;
     }
 
     private void publishBanEvent(Report report, String targetName, String leaderId) {

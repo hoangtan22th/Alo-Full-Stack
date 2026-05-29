@@ -64,6 +64,17 @@ export function initSocketConnection(io: Server) {
     }
 
     // 3. Mark user as Online in Redis
+    let isAlreadyOnline = false;
+    try {
+      const presenceStr = await presenceClient.hGet(`presence:users`, userId);
+      if (presenceStr) {
+        const presence = JSON.parse(presenceStr);
+        if (presence.status === "online") {
+          isAlreadyOnline = true;
+        }
+      }
+    } catch (e) {}
+
     await presenceClient.hSet(
       `presence:users`,
       userId,
@@ -73,6 +84,10 @@ export function initSocketConnection(io: Server) {
         socket_id: socket.id,
       }),
     );
+
+    if (!isAlreadyOnline) {
+      await presenceClient.incr(`presence:stats:online_count`);
+    }
 
     // Broadcast Online status
     socket.broadcast.emit(SOCKET_EVENTS.USER_ONLINE, {
@@ -221,6 +236,17 @@ export function initSocketConnection(io: Server) {
     socket.on("disconnect", async () => {
       console.log(`User disconnected: ${userId}`);
 
+      let wasOnline = false;
+      try {
+        const presenceStr = await presenceClient.hGet(`presence:users`, userId);
+        if (presenceStr) {
+          const presence = JSON.parse(presenceStr);
+          if (presence.status === "online") {
+            wasOnline = true;
+          }
+        }
+      } catch (e) {}
+
       // Update presence to offline instead of deleting
       await presenceClient.hSet(
         `presence:users`,
@@ -230,6 +256,13 @@ export function initSocketConnection(io: Server) {
           last_active: Date.now(),
         }),
       );
+
+      if (wasOnline) {
+        const count = await presenceClient.decr(`presence:stats:online_count`);
+        if (count < 0) {
+          await presenceClient.set(`presence:stats:online_count`, "0");
+        }
+      }
 
       // Broadcast Offline status
       socket.broadcast.emit(SOCKET_EVENTS.USER_OFFLINE, {

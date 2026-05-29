@@ -1,17 +1,19 @@
 "use client";
 // Popup khi nhấn vào avatar
-import { UserIcon as UserOutline } from "@heroicons/react/24/outline";
+import { UserIcon as UserOutline, SparklesIcon } from "@heroicons/react/24/outline";
 import Swal from "sweetalert2";
 import { useAuthStore } from "../../store/useAuthStore";
 
 interface UserMenuProps {
   onOpenProfile: () => void;
+  onOpenWrapped: () => void;
   onLogout: () => void;
   onClose: () => void;
 }
 
 export default function UserMenu({
   onOpenProfile,
+  onOpenWrapped,
   onLogout,
   onClose,
 }: UserMenuProps) {
@@ -58,6 +60,17 @@ export default function UserMenu({
         >
           <UserOutline className="w-5 h-5" />
           Hồ sơ của bạn
+        </button>
+
+        <button
+          onClick={() => {
+            onClose();
+            onOpenWrapped();
+          }}
+          className="w-full text-left px-3 py-2 text-sm text-purple-700 hover:bg-purple-50 hover:text-purple-800 rounded-md transition-colors flex items-center gap-3 font-semibold group"
+        >
+          <SparklesIcon className="w-5 h-5 text-purple-600 group-hover:scale-110 transition-transform animate-pulse" />
+          Nhìn lại {new Date().getFullYear()} (Wrapped)
         </button>
 
         <button
