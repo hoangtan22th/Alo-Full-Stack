@@ -62,6 +62,8 @@ import PollMessagePreview from "@/components/chat/PollMessagePreview";
 import PollDetailsModal from "@/components/ui/group/PollDetailsModal";
 import FileMessageBubble from "@/components/chat/FileMessageBubble";
 import TxtFileViewerModal from "@/components/chat/TxtFileViewerModal";
+import { parseReminderFromText } from "@/utils/reminderParser";
+import ReminderModal from "@/components/ui/group/ReminderModal";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -174,6 +176,12 @@ export default function ChatPage() {
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
   const [showPinnedModal, setShowPinnedModal] = useState(false);
   const [activePollId, setActivePollId] = useState<string | null>(null);
+  const [quickReminderPreset, setQuickReminderPreset] = useState<{
+    title: string;
+    date: string;
+    time: string;
+  } | null>(null);
+  const [showQuickReminderModal, setShowQuickReminderModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveOptions, setLeaveOptions] = useState({
@@ -199,6 +207,16 @@ export default function ChatPage() {
   const [mediaMessages, setMediaMessages] = useState<MessageDTO[]>([]);
   const [messageText, setMessageText] = useState("");
   const [conversationInfo, setConversationInfo] = useState<any>(null);
+  const latestReminderMessageId = useMemo(() => {
+    if (!messages || messages.length === 0 || !conversationInfo?.isGroup) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.type === "text" && !m.isRevoked && parseReminderFromText(m.content) !== null) {
+        return m._id;
+      }
+    }
+    return null;
+  }, [messages, conversationInfo?.isGroup]);
   const [previewingTxtFile, setPreviewingTxtFile] = useState<{ fileName: string; content: string } | null>(null);
 
   // Group Link Info Cache
@@ -3079,11 +3097,42 @@ export default function ChatPage() {
                                           );
                                         }
 
+                                        const parsed = conversationInfo?.isGroup ? parseReminderFromText(msg.content) : null;
+
                                         return (
-                                          <div
-                                            className={`px-2 py-1 text-[15px] font-medium leading-relaxed text-gray-900 break-words whitespace-pre-wrap text-justify`}
-                                          >
-                                            {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
+                                          <div className="flex flex-col">
+                                            <div
+                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap text-justify"
+                                            >
+                                              {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
+                                            </div>
+                                            {parsed && msg._id === latestReminderMessageId && (
+                                              <div 
+                                                className={`mt-2 pt-2 border-t-2 w-full flex justify-center
+                                                  ${isMine ? "border-blue-200" : "border-gray-300"}
+                                                `}
+                                              >
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setQuickReminderPreset({
+                                                      title: parsed.title,
+                                                      date: parsed.date,
+                                                      time: parsed.time
+                                                    });
+                                                    setShowQuickReminderModal(true);
+                                                  }}
+                                                  className={`text-[12px] font-black tracking-wide hover:underline transition-all select-none active:opacity-80 py-0.5
+                                                    ${isMine 
+                                                      ? "text-blue-800 hover:text-blue-950" 
+                                                      : "text-blue-800 hover:text-blue-950"
+                                                    }
+                                                  `}
+                                                >
+                                                  Tạo nhắc hẹn
+                                                </button>
+                                              </div>
+                                            )}
                                           </div>
                                         );
                                       })()
@@ -4474,6 +4523,19 @@ export default function ChatPage() {
           onClose={() => setPreviewingTxtFile(null)}
           fileName={previewingTxtFile.fileName}
           content={previewingTxtFile.content}
+        />
+      )}
+      {showQuickReminderModal && quickReminderPreset && (
+        <ReminderModal
+          conversationId={conversationId}
+          initialTitle={quickReminderPreset.title}
+          initialDate={quickReminderPreset.date}
+          initialTime={quickReminderPreset.time}
+          initialShowCreate={true}
+          onClose={() => {
+            setShowQuickReminderModal(false);
+            setQuickReminderPreset(null);
+          }}
         />
       )}
       <ChatEffects type={activeEffect} />
