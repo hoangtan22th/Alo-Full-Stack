@@ -3346,6 +3346,7 @@ export default function ChatPage() {
                                       {/* 4. Redo Button */}
                                       {isMounted &&
                                         isMine &&
+                                        msg.type === "text" &&
                                         msg.isRevoked &&
                                         msg.revokedAt &&
                                         new Date().getTime() -
