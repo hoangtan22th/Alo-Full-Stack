@@ -78,4 +78,10 @@ public class AdminReportController {
         long count = reportService.countTargetViolations(targetId);
         return ResponseEntity.ok(ApiResponse.success(count));
     }
+
+    @PostMapping("/{reportId}/ai-reanalyze")
+    public ResponseEntity<ApiResponse<ReportAdminResponse>> reanalyzeReport(@PathVariable String reportId) {
+        ReportAdminResponse response = reportService.reanalyzeReport(reportId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
 }

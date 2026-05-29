@@ -25,4 +25,6 @@ public interface ReportService {
     ReportStatisticsResponse getStatistics();
 
     long countTargetViolations(String targetId);
+
+    ReportAdminResponse reanalyzeReport(String reportId);
 }

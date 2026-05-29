@@ -63,6 +63,7 @@ public class ReportServiceImpl implements ReportService {
     private final MongoTemplate mongoTemplate;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final edu.iuh.fit.report_service.client.ChatbotClient chatbotClient;
 
     @Override
     public ReportResponse createReport(ReportCreationRequest request) {
@@ -616,5 +617,42 @@ public class ReportServiceImpl implements ReportService {
     @Override
     public long countTargetViolations(String targetId) {
         return reportRepository.countByTargetIdAndStatus(targetId, ReportStatus.RESOLVED);
+    }
+
+    @Override
+    public ReportAdminResponse reanalyzeReport(String reportId) {
+        log.info("[AI Override] Bypassing cache. Re-analyzing Report ID: {}", reportId);
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new RuntimeException("Report not found with ID: " + reportId));
+
+        try {
+            edu.iuh.fit.report_service.dto.request.ReportAnalysisRequest requestPayload = edu.iuh.fit.report_service.dto.request.ReportAnalysisRequest.builder()
+                    .reportId(report.getId())
+                    .reason(report.getReason().name())
+                    .targetId(report.getTargetId())
+                    .targetType(report.getTargetType().name())
+                    .targetName(report.getTargetName())
+                    .conversationType(report.getConversationType() != null ? report.getConversationType().name() : "ONE_TO_ONE")
+                    .messageSnapshots(report.getMessageSnapshots())
+                    .build();
+
+            ApiResponse<edu.iuh.fit.report_service.dto.response.AiAnalysisResponse> apiResponse = chatbotClient.analyzeReport(requestPayload);
+            if (apiResponse != null && apiResponse.getData() != null) {
+                edu.iuh.fit.report_service.dto.response.AiAnalysisResponse analysis = apiResponse.getData();
+                report.setAiSummary(analysis.getSummary());
+                report.setAiSuggestedAction(analysis.getSuggestedAction());
+                report.setAiConfidence(analysis.getConfidence());
+                report.setAiAnalyzedAt(LocalDateTime.now());
+                reportRepository.save(report);
+                log.info("[AI Override] AI re-analysis completed successfully for Report ID: {}", reportId);
+            } else {
+                log.warn("[AI Override] Received empty response from chatbot-service for Report ID: {}", reportId);
+            }
+        } catch (Exception e) {
+            log.error("[AI Override] Failed to call chatbot-service via Feign client", e);
+            throw new RuntimeException("Lỗi gọi AI engine phân tích: " + e.getMessage(), e);
+        }
+
+        return mapToAdminResponse(report);
     }
 }
