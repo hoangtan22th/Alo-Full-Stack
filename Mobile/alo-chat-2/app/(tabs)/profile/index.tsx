@@ -91,7 +91,10 @@ export default function MainProfileScreen() {
           {/* Profile Card */}
           <TouchableOpacity
             className="bg-white p-4 rounded-3xl flex-row items-center justify-between mb-6 border-[1px] border-gray-200"
-            onPress={() => router.push("/profile/edit")}
+            onPress={() => router.push({
+              pathname: "/profile/timeline",
+              params: { userId: user?.id || user?._id }
+            })}
           >
             <View className="flex-row items-center flex-1">
               <Image
