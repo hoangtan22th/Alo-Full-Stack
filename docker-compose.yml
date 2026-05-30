@@ -447,20 +447,7 @@ services:
     networks:
       - alo-network
 
-  # ============================================================================
-  # 6. AUTOMATION & MONITORING (WATCHTOWER)
-  # ============================================================================
 
-  watchtower:
-    image: containrrr/watchtower:latest
-    container_name: alo-watchtower
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - REPO_USER=${DOCKER_USERNAME:-hoangtan22th}
-      - REPO_PASS=${DOCKER_PASSWORD}
-    command: --interval 300 --cleanup
-    restart: always
 
 # ==============================================================================
 # NETWORKS & VOLUMES CONFIGURATION
