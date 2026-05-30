@@ -145,3 +145,22 @@ jobs:
           tags: |
             docker.io/${{ secrets.DOCKER_USERNAME }}/${{ matrix.service.image }}:${{ github.sha }}
             docker.io/${{ secrets.DOCKER_USERNAME }}/${{ matrix.service.image }}:latest
+
+  # 2. DEPLOY JOB (RUNS ONLY AFTER PARALLEL BUILD JOBS FINISH SUCCESSFULLY)
+  deploy:
+    name: Deploy to Server via SSH
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and deploy containers
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 54.255.57.50
+          username: ubuntu
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/Alo-Full-Stack
+            git checkout main || git checkout -b main
+            git pull origin main
+            docker compose pull
+            docker compose up -d --remove-orphans
