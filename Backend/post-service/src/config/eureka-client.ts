@@ -3,15 +3,16 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const PORT: number = parseInt(process.env.PORT as string, 10) || 8087;
-const hostName = '127.0.0.1'; 
+const PORT: number = parseInt(process.env.PORT as string, 10) || 8089;
+const hostName = process.env.HOSTNAME || '127.0.0.1'; 
+const ipAddr = process.env.IP_ADDR || '127.0.0.1';
 
 const eurekaClient = new Eureka({
   instance: {
     instanceId: `${hostName}:post-service:${PORT}`,
     app: 'POST-SERVICE',
     hostName: hostName,
-    ipAddr: '127.0.0.1',
+    ipAddr: ipAddr,
     statusPageUrl: `http://${hostName}:${PORT}/info`,
     healthCheckUrl: `http://${hostName}:${PORT}/health`,
     port: {
