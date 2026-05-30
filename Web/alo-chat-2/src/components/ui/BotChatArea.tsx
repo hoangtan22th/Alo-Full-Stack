@@ -267,7 +267,7 @@ export default function BotChatArea({ currentUser }: { currentUser: any }) {
             {BOT_INFO.name}
           </h2>
           <p className="text-[12px] font-bold text-blue-500 mt-1 uppercase tracking-wider">
-            Guardrails Protected
+            Trợ lý AI Thông minh
           </p>
         </div>
         <div className="p-6 space-y-6">
@@ -276,18 +276,18 @@ export default function BotChatArea({ currentUser }: { currentUser: any }) {
                 <SparklesIcon className="w-12 h-12" />
             </div>
             <p className="relative z-10">
-              Chào bạn! Mình là AI được huấn luyện đặc biệt để hỗ trợ riêng cho <strong>Alo Chat</strong>.
+              Chào bạn! Mình là <strong>Alo Bot</strong>, người bạn đồng hành thông minh giúp bạn tối ưu hóa và làm chủ mọi trải nghiệm trên Alo Chat.
             </p>
           </div>
           
           <div className="space-y-4">
-             <h4 className="text-[12px] font-black text-gray-400 uppercase tracking-widest px-1">Quy tắc bảo vệ</h4>
+             <h4 className="text-[12px] font-black text-gray-400 uppercase tracking-widest px-1">Tính năng nổi bật</h4>
              <div className="space-y-3">
                 {[
-                  "Chỉ trả lời về Alo Chat",
-                  "Từ chối các chủ đề ngoài lề",
-                  "Bảo mật thông tin người dùng",
-                  "Hỗ trợ tính năng thời tiết"
+                  "Hướng dẫn sử dụng các tính năng",
+                  "Dự báo thời tiết nhanh chóng",
+                  "Hỗ trợ quản lý và kết nối bạn bè",
+                  "Tương tác an toàn & bảo mật 100%"
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-3 px-1">
                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
