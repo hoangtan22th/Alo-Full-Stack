@@ -113,15 +113,6 @@ services:
         condition: service_healthy
     networks:
       - alo-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8888/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      # API gateway will fail healthcheck if downstream actuator is disabled, 
-      # but we can fallback to standard port check if actuator is not present.
-      # Fallback: test if port 8888 is open
-      # test: ["CMD", "nc", "-z", "localhost", "8888"]
 
   # ============================================================================
   # 3. JAVA BUSINESS MICROSERVICES
@@ -305,6 +296,8 @@ services:
     environment:
       - PORT=8083
       - NODE_ENV=production
+      - HOSTNAME=message-service
+      - IP_ADDR=message-service
       - MONGODB_URI=mongodb://mongodb:27017/alo_message_db
       - EUREKA_HOST=discovery-service
       - EUREKA_PORT=8761
@@ -365,6 +358,8 @@ services:
       - PORT=3000
       - HOSTNAME=realtime-service
       - IP_ADDR=realtime-service
+      - EUREKA_HOST=discovery-service
+      - EUREKA_PORT=8761
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672
       - JWT_SECRET=${JWT_SECRET}
