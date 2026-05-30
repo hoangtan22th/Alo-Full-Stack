@@ -1,7 +1,7 @@
 // src/services/broadcastService.ts
 import { axiosClient } from "@/lib/axiosClient";
 
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8888";
+const GATEWAY_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
 const BROADCAST_API_URL = `${GATEWAY_URL}/api/v1/admin/messages/broadcasts`;
 
 export interface BroadcastPayload {

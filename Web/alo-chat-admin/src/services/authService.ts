@@ -1,8 +1,8 @@
-﻿import { axiosClient } from "@/lib/axiosClient";
+import { axiosClient } from "@/lib/axiosClient";
 import { useAuthStore } from "@/store/useAuthStore";
 
 const GATEWAY_URL =
-  process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8888";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
 
 export const authService = {
   login: async (email: string, password: string) => {

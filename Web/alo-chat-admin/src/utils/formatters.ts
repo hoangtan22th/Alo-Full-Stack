@@ -1,4 +1,4 @@
-﻿export const formatEmail = (email: string) => {
+export const formatEmail = (email: string) => {
   return email ? email.toLowerCase() : "";
 };
 
