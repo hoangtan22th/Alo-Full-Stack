@@ -16,6 +16,7 @@ COPY Web/alo-chat-2/src ./src
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV NEXT_PUBLIC_STIPOP_API_KEY=ac1b6d780ed61f257feef561ad503147
 
 # Build the NextJS application
 RUN npm run build
