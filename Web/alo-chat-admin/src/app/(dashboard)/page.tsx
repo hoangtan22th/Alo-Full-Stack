@@ -75,7 +75,7 @@ export default function OverviewPage() {
 
     const interval = setInterval(() => {
       fetchDashboardData(false);
-    }, 10000); // Tự động cập nhật mỗi 10 giây (chạy ngầm)
+    }, 60000); // Tự động cập nhật mỗi 60 giây (chạy ngầm)
 
     return () => clearInterval(interval);
   }, []);

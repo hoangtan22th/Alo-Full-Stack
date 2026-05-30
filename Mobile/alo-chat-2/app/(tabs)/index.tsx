@@ -148,7 +148,7 @@ export default function MessagesScreen() {
     fetchData();
   }, [currentUserId]);
 
-  const { socket } = useSocket();
+  const { socket, onlineUsers, fetchBulkPresence } = useSocket();
 
   useEffect(() => {
     if (!socket) return;
@@ -253,7 +253,23 @@ export default function MessagesScreen() {
     if (!currentUserId) return;
     try {
       setLoading(true);
-      await Promise.all([fetchGroups(), fetchLabelsInfo(), fetchPinnedInfo()]);
+      const groups = await fetchGroups();
+      await Promise.all([fetchLabelsInfo(), fetchPinnedInfo()]);
+
+      // Fetch bulk presence for 1-1 chats
+      if (Array.isArray(groups)) {
+        const userIds = groups
+          .filter((g: any) => !g.isGroup)
+          .map((g: any) => {
+            const otherMember = g.members?.find((m: any) => String(m.userId) !== String(currentUserId));
+            return otherMember?.userId;
+          })
+          .filter(id => !!id);
+
+        if (userIds.length > 0) {
+          fetchBulkPresence(userIds);
+        }
+      }
     } catch (err) {
       console.error("Lỗi tải dữ liệu mobile:", err);
     } finally {
@@ -348,7 +364,7 @@ export default function MessagesScreen() {
               id: g._id,
               targetUserId:
                 !g.isGroup && currentUserId && g.members
-                  ? g.members.find((m: any) => m.userId !== currentUserId)
+                  ? g.members.find((m: any) => String(m.userId) !== String(currentUserId))
                       ?.userId
                   : undefined,
               name: chatName || "Cuộc trò chuyện",
@@ -369,9 +385,12 @@ export default function MessagesScreen() {
         DeviceEventEmitter.emit("update_unread_count", totalUnreadCount);
 
         setConversations(formattedGroups);
+        return groups;
       }
+      return [];
     } catch (error) {
       console.error("Lỗi lấy danh sách nhóm:", error);
+      return [];
     }
   };
 
@@ -508,6 +527,12 @@ export default function MessagesScreen() {
                 {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
               </Text>
             </View>
+          )}
+          {!chat.isGroup && chat.targetUserId && onlineUsers[String(chat.targetUserId)]?.status === "online" && (
+            <View 
+              style={{ zIndex: 20 }}
+              className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" 
+            />
           )}
         </View>
 

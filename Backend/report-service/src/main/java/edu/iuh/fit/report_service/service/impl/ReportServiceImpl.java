@@ -44,6 +44,9 @@ import edu.iuh.fit.report_service.dto.response.ReportStatisticsResponse;
 import edu.iuh.fit.report_service.client.MessageServiceClient;
 import edu.iuh.fit.report_service.dto.MessageDto;
 import edu.iuh.fit.common_service.exception.TamperedEvidenceException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.concurrent.TimeUnit;
 
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -58,6 +61,9 @@ public class ReportServiceImpl implements ReportService {
     private final MessageServiceClient messageServiceClient;
     private final RabbitTemplate rabbitTemplate;
     private final MongoTemplate mongoTemplate;
+    private final StringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper;
+    private final edu.iuh.fit.report_service.client.ChatbotClient chatbotClient;
 
     @Override
     public ReportResponse createReport(ReportCreationRequest request) {
@@ -337,6 +343,17 @@ public class ReportServiceImpl implements ReportService {
 
     @Override
     public ReportStatisticsResponse getStatistics() {
+        String cacheKey = "admin:stats:reports";
+        try {
+            String cachedData = redisTemplate.opsForValue().get(cacheKey);
+            if (cachedData != null) {
+                log.info("Returning cached report statistics...");
+                return objectMapper.readValue(cachedData, ReportStatisticsResponse.class);
+            }
+        } catch (Exception e) {
+            log.error("Redis cache get error in ReportServiceImpl", e);
+        }
+
         log.info("Calculating report statistics...");
 
         // 1. Overview Metrics
@@ -383,7 +400,7 @@ public class ReportServiceImpl implements ReportService {
                 .aggregate(topOffendersAgg, Report.class, ReportStatisticsResponse.OffenderInfo.class)
                 .getMappedResults();
 
-        return ReportStatisticsResponse.builder()
+        ReportStatisticsResponse statsResponse = ReportStatisticsResponse.builder()
                 .overview(ReportStatisticsResponse.Overview.builder()
                         .totalPending(totalPending)
                         .resolvedToday(resolvedToday)
@@ -393,6 +410,15 @@ public class ReportServiceImpl implements ReportService {
                 .byTargetType(byTargetType)
                 .topOffenders(topOffenders)
                 .build();
+
+        try {
+            String jsonStr = objectMapper.writeValueAsString(statsResponse);
+            redisTemplate.opsForValue().set(cacheKey, jsonStr, 300, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.error("Redis cache set error in ReportServiceImpl", e);
+        }
+
+        return statsResponse;
     }
 
     private void publishBanEvent(Report report, String targetName, String leaderId) {
@@ -536,6 +562,11 @@ public class ReportServiceImpl implements ReportService {
                 .lockedAt(report.getLockedAt())
                 .createdAt(report.getCreatedAt())
                 .updatedAt(report.getUpdatedAt())
+                .snapshotHash(report.getSnapshotHash())
+                .aiSummary(report.getAiSummary())
+                .aiSuggestedAction(report.getAiSuggestedAction())
+                .aiConfidence(report.getAiConfidence())
+                .aiAnalyzedAt(report.getAiAnalyzedAt())
                 .build();
     }
 
@@ -559,6 +590,15 @@ public class ReportServiceImpl implements ReportService {
             log.warn("fetchUserSafe called with blank userId, skipping.");
             return UserResponse.builder().id("").fullName("Unknown User").build();
         }
+        if (userId.equalsIgnoreCase("SYSTEM")) {
+            return UserResponse.builder()
+                    .id("SYSTEM")
+                    .fullName("Hệ thống AI")
+                    .firstName("Hệ thống")
+                    .lastName("AI")
+                    .avatar(null)
+                    .build();
+        }
         try {
             ApiResponse<UserResponse> response = userClient.getUserById(userId);
             if (response != null && response.getData() != null) {
@@ -567,11 +607,52 @@ public class ReportServiceImpl implements ReportService {
         } catch (FeignException.NotFound e) {
             log.warn("User not found for ID: {} (404 from user-service)", userId);
         } catch (FeignException e) {
-            log.error("Feign error fetching user {} — status: {}, body: {}",
-                    userId, e.status(), e.contentUTF8());
+            log.error("Feign error fetching user {} — message: {}", userId, e.getMessage());
         } catch (Exception e) {
             log.error("Unexpected error fetching user {}: {}", userId, e.getMessage());
         }
         return UserResponse.builder().id(userId).fullName("Unknown User").build();
+    }
+
+    @Override
+    public long countTargetViolations(String targetId) {
+        return reportRepository.countByTargetIdAndStatus(targetId, ReportStatus.RESOLVED);
+    }
+
+    @Override
+    public ReportAdminResponse reanalyzeReport(String reportId) {
+        log.info("[AI Override] Bypassing cache. Re-analyzing Report ID: {}", reportId);
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new RuntimeException("Report not found with ID: " + reportId));
+
+        try {
+            edu.iuh.fit.report_service.dto.request.ReportAnalysisRequest requestPayload = edu.iuh.fit.report_service.dto.request.ReportAnalysisRequest.builder()
+                    .reportId(report.getId())
+                    .reason(report.getReason().name())
+                    .targetId(report.getTargetId())
+                    .targetType(report.getTargetType().name())
+                    .targetName(report.getTargetName())
+                    .conversationType(report.getConversationType() != null ? report.getConversationType().name() : "ONE_TO_ONE")
+                    .messageSnapshots(report.getMessageSnapshots())
+                    .build();
+
+            ApiResponse<edu.iuh.fit.report_service.dto.response.AiAnalysisResponse> apiResponse = chatbotClient.analyzeReport(requestPayload);
+            if (apiResponse != null && apiResponse.getData() != null) {
+                edu.iuh.fit.report_service.dto.response.AiAnalysisResponse analysis = apiResponse.getData();
+                report.setAiSummary(analysis.getSummary());
+                report.setAiSuggestedAction(analysis.getSuggestedAction());
+                report.setAiConfidence(analysis.getConfidence());
+                report.setAiAnalyzedAt(LocalDateTime.now());
+                reportRepository.save(report);
+                log.info("[AI Override] AI re-analysis completed successfully for Report ID: {}", reportId);
+            } else {
+                log.warn("[AI Override] Received empty response from chatbot-service for Report ID: {}", reportId);
+            }
+        } catch (Exception e) {
+            log.error("[AI Override] Failed to call chatbot-service via Feign client", e);
+            throw new RuntimeException("Lỗi gọi AI engine phân tích: " + e.getMessage(), e);
+        }
+
+        return mapToAdminResponse(report);
     }
 }

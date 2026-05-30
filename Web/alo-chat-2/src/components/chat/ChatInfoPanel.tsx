@@ -145,7 +145,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   const isAdmin = currentUserRole === "leader";
   const isDeputy = currentUserRole === "deputy";
   const isManager = isAdmin || isDeputy;
-
+  
   const otherMember = useMemo(() => {
     if (isGroup) return null;
     return conversationInfo?.members?.find((m: any) => m.userId !== myId);
@@ -233,6 +233,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
       openReportModal: s.openReportModal,
     }))
   );
+
 
   const handleReportUser = () => {
     if (!otherUserId) return;
@@ -342,7 +343,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                 ? `${conversationInfo?.members?.length ?? 0} thành viên`
                 : isOnline
                   ? "Đang hoạt động"
-                  : getOfflineText(userStatus?.last_active)}
+                  : getOfflineText(userStatus?.lastActive)}
             </p>
 
             {/* Quick Actions */}
@@ -561,6 +562,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                     label="Báo xấu nhóm"
                     isDanger
                     onClick={() => setShowReportTargetModal(true)}
+
                   />
                   <SettingItem
                     icon={<ArrowRightOnRectangleIcon />}
@@ -738,7 +740,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           isOpen={showCommonGroupsModal}
           onClose={() => setShowCommonGroupsModal(false)}
           otherUserId={otherMember.userId}
-          friendName={otherMember.fullName || conversationInfo.displayName || "Bạn bè"}
+          friendName={
+            otherMember.fullName || conversationInfo.displayName || "Bạn bè"
+          }
         />
       )}
     </div>

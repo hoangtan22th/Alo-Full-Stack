@@ -12,7 +12,7 @@ import {
   TextInput
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeftIcon, PlusIcon, LockClosedIcon } from "react-native-heroicons/outline";
+import { ArrowLeftIcon, PlusIcon, LockClosedIcon, ChartBarIcon, UserGroupIcon } from "react-native-heroicons/outline";
 import { CheckCircleIcon, CheckIcon } from "react-native-heroicons/solid";
 import { pollService, PollDTO, PollResultDTO } from "../../services/pollService";
 import { useAuth } from "../../contexts/AuthContext";
@@ -38,6 +38,10 @@ export default function PollDetailsScreen() {
   const [initialVotes, setInitialVotes] = useState<string[]>([]);
   const [newOptionText, setNewOptionText] = useState("");
   const [isAddingOption, setIsAddingOption] = useState(false);
+  const [creatorName, setCreatorName] = useState("");
+  
+  // Tab: "vote" or "stats"
+  const [activeTab, setActiveTab] = useState<"vote" | "stats">("vote");
 
   const fetchPollData = async (isRefresh = false) => {
     if (!pollId) return;
@@ -47,7 +51,13 @@ export default function PollDetailsScreen() {
         pollService.getPollDetails(pollId as string),
         pollService.getPollResults(pollId as string)
       ]);
-      if (pollData) setPoll(pollData);
+      if (pollData) {
+        setPoll(pollData);
+        try {
+          const profile = await userService.getUserById(pollData.creatorId);
+          setCreatorName(profile?.fullName || "Người dùng");
+        } catch { setCreatorName("Người dùng"); }
+      }
       if (resultsData) setResults(resultsData);
       
       // Auto-select user votes
@@ -89,8 +99,10 @@ export default function PollDetailsScreen() {
   // Fetch user profiles for avatars
   useEffect(() => {
      const fetchUsers = async () => {
-        if (!poll || poll.settings.hideVoters) return; // Không cần fetch nếu ẩn danh
+        if (!poll || poll.settings.hideVoters) return;
         const userIds = new Set<string>();
+        // Also add creator
+        userIds.add(poll.creatorId);
         results.forEach(r => r.voters.forEach(v => userIds.add(v.userId)));
         
         const missingIds = Array.from(userIds).filter(id => !userCache[id]);
@@ -151,41 +163,54 @@ export default function PollDetailsScreen() {
   };
 
   const handleAddOption = async () => {
-     if (!newOptionText.trim()) return;
-     setIsAddingOption(true);
-     try {
-        const res = await pollService.addPollOption(pollId as string, newOptionText.trim());
-        if (res) {
-           setNewOptionText("");
-           fetchPollData();
-        } else {
-           Alert.alert("Lỗi", "Không thể thêm phương án.");
-        }
-     } catch(e) {
-        // ignore
-     } finally {
-        setIsAddingOption(false);
-     }
+    if (!newOptionText.trim()) return;
+    setIsAddingOption(true);
+    try {
+      const res = await pollService.addPollOption(pollId as string, newOptionText.trim());
+      if (res) {
+        setNewOptionText("");
+        fetchPollData();
+        Alert.alert("Thành công", "Đã thêm phương án mới.");
+      } else {
+        Alert.alert("Lỗi", "Không thể thêm phương án.");
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsAddingOption(false);
+    }
   };
 
   const handleClosePoll = () => {
-      Alert.alert(
-        "Khóa bình chọn",
-        "Bạn có chắc muốn khóa bình chọn này? Người khác sẽ không thể tiếp tục bình chọn.",
-        [
-          { text: "Hủy", style: "cancel" },
-          { 
-            text: "Khóa", 
-            style: "destructive",
-            onPress: async () => {
-               const ok = await pollService.closePoll(pollId as string);
-               if (ok) {
-                  fetchPollData();
-               }
+    Alert.alert(
+      "Khóa bình chọn",
+      "Bạn có chắc muốn khóa bình chọn này? Người khác sẽ không thể tiếp tục bình chọn.",
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Khóa",
+          style: "destructive",
+          onPress: async () => {
+            const ok = await pollService.closePoll(pollId as string);
+            if (ok) {
+              fetchPollData();
+              Alert.alert("Thành công", "Bình chọn đã được khóa.");
             }
-          }
-        ]
-      )
+          },
+        },
+      ],
+    );
+  };
+
+  const handleCreateGroupFromOption = (voterIds: string[], optionText: string) => {
+    router.push({
+      pathname: "/chat/create-group-poll",
+      params: {
+        voterIds: JSON.stringify(voterIds),
+        optionText,
+        pollQuestion: poll?.question || "",
+      },
+    });
   };
 
   if (loading) {
@@ -224,7 +249,47 @@ export default function PollDetailsScreen() {
         <TouchableOpacity onPress={() => router.back()} style={{ padding: 4, marginRight: 12 }}>
           <ArrowLeftIcon size={24} color="#374151" />
         </TouchableOpacity>
-        <Text style={{ flex: 1, fontSize: 18, fontWeight: "600", color: "#111827" }} numberOfLines={1}>Chi tiết bình chọn</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 18, fontWeight: "600", color: "#111827" }} numberOfLines={1}>Chi tiết bình chọn</Text>
+          {creatorName ? (
+            <Text style={{ fontSize: 11, color: "#9ca3af" }}>Tạo bởi: {creatorName}</Text>
+          ) : null}
+        </View>
+      </View>
+
+      {/* Tab Bar */}
+      <View style={{ flexDirection: "row", backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#f3f4f6" }}>
+        <TouchableOpacity
+          onPress={() => setActiveTab("vote")}
+          style={{
+            flex: 1,
+            paddingVertical: 12,
+            alignItems: "center",
+            borderBottomWidth: activeTab === "vote" ? 2 : 0,
+            borderBottomColor: "#3b82f6",
+          }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: "bold", color: activeTab === "vote" ? "#3b82f6" : "#9ca3af" }}>
+            Bình chọn
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setActiveTab("stats")}
+          style={{
+            flex: 1,
+            paddingVertical: 12,
+            alignItems: "center",
+            flexDirection: "row",
+            justifyContent: "center",
+            borderBottomWidth: activeTab === "stats" ? 2 : 0,
+            borderBottomColor: "#3b82f6",
+          }}
+        >
+          <ChartBarIcon size={16} color={activeTab === "stats" ? "#3b82f6" : "#9ca3af"} style={{ marginRight: 4 }} />
+          <Text style={{ fontSize: 14, fontWeight: "bold", color: activeTab === "stats" ? "#3b82f6" : "#9ca3af" }}>
+            Thống kê
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView 
@@ -266,120 +331,207 @@ export default function PollDetailsScreen() {
             </View>
          </View>
 
-         {/* Options */}
-         <View style={{ marginBottom: 24 }}>
-            {poll.options.map(opt => {
+         {/* ===== TAB: VOTE ===== */}
+         {activeTab === "vote" && (
+           <>
+             <View style={{ marginBottom: 24 }}>
+                {poll.options.map(opt => {
+                   const res = results.find(r => r.optionId === opt._id);
+                   const count = res ? res.count : 0;
+                   const voters = res ? res.voters : [];
+                   const percentage = Math.round((count / (totalVotes || 1)) * 100);
+                   const isSelected = selectedOptions.includes(opt._id as string);
+
+                   return (
+                      <TouchableOpacity 
+                         key={opt._id}
+                         activeOpacity={0.7}
+                         disabled={readonly}
+                         onPress={() => toggleOption(opt._id as string)}
+                         style={{
+                            backgroundColor: "white", 
+                            borderRadius: 16, 
+                            padding: 16, 
+                            marginBottom: 12,
+                            borderWidth: 2,
+                            borderColor: isSelected ? "#3b82f6" : "transparent",
+                            shadowColor: "#000", 
+                            shadowOffset: { width: 0, height: 1 }, 
+                            shadowOpacity: 0.05, 
+                            shadowRadius: 2, 
+                            elevation: 1 
+                         }}
+                      >
+                         <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
+                            {isSelected ? (
+                               <View style={{ width: 24, height: 24, borderRadius: poll.settings.allowMultipleAnswers ? 6 : 12, backgroundColor: "#3b82f6", marginRight: 12, alignItems: "center", justifyContent: "center" }}>
+                                  <CheckIcon size={16} color="white" />
+                               </View>
+                            ) : (
+                               <View style={{ width: 24, height: 24, borderRadius: poll.settings.allowMultipleAnswers ? 6 : 12, borderWidth: 1.5, borderColor: "#d1d5db", marginRight: 12 }} />
+                            )}
+                            <Text style={{ flex: 1, fontSize: 16, color: "#111827", fontWeight: isSelected ? "600" : "normal" }}>{opt.text}</Text>
+                            
+                            <View style={{ alignItems: "flex-end" }}>
+                               <Text style={{ fontSize: 16, fontWeight: "bold", color: "#374151" }}>{count}</Text>
+                            </View>
+                         </View>
+
+                         {/* Progress bar */}
+                         <View style={{ height: 6, backgroundColor: "#f3f4f6", borderRadius: 3, overflow: "hidden", marginBottom: 12 }}>
+                            <View style={{ height: "100%", width: `${percentage}%`, backgroundColor: isSelected ? "#3b82f6" : "#9ca3af" }} />
+                         </View>
+
+                         {/* Avatars */}
+                         {!poll.settings.hideVoters && count > 0 && (
+                            <View style={{ flexDirection: "row", alignItems: "center" }}>
+                               {voters.slice(0, 5).map((v, i) => {
+                                  const profile = userCache[v.userId];
+                                  const avatarUri = profile?.avatar;
+                                  
+                                  return avatarUri ? (
+                                     <Image 
+                                        key={v.userId} 
+                                        source={{ uri: avatarUri }} 
+                                        style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: "white", marginLeft: i > 0 ? -8 : 0 }} 
+                                     />
+                                  ) : (
+                                     <View key={v.userId} style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#e5e7eb", borderWidth: 1.5, borderColor: "white", marginLeft: i > 0 ? -8 : 0, alignItems: "center", justifyContent: "center" }}>
+                                        <Text style={{ fontSize: 10, fontWeight: "bold", color: "#6b7280" }}>
+                                          {profile?.fullName?.charAt(0) || "?"}
+                                        </Text>
+                                     </View>
+                                  );
+                               })}
+                               {count > 5 && (
+                                  <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#f3f4f6", borderWidth: 1.5, borderColor: "white", marginLeft: -8, alignItems: "center", justifyContent: "center" }}>
+                                     <Text style={{ fontSize: 10, fontWeight: "600", color: "#6b7280" }}>+{count - 5}</Text>
+                                  </View>
+                               )}
+                            </View>
+                         )}
+                      </TouchableOpacity>
+                   );
+                })}
+             </View>
+
+             {/* Add Option */}
+             {poll.settings.allowAddOptions && !readonly && (
+                <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8 }}>
+                   <TextInput 
+                      style={{ flex: 1, fontSize: 16, paddingVertical: 10, color: "#111827" }} 
+                      placeholder="Thêm lựa chọn mới..." 
+                      value={newOptionText}
+                      onChangeText={setNewOptionText}
+                   />
+                   <TouchableOpacity 
+                     onPress={handleAddOption} 
+                     disabled={isAddingOption || !newOptionText.trim()}
+                     style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center", backgroundColor: newOptionText.trim() ? "#3b82f6" : "#f3f4f6", borderRadius: 20 }}
+                   >
+                      {isAddingOption ? <ActivityIndicator size="small" color="white" /> : <PlusIcon size={20} color={newOptionText.trim() ? "white" : "#9ca3af"} />}
+                   </TouchableOpacity>
+                </View>
+             )}
+
+             {/* Admin action: Close poll */}
+             {isCreator && !readonly && (
+                <TouchableOpacity 
+                   onPress={handleClosePoll}
+                   style={{ marginTop: 24, paddingVertical: 14, alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: "#ef4444", backgroundColor: "#fef2f2" }}
+                >
+                   <Text style={{ fontSize: 16, fontWeight: "600", color: "#ef4444" }}>Khóa bình chọn</Text>
+                </TouchableOpacity>
+             )}
+           </>
+         )}
+
+         {/* ===== TAB: STATISTICS ===== */}
+         {activeTab === "stats" && (
+           <View>
+             {poll.options.map(opt => {
                const res = results.find(r => r.optionId === opt._id);
                const count = res ? res.count : 0;
                const voters = res ? res.voters : [];
                const percentage = Math.round((count / (totalVotes || 1)) * 100);
-               const isSelected = selectedOptions.includes(opt._id as string);
 
                return (
-                  <TouchableOpacity 
-                     key={opt._id}
-                     activeOpacity={0.7}
-                     disabled={readonly}
-                     onPress={() => toggleOption(opt._id as string)}
-                     style={{
-                        backgroundColor: "white", 
-                        borderRadius: 16, 
-                        padding: 16, 
-                        marginBottom: 12,
-                        borderWidth: 2,
-                        borderColor: isSelected ? "#3b82f6" : "transparent",
-                        shadowColor: "#000", 
-                        shadowOffset: { width: 0, height: 1 }, 
-                        shadowOpacity: 0.05, 
-                        shadowRadius: 2, 
-                        elevation: 1 
-                     }}
-                  >
-                     <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
-                        {isSelected ? (
-                           <View style={{ width: 24, height: 24, borderRadius: poll.settings.allowMultipleAnswers ? 6 : 12, backgroundColor: "#3b82f6", marginRight: 12, alignItems: "center", justifyContent: "center" }}>
-                              <CheckIcon size={16} color="white" />
+                 <View key={opt._id} style={{ backgroundColor: "white", borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: "#f3f4f6" }}>
+                   {/* Option header */}
+                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                     <Text style={{ fontSize: 16, fontWeight: "bold", color: "#111827", flex: 1 }}>{opt.text}</Text>
+                     <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 8 }}>
+                       <Text style={{ fontSize: 16, fontWeight: "bold", color: "#3b82f6" }}>{count}</Text>
+                       <Text style={{ fontSize: 12, fontWeight: "bold", color: "#9ca3af", marginLeft: 4 }}>({percentage}%)</Text>
+                     </View>
+                   </View>
+
+                   {/* Progress */}
+                   <View style={{ height: 8, backgroundColor: "#f3f4f6", borderRadius: 4, overflow: "hidden", marginBottom: 16 }}>
+                     <View style={{ height: "100%", width: `${percentage}%`, backgroundColor: "#3b82f6", borderRadius: 4 }} />
+                   </View>
+
+                   {/* Full voter list */}
+                   {!poll.settings.hideVoters && count > 0 ? (
+                     <View style={{ marginBottom: 12 }}>
+                       {voters.map(v => {
+                         const profile = userCache[v.userId];
+                         const name = profile?.fullName || "Người dùng";
+                         const avatarUri = profile?.avatar;
+
+                         return (
+                           <View key={v.userId} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 8, paddingHorizontal: 8, backgroundColor: "#f9fafb", borderRadius: 12, marginBottom: 6 }}>
+                             {avatarUri ? (
+                               <Image source={{ uri: avatarUri }} style={{ width: 32, height: 32, borderRadius: 16, marginRight: 10 }} />
+                             ) : (
+                               <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#dbeafe", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+                                 <Text style={{ fontSize: 13, fontWeight: "bold", color: "#3b82f6" }}>{name.charAt(0).toUpperCase()}</Text>
+                               </View>
+                             )}
+                             <Text style={{ flex: 1, fontSize: 14, fontWeight: "500", color: "#374151" }}>{name}</Text>
+                             <Text style={{ fontSize: 10, color: "#9ca3af" }}>
+                               {new Date(v.votedAt).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}
+                             </Text>
                            </View>
-                        ) : (
-                           <View style={{ width: 24, height: 24, borderRadius: poll.settings.allowMultipleAnswers ? 6 : 12, borderWidth: 1.5, borderColor: "#d1d5db", marginRight: 12 }} />
-                        )}
-                        <Text style={{ flex: 1, fontSize: 16, color: "#111827", fontWeight: isSelected ? "600" : "normal" }}>{opt.text}</Text>
-                        
-                        <View style={{ alignItems: "flex-end" }}>
-                           <Text style={{ fontSize: 16, fontWeight: "bold", color: "#374151" }}>{count}</Text>
-                        </View>
+                         );
+                       })}
                      </View>
+                   ) : poll.settings.hideVoters && count > 0 ? (
+                     <Text style={{ fontSize: 12, color: "#9ca3af", fontStyle: "italic", marginBottom: 12 }}>Ẩn danh — {count} người đã chọn</Text>
+                   ) : (
+                     <Text style={{ fontSize: 12, color: "#9ca3af", fontStyle: "italic", marginBottom: 12 }}>Chưa có ai chọn phương án này</Text>
+                   )}
 
-                     {/* Tiền độ % */}
-                     <View style={{ height: 6, backgroundColor: "#f3f4f6", borderRadius: 3, overflow: "hidden", marginBottom: 12 }}>
-                        <View style={{ height: "100%", width: `${percentage}%`, backgroundColor: isSelected ? "#3b82f6" : "#9ca3af" }} />
-                     </View>
-
-                     {/* Avatars */}
-                     {!poll.settings.hideVoters && count > 0 && (
-                        <View style={{ flexDirection: "row", alignItems: "center" }}>
-                           {voters.slice(0, 5).map((v, i) => {
-                              const profile = userCache[v.userId];
-                              const avatarUri = profile?.avatar;
-                              
-                              return avatarUri ? (
-                                 <Image 
-                                    key={v.userId} 
-                                    source={{ uri: avatarUri }} 
-                                    style={{ width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: "white", marginLeft: i > 0 ? -8 : 0 }} 
-                                 />
-                              ) : (
-                                 <View key={v.userId} style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#e5e7eb", borderWidth: 1.5, borderColor: "white", marginLeft: i > 0 ? -8 : 0, alignItems: "center", justifyContent: "center" }}>
-                                    <Text style={{ fontSize: 10, fontWeight: "bold", color: "#6b7280" }}>
-                                      {profile?.fullName?.charAt(0) || "?"}
-                                    </Text>
-                                 </View>
-                              );
-                           })}
-                           {count > 5 && (
-                              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#f3f4f6", borderWidth: 1.5, borderColor: "white", marginLeft: -8, alignItems: "center", justifyContent: "center" }}>
-                                 <Text style={{ fontSize: 10, fontWeight: "600", color: "#6b7280" }}>+{count - 5}</Text>
-                              </View>
-                           )}
-                        </View>
-                     )}
-                  </TouchableOpacity>
+                   {/* Create group button */}
+                   {!poll.settings.hideVoters && count >= 2 && (
+                     <TouchableOpacity
+                       onPress={() => handleCreateGroupFromOption(voters.map(v => v.userId), opt.text)}
+                       style={{
+                         paddingVertical: 10,
+                         borderRadius: 12,
+                         borderWidth: 1,
+                         borderColor: "#bfdbfe",
+                         backgroundColor: "#eff6ff",
+                         alignItems: "center",
+                         flexDirection: "row",
+                         justifyContent: "center",
+                       }}
+                     >
+                       <UserGroupIcon size={16} color="#3b82f6" style={{ marginRight: 6 }} />
+                       <Text style={{ fontSize: 13, fontWeight: "bold", color: "#3b82f6" }}>
+                         Tạo nhóm từ phương án này ({count} người)
+                       </Text>
+                     </TouchableOpacity>
+                   )}
+                 </View>
                );
-            })}
-         </View>
-
-         {/* Add Option */}
-         {poll.settings.allowAddOptions && !readonly && (
-            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "white", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8 }}>
-               <TextInput 
-                  style={{ flex: 1, fontSize: 16, paddingVertical: 10, color: "#111827" }} 
-                  placeholder="Thêm lựa chọn mới..." 
-                  value={newOptionText}
-                  onChangeText={setNewOptionText}
-               />
-               <TouchableOpacity 
-                 onPress={handleAddOption} 
-                 disabled={isAddingOption || !newOptionText.trim()}
-                 style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center", backgroundColor: newOptionText.trim() ? "#3b82f6" : "#f3f4f6", borderRadius: 20 }}
-               >
-                  {isAddingOption ? <ActivityIndicator size="small" color="white" /> : <PlusIcon size={20} color={newOptionText.trim() ? "white" : "#9ca3af"} />}
-               </TouchableOpacity>
-            </View>
-         )}
-
-         {/* Admin action: Close poll */}
-         {isCreator && !readonly && (
-            <TouchableOpacity 
-               onPress={handleClosePoll}
-               style={{ marginTop: 24, paddingVertical: 14, alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: "#ef4444", backgroundColor: "#fef2f2" }}
-            >
-               <Text style={{ fontSize: 16, fontWeight: "600", color: "#ef4444" }}>Khóa bình chọn</Text>
-            </TouchableOpacity>
+             })}
+           </View>
          )}
       </ScrollView>
 
       {/* Floating Action Button for Voting */}
-      {!readonly && (
+      {activeTab === "vote" && !readonly && (
          <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 16), paddingTop: 8, backgroundColor: "white", borderTopWidth: 1, borderTopColor: "#f3f4f6" }}>
             {selectedOptions.length > 0 && (
               <TouchableOpacity onPress={() => setSelectedOptions([])} style={{ alignSelf: "flex-end", marginBottom: 8 }}>

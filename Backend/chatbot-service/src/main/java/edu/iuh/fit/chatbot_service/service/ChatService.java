@@ -26,6 +26,7 @@ public class ChatService {
     private final ChatHistoryRepository chatHistoryRepository;
     private final VectorStore vectorStore;
     private final GuidelineTool guidelineTool;
+    private final SystemTool systemTool; // 🚀 Inject SystemTool
 
     private static final String AI_GUARDRAIL_PROMPT = """
             BẢN HIẾN PHÁP TRỢ LÝ ALO CHAT:
@@ -43,7 +44,8 @@ public class ChatService {
             MessageTool messageTool,
             ChatHistoryRepository chatHistoryRepository,
             VectorStore vectorStore,
-            GuidelineTool guidelineTool) {
+            GuidelineTool guidelineTool,
+            SystemTool systemTool) { // 🚀 Inject SystemTool bean
         this.weatherTool = weatherTool;
         this.userTool = userTool;
         this.contactTool = contactTool;
@@ -51,6 +53,7 @@ public class ChatService {
         this.chatHistoryRepository = chatHistoryRepository;
         this.vectorStore = vectorStore;
         this.guidelineTool = guidelineTool;
+        this.systemTool = systemTool;
         this.chatClient = builder.build();
     }
 
@@ -68,12 +71,10 @@ public class ChatService {
             String userId = request.userId();
             String roomId = (request.roomId() != null) ? request.roomId() : "GLOBAL";
             String lowerMsg = request.message().toLowerCase();
-            String toolResult = null;
-            String phone = extractPhone(request.message());
 
             String currentUserName = getUserName(userId);
 
-            // 1. Nhận diện yêu cầu Tóm tắt - TUYỆT ĐỐI KHÔNG LƯU VÀO DATABASE (saveHistory)
+            // 1. Nhận diện yêu cầu Tóm tắt - Giữ nguyên logic chuyên biệt
             if (lowerMsg.contains("tóm tắt") || lowerMsg.contains("summary")) {
                 if ("GLOBAL".equals(roomId)) {
                     return currentUserName + " ơi, mình chỉ tóm tắt được trong phòng chat riêng thôi nha!";
@@ -85,29 +86,39 @@ public class ChatService {
 
                 String summary = summarizeConversation(transcript, currentUserName);
 
-                // --- QUAN TRỌNG: KHÔNG GỌI saveHistory Ở ĐÂY ĐỂ TRÁNH LÀM LOÃNG CHAT ---
                 System.out.println(">>> [CHATBOT] Đã thực hiện tóm tắt (Không lưu vào database theo yêu cầu).");
                 return summary.strip();
             }
 
-            // 2. Các Tool hỗ trợ
-            if (lowerMsg.contains("hướng dẫn") || lowerMsg.contains("cách dùng") || lowerMsg.contains("làm sao để")) {
-                toolResult = guidelineTool.readGuidelines();
-            } else if (lowerMsg.contains("bạn bè") || lowerMsg.contains("danh sách bạn")) {
-                toolResult = contactTool.getFriendsList(userId);
-            } else if (lowerMsg.contains("thời tiết")) {
-                toolResult = weatherTool.getWeather(extractLocation(request.message()));
-            } else if (lowerMsg.contains("mấy giờ")) {
-                toolResult = new SystemTool().getCurrentTime();
-            }
+            // 2. 🚀 LUỒNG AI AGENT ĐÍCH THỰC (Spring AI Function Calling)
+            // Tích hợp thông tin cá nhân và hướng dẫn sử dụng Tool
+            String personalizedPrompt = AI_GUARDRAIL_PROMPT.replace("{username}", currentUserName)
+                    + "\nID người dùng hiện tại của bạn trong hệ thống là: " + userId 
+                    + ". Khi gọi bất kỳ công cụ (tool) nào yêu cầu tham số userId, BẮT BUỘC hãy truyền giá trị ID này.";
 
-            if (toolResult != null) {
-                String finalResult = formatToolResult(toolResult, request.message(), currentUserName);
-                saveHistory(userId, request.message(), finalResult);
-                return finalResult;
-            }
+            List<Message> messages = new ArrayList<>();
+            messages.add(new SystemMessage(personalizedPrompt));
 
-            return handleGeneralChat(request, userId, currentUserName);
+            // Load 10 tin nhắn gần nhất để duy trì ngữ cảnh chat
+            List<ChatHistory> history = chatHistoryRepository.findByConversationIdOrderByCreatedAtAsc(userId);
+            history.stream().skip(Math.max(0, history.size() - 10)).forEach(h -> {
+                if ("user".equals(h.getRole()))
+                    messages.add(new UserMessage(h.getContent()));
+                else
+                    messages.add(new AssistantMessage(h.getContent()));
+            });
+            messages.add(new UserMessage(request.message()));
+
+            // Gọi mô hình với cơ chế Tool Calling tự động
+            String content = chatClient.prompt()
+                    .messages(messages)
+                    .tools(contactTool, weatherTool, userTool, messageTool, guidelineTool, systemTool)
+                    .call()
+                    .content();
+
+            // Lưu cuộc hội thoại vào lịch sử
+            saveHistory(userId, request.message(), content);
+            return content;
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -124,20 +135,11 @@ public class ChatService {
         }
     }
 
-    private String formatToolResult(String toolResult, String userQuestion, String userName) {
-        String systemPrompt = AI_GUARDRAIL_PROMPT.replace("{username}", userName)
-                + "\n\nThông tin từ hệ thống để bạn trả lời:\n" + toolResult;
-        return chatClient.prompt()
-                .messages(new SystemMessage(systemPrompt), new UserMessage(userQuestion))
-                .call().content();
-    }
-
     private String summarizeConversation(String transcript, String currentUserName) {
         if (transcript == null || transcript.isBlank() || transcript.contains("chưa có tin nhắn")) {
             return "Không có dữ liệu tin nhắn để tóm tắt.";
         }
 
-        // Khôi phục format tóm tắt cũ: Có tiêu đề và dấu gạch đầu dòng rõ ràng
         String systemPrompt = String.format(
                 """
                         Bạn là trợ lý AI thông minh của Alo Chat, có khả năng tóm tắt hội thoại xuất sắc như tính năng của Messenger/Meta AI.
@@ -150,7 +152,7 @@ public class ChatService {
                         2. TÊN NGƯỜI: Tuyệt đối sử dụng tên thật của các thành viên xuất hiện trong dữ liệu (ví dụ: "Tùng", "Hoa", "Admin"). Xưng hô "%s" là người đang yêu cầu tóm tắt (hãy gọi là "Bạn").
                         3. CẤU TRÚC BẢN TÓM TẮT:
                            - Bắt đầu bằng tiêu đề: "### 📝 Tóm tắt nội dung hội thoại"
-                           - Phần 1: Một đoạn văn ngắn (2-3 câu) kể lại câu chuyện đang diễn ra (ví dụ: "Trong nhóm này, mọi người đang bàn về việc đi chơi cuối tuần...").
+                           - Phân 1: Một đoạn văn ngắn (2-3 câu) kể lại câu chuyện đang diễn ra (ví dụ: "Trong nhóm này, mọi người đang bàn về việc đi chơi cuối tuần...").
                            - Phần 2: Các diễn biến chính, sử dụng dấu gạch đầu dòng (-). Mỗi dòng nên bắt đầu bằng tên người và hành động của họ (ví dụ: "- **Tùng** đề xuất đi Vũng Tàu nhưng **Hoa** lo ngại về thời tiết.").
                            - Phần 3: Kết luận hoặc các việc cần làm (nếu có).
                         4. ĐỊNH DẠNG: BẮT BUỘC sử dụng dấu gạch đầu dòng (-) cho các ý chi tiết để hệ thống hiển thị icon đẹp. Sử dụng **In đậm** cho tên người và các từ khóa quan trọng.
@@ -170,7 +172,6 @@ public class ChatService {
             if (content == null || content.isBlank())
                 return "AI không tìm thấy thông tin quan trọng để tóm tắt.";
 
-            // Đảm bảo kết quả bắt đầu bằng tiêu đề nếu AI quên
             if (!content.contains("###")) {
                 content = "### Nội dung tóm tắt\n" + content;
             }
@@ -178,24 +179,6 @@ public class ChatService {
         } catch (Exception e) {
             return "Lỗi tóm tắt: " + e.getMessage();
         }
-    }
-
-    private String handleGeneralChat(ChatRequest request, String userId, String userName) {
-        List<ChatHistory> history = chatHistoryRepository.findByConversationIdOrderByCreatedAtAsc(userId);
-        List<Message> messages = new ArrayList<>();
-        String personalizedPrompt = AI_GUARDRAIL_PROMPT.replace("{username}", userName);
-        messages.add(new SystemMessage(personalizedPrompt));
-        history.stream().skip(Math.max(0, history.size() - 10)).forEach(h -> {
-            if ("user".equals(h.getRole()))
-                messages.add(new UserMessage(h.getContent()));
-            else
-                messages.add(new AssistantMessage(h.getContent()));
-        });
-        messages.add(new UserMessage(request.message()));
-
-        String content = chatClient.prompt().messages(messages).call().content();
-        saveHistory(userId, request.message(), content);
-        return content;
     }
 
     private void saveHistory(String userId, String userMsg, String aiMsg) {
@@ -211,14 +194,5 @@ public class ChatService {
             a.setContent(aiMsg);
             chatHistoryRepository.save(a);
         }
-    }
-
-    private String extractPhone(String msg) {
-        Matcher m = Pattern.compile("(0[0-9]{9,10})").matcher(msg);
-        return m.find() ? m.group() : null;
-    }
-
-    private String extractLocation(String msg) {
-        return msg.toLowerCase().contains("hà nội") ? "Hanoi" : "Ho Chi Minh";
     }
 }

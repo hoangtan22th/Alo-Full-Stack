@@ -40,30 +40,16 @@ export const getBulkPresence = async (req: Request, res: Response) => {
 
 export const getMetrics = async (req: Request, res: Response) => {
   try {
-    const allPresence = await presenceClient.hGetAll(`presence:users`);
-    const userIds = Object.keys(allPresence);
-    
-    let onlineCount = 0;
-    const onlineUserIds: string[] = [];
-
-    Object.entries(allPresence).forEach(([userId, presenceStr]) => {
-      try {
-        const presence = JSON.parse(presenceStr);
-        if (presence.status === "online") {
-          onlineCount++;
-          onlineUserIds.push(userId);
-        }
-      } catch (e) {
-        // Ignore parse errors
-      }
-    });
+    const totalTracked = await presenceClient.hLen(`presence:users`);
+    const onlineCountStr = await presenceClient.get(`presence:stats:online_count`);
+    const onlineCount = onlineCountStr ? parseInt(onlineCountStr, 10) : 0;
 
     return res.status(200).json({
       status: 200,
       data: {
-        totalTracked: userIds.length,
+        totalTracked,
         onlineCount,
-        onlineUserIds
+        onlineUserIds: [] // Kept for structural compatibility with any existing clients
       }
     });
   } catch (error) {

@@ -17,10 +17,24 @@ public class RabbitMQConfig {
     public static final String ROUTING_KEY_GROUP_BANNED = "group.banned";
     public static final String ROUTING_KEY_REPORT_CREATED = "report.created";
     public static final String ROUTING_KEY_REPORT_RESOLVED = "report.resolved";
+    public static final String QUEUE_REPORT_AI_ANALYZE = "report.ai.analyze.queue";
 
     @Bean
     public TopicExchange adminExchange() {
         return new TopicExchange(EXCHANGE_NAME);
+    }
+
+    @Bean
+    public org.springframework.amqp.core.Queue reportAiAnalyzeQueue() {
+        return new org.springframework.amqp.core.Queue(QUEUE_REPORT_AI_ANALYZE, true);
+    }
+
+    @Bean
+    public org.springframework.amqp.core.Binding reportAiAnalyzeBinding() {
+        return org.springframework.amqp.core.BindingBuilder
+                .bind(reportAiAnalyzeQueue())
+                .to(adminExchange())
+                .with(ROUTING_KEY_REPORT_CREATED);
     }
 
     @Bean

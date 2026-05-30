@@ -39,7 +39,7 @@ public class AdminReportController {
         return ResponseEntity.ok(ApiResponse.success(reports));
     }
 
-    @PatchMapping("/{reportId}/action")
+    @RequestMapping(value = "/{reportId}/action", method = {RequestMethod.PATCH, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<ReportAdminResponse>> resolveReport(
             @PathVariable String reportId,
             @RequestHeader("X-Admin-Id") String adminId,
@@ -71,5 +71,17 @@ public class AdminReportController {
     public ResponseEntity<ApiResponse<ReportStatisticsResponse>> getStatistics() {
         ReportStatisticsResponse statistics = reportService.getStatistics();
         return ResponseEntity.ok(ApiResponse.success(statistics));
+    }
+
+    @GetMapping("/count/violations")
+    public ResponseEntity<ApiResponse<Long>> countViolations(@RequestParam String targetId) {
+        long count = reportService.countTargetViolations(targetId);
+        return ResponseEntity.ok(ApiResponse.success(count));
+    }
+
+    @PostMapping("/{reportId}/ai-reanalyze")
+    public ResponseEntity<ApiResponse<ReportAdminResponse>> reanalyzeReport(@PathVariable String reportId) {
+        ReportAdminResponse response = reportService.reanalyzeReport(reportId);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

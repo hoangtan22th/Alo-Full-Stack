@@ -382,7 +382,7 @@ export default function ConversationSidebar() {
                 (currentUserId && g.unreadCount?.[currentUserId]) || 0,
               updatedAt: g.updatedAt,
               otherMemberUserId: otherMember?.userId,
-              folder: g.folders?.[currentUserId] || "priority",
+              folder: (currentUserId && g.folders?.[currentUserId]) || "priority",
             };
           }),
         );

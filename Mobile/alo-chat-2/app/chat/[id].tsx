@@ -1,5 +1,11 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 
@@ -19,6 +25,7 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  Clipboard,
 } from "react-native";
 
 if (Platform.OS === "android") {
@@ -27,13 +34,15 @@ if (Platform.OS === "android") {
   }
 }
 
-import {
-  GestureHandlerRootView,
-} from "react-native-gesture-handler";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   ChevronDownIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
+  ClipboardDocumentIcon,
+  ArrowUturnRightIcon,
+  ArrowUturnLeftIcon,
+  TrashIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
@@ -51,6 +60,9 @@ import { GalleryViewerModal } from "../../components/chat/GalleryViewer";
 import { PinnedMessageBar } from "../../components/chat/PinnedMessageBar";
 import { ReactionDetailsSheet } from "../../components/chat/ReactionDetailsSheet";
 import { MessageContextMenu } from "../../components/chat/MessageContextMenu";
+import { ReportModal } from "../../components/ReportModal";
+import { ReportTargetModal } from "../../components/ReportTargetModal";
+import { TargetType } from "../../services/reportService";
 
 export default function GlobalChatScreen() {
   const {
@@ -60,7 +72,17 @@ export default function GlobalChatScreen() {
     membersCount,
     isGroup,
     targetUserId: paramsTargetUserId,
+    selectionMode,
+    initialSelectedIds,
   } = useLocalSearchParams();
+  const isGroupChat =
+    isGroup !== undefined
+      ? isGroup === "true"
+      : Boolean(
+          membersCount &&
+          membersCount !== "undefined" &&
+          membersCount !== "null",
+        );
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -80,7 +102,9 @@ export default function GlobalChatScreen() {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
+    null,
+  );
   const [selectedMsgLayout, setSelectedMsgLayout] = useState<{
     x: number;
     y: number;
@@ -88,14 +112,28 @@ export default function GlobalChatScreen() {
     height: number;
   } | null>(null);
 
-  const [reactionDetailMsgId, setReactionDetailMsgId] = useState<string | null>(null);
+  const [reactionDetailMsgId, setReactionDetailMsgId] = useState<string | null>(
+    null,
+  );
   const [showExtensionMenu, setShowExtensionMenu] = useState(false);
-  const [expandedTimeMsgId, setExpandedTimeMsgId] = useState<string | null>(null);
+  const [expandedTimeMsgId, setExpandedTimeMsgId] = useState<string | null>(
+    null,
+  );
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [hasNewUnseenMessages, setHasNewUnseenMessages] = useState(false);
-  const [userCache, setUserCache] = useState<Record<string, UserProfileDTO>>({});
-  const [resolvedConversationId, setResolvedConversationId] = useState<string | null>(null);
+  const [userCache, setUserCache] = useState<Record<string, UserProfileDTO>>(
+    {},
+  );
+  const [resolvedConversationId, setResolvedConversationId] = useState<
+    string | null
+  >(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [galleryImages, setGalleryImages] = useState<any[]>([]);
+
+  const handleOpenGallery = useCallback((imagesList: any[], index: number) => {
+    setGalleryImages(imagesList);
+    setViewerIndex(index);
+  }, []);
   const [replyingTo, setReplyingTo] = useState<MessageDTO | null>(null);
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -104,11 +142,45 @@ export default function GlobalChatScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [groupDetails, setGroupDetails] = useState<any>(null);
   const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
-
+  const [isReportModalVisible, setIsReportModalVisible] = useState(false);
+  const [reportTarget, setReportTarget] = useState<{
+    type: TargetType;
+    id: string;
+    name: string;
+  } | null>(null);
+  const [reportMessageIds, setReportMessageIds] = useState<string[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState(
+    selectionMode === "true",
+  );
+  const [selectionPurpose, setSelectionPurpose] = useState<
+    "REPORT" | "GENERAL"
+  >("REPORT");
+  const [selectedReportIds, setSelectedReportIds] = useState<string[]>(() => {
+    if (initialSelectedIds) {
+      try {
+        const ids =
+          typeof initialSelectedIds === "string"
+            ? JSON.parse(initialSelectedIds)
+            : initialSelectedIds;
+        return Array.isArray(ids) ? ids : [];
+      } catch (e) {
+        console.error("Error parsing initialSelectedIds:", e);
+      }
+    }
+    return [];
+  });
 
   const chatInputRef = useRef<any>(null);
   const replyingToRef = useRef<MessageDTO | null>(null);
   const fetchingRef = useRef(false); // V3: Strict protection against concurrent fetches
+
+  const toggleMessageSelection = React.useCallback((msgId: string) => {
+    setSelectedReportIds((prev) =>
+      prev.includes(msgId)
+        ? prev.filter((id) => id !== msgId)
+        : [...prev, msgId],
+    );
+  }, []);
 
   const setReplyingToWithRef = (msg: MessageDTO | null) => {
     setReplyingTo(msg);
@@ -125,14 +197,45 @@ export default function GlobalChatScreen() {
   }, [highlightedMsgId]);
 
   // Real-time Group Info
-  const [realtimeGroupName, setRealtimeGroupName] = useState<string>((name as string) || "");
-  const [realtimeAvatar, setRealtimeAvatar] = useState<string>((avatar as string) || "");
-  const [realtimeMembersCount, setRealtimeMembersCount] = useState<string>((membersCount as string) || "0");
+  const [realtimeGroupName, setRealtimeGroupName] = useState<string>(
+    (name as string) || "",
+  );
+  const [realtimeAvatar, setRealtimeAvatar] = useState<string>(
+    (avatar as string) || "",
+  );
+  const [realtimeMembersCount, setRealtimeMembersCount] = useState<string>(
+    (membersCount as string) || "0",
+  );
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
 
   const chatImages = useMemo(() => {
     return messages.filter((m) => m.type === "image" && !m.isRevoked);
   }, [messages]);
+
+  const getAutoSelectedMessageIds = useCallback(() => {
+    if (isGroupChat) return [];
+    const valid = messages.filter(
+      (m) =>
+        !m.isRevoked &&
+        (m.type === "text" || m.type === "image" || m.type === "file"),
+    );
+    if (valid.length <= 40) {
+      return valid.map((m) => m._id);
+    } else {
+      const first20 = valid.slice(0, 20).map((m) => m._id);
+      const last20 = valid.slice(-20).map((m) => m._id);
+      return Array.from(new Set([...first20, ...last20]));
+    }
+  }, [messages, isGroupChat]);
+
+  useEffect(() => {
+    if (name && name !== "undefined" && name !== "null")
+      setRealtimeGroupName(name as string);
+    if (avatar && avatar !== "undefined" && avatar !== "null")
+      setRealtimeAvatar(avatar as string);
+    if (membersCount && membersCount !== "undefined" && membersCount !== "null")
+      setRealtimeMembersCount(membersCount as string);
+  }, [name, avatar, membersCount]);
 
   const closeReactionDetails = () => {
     setReactionDetailMsgId(null);
@@ -147,22 +250,190 @@ export default function GlobalChatScreen() {
   const handleRevoke = async () => {
     if (!selectedMsg) return;
     const msgId = selectedMsg._id;
+    const sIndex = selectedImageIndex;
     closeModal();
-    const ok = await messageService.deleteMessage(msgId);
-    if (ok) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m._id === msgId ? { ...m, isRevoked: true, content: "" } : m
-        )
-      );
+
+    if (
+      sIndex !== null &&
+      sIndex !== undefined &&
+      selectedMsg.type === "image" &&
+      selectedMsg.metadata?.imageGroup
+    ) {
+      const ok = await messageService.revokeImageInGroup(msgId, sIndex);
+      if (ok) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m._id === msgId && m.metadata?.imageGroup) {
+              const newGroup = [...m.metadata.imageGroup];
+              if (newGroup[sIndex]) {
+                newGroup[sIndex] = { ...newGroup[sIndex], isRevoked: true };
+              }
+              const allRevoked = newGroup.every((img: any) => img.isRevoked);
+              return {
+                ...m,
+                isRevoked: allRevoked,
+                metadata: { ...m.metadata, imageGroup: newGroup },
+              };
+            }
+            return m;
+          }),
+        );
+      }
+    } else {
+      const ok = await messageService.deleteMessage(msgId);
+      if (ok) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === msgId ? { ...m, isRevoked: true, content: "" } : m,
+          ),
+        );
+      }
     }
   };
 
-  const handleDeleteLocal = () => {
+  const handleDeleteLocal = async () => {
     if (!selectedMsg) return;
     const msgId = selectedMsg._id;
+    const sIndex = selectedImageIndex;
     closeModal();
-    setMessages((prev) => prev.filter((m) => m._id !== msgId));
+
+    if (
+      sIndex !== null &&
+      sIndex !== undefined &&
+      selectedMsg.type === "image" &&
+      selectedMsg.metadata?.imageGroup
+    ) {
+      const ok = await messageService.deleteImageInGroupForMe(msgId, sIndex);
+      if (ok) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m._id === msgId && m.metadata?.imageGroup) {
+              const newGroup = [...m.metadata.imageGroup];
+              if (newGroup[sIndex]) {
+                const arr = newGroup[sIndex].deletedByUsers || [];
+                newGroup[sIndex] = {
+                  ...newGroup[sIndex],
+                  deletedByUsers: [...arr, currentUserId],
+                };
+              }
+              return {
+                ...m,
+                metadata: { ...m.metadata, imageGroup: newGroup },
+              };
+            }
+            return m;
+          }),
+        );
+      }
+    } else {
+      setMessages((prev) => prev.filter((m) => m._id !== msgId));
+    }
+  };
+
+  const handleMultiCopy = () => {
+    const textMsgs = messages
+      .filter(
+        (m) =>
+          selectedReportIds.includes(m._id) &&
+          m.type === "text" &&
+          !m.isRevoked,
+      )
+      .map((m) => m.content)
+      .join("\n");
+    if (!textMsgs) {
+      Alert.alert(
+        "Sao chép",
+        "Không có tin nhắn văn bản nào được chọn để sao chép.",
+      );
+      return;
+    }
+    Clipboard.setString(textMsgs);
+    Alert.alert("Sao chép", "Đã sao chép các tin nhắn được chọn.");
+    setIsSelectionMode(false);
+    setSelectedReportIds([]);
+  };
+
+  const handleMultiShare = () => {
+    const selectedMsgs = messages
+      .filter((m) => selectedReportIds.includes(m._id) && !m.isRevoked)
+      .map((m) => ({
+        content: m.content,
+        type: m.type,
+        metadata: m.metadata,
+      }));
+    if (selectedMsgs.length === 0) {
+      Alert.alert("Chia sẻ", "Không có tin nhắn nào hợp lệ để chia sẻ.");
+      return;
+    }
+    setIsSelectionMode(false);
+    setSelectedReportIds([]);
+    router.push({
+      pathname: "/chat/forward",
+      params: {
+        messages: JSON.stringify(selectedMsgs),
+      },
+    });
+  };
+
+  const handleMultiRevoke = async () => {
+    const myMsgs = messages.filter(
+      (m) =>
+        selectedReportIds.includes(m._id) &&
+        m.senderId === currentUserId &&
+        !m.isRevoked,
+    );
+    if (myMsgs.length === 0) {
+      Alert.alert("Thu hồi", "Không có tin nhắn nào do bạn gửi để thu hồi.");
+      return;
+    }
+
+    Alert.alert(
+      "Thu hồi nhiều tin nhắn",
+      `Bạn có chắc chắn muốn thu hồi ${myMsgs.length} tin nhắn đã chọn?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Thu hồi",
+          onPress: async () => {
+            const promises = myMsgs.map((m) =>
+              messageService.deleteMessage(m._id),
+            );
+            await Promise.all(promises);
+            setMessages((prev) =>
+              prev.map((m) =>
+                selectedReportIds.includes(m._id) &&
+                m.senderId === currentUserId
+                  ? { ...m, isRevoked: true, content: "" }
+                  : m,
+              ),
+            );
+            setIsSelectionMode(false);
+            setSelectedReportIds([]);
+          },
+        },
+      ],
+    );
+  };
+
+  const handleMultiDelete = () => {
+    if (selectedReportIds.length === 0) return;
+    Alert.alert(
+      "Xóa nhiều tin nhắn",
+      `Bạn có chắc chắn muốn xóa ${selectedReportIds.length} tin nhắn đã chọn?`,
+      [
+        { text: "Hủy", style: "cancel" },
+        {
+          text: "Xóa",
+          onPress: () => {
+            setMessages((prev) =>
+              prev.filter((m) => !selectedReportIds.includes(m._id)),
+            );
+            setIsSelectionMode(false);
+            setSelectedReportIds([]);
+          },
+        },
+      ],
+    );
   };
 
   const handleReact = async (emojiKey: string) => {
@@ -180,11 +451,14 @@ export default function GlobalChatScreen() {
   useEffect(() => {
     const fetchMissingUsers = async () => {
       const messageSenderIds = messages.map((m: MessageDTO) => m.senderId);
-      const reactionUserIds = messages
-        .find((m: MessageDTO) => m._id === reactionDetailMsgId)
-        ?.reactions?.map((r: any) => r.userId) || [];
+      const reactionUserIds =
+        messages
+          .find((m: MessageDTO) => m._id === reactionDetailMsgId)
+          ?.reactions?.map((r: any) => r.userId) || [];
 
-      const allIds = Array.from(new Set([...messageSenderIds, ...reactionUserIds]));
+      const allIds = Array.from(
+        new Set([...messageSenderIds, ...reactionUserIds]),
+      );
       const missingIds = allIds.filter((id) => id && !userCache[id]);
 
       if (missingIds.length === 0) return;
@@ -198,7 +472,7 @@ export default function GlobalChatScreen() {
           } catch (err) {
             console.error("Lỗi fetch profile:", id, err);
           }
-        })
+        }),
       );
 
       if (Object.keys(newProfiles).length > 0) {
@@ -216,12 +490,19 @@ export default function GlobalChatScreen() {
     return messages.find((m) => m._id === selectedMessageId);
   }, [selectedMessageId, messages]);
 
-  const onLongPressMessage = (msgId: string) => {
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
+    null,
+  );
+
+  const onLongPressMessage = (msgId: string, albumIndex?: number) => {
     const ref = messageRefs.current[msgId];
     if (ref) {
       ref.measureInWindow((x, y, width, height) => {
         setSelectedMsgLayout({ x, y, width, height });
         setSelectedMessageId(msgId);
+        if (albumIndex !== undefined) {
+          setSelectedImageIndex(albumIndex);
+        }
       });
     }
   };
@@ -229,22 +510,40 @@ export default function GlobalChatScreen() {
   const closeModal = () => {
     setSelectedMessageId(null);
     setSelectedMsgLayout(null);
+    setSelectedImageIndex(null);
   };
 
-  const isGroupChat = isGroup !== undefined ? isGroup === "true" : Boolean(membersCount && membersCount !== "undefined" && membersCount !== "null");
-  const targetUserId = typeof paramsTargetUserId === "string" ? paramsTargetUserId : typeof id === "string" ? id : (id as string[])?.[0];
-  const userStatus = !isGroupChat && targetUserId ? onlineUsers[targetUserId] : null;
+  const targetUserId =
+    typeof paramsTargetUserId === "string"
+      ? paramsTargetUserId
+      : typeof id === "string"
+        ? id
+        : (id as string[])?.[0];
+  const userStatus =
+    !isGroupChat && targetUserId ? onlineUsers[targetUserId] : null;
   const isOnline = userStatus?.status === "online";
 
   useEffect(() => {
     const resolve = async () => {
       const initialId = Array.isArray(id) ? id[0] : id;
       if (!initialId) return;
-      const needsResolution = isGroup === undefined && !paramsTargetUserId;
+      const isGroupVal =
+        isGroup !== undefined
+          ? isGroup === "true"
+          : Boolean(
+              membersCount &&
+              membersCount !== "undefined" &&
+              membersCount !== "null",
+            );
+
+      // UUIDs in this project have dashes, Conversation IDs (MongoDB) don't.
+      const isUUID = initialId.includes("-");
+      const needsResolution = !isGroupVal && isUUID;
 
       if (needsResolution) {
         try {
-          const conversation = await groupService.createDirectConversation(initialId);
+          const conversation =
+            await groupService.createDirectConversation(initialId);
           if (conversation && (conversation._id || conversation.id)) {
             setResolvedConversationId(conversation._id || conversation.id);
           } else {
@@ -273,8 +572,14 @@ export default function GlobalChatScreen() {
 
     try {
       const currentSkip = reset ? 0 : skip;
-      console.log(`[Chat] Fetching messages. skip=${currentSkip}, reset=${reset}`);
-      const response = await messageService.getMessageHistory(resolvedConversationId, 50, currentSkip);
+      console.log(
+        `[Chat] Fetching messages. skip=${currentSkip}, reset=${reset}`,
+      );
+      const response = await messageService.getMessageHistory(
+        resolvedConversationId,
+        50,
+        currentSkip,
+      );
       const newMsgs = response.messages || [];
       const hasMoreData = response.hasMore ?? newMsgs.length >= 50;
 
@@ -283,17 +588,21 @@ export default function GlobalChatScreen() {
       } else {
         setMessages((prev) => {
           const existingIds = new Set(prev.map((m: MessageDTO) => m._id));
-          const filteredNew = newMsgs.filter((m: MessageDTO) => !existingIds.has(m._id));
+          const filteredNew = newMsgs.filter(
+            (m: MessageDTO) => !existingIds.has(m._id),
+          );
           return [...filteredNew, ...prev];
         });
       }
 
       setHasMore(hasMoreData);
       setSkip((prev) => (reset ? newMsgs.length : prev + newMsgs.length));
-      console.log(`[Chat] Fetched ${newMsgs.length} messages. skip=${skip}, hasMore=${hasMoreData}`);
+      console.log(
+        `[Chat] Fetched ${newMsgs.length} messages. skip=${skip}, hasMore=${hasMoreData}`,
+      );
 
       if (reset) {
-        messageService.markAsRead(resolvedConversationId).catch(() => { });
+        messageService.markAsRead(resolvedConversationId).catch(() => {});
       }
     } catch (e) {
       console.error("Lỗi tải tin nhắn:", e);
@@ -306,7 +615,9 @@ export default function GlobalChatScreen() {
   const fetchPinnedMessages = async () => {
     if (!resolvedConversationId) return;
     try {
-      const pins = await messageService.getPinnedMessages(resolvedConversationId);
+      const pins = await messageService.getPinnedMessages(
+        resolvedConversationId,
+      );
       setPinnedMessages(pins || []);
     } catch (error) {
       console.error("Lỗi lấy tin nhắn ghim:", error);
@@ -344,6 +655,28 @@ export default function GlobalChatScreen() {
     }
   }, [resolvedConversationId, isGroupChat]);
 
+  // Handle selection mode from params (if coming back from ReportModal)
+  useEffect(() => {
+    const isSelection = selectionMode === "true";
+    setIsSelectionMode(isSelection);
+
+    if (isSelection && initialSelectedIds) {
+      try {
+        const ids =
+          typeof initialSelectedIds === "string"
+            ? JSON.parse(initialSelectedIds)
+            : initialSelectedIds;
+        if (Array.isArray(ids)) {
+          setSelectedReportIds(ids);
+        }
+      } catch (e) {
+        console.error("Error parsing initialSelectedIds:", e);
+      }
+    } else if (!isSelection) {
+      setSelectedReportIds([]);
+    }
+  }, [selectionMode, initialSelectedIds]);
+
   const handleLoadMore = () => {
     if (!loadingMore && hasMore) {
       console.log(`[Chat] Loading more messages... skip=${skip}`);
@@ -362,20 +695,27 @@ export default function GlobalChatScreen() {
     return adminIds.has(String(currentUserId));
   }, [isGroupChat, groupDetails, adminIds, currentUserId]);
 
-
   useEffect(() => {
     if (!socket || !resolvedConversationId) return;
 
     const expectedRoomId = isGroupChat ? resolvedConversationId : targetUserId;
 
     const handleTyping = (data: { roomId: string; actorId: string }) => {
-      if (data.roomId === expectedRoomId || data.roomId === resolvedConversationId) {
-        setTypingUsers((prev) => (prev.includes(data.actorId) ? prev : [...prev, data.actorId]));
+      if (
+        data.roomId === expectedRoomId ||
+        data.roomId === resolvedConversationId
+      ) {
+        setTypingUsers((prev) =>
+          prev.includes(data.actorId) ? prev : [...prev, data.actorId],
+        );
       }
     };
 
     const handleStopTyping = (data: { roomId: string; actorId: string }) => {
-      if (data.roomId === expectedRoomId || data.roomId === resolvedConversationId) {
+      if (
+        data.roomId === expectedRoomId ||
+        data.roomId === resolvedConversationId
+      ) {
         setTypingUsers((prev) => prev.filter((uid) => uid !== data.actorId));
       }
     };
@@ -385,26 +725,49 @@ export default function GlobalChatScreen() {
     const handleMessageReceived = (data: any) => {
       const newMsg = data.message ? data.message : data;
       if (newMsg.conversationId === resolvedConversationId) {
-        setMessages((prev) => (prev.find((m: MessageDTO) => m._id === newMsg._id) ? prev : [...prev, newMsg]));
-        if (currentUserId && String(newMsg.senderId) !== String(currentUserId)) {
-          messageService.markAsRead(resolvedConversationId).catch(() => { });
+        setMessages((prev) =>
+          prev.find((m: MessageDTO) => m._id === newMsg._id)
+            ? prev
+            : [...prev, newMsg],
+        );
+        if (
+          currentUserId &&
+          String(newMsg.senderId) !== String(currentUserId)
+        ) {
+          messageService.markAsRead(resolvedConversationId).catch(() => {});
           setHasNewUnseenMessages(true);
         } else {
-          setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
+          setTimeout(
+            () =>
+              flatListRef.current?.scrollToOffset({
+                offset: 0,
+                animated: true,
+              }),
+            100,
+          );
         }
       }
     };
 
     const handleMessagesRead = (data: { conversationId: string }) => {
-      if (data.conversationId === resolvedConversationId || data.conversationId === undefined) {
-        setMessages((prev) => prev.map((m: MessageDTO) => ({ ...m, isRead: true })));
+      if (
+        data.conversationId === resolvedConversationId ||
+        data.conversationId === undefined
+      ) {
+        setMessages((prev) =>
+          prev.map((m: MessageDTO) => ({ ...m, isRead: true })),
+        );
       }
     };
 
     const handleReactionUpdated = (data: any) => {
       const msgId = data.messageId || data._id;
       if (data.conversationId === resolvedConversationId || data.messageId) {
-        setMessages((prev) => prev.map((m: MessageDTO) => (m._id === msgId ? { ...m, reactions: data.reactions } : m)));
+        setMessages((prev) =>
+          prev.map((m: MessageDTO) =>
+            m._id === msgId ? { ...m, reactions: data.reactions } : m,
+          ),
+        );
       }
     };
 
@@ -414,45 +777,66 @@ export default function GlobalChatScreen() {
           if (data.message) {
             setPinnedMessages((prev) => {
               if (prev.some((m: MessageDTO) => m._id === data.message._id)) {
-                return prev.map((m: MessageDTO) => (m._id === data.message._id ? data.message : m));
+                return prev.map((m: MessageDTO) =>
+                  m._id === data.message._id ? data.message : m,
+                );
               }
               return [...prev, data.message];
             });
           }
         } else {
-          setPinnedMessages((prev) => prev.filter((m: MessageDTO) => m._id !== data.messageId));
+          setPinnedMessages((prev) =>
+            prev.filter((m: MessageDTO) => m._id !== data.messageId),
+          );
         }
       }
     };
 
     const handleMessageRevoked = (data: any) => {
-      setMessages((prev: MessageDTO[]) => prev.map((m: MessageDTO) => (m._id === data.messageId ? { ...m, isRevoked: true, content: "" } : m)));
-      setPinnedMessages((prev: MessageDTO[]) => prev.filter((m: MessageDTO) => m._id !== data.messageId));
+      setMessages((prev: MessageDTO[]) =>
+        prev.map((m: MessageDTO) =>
+          m._id === data.messageId ? { ...m, isRevoked: true, content: "" } : m,
+        ),
+      );
+      setPinnedMessages((prev: MessageDTO[]) =>
+        prev.filter((m: MessageDTO) => m._id !== data.messageId),
+      );
     };
 
-    const handleConversationRemoved = (data: { conversationId: string; groupName: string; reason: string }) => {
-      if (data.conversationId === resolvedConversationId && data.reason !== "leave") {
+    const handleConversationRemoved = (data: {
+      conversationId: string;
+      groupName: string;
+      reason: string;
+    }) => {
+      if (
+        data.conversationId === resolvedConversationId &&
+        data.reason !== "leave"
+      ) {
         Alert.alert(
           "Thông báo",
           data.reason === "delete"
             ? `Nhóm ${data.groupName} đã được giải tán`
             : `Bạn đã bị mời ra khỏi nhóm ${data.groupName}`,
-          [{
-            text: "OK", onPress: () => {
-              if (router.canDismiss()) {
-                router.dismissAll();
-              }
-              router.replace("/(tabs)");
-            }
-          }]
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                if (router.canDismiss()) {
+                  router.dismissAll();
+                }
+                router.replace("/(tabs)");
+              },
+            },
+          ],
         );
       }
     };
 
     const handleGroupUpdated = (data: any) => {
       const updatedGroup = data.group ? data.group : data;
-      const updatedId = updatedGroup._id || updatedGroup.id || updatedGroup.conversationId;
-      
+      const updatedId =
+        updatedGroup._id || updatedGroup.id || updatedGroup.conversationId;
+
       if (String(updatedId) === String(resolvedConversationId)) {
         setGroupDetails(updatedGroup);
         if (updatedGroup.members) {
@@ -464,7 +848,48 @@ export default function GlobalChatScreen() {
           setAdminIds(admins);
         }
         if (updatedGroup.name) setRealtimeGroupName(updatedGroup.name);
-        if (updatedGroup.groupAvatar) setRealtimeAvatar(updatedGroup.groupAvatar);
+        if (updatedGroup.groupAvatar)
+          setRealtimeAvatar(updatedGroup.groupAvatar);
+      }
+    };
+    // Khi có thay đổi bình chọn, di chuyển message poll xuống cuối
+    const handlePollUpdated = (data: any) => {
+      setMessages((prev: MessageDTO[]) => {
+        const idx = prev.findIndex(
+          (m: MessageDTO) =>
+            m.type === "poll" && (m as any).metadata?.pollId === data.pollId,
+        );
+        if (idx === -1) return prev;
+        const pollMsg = { ...prev[idx], updatedAt: new Date().toISOString() };
+        const filtered = prev.filter((_: any, i: number) => i !== idx);
+        return [...filtered, pollMsg];
+      });
+    };
+
+    const handleMessageUpdated = (data: any) => {
+      const updatedMsg = data.message || data;
+      if (updatedMsg && updatedMsg._id) {
+        setMessages((prev: MessageDTO[]) =>
+          prev.map((m: MessageDTO) =>
+            m._id === updatedMsg._id ? updatedMsg : m,
+          ),
+        );
+        setPinnedMessages((prev: MessageDTO[]) =>
+          prev.map((m: MessageDTO) =>
+            m._id === updatedMsg._id ? updatedMsg : m,
+          ),
+        );
+      }
+    };
+
+    const handleGroupBanned = (data: any) => {
+      const updatedId = data.groupId || data.conversationId;
+      if (String(updatedId) === String(resolvedConversationId)) {
+        setGroupDetails((prev: any) => ({
+          ...prev,
+          status: data.status,
+          isBanned: data.status === "READ_ONLY",
+        }));
       }
     };
 
@@ -475,8 +900,11 @@ export default function GlobalChatScreen() {
     socket.on("STOP_TYPING", handleStopTyping);
     socket.on("message-pinned", handleMessagePinned);
     socket.on("message-revoked", handleMessageRevoked);
+    socket.on("message-updated", handleMessageUpdated);
     socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
     socket.on("GROUP_UPDATED", handleGroupUpdated);
+    socket.on("GROUP_BANNED", handleGroupBanned);
+    socket.on("POLL_UPDATED", handlePollUpdated);
 
     return () => {
       socket.off("message-received", handleMessageReceived);
@@ -486,8 +914,11 @@ export default function GlobalChatScreen() {
       socket.off("STOP_TYPING", handleStopTyping);
       socket.off("message-pinned", handleMessagePinned);
       socket.off("message-revoked", handleMessageRevoked);
+      socket.off("message-updated", handleMessageUpdated);
       socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
       socket.off("GROUP_UPDATED", handleGroupUpdated);
+      socket.off("GROUP_BANNED", handleGroupBanned);
+      socket.off("POLL_UPDATED", handlePollUpdated);
     };
   }, [socket, resolvedConversationId, isGroupChat, targetUserId]);
 
@@ -528,11 +959,17 @@ export default function GlobalChatScreen() {
     setInputText(text);
     if (!socket || !resolvedConversationId) return;
     if (!typingTimeoutRef.current) {
-      socket.emit("TYPING", { roomId: resolvedConversationId, actorId: currentUserId });
+      socket.emit("TYPING", {
+        roomId: resolvedConversationId,
+        actorId: currentUserId,
+      });
     }
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
-      socket.emit("STOP_TYPING", { roomId: resolvedConversationId, actorId: currentUserId });
+      socket.emit("STOP_TYPING", {
+        roomId: resolvedConversationId,
+        actorId: currentUserId,
+      });
       typingTimeoutRef.current = null;
     }, 2000);
   };
@@ -586,9 +1023,7 @@ export default function GlobalChatScreen() {
       senderName:
         msg.senderId === currentUserId
           ? "Bạn"
-          : msg.senderName ||
-            userCache[msg.senderId]?.fullName ||
-            "Người dùng",
+          : msg.senderName || userCache[msg.senderId]?.fullName || "Người dùng",
       content: content,
       type: msg.type,
     };
@@ -626,7 +1061,7 @@ export default function GlobalChatScreen() {
           100,
         );
       }
-    } catch (e) { }
+    } catch (e) {}
   };
 
   const handleSendFile = async () => {
@@ -657,10 +1092,16 @@ export default function GlobalChatScreen() {
 
       if (sentMessages.length > 0) {
         setMessages((prev: MessageDTO[]) => {
-          const newOnes = sentMessages.filter((sm) => !prev.find((m) => m._id === sm._id));
+          const newOnes = sentMessages.filter(
+            (sm) => !prev.find((m) => m._id === sm._id),
+          );
           return [...prev, ...newOnes];
         });
-        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
+        setTimeout(
+          () =>
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
+          100,
+        );
       }
     } catch (e) {
       console.error("Lỗi gửi nhiều file:", e);
@@ -669,24 +1110,53 @@ export default function GlobalChatScreen() {
 
   const handleSendImage = async () => {
     if (!resolvedConversationId) return;
+    const replyData = getReplyData(replyingToRef.current);
     try {
       const imgRes = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsEditing: false,
         quality: 0.8,
         allowsMultipleSelection: true,
-      });
+        shouldDownloadFromNetwork: true,
+        videoExportPreset: 0,
+      } as any);
 
       if (imgRes.canceled || !imgRes.assets?.length) return;
 
-      const replyData = getReplyData(replyingToRef.current);
       setReplyingTo(null);
       const sentMessages: MessageDTO[] = [];
-      for (const asset of imgRes.assets) {
+      const assets = imgRes.assets || [];
+      const images = assets.filter((a) => a.type === "image");
+      const videos = assets.filter((a) => a.type === "video");
+
+      if (images.length > 1) {
+        const sentMessage = await messageService.sendImagesMessage({
+          conversationId: resolvedConversationId,
+          files: images,
+          senderName: currentUserName,
+          replyTo: replyData,
+        });
+        if (sentMessage) {
+          sentMessages.push(sentMessage);
+        }
+      } else if (images.length === 1) {
         const sentMessage = await messageService.sendFileMessage({
           conversationId: resolvedConversationId,
-          file: asset,
+          file: images[0],
           isImage: true,
+          senderName: currentUserName,
+          replyTo: replyData,
+        });
+        if (sentMessage) {
+          sentMessages.push(sentMessage);
+        }
+      }
+
+      for (const videoAsset of videos) {
+        const sentMessage = await messageService.sendFileMessage({
+          conversationId: resolvedConversationId,
+          file: videoAsset,
+          isImage: false,
           senderName: currentUserName,
           replyTo: replyData,
         });
@@ -697,17 +1167,75 @@ export default function GlobalChatScreen() {
 
       if (sentMessages.length > 0) {
         setMessages((prev: MessageDTO[]) => {
-          const newOnes = sentMessages.filter((sm) => !prev.find((m) => m._id === sm._id));
+          const newOnes = sentMessages.filter(
+            (sm) => !prev.find((m) => m._id === sm._id),
+          );
           return [...prev, ...newOnes];
         });
-        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
+        setTimeout(
+          () =>
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
+          100,
+        );
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Lỗi gửi nhiều ảnh:", e);
+      if (e.message?.includes("3164")) {
+        setTimeout(async () => {
+          try {
+            const fileRes = await DocumentPicker.getDocumentAsync({
+              type: "video/*",
+              copyToCacheDirectory: true,
+              multiple: true,
+            });
+            if (fileRes.canceled || !fileRes.assets?.length) return;
+
+            const sentMessages: MessageDTO[] = [];
+            for (const asset of fileRes.assets) {
+              const sentMessage = await messageService.sendFileMessage({
+                conversationId: resolvedConversationId,
+                file: asset,
+                isImage: false,
+                senderName: currentUserName,
+                replyTo: replyData,
+              });
+              if (sentMessage) {
+                sentMessages.push(sentMessage);
+              }
+            }
+
+            if (sentMessages.length > 0) {
+              setMessages((prev: MessageDTO[]) => {
+                const newOnes = sentMessages.filter(
+                  (sm) => !prev.find((m) => m._id === sm._id),
+                );
+                return [...prev, ...newOnes];
+              });
+              setTimeout(
+                () =>
+                  flatListRef.current?.scrollToOffset({
+                    offset: 0,
+                    animated: true,
+                  }),
+                100,
+              );
+            }
+          } catch (docErr) {
+            console.error("Lỗi gửi video qua DocumentPicker:", docErr);
+            Alert.alert("Lỗi", "Không thể chọn hoặc tải tệp tin này.");
+          }
+        }, 1000);
+      } else {
+        Alert.alert("Lỗi", "Không thể chọn hoặc gửi tệp tin này.");
+      }
     }
   };
 
-  interface MsgGroup { isSender: boolean; senderId: string; messages: MessageDTO[]; }
+  interface MsgGroup {
+    isSender: boolean;
+    senderId: string;
+    messages: MessageDTO[];
+  }
   const messageGroups = useMemo((): MsgGroup[] => {
     const FIVE_MIN = 5 * 60 * 1000;
     const groups: MsgGroup[] = [];
@@ -715,12 +1243,23 @@ export default function GlobalChatScreen() {
       const isSender = msg.senderId === currentUserId;
       const last = groups[groups.length - 1];
       const lastMsg = last?.messages[last.messages.length - 1];
-      const gap = lastMsg ? new Date(msg.createdAt).getTime() - new Date(lastMsg.createdAt).getTime() : Infinity;
+      const gap = lastMsg
+        ? new Date(msg.createdAt).getTime() -
+          new Date(lastMsg.createdAt).getTime()
+        : Infinity;
       const isSystem = msg.type === "system";
       const lastIsSystem = lastMsg?.type === "system";
       const isPoll = msg.type === "poll";
       const lastIsPoll = lastMsg?.type === "poll";
-      if (last && last.senderId === msg.senderId && gap < FIVE_MIN && !isSystem && !lastIsSystem && !isPoll && !lastIsPoll) {
+      if (
+        last &&
+        last.senderId === msg.senderId &&
+        gap < FIVE_MIN &&
+        !isSystem &&
+        !lastIsSystem &&
+        !isPoll &&
+        !lastIsPoll
+      ) {
         last.messages.push(msg);
       } else {
         groups.push({ isSender, senderId: msg.senderId, messages: [msg] });
@@ -737,6 +1276,9 @@ export default function GlobalChatScreen() {
     if (!isGroupChat) return true;
     if (!groupDetails) return true;
 
+    // Check if group is banned
+    if (groupDetails.isBanned) return false;
+
     const sendPermission = groupDetails.permissions?.sendMessage || "EVERYONE";
     if (sendPermission === "EVERYONE") return true;
 
@@ -748,7 +1290,9 @@ export default function GlobalChatScreen() {
       setKeyboardVisible(true);
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     });
-    const hideSub = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
+    const hideSub = Keyboard.addListener("keyboardDidHide", () =>
+      setKeyboardVisible(false),
+    );
     return () => {
       showSub.remove();
       hideSub.remove();
@@ -761,10 +1305,15 @@ export default function GlobalChatScreen() {
     try {
       const ok = await messageService.pinMessage(selectedMsg._id);
       if (ok) {
-        setPinnedMessages((prev) => [...prev, selectedMsg].filter((msg: MessageDTO, idx: number, arr: MessageDTO[]) => arr.findIndex((m: MessageDTO) => m._id === msg._id) === idx));
+        setPinnedMessages((prev) =>
+          [...prev, selectedMsg].filter(
+            (msg: MessageDTO, idx: number, arr: MessageDTO[]) =>
+              arr.findIndex((m: MessageDTO) => m._id === msg._id) === idx,
+          ),
+        );
         Alert.alert("Đã ghim tin nhắn");
       }
-    } catch (e) { }
+    } catch (e) {}
   };
 
   const handleUnpinMessage = async () => {
@@ -772,14 +1321,21 @@ export default function GlobalChatScreen() {
     closeModal();
     const ok = await messageService.unpinMessage(selectedMsg._id);
     if (ok) {
-      setPinnedMessages((prev) => prev.filter((m: MessageDTO) => m._id !== selectedMsg._id));
+      setPinnedMessages((prev) =>
+        prev.filter((m: MessageDTO) => m._id !== selectedMsg._id),
+      );
       Alert.alert("Đã bỏ ghim tin nhắn");
     }
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: "#f9fafb" }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-      <View style={{ paddingTop: insets.top, backgroundColor: "white", zIndex: 10 }}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: "#f9fafb" }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <View
+        style={{ paddingTop: insets.top, backgroundColor: "white", zIndex: 10 }}
+      >
         {isSearchMode ? (
           <View className="flex-row items-center px-4 py-2 border-b border-gray-100 bg-white">
             <TouchableOpacity onPress={closeSearch} className="p-2 -ml-2">
@@ -806,18 +1362,22 @@ export default function GlobalChatScreen() {
             isGroupChat={isGroupChat}
             isOnline={isOnline}
             userStatus={userStatus}
-            onBack={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))}
+            onBack={() =>
+              router.canGoBack() ? router.back() : router.replace("/(tabs)")
+            }
             onSearchToggle={() => setIsSearchMode(true)}
             onInfo={() => {
-              router.push({
+              const autoIds = isGroupChat ? [] : getAutoSelectedMessageIds();
+              router.replace({
                 pathname: "/chat/info",
                 params: {
-                  id: resolvedConversationId || id,
+                  id: id as string,
                   name: realtimeGroupName,
                   avatar: realtimeAvatar,
                   membersCount: realtimeMembersCount,
                   isGroup: isGroupChat ? "true" : "false",
                   targetUserId,
+                  selectedMessageIds: JSON.stringify(autoIds),
                 },
               });
             }}
@@ -850,7 +1410,10 @@ export default function GlobalChatScreen() {
 
       <View className="flex-1 relative">
         <PinnedMessageBar pinnedMessages={pinnedMessages} />
-        <View className="absolute top-0 left-0 right-0 bottom-0" style={{ paddingTop: pinnedMessages.length > 0 ? 64 : 0 }}>
+        <View
+          className="absolute top-0 left-0 right-0 bottom-0"
+          style={{ paddingTop: pinnedMessages.length > 0 ? 64 : 0 }}
+        >
           <FlatList
             ref={flatListRef}
             data={invertedMessages}
@@ -860,18 +1423,35 @@ export default function GlobalChatScreen() {
             onEndReachedThreshold={0.5}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             className="flex-1 px-4"
-            contentContainerStyle={{ flexGrow: 1, paddingTop: 80, paddingBottom: 0 }}
-            ListHeaderComponent={typingUsers.length > 0 ? (
-              <View className="mb-6 self-start flex-row items-center px-5 py-3 shadow-sm bg-white rounded-3xl rounded-bl-lg">
-                <Text className="text-gray-500 italic text-sm">{typingUsers.length === 1 ? "Có người đang nhắn tin..." : "Nhiều người đang nhắn tin..."}</Text>
-              </View>
-            ) : null}
-            ListFooterComponent={loadingMore ? <View className="py-4 items-center"><ActivityIndicator color="#3b82f6" /></View> : null}
+            contentContainerStyle={{
+              flexGrow: 1,
+              paddingTop: 80,
+              paddingBottom: 0,
+            }}
+            ListHeaderComponent={
+              typingUsers.length > 0 ? (
+                <View className="mb-6 self-start flex-row items-center px-5 py-3 shadow-sm bg-white rounded-3xl rounded-bl-lg">
+                  <Text className="text-gray-500 italic text-sm">
+                    {typingUsers.length === 1
+                      ? "Có người đang nhắn tin..."
+                      : "Nhiều người đang nhắn tin..."}
+                  </Text>
+                </View>
+              ) : null
+            }
+            ListFooterComponent={
+              loadingMore ? (
+                <View className="py-4 items-center">
+                  <ActivityIndicator color="#3b82f6" />
+                </View>
+              ) : null
+            }
             onScroll={(e) => {
               const { contentOffset } = e.nativeEvent;
               const closeToBottom = contentOffset.y < 50;
               setIsAtBottom(closeToBottom);
-              if (closeToBottom && hasNewUnseenMessages) setHasNewUnseenMessages(false);
+              if (closeToBottom && hasNewUnseenMessages)
+                setHasNewUnseenMessages(false);
             }}
             renderItem={({ item: group }) => {
               const sender = userCache[group.senderId];
@@ -880,8 +1460,13 @@ export default function GlobalChatScreen() {
                 return (
                   <View className="items-center my-3 w-full">
                     {group.messages.map((msg: MessageDTO) => (
-                      <View key={msg._id} className="bg-gray-200/80 px-4 py-1.5 rounded-full mb-1">
-                        <Text className="text-[12px] text-gray-600 font-medium text-center">{msg.content}</Text>
+                      <View
+                        key={msg._id}
+                        className="bg-gray-200/80 px-4 py-1.5 rounded-full mb-1"
+                      >
+                        <Text className="text-[12px] text-gray-600 font-medium text-center">
+                          {msg.content}
+                        </Text>
                       </View>
                     ))}
                   </View>
@@ -894,10 +1479,15 @@ export default function GlobalChatScreen() {
                       msg={group.messages[0]}
                       isSender={group.isSender}
                       isLastInBlock={true}
-                      onLongPress={() => onLongPressMessage(group.messages[0]._id)}
-                      openReactionDetails={() => setReactionDetailMsgId(group.messages[0]._id)}
+                      onLongPress={() =>
+                        onLongPressMessage(group.messages[0]._id)
+                      }
+                      openReactionDetails={() =>
+                        setReactionDetailMsgId(group.messages[0]._id)
+                      }
                       chatImages={chatImages}
                       setViewerIndex={setViewerIndex}
+                      onOpenGallery={handleOpenGallery}
                       messageRefs={messageRefs}
                       expandedTimeMsgId={expandedTimeMsgId}
                       setExpandedTimeMsgId={setExpandedTimeMsgId}
@@ -912,34 +1502,69 @@ export default function GlobalChatScreen() {
                 );
               }
               return (
-                <View className={`mb-6 flex-row ${group.isSender ? "justify-end" : "justify-start"}`}>
+                <View
+                  className={`mb-6 flex-row ${group.isSender ? "justify-end" : "justify-start"}`}
+                >
                   {!group.isSender && (
                     <View className="w-10 items-center justify-end mr-2">
-                      {sender?.avatar ? <Image source={{ uri: sender.avatar }} className="w-8 h-8 rounded-full mb-1" /> : <View className="w-8 h-8 rounded-full bg-blue-100 items-center justify-center mb-1"><Text className="text-blue-600 font-bold text-xs">{senderName.charAt(0).toUpperCase()}</Text></View>}
+                      {sender?.avatar ? (
+                        <Image
+                          source={{ uri: sender.avatar }}
+                          className="w-8 h-8 rounded-full mb-1"
+                        />
+                      ) : (
+                        <View className="w-8 h-8 rounded-full bg-blue-100 items-center justify-center mb-1">
+                          <Text className="text-blue-600 font-bold text-xs">
+                            {senderName.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   )}
-                  <View className={`max-w-[80%] ${group.isSender ? "items-end" : "items-start"}`}>
-                    {!group.isSender && isGroupChat && <Text className="text-[11px] font-bold text-gray-500 mb-1 ml-1">{senderName}</Text>}
+                  <View
+                    className={`max-w-[80%] ${group.isSender ? "items-end" : "items-start"}`}
+                  >
+                    {!group.isSender && isGroupChat && (
+                      <Text className="text-[11px] font-bold text-gray-500 mb-1 ml-1">
+                        {senderName}
+                      </Text>
+                    )}
                     {group.messages.map((msg: MessageDTO, idx: number) => (
-                      <MessageItem
-                        key={msg._id}
-                        msg={msg}
-                        isSender={group.isSender}
-                        isLastInBlock={idx === group.messages.length - 1}
-                        onLongPress={() => onLongPressMessage(msg._id)}
-                        openReactionDetails={() => setReactionDetailMsgId(msg._id)}
-                        chatImages={chatImages}
-                        setViewerIndex={setViewerIndex}
-                        messageRefs={messageRefs}
-                        expandedTimeMsgId={expandedTimeMsgId}
-                        setExpandedTimeMsgId={setExpandedTimeMsgId}
-                        onReplyClick={scrollToMessage}
-                        isHighlighted={msg._id === highlightedMsgId}
-                        isAdminHighlighted={
-                          groupDetails?.isHighlightEnabled &&
-                          adminIds.has(String(msg.senderId))
-                        }
-                      />
+                      <View key={msg._id}>
+                        <MessageItem
+                          msg={msg}
+                          isSender={group.isSender}
+                          isLastInBlock={idx === group.messages.length - 1}
+                          onLongPress={(albumIndex) =>
+                            !isSelectionMode &&
+                            onLongPressMessage(msg._id, albumIndex)
+                          }
+                          onPress={
+                            isSelectionMode
+                              ? () => toggleMessageSelection(msg._id)
+                              : undefined
+                          }
+                          isSelected={
+                            isSelectionMode &&
+                            selectedReportIds.includes(msg._id)
+                          }
+                          openReactionDetails={() =>
+                            setReactionDetailMsgId(msg._id)
+                          }
+                          chatImages={chatImages}
+                          setViewerIndex={setViewerIndex}
+                          onOpenGallery={handleOpenGallery}
+                          messageRefs={messageRefs}
+                          expandedTimeMsgId={expandedTimeMsgId}
+                          setExpandedTimeMsgId={setExpandedTimeMsgId}
+                          onReplyClick={scrollToMessage}
+                          isHighlighted={msg._id === highlightedMsgId}
+                          isAdminHighlighted={
+                            groupDetails?.isHighlightEnabled &&
+                            adminIds.has(String(msg.senderId))
+                          }
+                        />
+                      </View>
                     ))}
                   </View>
                 </View>
@@ -949,7 +1574,10 @@ export default function GlobalChatScreen() {
         </View>
 
         {isSearchMode && searchQuery.length > 0 && (
-          <View className="absolute top-0 left-0 right-0 bottom-0 bg-white z-[60]" style={{ marginTop: pinnedMessages.length > 0 ? 64 : 0 }}>
+          <View
+            className="absolute top-0 left-0 right-0 bottom-0 bg-white z-[60]"
+            style={{ marginTop: pinnedMessages.length > 0 ? 64 : 0 }}
+          >
             {isSearching ? (
               <View className="p-10 items-center">
                 <ActivityIndicator color="#3b82f6" />
@@ -970,27 +1598,51 @@ export default function GlobalChatScreen() {
                   >
                     <View className="w-10 h-10 rounded-full bg-blue-50 items-center justify-center mr-3">
                       {userCache[item.senderId]?.avatar ? (
-                        <Image source={{ uri: userCache[item.senderId].avatar }} className="w-10 h-10 rounded-full" />
+                        <Image
+                          source={{ uri: userCache[item.senderId].avatar }}
+                          className="w-10 h-10 rounded-full"
+                        />
                       ) : (
                         <View className="w-10 h-10 rounded-full bg-blue-100 items-center justify-center">
-                          <Text className="text-blue-600 font-bold">{(userCache[item.senderId]?.fullName || "U").charAt(0).toUpperCase()}</Text>
+                          <Text className="text-blue-600 font-bold">
+                            {(userCache[item.senderId]?.fullName || "U")
+                              .charAt(0)
+                              .toUpperCase()}
+                          </Text>
                         </View>
                       )}
                     </View>
                     <View className="flex-1">
                       <View className="flex-row justify-between items-center mb-1">
-                        <Text className="font-bold text-gray-900" numberOfLines={1}>{userCache[item.senderId]?.fullName || "Người dùng"}</Text>
-                        <Text className="text-[10px] text-gray-400">{new Date(item.createdAt).toLocaleDateString()}</Text>
+                        <Text
+                          className="font-bold text-gray-900"
+                          numberOfLines={1}
+                        >
+                          {userCache[item.senderId]?.fullName || "Người dùng"}
+                        </Text>
+                        <Text className="text-[10px] text-gray-400">
+                          {new Date(item.createdAt).toLocaleDateString()}
+                        </Text>
                       </View>
-                      <Text className="text-gray-600 text-sm" numberOfLines={2}>{item.content}</Text>
+                      <Text className="text-gray-600 text-sm" numberOfLines={2}>
+                        {item.content}
+                      </Text>
                     </View>
                   </TouchableOpacity>
                 )}
-                ListEmptyComponent={<View className="p-10 items-center"><Text className="text-gray-400">Không tìm thấy tin nhắn nào</Text></View>}
+                ListEmptyComponent={
+                  <View className="p-10 items-center">
+                    <Text className="text-gray-400">
+                      Không tìm thấy tin nhắn nào
+                    </Text>
+                  </View>
+                }
               />
             ) : (
               <View className="p-10 items-center">
-                <Text className="text-gray-400">Không tìm thấy tin nhắn nào</Text>
+                <Text className="text-gray-400">
+                  Không tìm thấy tin nhắn nào
+                </Text>
               </View>
             )}
           </View>
@@ -1001,18 +1653,28 @@ export default function GlobalChatScreen() {
             {hasNewUnseenMessages ? (
               <TouchableOpacity
                 onPress={() => {
-                  flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+                  flatListRef.current?.scrollToOffset({
+                    offset: 0,
+                    animated: true,
+                  });
                   setHasNewUnseenMessages(false);
                 }}
                 className="bg-blue-500 flex-row items-center px-4 py-2.5 rounded-full shadow-lg"
                 activeOpacity={0.8}
               >
-                <Text className="text-white font-bold text-sm mr-2">Tin nhắn mới</Text>
+                <Text className="text-white font-bold text-sm mr-2">
+                  Tin nhắn mới
+                </Text>
                 <ChevronDownIcon size={18} color="white" strokeWidth={3} />
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
-                onPress={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
+                onPress={() =>
+                  flatListRef.current?.scrollToOffset({
+                    offset: 0,
+                    animated: true,
+                  })
+                }
                 className="bg-white p-2.5 rounded-full shadow-md border border-gray-100"
               >
                 <ChevronDownIcon size={24} color="#3b82f6" strokeWidth={2.5} />
@@ -1021,36 +1683,203 @@ export default function GlobalChatScreen() {
           </View>
         )}
 
-        <View className="flex-1 justify-end" pointerEvents="box-none">
-          <ChatInput
-            ref={chatInputRef}
-            inputText={inputText}
-            onInputChange={handleInputChange}
-            onSendMessage={sendMessage}
-            onSendImage={handleSendImage}
-            onSendFile={handleSendFile}
-            onCreatePoll={() => {
-              if (resolvedConversationId) {
-                router.push({
-                  pathname: "/chat/create-poll",
-                  params: { conversationId: resolvedConversationId },
-                });
+        {!isSelectionMode ? (
+          <View className="flex-1 justify-end" pointerEvents="box-none">
+            <ChatInput
+              ref={chatInputRef}
+              inputText={inputText}
+              onInputChange={handleInputChange}
+              onSendMessage={sendMessage}
+              onSendImage={handleSendImage}
+              onSendFile={handleSendFile}
+              onCreatePoll={() => {
+                if (resolvedConversationId) {
+                  router.push({
+                    pathname: "/chat/create-poll",
+                    params: { conversationId: resolvedConversationId },
+                  });
+                }
+              }}
+              isKeyboardVisible={isKeyboardVisible}
+              replyingTo={replyingTo}
+              onCancelReply={() => setReplyingToWithRef(null)}
+              canSendMessage={canSendMessage}
+              isBanned={
+                groupDetails?.isBanned || groupDetails?.status === "READ_ONLY"
               }
-            }}
-            isKeyboardVisible={isKeyboardVisible}
-            replyingTo={replyingTo}
-            onCancelReply={() => setReplyingToWithRef(null)}
-            canSendMessage={canSendMessage}
-          />
-        </View>
+            />
+          </View>
+        ) : (
+          <View className="flex-1 justify-end" pointerEvents="box-none">
+            {selectionPurpose === "REPORT" ? (
+              <View
+                className="bg-white border-t border-gray-100 px-6 py-4 flex-row items-center justify-between"
+                style={{
+                  paddingBottom: Math.max(insets.bottom, 16),
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: -3 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 10,
+                }}
+              >
+                <View>
+                  <Text className="text-sm text-gray-500">Đã chọn</Text>
+                  <Text
+                    className="text-lg font-bold"
+                    style={{
+                      color:
+                        selectedReportIds.length > 0 &&
+                        (selectedReportIds.length < 1 ||
+                          selectedReportIds.length > 40)
+                          ? "#ef4444"
+                          : "#111827",
+                    }}
+                  >
+                    {selectedReportIds.length}{" "}
+                    <Text className="text-xs font-normal text-gray-400">
+                      (tối đa 40)
+                    </Text>
+                  </Text>
+                </View>
+                <View className="flex-row gap-3">
+                  <TouchableOpacity
+                    onPress={() => {
+                      setIsSelectionMode(false);
+                      setSelectedReportIds([]);
+                    }}
+                    className="px-4 py-2 bg-gray-100 rounded-full"
+                  >
+                    <Text className="font-bold text-gray-600">Hủy</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (
+                        selectedReportIds.length < 1 ||
+                        selectedReportIds.length > 40
+                      ) {
+                        Alert.alert(
+                          "Thông báo",
+                          "Vui lòng chọn từ 1 đến 40 tin nhắn làm bằng chứng.",
+                        );
+                        return;
+                      }
+
+                      const selectedIds = JSON.stringify(selectedReportIds);
+                      const isGroupStr = isGroupChat ? "true" : "false";
+
+                      let query = `id=${id}&name=${encodeURIComponent(realtimeGroupName)}&avatar=${encodeURIComponent(realtimeAvatar)}&membersCount=${realtimeMembersCount}&isGroup=${isGroupStr}&selectedMessageIds=${encodeURIComponent(selectedIds)}&showReport=true`;
+
+                      if (!isGroupChat && targetUserId) {
+                        query += `&targetUserId=${targetUserId}`;
+                      }
+
+                      router.replace(`/chat/info?${query}` as any);
+                    }}
+                    className="px-6 py-2 rounded-full"
+                    style={{
+                      backgroundColor:
+                        selectedReportIds.length >= 1 &&
+                        selectedReportIds.length <= 40
+                          ? "#2563eb"
+                          : "#93c5fd",
+                    }}
+                  >
+                    <Text className="font-bold text-white">Xong</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View
+                className="bg-white border-t border-gray-100 px-4 py-3 flex-row items-center justify-around"
+                style={{
+                  paddingBottom: Math.max(insets.bottom, 12),
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: -3 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 4,
+                  elevation: 10,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={handleMultiCopy}
+                  className="items-center justify-center py-2 px-1"
+                >
+                  <ClipboardDocumentIcon size={22} color="#4b5563" />
+                  <Text className="text-[10px] text-gray-600 mt-1 font-medium">
+                    Sao chép
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleMultiShare}
+                  className="items-center justify-center py-2 px-1"
+                >
+                  <ArrowUturnRightIcon size={22} color="#4b5563" />
+                  <Text className="text-[10px] text-gray-600 mt-1 font-medium">
+                    Chia sẻ
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleMultiRevoke}
+                  className="items-center justify-center py-2 px-1"
+                >
+                  <ArrowUturnLeftIcon size={22} color="#f97316" />
+                  <Text className="text-[10px] text-orange-600 mt-1 font-medium">
+                    Thu hồi
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleMultiDelete}
+                  className="items-center justify-center py-2 px-1"
+                >
+                  <TrashIcon size={22} color="#ef4444" />
+                  <Text className="text-[10px] text-red-500 mt-1 font-medium">
+                    Xóa
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    setIsSelectionMode(false);
+                    setSelectedReportIds([]);
+                  }}
+                  className="items-center justify-center py-2 px-1"
+                >
+                  <XMarkIcon size={22} color="#6b7280" />
+                  <Text className="text-[10px] text-gray-500 mt-1 font-medium">
+                    Hủy
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
-      <GalleryViewerModal images={chatImages} initialIndex={viewerIndex ?? 0} onClose={() => setViewerIndex(null)} onIndexChange={setViewerIndex} visible={viewerIndex !== null} />
-      <ReactionDetailsSheet msgId={reactionDetailMsgId} onClose={closeReactionDetails} messages={messages} userCache={userCache} />
+      <GalleryViewerModal
+        images={galleryImages.length > 0 ? galleryImages : chatImages}
+        initialIndex={viewerIndex ?? 0}
+        onClose={() => {
+          setViewerIndex(null);
+          setGalleryImages([]);
+        }}
+        onIndexChange={setViewerIndex}
+        visible={viewerIndex !== null}
+      />
+      <ReactionDetailsSheet
+        msgId={reactionDetailMsgId}
+        onClose={closeReactionDetails}
+        messages={messages}
+        userCache={userCache}
+      />
       <MessageContextMenu
         visible={!!selectedMessageId && !!selectedMsgLayout}
         selectedMsg={selectedMsg || null}
         layout={selectedMsgLayout}
+        selectedImageIndex={selectedImageIndex}
         onClose={closeModal}
         onReact={handleReact}
         onClearReactions={handleClearReactions}
@@ -1060,11 +1889,62 @@ export default function GlobalChatScreen() {
         onPin={handlePinMessage}
         onUnpin={handleUnpinMessage}
         onReply={handleReply}
-        isPinned={!!selectedMessageId && pinnedMessages.some((m: MessageDTO) => m._id === selectedMessageId)}
+        onForward={(msg) => {
+          closeModal();
+          router.push({
+            pathname: "/chat/forward",
+            params: {
+              content: msg.content,
+              type: msg.type,
+              metadata: msg.metadata ? JSON.stringify(msg.metadata) : undefined,
+            },
+          });
+        }}
+        onSelectMultiple={(msg) => {
+          closeModal();
+          setIsSelectionMode(true);
+          setSelectionPurpose("GENERAL");
+          setSelectedReportIds([msg._id]);
+        }}
+        onReport={(msg) => {
+          closeModal();
+          setReportTarget({
+            type: TargetType.USER,
+            id: msg.senderId,
+            name: msg.senderName || "Người dùng",
+          });
+          setReportMessageIds([msg._id]);
+          setIsReportModalVisible(true);
+        }}
+        isPinned={
+          !!selectedMessageId &&
+          pinnedMessages.some((m: MessageDTO) => m._id === selectedMessageId)
+        }
         canPin={canPinMessage}
         currentUserId={currentUserId as string}
+      />
+
+      <ReportModal
+        visible={isReportModalVisible}
+        onClose={() => {
+          setIsReportModalVisible(false);
+          setReportTarget(null);
+          setReportMessageIds([]);
+        }}
+        targetId={reportTarget ? reportTarget.id : ""}
+        targetType={reportTarget ? reportTarget.type : TargetType.USER}
+        targetName={reportTarget ? reportTarget.name : "Người dùng"}
+        selectedMessageIds={reportMessageIds}
+        messages={messages}
+        getAvatarForUser={(senderId) => userCache[senderId]?.avatar || ""}
+        conversationId={id as string}
+        conversationType={isGroup === "true" ? "GROUP" : "ONE_TO_ONE"}
+        onSuccess={() => {
+          setIsReportModalVisible(false);
+          setReportTarget(null);
+          setReportMessageIds([]);
+        }}
       />
     </KeyboardAvoidingView>
   );
 }
-

@@ -83,8 +83,10 @@ export const groupService = {
     try {
       const data = await api.get<any, any>(`/groups/${groupId}/link-info`);
       return data;
-    } catch (error) {
-      console.error("Lỗi lấy thông tin nhóm cho link:", error);
+    } catch (error: any) {
+      if (error.response?.status !== 404) {
+        console.error("Lỗi lấy thông tin nhóm cho link:", error);
+      }
       throw error;
     }
   },
@@ -472,6 +474,17 @@ export const groupService = {
       return await api.get<any, any>(`/groups/common/${otherUserId}`);
     } catch (error) {
       console.error("Lỗi lấy danh sách nhóm chung:", error);
+      throw error;
+    }
+  },
+
+  getUserYearlyStats: async (userId: string, year: number) => {
+    try {
+      return await api.get<any, any>(`/groups/stats/yearly`, {
+        params: { userId, year },
+      });
+    } catch (error) {
+      console.error("Lỗi lấy thống kê năm của người dùng:", error);
       throw error;
     }
   },

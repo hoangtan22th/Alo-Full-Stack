@@ -23,4 +23,7 @@ public interface ReportRepository extends MongoRepository<Report, String> {
     long countByStatus(ReportStatus status);
     long countByStatusInAndUpdatedAtAfter(List<ReportStatus> statuses, LocalDateTime date);
     long countByResolvedAction(AdminActionRequest.AdminAction action);
+
+    java.util.Optional<Report> findFirstBySnapshotHashAndAiSummaryIsNotNull(String snapshotHash);
+    long countByTargetIdAndStatus(String targetId, ReportStatus status);
 }

@@ -31,6 +31,7 @@ export default function PollsManagementScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [canCreate, setCanCreate] = useState(false);
+  const [displayCount, setDisplayCount] = useState(5);
 
   const fetchData = async (isRefresh = false) => {
     if (!id) return;
@@ -87,7 +88,7 @@ export default function PollsManagementScreen() {
   const renderItem = ({ item }: { item: PollDTO }) => (
     <TouchableOpacity
       className="bg-white rounded-2xl p-4 mb-3 border border-gray-100 shadow-sm"
-      onPress={() => router.push(`/chat/poll-details?pollId=${item._id}`)}
+      onPress={() => router.push({ pathname: "/chat/poll-details", params: { pollId: item._id } })}
     >
       <View className="flex-row items-center mb-2">
         <View className="w-10 h-10 bg-blue-50 rounded-full items-center justify-center mr-3">
@@ -125,7 +126,7 @@ export default function PollsManagementScreen() {
         </View>
       ) : (
         <FlatList
-          data={polls}
+          data={polls.slice(0, displayCount)}
           keyExtractor={(item) => item._id}
           renderItem={renderItem}
           contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
@@ -134,6 +135,18 @@ export default function PollsManagementScreen() {
               <ChartBarIcon size={64} color="#d1d5db" />
               <Text className="text-gray-400 mt-4 text-[15px]">Chưa có bình chọn nào</Text>
             </View>
+          }
+          ListFooterComponent={
+            displayCount < polls.length ? (
+              <TouchableOpacity
+                className="w-full py-3 mt-2 bg-blue-50 rounded-xl items-center justify-center"
+                onPress={() => setDisplayCount((prev) => prev + 5)}
+              >
+                <Text className="text-[13px] font-bold text-blue-600">
+                  Xem thêm ({polls.length - displayCount} bình chọn cũ hơn)
+                </Text>
+              </TouchableOpacity>
+            ) : null
           }
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => fetchData(true)} />

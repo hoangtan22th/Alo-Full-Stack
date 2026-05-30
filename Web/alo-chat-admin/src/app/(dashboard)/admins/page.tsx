@@ -353,7 +353,7 @@ export default function AdminManagementPage() {
               {
                 name,
                 email,
-                password,
+                password: password || "",
                 role: role as "ROLE_ADMIN" | "ROLE_SUPER_ADMIN",
               },
               () => {

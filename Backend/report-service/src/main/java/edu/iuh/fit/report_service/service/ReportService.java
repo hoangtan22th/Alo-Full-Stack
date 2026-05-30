@@ -23,4 +23,8 @@ public interface ReportService {
     void heartbeatLock(String reportId, String adminId);
 
     ReportStatisticsResponse getStatistics();
+
+    long countTargetViolations(String targetId);
+
+    ReportAdminResponse reanalyzeReport(String reportId);
 }
