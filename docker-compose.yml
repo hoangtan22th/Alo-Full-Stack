@@ -426,6 +426,8 @@ services:
     environment:
       - PORT=3001
       - NEXT_PUBLIC_API_URL=http://${EXPO_PUBLIC_IP_ADDRESS:-localhost}:8888
+      - NEXT_PUBLIC_ZEGO_APP_ID=${NEXT_PUBLIC_ZEGO_APP_ID}
+      - NEXT_PUBLIC_ZEGO_SERVER_SECRET=${NEXT_PUBLIC_ZEGO_SERVER_SECRET}
     depends_on:
       - api-gateway
     networks:
@@ -442,6 +444,8 @@ services:
     environment:
       - PORT=3002
       - NEXT_PUBLIC_API_URL=http://${EXPO_PUBLIC_IP_ADDRESS:-localhost}:8888
+      - NEXT_PUBLIC_ZEGO_APP_ID=${NEXT_PUBLIC_ZEGO_APP_ID}
+      - NEXT_PUBLIC_ZEGO_SERVER_SECRET=${NEXT_PUBLIC_ZEGO_SERVER_SECRET}
     depends_on:
       - api-gateway
     networks:
