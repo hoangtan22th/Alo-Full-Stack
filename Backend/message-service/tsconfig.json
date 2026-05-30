@@ -7,9 +7,12 @@
 
     // Environment Settings
     // See also https://aka.ms/tsconfig/module
-    "module": "ESNext",
-    "target": "esnext",
-    "moduleResolution": "bundler",
+    "module": "commonjs",
+    "target": "es2022",
+    "moduleResolution": "node",
+    "ignoreDeprecations": "6.0",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
     // "types": [],
     // For nodejs:
     // "lib": ["esnext"],

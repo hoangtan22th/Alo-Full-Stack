@@ -1170,7 +1170,7 @@ export default function ChatPage() {
           console.log("✅ [Realtime] This group was BANNED/UNBANNED, refreshing info...");
           // Cập nhật state cục bộ ngay lập tức nếu có status trong data
           if (data.status) {
-            setConversationInfo(prev => prev ? { ...prev, status: data.status } : null);
+            setConversationInfo((prev: any) => prev ? { ...prev, status: data.status } : null);
           }
           fetchConversationInfo();
         }
@@ -1181,7 +1181,7 @@ export default function ChatPage() {
         console.log("📢 [Realtime] GROUP_DISBANDED event received:", data);
         if (String(data.groupId || data.conversationId) === String(activeConvoId)) {
           // Cập nhật state cục bộ để UI hiện banner "đã giải tán" ngay lập tức
-          setConversationInfo(prev => prev ? { ...prev, status: 'DISBANDED' } : null);
+          setConversationInfo((prev: any) => prev ? { ...prev, status: 'DISBANDED' } : null);
           toast.error(data.message || "Nhóm này đã bị giải tán do vi phạm.");
           
           // Đợi 2 giây để người dùng kịp thấy banner rồi mới redirect
@@ -2172,7 +2172,7 @@ export default function ChatPage() {
                       ? `${conversationInfo?.members?.length ?? ""} thành viên`
                       : isOnline
                         ? "Đang hoạt động"
-                        : getOfflineText(userStatus?.last_active)}
+                        : getOfflineText(userStatus?.lastActive)}
                   </p>
                 </div>
               </div>

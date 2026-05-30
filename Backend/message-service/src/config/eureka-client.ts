@@ -4,15 +4,15 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const PORT: number = parseInt(process.env.PORT as string, 10) || 8083;
-const hostName = 'localhost'; 
+const hostName = process.env.HOSTNAME || 'localhost'; 
+const ipAddr = process.env.IP_ADDR || '127.0.0.1';
 
 const eurekaClient = new Eureka({
   instance: {
-    // Sửa instanceId để Eureka hiển thị đúng địa chỉ localhost
     instanceId: `${hostName}:message-service:${PORT}`,
     app: 'MESSAGE-SERVICE',
     hostName: hostName,
-    ipAddr: '127.0.0.1', // Trỏ thẳng về loopback
+    ipAddr: ipAddr,
     statusPageUrl: `http://${hostName}:${PORT}/info`,
     healthCheckUrl: `http://${hostName}:${PORT}/health`,
     port: {

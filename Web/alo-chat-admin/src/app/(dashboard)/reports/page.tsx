@@ -342,6 +342,7 @@ export default function ReportsModerationPage() {
             <Pagination
               currentPage={currentPage}
               totalPages={pagination.totalPages}
+              totalElements={pagination.totalElements}
               onPageChange={handlePageChange}
             />
           </div>
