@@ -78,6 +78,13 @@ public class UserServiceImpl implements UserService {
             throw new AppException(400,
                     "Số điện thoại không được phép thay đổi sau khi đăng ký");
         }
+
+        String reqEmail = request.getEmail();
+        if (reqEmail != null && !reqEmail.trim().isEmpty() && !reqEmail.equalsIgnoreCase(user.getEmail())) {
+            throw new AppException(400,
+                    "Email không được phép thay đổi sau khi đăng ký");
+        }
+
         if (request.getGender() != null) {
             user.setGender(UserProfile.Gender.values()[Math.min(Math.max(0, request.getGender()),
                     UserProfile.Gender.values().length - 1)]);

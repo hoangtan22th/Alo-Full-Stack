@@ -85,6 +85,7 @@ services:
   # ============================================================================
 
   discovery-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-discovery-service:latest
     build:
       context: .
       dockerfile: infrastructure/discovery-service/Dockerfile
@@ -95,6 +96,7 @@ services:
       - alo-network
 
   api-gateway:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-api-gateway:latest
     build:
       context: .
       dockerfile: infrastructure/api-gateway/Dockerfile
@@ -119,6 +121,7 @@ services:
   # ============================================================================
 
   auth-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-auth-service:latest
     build:
       context: .
       dockerfile: Backend/auth-service/Dockerfile
@@ -159,6 +162,7 @@ services:
       - alo-network
 
   user-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-user-service:latest
     build:
       context: .
       dockerfile: Backend/user-service/Dockerfile
@@ -189,6 +193,7 @@ services:
       - alo-network
 
   contact-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-contact-service:latest
     build:
       context: .
       dockerfile: Backend/contact-service/Dockerfile
@@ -209,6 +214,7 @@ services:
       - alo-network
 
   notification-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-notification-service:latest
     build:
       context: .
       dockerfile: Backend/notification-service/Dockerfile
@@ -232,6 +238,7 @@ services:
       - alo-network
 
   chatbot-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-chatbot-service:latest
     build:
       context: .
       dockerfile: Backend/chatbot-service/Dockerfile
@@ -260,6 +267,7 @@ services:
       - alo-network
 
   report-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-report-service:latest
     build:
       context: .
       dockerfile: Backend/report-service/Dockerfile
@@ -287,6 +295,7 @@ services:
   # ============================================================================
 
   message-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-message-service:latest
     build:
       context: .
       dockerfile: Backend/message-service/Dockerfile
@@ -321,6 +330,7 @@ services:
       - alo-network
 
   group-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-group-service:latest
     build:
       context: .
       dockerfile: Backend/group-service/Dockerfile
@@ -352,6 +362,7 @@ services:
       - alo-network
 
   realtime-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-realtime-service:latest
     build:
       context: .
       dockerfile: Backend/realtime-service/Dockerfile
@@ -377,6 +388,7 @@ services:
       - alo-network
 
   voting-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-voting-service:latest
     build:
       context: .
       dockerfile: Backend/voting-service/Dockerfile
@@ -404,6 +416,7 @@ services:
   # ============================================================================
 
   alo-chat-2:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-chat-web:latest
     build:
       context: .
       dockerfile: Web/alo-chat-2/Dockerfile
@@ -419,6 +432,7 @@ services:
       - alo-network
 
   alo-chat-admin:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-chat-admin:latest
     build:
       context: .
       dockerfile: Web/alo-chat-admin/Dockerfile
@@ -432,6 +446,22 @@ services:
       - api-gateway
     networks:
       - alo-network
+
+  # ============================================================================
+  # 6. AUTOMATION & MONITORING (WATCHTOWER)
+  # ============================================================================
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: alo-watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DOCKER_API_VERSION=1.40
+      - REPO_USER=${DOCKER_USERNAME:-hoangtan22th}
+      - REPO_PASS=${DOCKER_PASSWORD}
+    command: --interval 300 --cleanup
+    restart: always
 
 # ==============================================================================
 # NETWORKS & VOLUMES CONFIGURATION

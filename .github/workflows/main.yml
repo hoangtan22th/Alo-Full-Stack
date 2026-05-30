@@ -1,0 +1,88 @@
+name: CI_CD_Pipeline
+
+on:
+  push:
+    branches: [ main, dev-2 ]
+
+concurrency:
+  group: production
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
+
+jobs:
+
+  # 1. BUILD + PUSH IMAGES FOR ALL MICROSERVICES (RUNS IN PARALLEL VIA MATRIX)
+  build:
+    name: Build & Push ${{ matrix.service.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: discovery-service
+            file: infrastructure/discovery-service/Dockerfile
+            image: alo-discovery-service
+          - name: api-gateway
+            file: infrastructure/api-gateway/Dockerfile
+            image: alo-api-gateway
+          - name: auth-service
+            file: Backend/auth-service/Dockerfile
+            image: alo-auth-service
+          - name: user-service
+            file: Backend/user-service/Dockerfile
+            image: alo-user-service
+          - name: contact-service
+            file: Backend/contact-service/Dockerfile
+            image: alo-contact-service
+          - name: notification-service
+            file: Backend/notification-service/Dockerfile
+            image: alo-notification-service
+          - name: chatbot-service
+            file: Backend/chatbot-service/Dockerfile
+            image: alo-chatbot-service
+          - name: report-service
+            file: Backend/report-service/Dockerfile
+            image: alo-report-service
+          - name: message-service
+            file: Backend/message-service/Dockerfile
+            image: alo-message-service
+          - name: group-service
+            file: Backend/group-service/Dockerfile
+            image: alo-group-service
+          - name: realtime-service
+            file: Backend/realtime-service/Dockerfile
+            image: alo-realtime-service
+          - name: voting-service
+            file: Backend/voting-service/Dockerfile
+            image: alo-voting-service
+          - name: alo-chat-2
+            file: Web/alo-chat-2/Dockerfile
+            image: alo-chat-web
+          - name: alo-chat-admin
+            file: Web/alo-chat-admin/Dockerfile
+            image: alo-chat-admin
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build & Push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service.file }}
+          push: true
+          tags: |
+            docker.io/${{ secrets.DOCKER_USERNAME }}/${{ matrix.service.image }}:${{ github.sha }}
+            docker.io/${{ secrets.DOCKER_USERNAME }}/${{ matrix.service.image }}:latest

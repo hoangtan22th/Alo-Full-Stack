@@ -307,7 +307,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                   value={phone}
                   onChange={setPhone}
                   type="tel"
-                  isEditing={isEditing}
+                  isEditing={false}
                   loading={loading}
                 />
                 <FormInput
@@ -315,7 +315,7 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                   value={email}
                   onChange={setEmail}
                   type="email"
-                  isEditing={isEditing}
+                  isEditing={false}
                   loading={loading}
                 />
               </div>
