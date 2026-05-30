@@ -394,9 +394,9 @@ services:
       dockerfile: Backend/post-service/Dockerfile
     container_name: alo-post-service
     ports:
-      - "8088:8088"
+      - "8089:8089"
     environment:
-      - PORT=8088
+      - PORT=8089
       - NODE_ENV=production
       - HOSTNAME=post-service
       - IP_ADDR=post-service
