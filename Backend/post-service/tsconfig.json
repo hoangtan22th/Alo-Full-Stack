@@ -16,7 +16,8 @@
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*", "index.ts"],
   "exclude": ["node_modules", "dist"]
