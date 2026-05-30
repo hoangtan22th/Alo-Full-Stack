@@ -67,17 +67,76 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # Fetch all history for all tags and branches (needed for git diff)
+
+      - name: Check for changes in service directory
+        id: check_changes
+        run: |
+          DIR=$(dirname "${{ matrix.service.file }}")
+          echo "Checking changes in directory: $DIR"
+          
+          # Default to true (build by default)
+          CHANGED=true
+          
+          # Check if this is a push event with before/after commits
+          if [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ] && [ -n "${{ github.event.before }}" ]; then
+            echo "Comparing changes between ${{ github.event.before }} and ${{ github.event.after }}"
+            
+            # Check if service folder changed
+            if git diff --quiet ${{ github.event.before }} ${{ github.event.after }} -- "$DIR"; then
+              CHANGED=false
+              echo "No changes detected in $DIR."
+            else
+              echo "Changes detected in $DIR!"
+            fi
+            
+            # SPECIAL RULE: If this is a Java service and common-service has changed, force build
+            if [ "$CHANGED" = "false" ] && [[ "${{ matrix.service.file }}" == Backend/* ]] && [[ "${{ matrix.service.file }}" != *message-service* ]] && [[ "${{ matrix.service.file }}" != *group-service* ]] && [[ "${{ matrix.service.file }}" != *realtime-service* ]] && [[ "${{ matrix.service.file }}" != *voting-service* ]]; then
+              if ! git diff --quiet ${{ github.event.before }} ${{ github.event.after }} -- "Backend/common-service"; then
+                echo "Backend/common-service changed! Forcing build for Java service ${{ matrix.service.name }}."
+                CHANGED=true
+              fi
+            fi
+          else
+            # Fallback to checking HEAD~1 if git history allows
+            if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+              echo "Comparing changes in the last commit (HEAD~1 to HEAD)"
+              if git diff --quiet HEAD~1 HEAD -- "$DIR"; then
+                CHANGED=false
+                echo "No changes detected in $DIR."
+              else
+                echo "Changes detected in $DIR!"
+              fi
+              
+              # SPECIAL RULE for common-service fallback
+              if [ "$CHANGED" = "false" ] && [[ "${{ matrix.service.file }}" == Backend/* ]] && [[ "${{ matrix.service.file }}" != *message-service* ]] && [[ "${{ matrix.service.file }}" != *group-service* ]] && [[ "${{ matrix.service.file }}" != *realtime-service* ]] && [[ "${{ matrix.service.file }}" != *voting-service* ]]; then
+                if ! git diff --quiet HEAD~1 HEAD -- "Backend/common-service"; then
+                  echo "Backend/common-service changed! Forcing build for Java service ${{ matrix.service.name }}."
+                  CHANGED=true
+                fi
+              fi
+            else
+              echo "First push or no historical commit found. Forcing full build."
+            fi
+          fi
+          
+          echo "changed=$CHANGED" >> $GITHUB_OUTPUT
+        shell: bash
 
       - name: Set up Docker Buildx
+        if: steps.check_changes.outputs.changed == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
+        if: steps.check_changes.outputs.changed == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build & Push
+        if: steps.check_changes.outputs.changed == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
