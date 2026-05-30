@@ -2802,8 +2802,10 @@ export default function ChatPage() {
                                               baseImgH,
                                             );
                                             const cellWidth =
-                                              cellHeight *
-                                              (baseImgW / baseImgH);
+                                              count > 1
+                                                ? cellHeight
+                                                : cellHeight *
+                                                  (baseImgW / baseImgH);
                                             const gap = 4;
                                             let computedGridWidth =
                                               cellWidth * numCols +
@@ -2856,9 +2858,11 @@ export default function ChatPage() {
 
                                                     // CHÌA KHÓA: Giữ đúng kích thước gốc bằng aspectRatio của từng tấm
                                                     const itemAspect =
-                                                      img.width && img.height
-                                                        ? `${img.width}/${img.height}`
-                                                        : aspectR;
+                                                      count > 1
+                                                        ? "1"
+                                                        : img.width && img.height
+                                                          ? `${img.width}/${img.height}`
+                                                          : aspectR;
 
                                                     return (
                                                       <div
