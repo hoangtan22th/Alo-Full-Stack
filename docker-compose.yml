@@ -425,7 +425,7 @@ services:
       - "3001:3001"
     environment:
       - PORT=3001
-      - NEXT_PUBLIC_API_URL=http://localhost:8888
+      - NEXT_PUBLIC_API_URL=http://${EXPO_PUBLIC_IP_ADDRESS:-localhost}:8888
     depends_on:
       - api-gateway
     networks:
@@ -441,7 +441,7 @@ services:
       - "3002:3002"
     environment:
       - PORT=3002
-      - NEXT_PUBLIC_API_URL=http://localhost:8888
+      - NEXT_PUBLIC_API_URL=http://${EXPO_PUBLIC_IP_ADDRESS:-localhost}:8888
     depends_on:
       - api-gateway
     networks:
@@ -460,7 +460,7 @@ services:
       - DOCKER_API_VERSION=1.40
       - REPO_USER=${DOCKER_USERNAME:-hoangtan22th}
       - REPO_PASS=${DOCKER_PASSWORD}
-    command: --interval 300 --cleanup
+    command: --interval 30 --cleanup
     restart: always
 
 # ==============================================================================
