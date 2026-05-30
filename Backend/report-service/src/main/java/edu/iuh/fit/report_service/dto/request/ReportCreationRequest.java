@@ -6,6 +6,7 @@ import edu.iuh.fit.report_service.entity.ReportReason;
 import edu.iuh.fit.report_service.entity.TargetType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -20,25 +21,30 @@ import java.util.List;
 public class ReportCreationRequest {
 
     @NotBlank(message = "Reporter ID cannot be null")
+    @Size(min = 36, max = 36, message = "Reporter ID must be exactly 36 characters")
     private String reporterId;
 
     @NotBlank(message = "Target ID cannot be null")
+    @Size(min = 36, max = 36, message = "Target ID must be exactly 36 characters")
     private String targetId;
 
     @NotNull(message = "Target Type is required")
     private TargetType targetType;
 
+    @Size(min = 1, max = 1000, message = "Target Name must be between 1 and 1000 characters")
     private String targetName;
 
     @NotNull(message = "Conversation Type is required")
     private ConversationType conversationType;
 
     @NotBlank(message = "Conversation ID is required")
+    @Size(min = 36, max = 36, message = "Conversation ID must be exactly 36 characters")
     private String conversationId;
 
     @NotNull(message = "Report Reason is required")
     private ReportReason reason;
 
+    @Size(min = 1, max = 1000, message = "Description must be between 1 and 1000 characters")
     private String description;
 
     private List<String> imageUrls;
