@@ -16,7 +16,7 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 
 ENV NODE_ENV=production
-ENV PORT=8087
+ENV PORT=8089
 
-EXPOSE 8087
+EXPOSE 8089
 CMD ["npm", "start"]
