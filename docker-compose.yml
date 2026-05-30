@@ -398,6 +398,10 @@ services:
     environment:
       - PORT=8087
       - NODE_ENV=production
+      - HOSTNAME=voting-service
+      - IP_ADDR=voting-service
+      - EUREKA_HOST=discovery-service
+      - EUREKA_PORT=8761
       - MONGO_URI=mongodb://mongodb:27017/alo_voting_db
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672
