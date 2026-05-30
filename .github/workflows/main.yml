@@ -2,7 +2,7 @@ name: CI_CD_Pipeline
 
 on:
   push:
-    branches: [ main, feature/cicd-setup ]
+    branches: [ main, dev-2 ]
 
 concurrency:
   group: production
