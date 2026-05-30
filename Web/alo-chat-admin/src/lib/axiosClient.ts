@@ -4,7 +4,7 @@ const getGatewayUrl = () => {
   if (typeof window !== "undefined") {
     return `http://${window.location.hostname}:8888`;
   }
-  return process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8888";
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
 };
 const GATEWAY_URL = getGatewayUrl();
 const API_URL = `${GATEWAY_URL}/api/v1/admin/management`;
