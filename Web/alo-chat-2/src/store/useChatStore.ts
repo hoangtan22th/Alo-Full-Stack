@@ -11,6 +11,8 @@ interface ChatState {
     reportTargetName: string | null;
     reportAnchorId: string | null;
     reportConversationType: "ONE_TO_ONE" | "GROUP" | null;
+    isReportSelectionMode: boolean;
+    selectedMessagesForReport: string[];
 
     // --- Actions ---
     setTyping: (conversationId: string, userId: string, isTyping: boolean) => void;
@@ -20,6 +22,9 @@ interface ChatState {
 
     openReportModal: (targetId: string, targetName?: string | null, anchorId?: string | null, conversationType?: "ONE_TO_ONE" | "GROUP") => void;
     closeReportModal: () => void;
+    setReportSelectionMode: (val: boolean) => void;
+    toggleMessageForReport: (messageId: string) => void;
+    clearReportSelection: () => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -33,6 +38,8 @@ export const useChatStore = create<ChatState>((set) => ({
     reportTargetName: null,
     reportAnchorId: null,
     reportConversationType: null,
+    isReportSelectionMode: false,
+    selectedMessagesForReport: [],
 
     setTyping: (conversationId, userId, isTyping) => {
         set((state) => {
@@ -92,4 +99,15 @@ export const useChatStore = create<ChatState>((set) => ({
             reportAnchorId: null,
             reportConversationType: null,
         }),
+
+    setReportSelectionMode: (val) => set({ isReportSelectionMode: val, selectedMessagesForReport: [] }),
+    toggleMessageForReport: (messageId) =>
+        set((state) => {
+            const current = state.selectedMessagesForReport;
+            const updated = current.includes(messageId)
+                ? current.filter((id) => id !== messageId)
+                : [...current, messageId];
+            return { selectedMessagesForReport: updated };
+        }),
+    clearReportSelection: () => set({ isReportSelectionMode: false, selectedMessagesForReport: [] }),
 }));

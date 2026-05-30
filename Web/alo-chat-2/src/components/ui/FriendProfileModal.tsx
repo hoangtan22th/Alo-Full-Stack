@@ -374,7 +374,7 @@ export default function FriendProfileModal({
               {userData?.fullName || "Đang tải..."}
             </h1>
             <p className={`text-[11px] font-bold mt-0.5 ${isOnline ? "text-green-500" : "text-gray-400"}`}>
-              {isOnline ? "Đang hoạt động" : getOfflineText(userStatus?.last_active)}
+              {isOnline ? "Đang hoạt động" : getOfflineText(userStatus?.lastActive)}
             </p>
 
             {/* ✅ KHU VỰC NÚT BẤM CHÍNH ĐÃ FIX LOGIC */}

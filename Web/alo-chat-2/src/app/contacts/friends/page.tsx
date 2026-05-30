@@ -70,7 +70,7 @@ export default function FriendListPage() {
             setFriends(formattedFriends);
 
             // Fetch presence for all friends
-            const userIds = formattedFriends.map((f) => String(f.displayId));
+            const userIds = formattedFriends.map((f: any) => String(f.displayId));
             if (userIds.length > 0) {
                 presenceService.getBulkPresence(userIds).then((res) => {
                     if (res) setBulkPresence(res);
@@ -215,7 +215,7 @@ export default function FriendListPage() {
                                                         <>
                                                             <div className="w-1.5 h-1.5 bg-gray-300 rounded-full" />
                                                             <p className="text-[10px] text-gray-400 font-bold uppercase">
-                                                                {getOfflineText(onlineUsers[String(friend.displayId)]?.last_active)}
+                                                                {getOfflineText(onlineUsers[String(friend.displayId)]?.lastActive)}
                                                             </p>
                                                         </>
                                                     )}
