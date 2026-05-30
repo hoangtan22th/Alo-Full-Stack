@@ -66,7 +66,7 @@ function RootLayoutNav() {
         // Kiểm tra nếu là thông báo bị mời ra khỏi nhóm
         if (data.type === "REMOVED") {
           const groupId = data.data?.groupId;
-          const currentPathId = segments[1];
+          const currentPathId = (segments as string[])[1];
           const queryId = searchParams.id;
 
           // Nếu đang ở màn hình chat của nhóm đó hoặc màn hình info của nhóm đó

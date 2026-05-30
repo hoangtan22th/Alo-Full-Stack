@@ -5,6 +5,9 @@ interface ChatState {
     onlineUsers: Record<string, { status: string; lastActive?: number }>;
     friendIds: Set<string>;
 
+    // --- Notifications State ---
+    unreadNotifsCount: number;
+
     // --- V2.1 Report System State ---
     isReportModalOpen: boolean;
     reportTargetId: string | null;
@@ -25,12 +28,18 @@ interface ChatState {
     setReportSelectionMode: (val: boolean) => void;
     toggleMessageForReport: (messageId: string) => void;
     clearReportSelection: () => void;
+
+    setUnreadNotifsCount: (count: number) => void;
+    incrementUnreadNotifsCount: () => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
     typingUsers: {},
     onlineUsers: {},
     friendIds: new Set(),
+
+    // --- Notifications State ---
+    unreadNotifsCount: 0,
 
     // --- V2.1 Report System State ---
     isReportModalOpen: false,
@@ -110,4 +119,7 @@ export const useChatStore = create<ChatState>((set) => ({
             return { selectedMessagesForReport: updated };
         }),
     clearReportSelection: () => set({ isReportSelectionMode: false, selectedMessagesForReport: [] }),
+
+    setUnreadNotifsCount: (count) => set({ unreadNotifsCount: count }),
+    incrementUnreadNotifsCount: () => set((state) => ({ unreadNotifsCount: state.unreadNotifsCount + 1 })),
 }));
