@@ -90,9 +90,16 @@ const getMediaUrl = (url: string | undefined): string => {
   ) {
     return url;
   }
-  const backendHost =
-    process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") ||
-    "http://localhost:8888";
+  const getBackendHost = () => {
+    if (typeof window !== "undefined") {
+      return `http://${window.location.hostname}:8888`;
+    }
+    return (
+      process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") ||
+      "http://localhost:8888"
+    );
+  };
+  const backendHost = getBackendHost();
   return `${backendHost}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 

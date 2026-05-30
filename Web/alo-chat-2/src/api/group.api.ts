@@ -1,7 +1,13 @@
 // src/api/group.api.ts
 // Tầng gọi API đến Group Service (Node.js backend qua API Gateway)
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
+const getBaseUrl = () => {
+  if (typeof window !== "undefined") {
+    return `http://${window.location.hostname}:8888`;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
+};
+const BASE_URL = getBaseUrl();
 
 // ===========================
 // TYPES (khớp với Conversation.ts ở backend)

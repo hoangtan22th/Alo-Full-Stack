@@ -6,7 +6,13 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import { toast } from "sonner";
 
-const REALTIME_URL = process.env.NEXT_PUBLIC_REALTIME_URL || "http://localhost:3000";
+const getRealtimeUrl = () => {
+  if (typeof window !== "undefined") {
+    return `http://${window.location.hostname}:3000`;
+  }
+  return process.env.NEXT_PUBLIC_REALTIME_URL || "http://localhost:3000";
+};
+const REALTIME_URL = getRealtimeUrl();
 
 export function useAdminSocket() {
   const socketRef = useRef<Socket | null>(null);
