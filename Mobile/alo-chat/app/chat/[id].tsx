@@ -250,22 +250,84 @@ export default function GlobalChatScreen() {
   const handleRevoke = async () => {
     if (!selectedMsg) return;
     const msgId = selectedMsg._id;
+    const sIndex = selectedImageIndex;
     closeModal();
-    const ok = await messageService.deleteMessage(msgId);
-    if (ok) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m._id === msgId ? { ...m, isRevoked: true, content: "" } : m,
-        ),
-      );
+
+    if (
+      sIndex !== null &&
+      sIndex !== undefined &&
+      selectedMsg.type === "image" &&
+      selectedMsg.metadata?.imageGroup
+    ) {
+      const ok = await messageService.revokeImageInGroup(msgId, sIndex);
+      if (ok) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m._id === msgId && m.metadata?.imageGroup) {
+              const newGroup = [...m.metadata.imageGroup];
+              if (newGroup[sIndex]) {
+                newGroup[sIndex] = { ...newGroup[sIndex], isRevoked: true };
+              }
+              const allRevoked = newGroup.every((img: any) => img.isRevoked);
+              return {
+                ...m,
+                isRevoked: allRevoked,
+                metadata: { ...m.metadata, imageGroup: newGroup },
+              };
+            }
+            return m;
+          }),
+        );
+      }
+    } else {
+      const ok = await messageService.deleteMessage(msgId);
+      if (ok) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === msgId ? { ...m, isRevoked: true, content: "" } : m,
+          ),
+        );
+      }
     }
   };
 
-  const handleDeleteLocal = () => {
+  const handleDeleteLocal = async () => {
     if (!selectedMsg) return;
     const msgId = selectedMsg._id;
+    const sIndex = selectedImageIndex;
     closeModal();
-    setMessages((prev) => prev.filter((m) => m._id !== msgId));
+
+    if (
+      sIndex !== null &&
+      sIndex !== undefined &&
+      selectedMsg.type === "image" &&
+      selectedMsg.metadata?.imageGroup
+    ) {
+      const ok = await messageService.deleteImageInGroupForMe(msgId, sIndex);
+      if (ok) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m._id === msgId && m.metadata?.imageGroup) {
+              const newGroup = [...m.metadata.imageGroup];
+              if (newGroup[sIndex]) {
+                const arr = newGroup[sIndex].deletedByUsers || [];
+                newGroup[sIndex] = {
+                  ...newGroup[sIndex],
+                  deletedByUsers: [...arr, currentUserId],
+                };
+              }
+              return {
+                ...m,
+                metadata: { ...m.metadata, imageGroup: newGroup },
+              };
+            }
+            return m;
+          }),
+        );
+      }
+    } else {
+      setMessages((prev) => prev.filter((m) => m._id !== msgId));
+    }
   };
 
   const handleMultiCopy = () => {

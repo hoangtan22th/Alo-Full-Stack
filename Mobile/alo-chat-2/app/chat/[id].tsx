@@ -250,22 +250,84 @@ export default function GlobalChatScreen() {
   const handleRevoke = async () => {
     if (!selectedMsg) return;
     const msgId = selectedMsg._id;
+    const sIndex = selectedImageIndex;
     closeModal();
-    const ok = await messageService.deleteMessage(msgId);
-    if (ok) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m._id === msgId ? { ...m, isRevoked: true, content: "" } : m,
-        ),
-      );
+
+    if (
+      sIndex !== null &&
+      sIndex !== undefined &&
+      selectedMsg.type === "image" &&
+      selectedMsg.metadata?.imageGroup
+    ) {
+      const ok = await messageService.revokeImageInGroup(msgId, sIndex);
+      if (ok) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m._id === msgId && m.metadata?.imageGroup) {
+              const newGroup = [...m.metadata.imageGroup];
+              if (newGroup[sIndex]) {
+                newGroup[sIndex] = { ...newGroup[sIndex], isRevoked: true };
+              }
+              const allRevoked = newGroup.every((img: any) => img.isRevoked);
+              return {
+                ...m,
+                isRevoked: allRevoked,
+                metadata: { ...m.metadata, imageGroup: newGroup },
+              };
+            }
+            return m;
+          }),
+        );
+      }
+    } else {
+      const ok = await messageService.deleteMessage(msgId);
+      if (ok) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === msgId ? { ...m, isRevoked: true, content: "" } : m,
+          ),
+        );
+      }
     }
   };
 
-  const handleDeleteLocal = () => {
+  const handleDeleteLocal = async () => {
     if (!selectedMsg) return;
     const msgId = selectedMsg._id;
+    const sIndex = selectedImageIndex;
     closeModal();
-    setMessages((prev) => prev.filter((m) => m._id !== msgId));
+
+    if (
+      sIndex !== null &&
+      sIndex !== undefined &&
+      selectedMsg.type === "image" &&
+      selectedMsg.metadata?.imageGroup
+    ) {
+      const ok = await messageService.deleteImageInGroupForMe(msgId, sIndex);
+      if (ok) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m._id === msgId && m.metadata?.imageGroup) {
+              const newGroup = [...m.metadata.imageGroup];
+              if (newGroup[sIndex]) {
+                const arr = newGroup[sIndex].deletedByUsers || [];
+                newGroup[sIndex] = {
+                  ...newGroup[sIndex],
+                  deletedByUsers: [...arr, currentUserId],
+                };
+              }
+              return {
+                ...m,
+                metadata: { ...m.metadata, imageGroup: newGroup },
+              };
+            }
+            return m;
+          }),
+        );
+      }
+    } else {
+      setMessages((prev) => prev.filter((m) => m._id !== msgId));
+    }
   };
 
   const handleMultiCopy = () => {
@@ -428,7 +490,9 @@ export default function GlobalChatScreen() {
     return messages.find((m) => m._id === selectedMessageId);
   }, [selectedMessageId, messages]);
 
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
+    null,
+  );
 
   const onLongPressMessage = (msgId: string, albumIndex?: number) => {
     const ref = messageRefs.current[msgId];
@@ -1149,7 +1213,10 @@ export default function GlobalChatScreen() {
               });
               setTimeout(
                 () =>
-                  flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
+                  flatListRef.current?.scrollToOffset({
+                    offset: 0,
+                    animated: true,
+                  }),
                 100,
               );
             }
@@ -1316,10 +1383,10 @@ export default function GlobalChatScreen() {
             }}
             onHeaderClick={() => {
               if (isGroupChat) {
-                router.replace({
+                router.push({
                   pathname: "/chat/info",
                   params: {
-                    id: id as string,
+                    id: resolvedConversationId || id,
                     name: realtimeGroupName,
                     avatar: realtimeAvatar,
                     membersCount: realtimeMembersCount,
@@ -1328,17 +1395,11 @@ export default function GlobalChatScreen() {
                   },
                 });
               } else {
-                const autoIds = getAutoSelectedMessageIds();
                 router.push({
-                  pathname: "/chat/info",
+                  pathname: "/(tabs)/contacts/send-request",
                   params: {
-                    id: resolvedConversationId || id,
-                    name: realtimeGroupName,
-                    avatar: realtimeAvatar,
-                    membersCount: realtimeMembersCount,
-                    isGroup: "false",
-                    targetUserId,
-                    selectedMessageIds: JSON.stringify(autoIds),
+                    userId: targetUserId,
+                    from: "chat",
                   },
                 });
               }
@@ -1475,9 +1536,14 @@ export default function GlobalChatScreen() {
                           isSender={group.isSender}
                           isLastInBlock={idx === group.messages.length - 1}
                           onLongPress={(albumIndex) =>
-                            !isSelectionMode && onLongPressMessage(msg._id, albumIndex)
+                            !isSelectionMode &&
+                            onLongPressMessage(msg._id, albumIndex)
                           }
-                          onPress={isSelectionMode ? () => toggleMessageSelection(msg._id) : undefined}
+                          onPress={
+                            isSelectionMode
+                              ? () => toggleMessageSelection(msg._id)
+                              : undefined
+                          }
                           isSelected={
                             isSelectionMode &&
                             selectedReportIds.includes(msg._id)

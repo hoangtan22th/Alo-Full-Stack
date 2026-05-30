@@ -8,7 +8,10 @@ import {
   View,
   ScrollView,
 } from "react-native";
-import { InformationCircleIcon } from "react-native-heroicons/outline";
+import {
+  InformationCircleIcon,
+  EllipsisHorizontalIcon,
+} from "react-native-heroicons/outline";
 import { PlayIcon } from "react-native-heroicons/solid";
 import { MessageDTO } from "../../services/messageService";
 import { EMOJI_MAP } from "../../constants/Chat";
@@ -16,7 +19,7 @@ import { openRemoteFile } from "../../utils/fileUtils";
 import { WebView } from "react-native-webview";
 import { PollMessagePreview } from "./PollMessagePreview";
 import { useAuth } from "../../contexts/AuthContext";
-// import Pdf from "react-native-pdf";
+import Pdf from "react-native-pdf";
 
 interface MessageItemProps {
   msg: MessageDTO;
@@ -201,7 +204,7 @@ export const MessageItem = ({
                 }
 
                 return (
-                  <View className="flex-row flex-wrap gap-1 justify-start w-[260px] p-1 bg-gray-50 rounded-2xl">
+                  <View className="flex-row flex-wrap gap-1 justify-start w-[260px] p-1 bg-gray-50 rounded-2xl relative">
                     {visibleImages.map((img: any, idx: number) => {
                       const shouldShowPlaceholder =
                         msg.isRevoked || img.isRevoked;
@@ -256,6 +259,26 @@ export const MessageItem = ({
                         </TouchableOpacity>
                       );
                     })}
+
+                    {!msg.isRevoked && (
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => onLongPress()}
+                        style={{
+                          position: "absolute",
+                          bottom: 8,
+                          right: 8,
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: "rgba(0,0,0,0.6)",
+                          justifyContent: "center",
+                          alignItems: "center",
+                        }}
+                      >
+                        <EllipsisHorizontalIcon size={20} color="white" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 );
               })()
@@ -348,6 +371,11 @@ export const MessageItem = ({
                       );
                     }
                   }}
+                  onLongPress={() => {
+                    if (!msg.isRevoked) {
+                      onLongPress();
+                    }
+                  }}
                   className={`overflow-hidden rounded-2xl bg-white`}
                   style={{ width: 260 }}
                 >
@@ -369,11 +397,21 @@ export const MessageItem = ({
                         "sh",
                       ].includes(ext || "");
                       const isPdf = ext === "pdf";
+                      const isOffice = [
+                        "doc",
+                        "docx",
+                        "xls",
+                        "xlsx",
+                        "ppt",
+                        "pptx",
+                      ].includes(ext || "");
 
                       if (isText) {
                         return <FileTextPreview url={msg.content} />;
                       } else if (isPdf) {
                         return <FilePdfPreview url={msg.content} />;
+                      } else if (isOffice) {
+                        return <OfficeFilePreview url={msg.content} />;
                       } else {
                         return (
                           <View className="flex-1 items-center justify-center bg-gray-50">
@@ -562,6 +600,7 @@ const FileTextPreview = ({ url }: { url: string }) => {
 //           backgroundColor: "white",
 //           width: "100%",
 //           height: "100%",
+//           marginTop: -2,
 //         }}
 //         onError={(error) => {
 //           console.warn("[FilePdfPreview] Lỗi render PDF:", error);
@@ -591,6 +630,33 @@ const FilePdfPreview = ({ url }: { url: string }) => {
         onHttpError={(syntheticEvent) => {
           const { nativeEvent } = syntheticEvent;
           console.warn("WebView HTTP error: ", nativeEvent);
+        }}
+      />
+    </View>
+  );
+};
+
+const OfficeFilePreview = ({ url }: { url: string }) => {
+  const previewUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`;
+
+  return (
+    <View className="flex-1 overflow-hidden bg-white" pointerEvents="none">
+      <WebView
+        source={{ uri: previewUrl }}
+        scrollEnabled={false}
+        pointerEvents="none"
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        startInLoadingState={true}
+        style={{
+          flex: 1,
+          backgroundColor: "white",
+        }}
+        onHttpError={(syntheticEvent) => {
+          console.warn(
+            "[OfficeFilePreview] HTTP error: ",
+            syntheticEvent.nativeEvent,
+          );
         }}
       />
     </View>
