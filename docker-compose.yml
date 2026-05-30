@@ -458,7 +458,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - DOCKER_API_VERSION=1.40
-    command: --interval 10 --cleanup
+      - REPO_USER=${DOCKER_USERNAME:-hoangtan22th}
+      - REPO_PASS=${DOCKER_PASSWORD}
+    command: --interval 30 --cleanup
     restart: always
 
 # ==============================================================================
