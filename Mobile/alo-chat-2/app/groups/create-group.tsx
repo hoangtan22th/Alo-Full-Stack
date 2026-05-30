@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import React, { useState, useEffect } from "react";
 import {
   Image,
@@ -21,6 +21,7 @@ import {
   FriendshipResponseDTO,
 } from "../../services/contactService";
 import { groupService } from "../../services/groupService";
+import { userService } from "../../services/userService";
 import { useAuth } from "../../contexts/AuthContext";
 
 type Contact = {
@@ -40,16 +41,72 @@ export default function CreateGroupScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
-
+  const { initialMemberIds, initialGroupName } = useLocalSearchParams();
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [groupName, setGroupName] = useState("");
   const [friends, setFriends] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [groupAvatarUri, setGroupAvatarUri] = useState<string | null>(null);
 
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [copiedMembers, setCopiedMembers] = useState<Contact[]>([]);
+
   useEffect(() => {
     fetchFriends();
+    if (initialGroupName) {
+      setGroupName(initialGroupName as string);
+    }
   }, []);
+
+  useEffect(() => {
+    const initializeSelectedContacts = async () => {
+      if (initialMemberIds && user && !isInitialized) {
+        const memberIdsStr = Array.isArray(initialMemberIds)
+          ? initialMemberIds[0]
+          : initialMemberIds;
+        const ids = memberIdsStr.split(",");
+        const currentUserId = user?.id || user?._id || user?.userId;
+        const filteredIds = ids.filter((id) => id && id !== currentUserId);
+
+        setSelectedContacts(filteredIds);
+
+        // Fetch profiles for non-friends in initialMemberIds
+        const friendIds = friends.map((f) => f.id);
+        const nonFriendIds = filteredIds.filter((id) => !friendIds.includes(id));
+
+        if (nonFriendIds.length > 0) {
+          try {
+            const profiles = await Promise.all(
+              nonFriendIds.map(async (id) => {
+                const res = await userService.getUserById(id);
+                const userData =
+                  res && (res as any).data ? (res as any).data : res;
+                if (userData) {
+                  return {
+                    id: userData.id || userData._id,
+                    name: userData.fullName || "Người dùng",
+                    status: "Thành viên nhóm cũ",
+                    avatar: userData.avatar || null,
+                    initials: userData.fullName
+                      ? userData.fullName.charAt(0).toUpperCase()
+                      : "U",
+                  };
+                }
+                return null;
+              }),
+            );
+            setCopiedMembers(profiles.filter((p) => p !== null) as Contact[]);
+          } catch (error) {
+            console.error("Lỗi lấy thông tin thành viên nhóm cũ:", error);
+          }
+        }
+
+        setIsInitialized(true);
+      }
+    };
+
+    initializeSelectedContacts();
+  }, [initialMemberIds, user, isInitialized, friends]);
 
   const handlePickImage = async () => {
     // Xin quyền truy cập thư viện ảnh nếu cần (trên iOS/Android thật)
@@ -108,6 +165,13 @@ export default function CreateGroupScreen() {
     },
   ];
 
+  if (copiedMembers.length > 0) {
+    CONTACT_SECTIONS.push({
+      title: "THÀNH VIÊN NHÓM CŨ",
+      data: copiedMembers,
+    });
+  }
+
   const handleCreateGroup = async () => {
     if (!groupName.trim()) {
       Alert.alert("Lỗi", "Vui lòng nhập tên nhóm");
@@ -124,6 +188,7 @@ export default function CreateGroupScreen() {
         groupName.trim(),
         selectedContacts,
         groupAvatarUri || undefined,
+        !!initialMemberIds,
       );
 
       // Backend trả về group object có _id hoặc id

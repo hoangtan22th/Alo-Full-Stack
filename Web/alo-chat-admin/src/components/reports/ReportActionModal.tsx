@@ -44,7 +44,7 @@ const REASON_LABELS: Record<string, string> = {
   OTHER: "Khác",
 };
 
-const getMediaUrl = (url: string | undefined): string => {
+const getMediaUrl = (url: string | null | undefined): string => {
   if (!url) return "";
   if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) return url;
   const backendHost = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8888";

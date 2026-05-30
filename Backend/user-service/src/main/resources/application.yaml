@@ -6,6 +6,10 @@ spring:
     import: optional:file:.env[.properties], optional:file:Backend/auth-service/.env[.properties]
   application:
     name: user-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
   datasource:
     url: jdbc:mariadb://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:alo_user_db}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Ho_Chi_Minh

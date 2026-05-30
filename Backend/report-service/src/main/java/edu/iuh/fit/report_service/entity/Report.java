@@ -91,4 +91,20 @@ public class Report {
     @LastModifiedDate
     @Field("updated_at")
     private LocalDateTime updatedAt;
+
+    @Indexed
+    @Field("snapshot_hash")
+    private String snapshotHash;
+
+    @Field("ai_summary")
+    private String aiSummary;
+
+    @Field("ai_suggested_action")
+    private String aiSuggestedAction;
+
+    @Field("ai_confidence")
+    private Double aiConfidence;
+
+    @Field("ai_analyzed_at")
+    private LocalDateTime aiAnalyzedAt;
 }

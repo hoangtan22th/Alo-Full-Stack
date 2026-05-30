@@ -5,9 +5,9 @@ spring:
   application:
     name: chatbot-service
   datasource:
-    url: jdbc:mariadb://localhost:3306/chatbot_memory?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh
-    username: root
-    password: root
+    url: jdbc:mariadb://${DB_HOST:localhost}:${DB_PORT:3306}/chatbot_memory?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
     driver-class-name: org.mariadb.jdbc.Driver
 
   jpa:
@@ -25,7 +25,6 @@ spring:
 #      chat:
 #        base-url: https://api.groq.com/openai
 #        options:
-##          model: llama-3.3-70b-versatile
 #          model: llama-3.1-8b-instant
 #          temperature: 0.2
 #          max-tokens: 1000
@@ -45,7 +44,7 @@ spring:
   ai:
     openai:
       api-key: dummy
-      base-url: http://localhost:11434
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       chat:
         options:
           model: qwen2.5:7b
@@ -53,7 +52,7 @@ spring:
           max-tokens: 2000
 
     ollama:
-      base-url: http://localhost:11434
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       chat:
         enabled: false
       embedding:
@@ -63,8 +62,8 @@ spring:
 
     vectorstore:
       qdrant:
-        host: localhost
-        port: 6334
+        host: ${QDRANT_HOST:localhost}
+        port: ${QDRANT_PORT:6334}
         initialize-schema: true
 eureka:
   client:

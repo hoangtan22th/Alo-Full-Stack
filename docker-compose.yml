@@ -1,0 +1,470 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # 1. INFRASTRUCTURE & DATABASES
+  # ============================================================================
+
+  mariadb:
+    image: mariadb:10.11
+    container_name: alo-mariadb
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - alo-network
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:6.0
+    container_name: alo-mongodb
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - alo-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: alo-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - alo-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: alo-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - alo-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: alo-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - alo-network
+
+  # ============================================================================
+  # 2. CORE INFRASTRUCTURE SERVICES (JAVA)
+  # ============================================================================
+
+  discovery-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-discovery-service:latest
+    build:
+      context: .
+      dockerfile: infrastructure/discovery-service/Dockerfile
+    container_name: alo-discovery-service
+    ports:
+      - "8761:8761"
+    networks:
+      - alo-network
+
+  api-gateway:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-api-gateway:latest
+    build:
+      context: .
+      dockerfile: infrastructure/api-gateway/Dockerfile
+    container_name: alo-api-gateway
+    ports:
+      - "8888:8888"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - EUREKA_DEFAULT_ZONE=http://discovery-service:8761/eureka/
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      discovery-service:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    networks:
+      - alo-network
+
+  # ============================================================================
+  # 3. JAVA BUSINESS MICROSERVICES
+  # ============================================================================
+
+  auth-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-auth-service:latest
+    build:
+      context: .
+      dockerfile: Backend/auth-service/Dockerfile
+    container_name: alo-auth-service
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - DB_NAME=alo_auth_db
+      - DB_USERNAME=${DB_USERNAME:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      - EUREKA_DEFAULT_ZONE=http://discovery-service:8761/eureka/
+      - JWT_SECRET=${JWT_SECRET}
+      - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
+      - AWS_SECRET_KEY=${AWS_SECRET_KEY}
+      - AWS_REGION=${AWS_REGION:-ap-southeast-1}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-btl-alo-chat}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+    depends_on:
+      discovery-service:
+        condition: service_started
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - alo-network
+
+  user-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-user-service:latest
+    build:
+      context: .
+      dockerfile: Backend/user-service/Dockerfile
+    container_name: alo-user-service
+    ports:
+      - "8086:8086"
+    environment:
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - DB_NAME=alo_user_db
+      - DB_USERNAME=${DB_USERNAME:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      - EUREKA_DEFAULT_ZONE=http://discovery-service:8761/eureka/
+      - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
+      - AWS_SECRET_KEY=${AWS_SECRET_KEY}
+      - AWS_REGION=${AWS_REGION:-ap-southeast-1}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-btl-alo-chat}
+    depends_on:
+      auth-service:
+        condition: service_started
+    networks:
+      - alo-network
+
+  contact-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-contact-service:latest
+    build:
+      context: .
+      dockerfile: Backend/contact-service/Dockerfile
+    container_name: alo-contact-service
+    ports:
+      - "8081:8081"
+    environment:
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - DB_NAME=alo_contact_db
+      - DB_USERNAME=${DB_USERNAME:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - EUREKA_DEFAULT_ZONE=http://discovery-service:8761/eureka/
+    depends_on:
+      auth-service:
+        condition: service_started
+    networks:
+      - alo-network
+
+  notification-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-notification-service:latest
+    build:
+      context: .
+      dockerfile: Backend/notification-service/Dockerfile
+    container_name: alo-notification-service
+    ports:
+      - "8084:8084"
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      - MAIL_HOST=${MAIL_HOST:-smtp.gmail.com}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - EUREKA_DEFAULT_ZONE=http://discovery-service:8761/eureka/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - alo-network
+
+  chatbot-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-chatbot-service:latest
+    build:
+      context: .
+      dockerfile: Backend/chatbot-service/Dockerfile
+    container_name: alo-chatbot-service
+    ports:
+      - "8085:8085"
+    environment:
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - DB_NAME=chatbot_memory
+      - DB_USERNAME=${DB_USERNAME:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - EUREKA_DEFAULT_ZONE=http://discovery-service:8761/eureka/
+      - SPRING_AI_OPENAI_API_KEY=${GEMINI_API_KEY:-dummy}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6334
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - alo-network
+
+  report-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-report-service:latest
+    build:
+      context: .
+      dockerfile: Backend/report-service/Dockerfile
+    container_name: alo-report-service
+    ports:
+      - "8088:8088"
+    environment:
+      - PORT=8088
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      - MONGODB_URI=mongodb://mongodb:27017/alo_report_db
+      - EUREKA_DEFAULT_ZONE=http://discovery-service:8761/eureka/
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - alo-network
+
+  # ============================================================================
+  # 4. NODE.JS REAL-TIME & DATA SERVICES
+  # ============================================================================
+
+  message-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-message-service:latest
+    build:
+      context: .
+      dockerfile: Backend/message-service/Dockerfile
+    container_name: alo-message-service
+    ports:
+      - "8083:8083"
+    environment:
+      - PORT=8083
+      - NODE_ENV=production
+      - HOSTNAME=message-service
+      - IP_ADDR=message-service
+      - MONGODB_URI=mongodb://mongodb:27017/alo_message_db
+      - EUREKA_HOST=discovery-service
+      - EUREKA_PORT=8761
+      - GATEWAY_URL=http://api-gateway:8888
+      - GROUP_SERVICE_URL=http://group-service:8082/api/v1/groups
+      - CHATBOT_SERVICE_URL=http://chatbot-service:8085
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      - AWS_REGION=${AWS_REGION:-ap-southeast-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_KEY}
+      - AWS_BUCKET_NAME=${AWS_S3_BUCKET:-btl-alo-chat}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - alo-network
+
+  group-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-group-service:latest
+    build:
+      context: .
+      dockerfile: Backend/group-service/Dockerfile
+    container_name: alo-group-service
+    ports:
+      - "8082:8082"
+    environment:
+      - PORT=8082
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/alo_group_db
+      - EUREKA_HOST=discovery-service
+      - EUREKA_PORT=8761
+      - GATEWAY_URL=http://api-gateway:8888
+      - MESSAGE_SERVICE_URL=http://message-service:8083/api/v1/messages
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
+      - AWS_REGION=${AWS_REGION:-ap-southeast-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_KEY}
+      - AWS_BUCKET_NAME=${AWS_S3_BUCKET:-btl-alo-chat}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - alo-network
+
+  realtime-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-realtime-service:latest
+    build:
+      context: .
+      dockerfile: Backend/realtime-service/Dockerfile
+    container_name: alo-realtime-service
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - HOSTNAME=realtime-service
+      - IP_ADDR=realtime-service
+      - EUREKA_HOST=discovery-service
+      - EUREKA_PORT=8761
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672
+      - JWT_SECRET=${JWT_SECRET}
+      - GATEWAY_URL=http://api-gateway:8888
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - alo-network
+
+  voting-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-voting-service:latest
+    build:
+      context: .
+      dockerfile: Backend/voting-service/Dockerfile
+    container_name: alo-voting-service
+    ports:
+      - "8087:8087"
+    environment:
+      - PORT=8087
+      - NODE_ENV=production
+      - MONGO_URI=mongodb://mongodb:27017/alo_voting_db
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - alo-network
+
+  # ============================================================================
+  # 5. FRONTEND WEB CLIENTS
+  # ============================================================================
+
+  alo-chat-2:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-chat-web:latest
+    build:
+      context: .
+      dockerfile: Web/alo-chat-2/Dockerfile
+    container_name: alo-chat-web
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - NEXT_PUBLIC_API_URL=http://${EXPO_PUBLIC_IP_ADDRESS:-localhost}:8888
+    depends_on:
+      - api-gateway
+    networks:
+      - alo-network
+
+  alo-chat-admin:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-chat-admin:latest
+    build:
+      context: .
+      dockerfile: Web/alo-chat-admin/Dockerfile
+    container_name: alo-chat-admin
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - NEXT_PUBLIC_API_URL=http://${EXPO_PUBLIC_IP_ADDRESS:-localhost}:8888
+    depends_on:
+      - api-gateway
+    networks:
+      - alo-network
+
+
+
+# ==============================================================================
+# NETWORKS & VOLUMES CONFIGURATION
+# ==============================================================================
+
+networks:
+  alo-network:
+    driver: bridge
+
+volumes:
+  mariadb_data:
+    driver: local
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  qdrant_data:
+    driver: local

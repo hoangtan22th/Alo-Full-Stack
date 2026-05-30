@@ -10,6 +10,9 @@ import edu.iuh.fit.repository.UserProfileRepository;
 import edu.iuh.fit.service.RabbitMQPublisher;
 import edu.iuh.fit.service.S3Service;
 import edu.iuh.fit.service.UserService;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -34,6 +37,8 @@ public class UserServiceImpl implements UserService {
     private final UserProfileRepository userProfileRepository;
     private final S3Service s3Service;
     private final RabbitMQPublisher rabbitMQPublisher;
+    private final StringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper;
 
     @Override
     public UserDto getUserById(String id) {
@@ -73,6 +78,13 @@ public class UserServiceImpl implements UserService {
             throw new AppException(400,
                     "Số điện thoại không được phép thay đổi sau khi đăng ký");
         }
+
+        String reqEmail = request.getEmail();
+        if (reqEmail != null && !reqEmail.trim().isEmpty() && !reqEmail.equalsIgnoreCase(user.getEmail())) {
+            throw new AppException(400,
+                    "Email không được phép thay đổi sau khi đăng ký");
+        }
+
         if (request.getGender() != null) {
             user.setGender(UserProfile.Gender.values()[Math.min(Math.max(0, request.getGender()),
                     UserProfile.Gender.values().length - 1)]);
@@ -167,18 +179,37 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserQuickStatsResponse getQuickStats() {
+        String cacheKey = "admin:stats:users";
+        try {
+            String cachedData = redisTemplate.opsForValue().get(cacheKey);
+            if (cachedData != null) {
+                return objectMapper.readValue(cachedData, UserQuickStatsResponse.class);
+            }
+        } catch (Exception e) {
+            System.err.println("Redis cache get error in UserServiceImpl: " + e.getMessage());
+        }
+
         long totalUsers = userProfileRepository.count();
         LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
         long newToday = userProfileRepository.countByCreatedAtAfter(startOfToday);
         long bannedUsers = userProfileRepository.countByStatus(UserProfile.UserStatus.BANNED);
         long onlineNow = userProfileRepository.countByIsOnline(true);
 
-        return UserQuickStatsResponse.builder()
+        UserQuickStatsResponse statsResponse = UserQuickStatsResponse.builder()
                 .totalUsers(totalUsers)
                 .newToday(newToday)
                 .onlineNow(onlineNow)
                 .bannedUsers(bannedUsers)
                 .build();
+
+        try {
+            String jsonStr = objectMapper.writeValueAsString(statsResponse);
+            redisTemplate.opsForValue().set(cacheKey, jsonStr, 300, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            System.err.println("Redis cache set error in UserServiceImpl: " + e.getMessage());
+        }
+
+        return statsResponse;
     }
 
     @Override
