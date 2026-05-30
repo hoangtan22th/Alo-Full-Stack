@@ -5,6 +5,8 @@ import messageDataService from "../services/message.service.js";
 import { uploadFileToS3 } from "../services/s3Service.js";
 import rabbitMQProducer from "../services/RabbitMQProducerService.js";
 import { MessageEvent } from "../types/events.js";
+// @ts-ignore
+import convert from "heic-convert";
 
 /**
  * Extract userId from x-user-id header (set by Gateway)
@@ -716,6 +718,54 @@ async function runAIModeration(messageEvent: any): Promise<void> {
 
 
 /**
+ * Helper to convert HEIC to JPG if needed
+ */
+async function convertHeicToJpgIfNeeded(
+  file: Express.Multer.File,
+): Promise<Express.Multer.File> {
+  const extension = file.originalname.split(".").pop()?.toLowerCase();
+  const isHeic =
+    file.mimetype === "image/heic" ||
+    file.mimetype === "image/heif" ||
+    extension === "heic" ||
+    extension === "heif";
+
+  if (isHeic) {
+    try {
+      console.log(`[HeicConverter] Converting HEIC to JPG: ${file.originalname}`);
+      const outputBuffer = await convert({
+        buffer: file.buffer,
+        format: "JPEG",
+        quality: 0.85,
+      });
+
+      const lastDotIndex = file.originalname.lastIndexOf(".");
+      const baseName =
+        lastDotIndex !== -1
+          ? file.originalname.substring(0, lastDotIndex)
+          : file.originalname;
+      const newName = `${baseName}.jpg`;
+
+      return {
+        fieldname: file.fieldname,
+        originalname: newName,
+        encoding: file.encoding,
+        mimetype: "image/jpeg",
+        size: outputBuffer.length,
+        destination: file.destination,
+        filename: file.filename,
+        path: file.path,
+        buffer: outputBuffer as Buffer,
+        stream: file.stream,
+      };
+    } catch (err) {
+      console.error(`[HeicConverter] Failed to convert HEIC image:`, err);
+    }
+  }
+  return file;
+}
+
+/**
  * Upload a file and create a message
  */
 export async function uploadFile(
@@ -726,7 +776,7 @@ export async function uploadFile(
   try {
     const { conversationId, replyTo, senderName } = req.body;
     const userId = getUserIdFromHeader(req);
-    const file = req.file;
+    let file = req.file;
 
     if (!userId) {
       res.status(401).json({ error: "Unauthorized - no user id" });
@@ -737,6 +787,8 @@ export async function uploadFile(
       res.status(400).json({ error: "Missing conversationId or file" });
       return;
     }
+
+    file = await convertHeicToJpgIfNeeded(file);
 
     // 0. Kiểm tra quyền nhắn tin & Lấy info
     const conversation = await getConversation(req, String(conversationId), userId);
@@ -836,13 +888,14 @@ export async function uploadRawFiles(
     }
 
     const uploadPromises = files.map(async (file) => {
+      const convertedFile = await convertHeicToJpgIfNeeded(file);
       // Fix Vietnamese encoding for originalname
-      const originalName = Buffer.from(file.originalname, "latin1").toString("utf8");
+      const originalName = Buffer.from(convertedFile.originalname, "latin1").toString("utf8");
       
       // Upload to S3
       const fileUrl = await uploadFileToS3(
-        file.buffer,
-        file.mimetype,
+        convertedFile.buffer,
+        convertedFile.mimetype,
         originalName
       );
       
@@ -1070,12 +1123,13 @@ export async function uploadImages(
 
     // 1. Upload all to S3 concurrently
     const uploadPromises = files.map(async (file, index) => {
-      const originalName = Buffer.from(file.originalname, "latin1").toString(
+      const convertedFile = await convertHeicToJpgIfNeeded(file);
+      const originalName = Buffer.from(convertedFile.originalname, "latin1").toString(
         "utf8",
       );
       const url = await uploadFileToS3(
-        file.buffer,
-        file.mimetype,
+        convertedFile.buffer,
+        convertedFile.mimetype,
         originalName,
       );
       return {
@@ -1083,8 +1137,8 @@ export async function uploadImages(
         width: parsedWidths ? parsedWidths[index] : 0,
         height: parsedHeights ? parsedHeights[index] : 0,
         fileName: originalName,
-        fileSize: file.size,
-        fileType: file.mimetype,
+        fileSize: convertedFile.size,
+        fileType: convertedFile.mimetype,
         isRevoked: false,
         deletedByUsers: [],
       };
@@ -1540,3 +1594,84 @@ export async function getAdminConversationHistory(
     next(error);
   }
 }
+
+/**
+ * Lấy tin nhắn cuối cùng cho danh sách các cuộc hội thoại của một user cụ thể (loại bỏ tin đã xóa)
+ * POST /api/v1/messages/last-messages
+ */
+export async function getLastMessagesForConversations(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationIds } = req.body;
+    const userId = getUserIdFromHeader(req);
+
+    if (!Array.isArray(conversationIds)) {
+      res.status(400).json({ error: "conversationIds must be an array" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    if (conversationIds.length === 0) {
+      res.json({ status: "success", data: {} });
+      return;
+    }
+
+    // Convert IDs to ObjectIds
+    const objectIds = conversationIds
+      .filter((id: string) => Types.ObjectId.isValid(id))
+      .map((id: string) => new Types.ObjectId(id));
+
+    // MongoDB Aggregation to find the last message for each conversation
+    // where deletedByUsers does not contain the current user ID
+    const aggregationResult = await Message.aggregate([
+      {
+        $match: {
+          conversationId: { $in: objectIds },
+          deletedByUsers: { $ne: userId }
+        }
+      },
+      {
+        $sort: { createdAt: -1 }
+      },
+      {
+        $group: {
+          _id: "$conversationId",
+          lastMessage: { $first: "$$ROOT" }
+        }
+      }
+    ]);
+
+    // Format output as a Map of conversationId -> messageDetails
+    const data: Record<string, any> = {};
+    aggregationResult.forEach((item) => {
+      const msg = item.lastMessage;
+      data[item._id.toString()] = {
+        _id: msg._id.toString(),
+        conversationId: msg.conversationId.toString(),
+        senderId: msg.senderId,
+        senderName: msg.senderName,
+        type: msg.type,
+        content: msg.content,
+        metadata: msg.metadata,
+        isRevoked: msg.isRevoked,
+        createdAt: msg.createdAt,
+      };
+    });
+
+    res.json({
+      status: "success",
+      data,
+    });
+  } catch (error) {
+    console.error("[MessageController] getLastMessagesForConversations error:", error);
+    next(error);
+  }
+}
+

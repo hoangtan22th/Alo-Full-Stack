@@ -65,6 +65,7 @@ import FileMessageBubble from "@/components/chat/FileMessageBubble";
 import TxtFileViewerModal from "@/components/chat/TxtFileViewerModal";
 import { parseReminderFromText } from "@/utils/reminderParser";
 import ReminderModal from "@/components/ui/group/ReminderModal";
+import { UpdateDefaultEmojiModal } from "@/components/ui/UpdateDefaultEmojiModal";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -376,11 +377,16 @@ export default function ChatPage() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
 
+  const [defaultEmoji, setDefaultEmoji] = useState("👍");
+  const [isDefaultEmojiModalOpen, setIsDefaultEmojiModalOpen] = useState(false);
+
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [confirmModalConfig, setConfirmModalConfig] = useState<{
     title: string;
     description: string;
     actionText: string;
+    type?: "danger" | "warning";
+    hideCancel?: boolean;
     onConfirm: () => void | Promise<void>;
   } | null>(null);
 
@@ -388,12 +394,16 @@ export default function ChatPage() {
     title: string;
     description: string;
     actionText: string;
+    type?: "danger" | "warning";
+    hideCancel?: boolean;
     onConfirm: () => void | Promise<void>;
   }) => {
     setConfirmModalConfig({
       title: config.title,
       description: config.description,
       actionText: config.actionText,
+      type: config.type || "danger",
+      hideCancel: config.hideCancel,
       onConfirm: async () => {
         await config.onConfirm();
         setConfirmModalOpen(false);
@@ -491,6 +501,11 @@ export default function ChatPage() {
           setMessages((prev) => prev.filter((m) => !selectedMessageIds.has(m._id)));
           setIsMultiSelectMode(false);
           setSelectedMessageIds(new Set());
+          window.dispatchEvent(
+            new CustomEvent("message_deleted_for_me", {
+              detail: { conversationId },
+            })
+          );
         } else {
           toast.error("Có lỗi xảy ra khi xóa tin nhắn");
         }
@@ -579,6 +594,10 @@ export default function ChatPage() {
     setShowMentionIndicator(false);
     setMentionToScrollId(null);
     setActiveEffect(null); // Reset effect when changing chat
+    if (typeof window !== "undefined" && conversationId) {
+      const saved = localStorage.getItem(`default_emoji_${conversationId}`);
+      setDefaultEmoji(saved || "👍");
+    }
   }, [conversationId]);
 
   // Trigger client-side particle effects based on message content
@@ -1419,6 +1438,11 @@ export default function ChatPage() {
           // Optimistic Update: Xóa ngay ở local UI
           setMessages((prev) => prev.filter((m) => m._id !== messageId));
           await messageService.deleteMessageForMe(messageId);
+          window.dispatchEvent(
+            new CustomEvent("message_deleted_for_me", {
+              detail: { conversationId },
+            })
+          );
         } catch (error) {
           console.error("Lỗi xóa tin nhắn phía tôi:", error);
         }
@@ -1737,6 +1761,51 @@ export default function ChatPage() {
     }
   };
 
+  const handleSendDefaultEmoji = async () => {
+    if (!conversationId || sending) return;
+
+    const myId =
+      currentUser?.id || currentUser?._id || currentUser?.userId || "me";
+
+    setSending(true);
+
+    const tempId = `temp_${Date.now()}`;
+    const tempMsg: MessageDTO = {
+      _id: tempId,
+      conversationId,
+      senderId: myId,
+      senderName: currentUser?.fullName || "Tôi",
+      type: "text",
+      content: defaultEmoji,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+
+    try {
+      await messageService.sendMessage({
+        conversationId,
+        content: defaultEmoji,
+        type: "text",
+        senderName: currentUser?.fullName || "Tôi",
+      });
+
+      if (isStranger) {
+        groupService
+          .updateConversationFolder(conversationId, "priority")
+          .catch(console.error);
+      }
+    } catch (err) {
+      console.error("Lỗi gửi biểu tượng cảm xúc:", err);
+      setMessages((prev) => prev.filter((m) => m._id !== tempId));
+    } finally {
+      setSending(false);
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
+  };
+
   // ─── Handle file upload ───
   const handleFileButtonClick = () => {
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -1758,7 +1827,14 @@ export default function ChatPage() {
     )
       return;
     if (filesList.length > 20) {
-      alert("Chỉ được gửi tối đa 20 file mỗi lần!");
+      showConfirm({
+        title: "Giới hạn số lượng tệp",
+        description: "Chỉ được gửi tối đa 20 file mỗi lần!",
+        actionText: "Đã hiểu",
+        type: "warning",
+        hideCancel: true,
+        onConfirm: () => {},
+      });
       return;
     }
 
@@ -1766,9 +1842,14 @@ export default function ChatPage() {
     // Kiểm tra từng file dưới 100MB
     for (const file of files) {
       if (file.size > 100 * 1024 * 1024) {
-        alert(
-          `File "${file.name}" vượt quá 100MB, vui lòng chọn file nhỏ hơn.`,
-        );
+        showConfirm({
+          title: "Dung lượng tệp quá lớn",
+          description: `Tệp "${file.name}" vượt quá giới hạn 100MB. Vui lòng chọn tệp nhỏ hơn.`,
+          actionText: "Đã hiểu",
+          type: "warning",
+          hideCancel: true,
+          onConfirm: () => {},
+        });
         return;
       }
     }
@@ -2718,24 +2799,15 @@ export default function ChatPage() {
                                               : false;
 
                                             // 2. Logic số cột linh hoạt dựa trên số ảnh THỰC TẾ đang có
-                                            let numCols = 2;
-                                            let gridCols = "grid-cols-2";
+                                            let numCols = 3;
+                                            let gridCols = "grid-cols-3";
                                             if (count === 1) {
                                               gridCols = "grid-cols-1";
                                               numCols = 1;
-                                            } else if (count === 3) {
-                                              gridCols = "grid-cols-3";
-                                              numCols = 3;
-                                            } else if (
-                                              count >= 4 &&
-                                              isPortrait
-                                            ) {
-                                              gridCols = "grid-cols-4";
-                                              numCols = 4;
-                                            } else if (
-                                              count >= 4 &&
-                                              !isPortrait
-                                            ) {
+                                            } else if (count === 2) {
+                                              gridCols = "grid-cols-2";
+                                              numCols = 2;
+                                            } else if (count === 4) {
                                               gridCols = "grid-cols-2";
                                               numCols = 2;
                                             }
@@ -2774,8 +2846,10 @@ export default function ChatPage() {
                                               baseImgH,
                                             );
                                             const cellWidth =
-                                              cellHeight *
-                                              (baseImgW / baseImgH);
+                                              count > 1
+                                                ? cellHeight
+                                                : cellHeight *
+                                                  (baseImgW / baseImgH);
                                             const gap = 4;
                                             let computedGridWidth =
                                               cellWidth * numCols +
@@ -2806,8 +2880,6 @@ export default function ChatPage() {
                                                           ? "280px"
                                                           : "100%",
                                                     }),
-                                                  maxHeight: "420px",
-                                                  overflow: "hidden",
                                                 }}
                                               >
                                                 {visibleImages.map(
@@ -2828,9 +2900,11 @@ export default function ChatPage() {
 
                                                     // CHÌA KHÓA: Giữ đúng kích thước gốc bằng aspectRatio của từng tấm
                                                     const itemAspect =
-                                                      img.width && img.height
-                                                        ? `${img.width}/${img.height}`
-                                                        : aspectR;
+                                                      count > 1
+                                                        ? "1"
+                                                        : img.width && img.height
+                                                          ? `${img.width}/${img.height}`
+                                                          : aspectR;
 
                                                     return (
                                                       <div
@@ -3173,7 +3247,7 @@ export default function ChatPage() {
                                     {/* end: system call bypasses bubble wrapper */}
                                     {/* Hover Controls (Reaction & Menu & Redo) */}
                                     <div
-                                      className={`absolute bottom-0 ${isMine ? "right-full pr-2" : "left-full pl-2"} flex items-center gap-1 z-[1000] ${hoveredMsgId === msg._id && !isMultiSelectMode
+                                      className={`absolute bottom-0 ${isMine ? "right-full pr-2" : "left-full pl-2"} flex items-center gap-1 z-[1000] ${(hoveredMsgId === msg._id || activeReactionMenu === msg._id || activeMenu === msg._id) && !isMultiSelectMode
                                         ? "opacity-100 translate-y-0"
                                         : "opacity-0 translate-y-2 pointer-events-none"
                                         } transition-all duration-200`}
@@ -3206,7 +3280,7 @@ export default function ChatPage() {
 
                                           {activeReactionMenu === msg._id && (
                                             <div
-                                              className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                                              className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"} before:absolute before:left-0 before:right-0 before:h-4 before:content-[''] ${menuPosition === "bottom" ? "before:-top-3.5" : "before:-bottom-3.5"}`}
                                               onMouseLeave={() =>
                                                 setActiveReactionMenu(null)
                                               }
@@ -3294,7 +3368,7 @@ export default function ChatPage() {
 
                                         {activeMenu === msg._id && (
                                           <div
-                                            className={`absolute z-50 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 overflow-hidden right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                                            className={`absolute z-50 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"} before:absolute before:left-0 before:right-0 before:h-4 before:content-[''] ${menuPosition === "bottom" ? "before:-top-3.5" : "before:-bottom-3.5"}`}
                                             onMouseLeave={() =>
                                               setActiveMenu(null)
                                             }
@@ -3834,9 +3908,23 @@ export default function ChatPage() {
                           <PaperAirplaneIcon className="w-6 h-6" />
                         </button>
                       ) : (
-                        <button className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90">
-                          {/* This matches the Like/Thumb icon in the image */}
-                          <span className="text-2xl">👍</span>
+                        <button 
+                          onClick={() => setIsDefaultEmojiModalOpen(true)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setIsDefaultEmojiModalOpen(true);
+                          }}
+                          className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90 cursor-pointer"
+                        >
+                          <span 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSendDefaultEmoji();
+                            }}
+                            className="text-2xl cursor-pointer select-none"
+                          >
+                            {defaultEmoji}
+                          </span>
                         </button>
                       )}
                     </div>
@@ -4587,7 +4675,11 @@ export default function ChatPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                confirmModalConfig.type === "warning"
+                  ? "bg-yellow-50 text-yellow-600"
+                  : "bg-red-50 text-red-600"
+              }`}>
                 <AlertTriangle size={32} />
               </div>
               <h3 className="text-xl font-bold text-slate-800 mb-2">
@@ -4598,15 +4690,21 @@ export default function ChatPage() {
               </p>
             </div>
             <div className="p-4 bg-slate-50 flex gap-3">
-              <button
-                onClick={() => setConfirmModalOpen(false)}
-                className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-white transition-colors text-sm cursor-pointer"
-              >
-                Hủy bỏ
-              </button>
+              {!confirmModalConfig.hideCancel && (
+                <button
+                  onClick={() => setConfirmModalOpen(false)}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-white transition-colors text-sm cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+              )}
               <button
                 onClick={confirmModalConfig.onConfirm}
-                className="flex-1 px-4 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-200 text-sm cursor-pointer"
+                className={`flex-1 px-4 py-2.5 text-white font-bold rounded-xl transition-colors shadow-lg text-sm cursor-pointer ${
+                  confirmModalConfig.type === "warning"
+                    ? "bg-yellow-500 hover:bg-yellow-600 shadow-yellow-200"
+                    : "bg-red-600 hover:bg-red-700 shadow-red-200"
+                }`}
               >
                 {confirmModalConfig.actionText}
               </button>
@@ -4614,6 +4712,21 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+
+      {/* Update Default Emoji Modal */}
+      <UpdateDefaultEmojiModal
+        isOpen={isDefaultEmojiModalOpen}
+        onClose={() => setIsDefaultEmojiModalOpen(false)}
+        currentEmoji={defaultEmoji}
+        onConfirm={(emoji) => {
+          setDefaultEmoji(emoji);
+          if (typeof window !== "undefined" && conversationId) {
+            localStorage.setItem(`default_emoji_${conversationId}`, emoji);
+          }
+          setIsDefaultEmojiModalOpen(false);
+          toast.success("Đã cập nhật biểu tượng cảm xúc mặc định");
+        }}
+      />
     </>
   );
 }
