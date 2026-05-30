@@ -2,7 +2,7 @@ import { axiosClient } from "@/lib/axiosClient";
 import axios from "axios";
 
 const GATEWAY_URL =
-  process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8888";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
 const API_URL = `${GATEWAY_URL}/api/v1/admin/reports`;
 const MESSAGES_URL = `${GATEWAY_URL}/api/v1/messages`;
 
