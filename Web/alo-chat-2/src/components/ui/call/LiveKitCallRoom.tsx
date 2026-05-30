@@ -70,6 +70,7 @@ interface Props {
 export default function LiveKitCallRoom(props: Props) {
     const { roomId, userName, userId, isVideoCall, onLeaveRoom } = props;
     const [token, setToken] = useState("");
+    const [serverUrl, setServerUrl] = useState("");
     const [tokenError, setTokenError] = useState<string | null>(null);
     const [connectionError, setConnectionError] = useState<string | null>(null);
     const [isMinimized, setIsMinimized] = useState(false);
@@ -97,8 +98,9 @@ export default function LiveKitCallRoom(props: Props) {
                 }
                 const data = await resp.json();
                 if (!cancelled) {
-                    if (data.token) {
+                    if (data.token && data.serverUrl) {
                         setToken(data.token);
+                        setServerUrl(data.serverUrl);
                         clearTimeout(timeout);
                     } else {
                         setTokenError(data.error || "Không lấy được token cuộc gọi.");
@@ -138,7 +140,7 @@ export default function LiveKitCallRoom(props: Props) {
         );
     }
 
-    if (token === "") {
+    if (token === "" || serverUrl === "") {
         return (
             <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center text-white">
                 <motion.div
@@ -181,7 +183,7 @@ export default function LiveKitCallRoom(props: Props) {
                 video={isVideoCall}
                 audio={true}
                 token={token}
-                serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
+                serverUrl={serverUrl}
                 onDisconnected={() => onLeaveRoom()}
                 onError={(error) => {
                     console.error("[LiveKit] Connection error:", error);
