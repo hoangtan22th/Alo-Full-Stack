@@ -7,6 +7,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ScrollView,
 } from "react-native";
 import {
   ArrowUturnLeftIcon,
@@ -14,6 +15,9 @@ import {
   MapPinIcon,
   TrashIcon,
   XMarkIcon,
+  ShieldExclamationIcon,
+  ArrowUturnRightIcon,
+  QueueListIcon,
 } from "react-native-heroicons/outline";
 import { MessageDTO } from "../../services/messageService";
 import { EMOJI_MAP } from "../../constants/Chat";
@@ -22,6 +26,7 @@ interface MessageContextMenuProps {
   visible: boolean;
   selectedMsg: MessageDTO | null;
   layout: { x: number; y: number; width: number; height: number } | null;
+  selectedImageIndex?: number | null;
   onClose: () => void;
   onReact: (emojiKey: string) => void;
   onClearReactions: () => void;
@@ -31,6 +36,9 @@ interface MessageContextMenuProps {
   onPin: () => void;
   onUnpin: () => void;
   onReply: (msg: MessageDTO) => void;
+  onReport?: (msg: MessageDTO) => void;
+  onForward?: (msg: MessageDTO) => void;
+  onSelectMultiple?: (msg: MessageDTO) => void;
   isPinned: boolean;
   canPin?: boolean;
   currentUserId: string;
@@ -40,6 +48,7 @@ export const MessageContextMenu = ({
   visible,
   selectedMsg,
   layout,
+  selectedImageIndex,
   onClose,
   onReact,
   onClearReactions,
@@ -49,6 +58,9 @@ export const MessageContextMenu = ({
   onPin,
   onUnpin,
   onReply,
+  onReport,
+  onForward,
+  onSelectMultiple,
   isPinned,
   canPin = true,
   currentUserId,
@@ -56,9 +68,32 @@ export const MessageContextMenu = ({
   if (!visible || !selectedMsg || !layout) return null;
 
   const screenHeight = Dimensions.get("window").height;
-  const isTopHalf = layout.y < screenHeight / 2;
+
+  let msgTop = layout.y;
+  let msgHeight = layout.height;
+
+  // Nếu là ảnh (không thu hồi), chiều cao hiển thị trong popup luôn bị cố định là 200
+  if (selectedMsg.type === "image" && !selectedMsg.isRevoked) {
+    msgHeight = 200;
+  }
+
+  // Giới hạn chiều cao popup message (vd max 50% màn hình)
+  const maxHeight = screenHeight * 0.5;
+  if (msgHeight > maxHeight) {
+    msgHeight = maxHeight;
+  }
+
+  // Đảm bảo không bị lẹm khung
+  if (msgTop < 60) msgTop = 60;
+  if (msgTop + msgHeight + 350 > screenHeight) {
+    msgTop = Math.max(60, screenHeight - msgHeight - 350);
+  }
+
+  const isTopHalf = msgTop < screenHeight / 2;
   const isSender = selectedMsg.senderId === currentUserId;
-  const hasMyReaction = selectedMsg.reactions?.some((r: any) => r.userId === currentUserId);
+  const hasMyReaction = selectedMsg.reactions?.some(
+    (r: any) => r.userId === currentUserId,
+  );
 
   return (
     <Modal
@@ -73,70 +108,138 @@ export const MessageContextMenu = ({
           <View
             style={{
               position: "absolute",
-              top: layout.y,
+              top: msgTop,
               left: layout.x,
               width: layout.width,
-              height: layout.height,
+              height: msgHeight,
             }}
           >
             <View
-              className={`shadow-2xl ${
+              className={`shadow-2xl overflow-hidden ${
                 selectedMsg.type === "image" && !selectedMsg.isRevoked
-                  ? "p-0 bg-transparent"
+                  ? "p-0 bg-transparent flex-1"
                   : "px-5 py-3 " +
                     (isSender
-                      ? "bg-black rounded-3xl rounded-br-lg"
-                      : "bg-white rounded-3xl rounded-bl-lg")
+                      ? "bg-black rounded-3xl rounded-br-lg flex-1"
+                      : "bg-white rounded-3xl rounded-bl-lg flex-1")
               }`}
             >
-              {selectedMsg.replyTo && (
-                <View
-                  className={`mb-2 p-2 rounded-lg border-l-4 border-blue-400 ${
-                    isSender ? "bg-gray-800" : "bg-gray-100"
-                  }`}
-                >
-                  <Text
-                    className={`text-[12px] font-bold mb-0.5 ${
-                      isSender ? "text-blue-300" : "text-blue-600"
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ flexGrow: 1 }}
+              >
+                {selectedMsg.replyTo && (
+                  <View
+                    className={`mb-2 p-2 rounded-lg border-l-4 border-blue-400 ${
+                      isSender ? "bg-gray-800" : "bg-gray-100"
                     }`}
                   >
-                    {selectedMsg.replyTo.senderName || "Người dùng"}
+                    <Text
+                      className={`text-[12px] font-bold mb-0.5 ${
+                        isSender ? "text-blue-300" : "text-blue-600"
+                      }`}
+                    >
+                      {selectedMsg.replyTo.senderName || "Người dùng"}
+                    </Text>
+                    <Text
+                      className={`text-[12px] ${
+                        isSender ? "text-gray-400" : "text-gray-500"
+                      }`}
+                      numberOfLines={1}
+                    >
+                      {selectedMsg.replyTo.type === "text"
+                        ? selectedMsg.replyTo.content
+                        : selectedMsg.replyTo.type === "image" ||
+                            (selectedMsg.replyTo.type === "file" &&
+                              [
+                                "jpg",
+                                "jpeg",
+                                "png",
+                                "gif",
+                                "webp",
+                                "heic",
+                                "heif",
+                              ].includes(
+                                selectedMsg.replyTo.content
+                                  .split(".")
+                                  .pop()
+                                  ?.toLowerCase() || "",
+                              ))
+                          ? selectedMsg.replyTo.content === "[Album Ảnh]"
+                            ? "[Album Ảnh]"
+                            : "[Hình ảnh]"
+                          : "[Tệp tin]"}
+                    </Text>
+                  </View>
+                )}
+                {selectedMsg.isRevoked ? (
+                  <Text className="italic text-sm text-gray-400">
+                    Tin nhắn đã bị thu hồi
                   </Text>
+                ) : selectedMsg.type === "image" ? (
+                  (() => {
+                    let imageUri = selectedMsg.content;
+                    if (
+                      selectedMsg.metadata?.imageGroup &&
+                      selectedImageIndex !== undefined &&
+                      selectedImageIndex !== null
+                    ) {
+                      const groupItem =
+                        selectedMsg.metadata.imageGroup[selectedImageIndex];
+                      if (groupItem && !groupItem.isRevoked) {
+                        imageUri = groupItem.url;
+                      }
+                    } else if (
+                      selectedMsg.metadata?.imageGroup &&
+                      selectedMsg.metadata.imageGroup.length > 0
+                    ) {
+                      const active = selectedMsg.metadata.imageGroup.find(
+                        (img: any) => !img.isRevoked,
+                      );
+                      if (active) imageUri = active.url;
+                    }
+                    return (
+                      <Image
+                        source={{ uri: imageUri }}
+                        className="rounded-[22px] border border-gray-100/50"
+                        style={{ width: 260, height: 200 }}
+                        resizeMode="cover"
+                      />
+                    );
+                  })()
+                ) : selectedMsg.type === "file" ? (
+                  <View className="flex-row items-center gap-3">
+                    <View className="w-12 h-12 bg-black/10 rounded-xl items-center justify-center border border-black/5">
+                      <Text
+                        className={`font-bold uppercase text-[10px] ${isSender ? "text-gray-200" : "text-gray-500"}`}
+                      >
+                        FILE
+                      </Text>
+                    </View>
+                    <Text
+                      className={`text-base font-medium flex-1 ${isSender ? "text-white" : "text-gray-900"}`}
+                      numberOfLines={2}
+                    >
+                      {selectedMsg.metadata?.fileName ||
+                        selectedMsg.content.split("/").pop()}
+                    </Text>
+                  </View>
+                ) : selectedMsg.type === "poll" ? (
                   <Text
-                    className={`text-[12px] ${
-                      isSender ? "text-gray-400" : "text-gray-500"
-                    }`}
-                    numberOfLines={1}
+                    className={`text-base leading-6 font-medium ${isSender ? "text-white" : "text-gray-900"}`}
                   >
-                    {selectedMsg.replyTo.type === "text"
-                      ? selectedMsg.replyTo.content
-                      : selectedMsg.replyTo.type === "image"
-                        ? selectedMsg.replyTo.content === "[Album Ảnh]"
-                          ? "[Album Ảnh]"
-                          : "[Hình ảnh]"
-                        : "[Tệp tin]"}
+                    📊 [Bình chọn] {selectedMsg.content}
                   </Text>
-                </View>
-              )}
-              {selectedMsg.isRevoked ? (
-                <Text className="italic text-sm text-gray-400">
-                  Tin nhắn đã bị thu hồi
-                </Text>
-              ) : selectedMsg.type === "image" ? (
-                <Image
-                  source={{ uri: selectedMsg.content }}
-                  className="w-[260px] h-[200px] rounded-[22px] border border-gray-100/50"
-                  resizeMode="cover"
-                />
-              ) : (
-                <Text
-                  className={`text-base leading-6 ${
-                    isSender ? "text-white" : "text-gray-900"
-                  }`}
-                >
-                  {selectedMsg.content}
-                </Text>
-              )}
+                ) : (
+                  <Text
+                    className={`text-base leading-6 ${
+                      isSender ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    {selectedMsg.content}
+                  </Text>
+                )}
+              </ScrollView>
             </View>
           </View>
 
@@ -147,18 +250,8 @@ export const MessageContextMenu = ({
               left: 20,
               right: 20,
               top: isTopHalf
-                ? layout.y + layout.height + 15
-                : Math.max(
-                    20,
-                    layout.y -
-                      (isSender
-                        ? selectedMsg.type === "image"
-                          ? 200
-                          : 230
-                        : selectedMsg.type === "image"
-                          ? 150
-                          : 190),
-                  ),
+                ? msgTop + msgHeight + 15
+                : Math.max(20, msgTop - 360),
               alignItems: isSender ? "flex-end" : "flex-start",
             }}
           >
@@ -198,15 +291,35 @@ export const MessageContextMenu = ({
                 onPress={() => onReply(selectedMsg)}
                 className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
               >
-                <ArrowUturnLeftIcon
-                  size={18}
-                  color="#4b5563"
-                  style={{ transform: [{ scaleX: -1 }] }}
-                />
+                <ArrowUturnLeftIcon size={18} color="#4b5563" />
                 <Text className="text-[14px] font-medium text-gray-700">
                   Trả lời
                 </Text>
               </TouchableOpacity>
+
+              {!selectedMsg.isRevoked && onForward && (
+                <TouchableOpacity
+                  onPress={() => onForward(selectedMsg)}
+                  className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
+                >
+                  <ArrowUturnRightIcon size={18} color="#4b5563" />
+                  <Text className="text-[14px] font-medium text-gray-700">
+                    Chuyển tiếp
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {onSelectMultiple && (
+                <TouchableOpacity
+                  onPress={() => onSelectMultiple(selectedMsg)}
+                  className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
+                >
+                  <QueueListIcon size={18} color="#4b5563" />
+                  <Text className="text-[14px] font-medium text-gray-700">
+                    Chọn nhiều
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               {!selectedMsg.isRevoked && selectedMsg.type === "text" && (
                 <TouchableOpacity
@@ -220,8 +333,8 @@ export const MessageContextMenu = ({
                 </TouchableOpacity>
               )}
 
-              {canPin && (
-                isPinned ? (
+              {canPin &&
+                (isPinned ? (
                   <TouchableOpacity
                     onPress={onUnpin}
                     className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
@@ -241,8 +354,7 @@ export const MessageContextMenu = ({
                       Ghim tin nhắn
                     </Text>
                   </TouchableOpacity>
-                )
-              )}
+                ))}
 
               {isSender && !selectedMsg.isRevoked && (
                 <TouchableOpacity
@@ -258,13 +370,25 @@ export const MessageContextMenu = ({
 
               <TouchableOpacity
                 onPress={onDeleteLocal}
-                className="flex-row items-center gap-3 px-4 py-3 active:bg-red-50"
+                className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-red-50"
               >
                 <TrashIcon size={18} color="#ef4444" />
                 <Text className="text-[14px] font-medium text-red-500">
                   Xóa tin nhắn
                 </Text>
               </TouchableOpacity>
+
+              {!isSender && onReport && (
+                <TouchableOpacity
+                  onPress={() => onReport(selectedMsg)}
+                  className="flex-row items-center gap-3 px-4 py-3 active:bg-red-50"
+                >
+                  <ShieldExclamationIcon size={18} color="#ef4444" />
+                  <Text className="text-[14px] font-medium text-red-500">
+                    Báo cáo tin nhắn
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>

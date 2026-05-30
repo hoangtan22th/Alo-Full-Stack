@@ -6,20 +6,26 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ScrollView,
 } from "react-native";
-import { InformationCircleIcon } from "react-native-heroicons/outline";
+import {
+  InformationCircleIcon,
+  EllipsisHorizontalIcon,
+} from "react-native-heroicons/outline";
+import { PlayIcon } from "react-native-heroicons/solid";
 import { MessageDTO } from "../../services/messageService";
 import { EMOJI_MAP } from "../../constants/Chat";
 import { openRemoteFile } from "../../utils/fileUtils";
 import { WebView } from "react-native-webview";
 import { PollMessagePreview } from "./PollMessagePreview";
-// import Pdf from "react-native-pdf";
+import { useAuth } from "../../contexts/AuthContext";
+import Pdf from "react-native-pdf";
 
 interface MessageItemProps {
   msg: MessageDTO;
   isSender: boolean;
   isLastInBlock: boolean;
-  onLongPress: () => void;
+  onLongPress: (albumIndex?: number) => void;
   openReactionDetails: () => void;
   chatImages: MessageDTO[];
   setViewerIndex: (idx: number) => void;
@@ -29,6 +35,9 @@ interface MessageItemProps {
   onReplyClick?: (messageId: string) => void;
   isHighlighted?: boolean;
   isAdminHighlighted?: boolean;
+  onPress?: () => void;
+  isSelected?: boolean;
+  onOpenGallery?: (imagesList: any[], idx: number) => void;
 }
 
 export const MessageItem = ({
@@ -45,7 +54,12 @@ export const MessageItem = ({
   onReplyClick,
   isHighlighted,
   isAdminHighlighted,
+  onPress,
+  isSelected,
+  onOpenGallery,
 }: MessageItemProps) => {
+  const { user } = useAuth();
+  const currentUserId = user?.id || user?._id || user?.userId || null;
   const timeString = new Date(msg.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
@@ -74,9 +88,15 @@ export const MessageItem = ({
           if (r) messageRefs.current[msg._id] = r as any;
         }}
         activeOpacity={0.8}
-        onLongPress={onLongPress}
+        onLongPress={() => {
+          if (!msg.isRevoked) {
+            onLongPress();
+          }
+        }}
         onPress={() => {
-          if (!isLastInBlock) {
+          if (onPress) {
+            onPress();
+          } else if (!isLastInBlock) {
             LayoutAnimation.configureNext(
               LayoutAnimation.Presets.easeInEaseOut,
             );
@@ -94,10 +114,11 @@ export const MessageItem = ({
                 (isSender
                   ? "bg-black rounded-3xl rounded-br-lg"
                   : "bg-white rounded-3xl rounded-bl-lg")
-          } ${isAdminHighlighted ? "border-amber-200" : "border-transparent"}`}
-          style={
-            msg.type === "poll" ? { width: "100%", alignItems: "center" } : {}
-          }
+          } ${isAdminHighlighted ? "border-amber-200" : isSelected ? "border-blue-500" : "border-transparent"}`}
+          style={[
+            msg.type === "poll" ? { width: "100%", alignItems: "center" } : {},
+            isSelected ? { backgroundColor: "rgba(59, 130, 246, 0.1)" } : {},
+          ]}
         >
           {msg.replyTo && msg.replyTo.messageId && (
             <TouchableOpacity
@@ -122,7 +143,20 @@ export const MessageItem = ({
               >
                 {msg.replyTo.type === "text"
                   ? msg.replyTo.content
-                  : msg.replyTo.type === "image"
+                  : msg.replyTo.type === "image" ||
+                      (msg.replyTo.type === "file" &&
+                        [
+                          "jpg",
+                          "jpeg",
+                          "png",
+                          "gif",
+                          "webp",
+                          "heic",
+                          "heif",
+                        ].includes(
+                          msg.replyTo.content.split(".").pop()?.toLowerCase() ||
+                            "",
+                        ))
                     ? msg.replyTo.content === "[Album Ảnh]"
                       ? "[Album Ảnh]"
                       : "[Hình ảnh]"
@@ -141,117 +175,302 @@ export const MessageItem = ({
               Tin nhắn đã bị thu hồi
             </Text>
           ) : msg.type === "image" ? (
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => {
-                const idx = chatImages.findIndex((img) => img._id === msg._id);
-                if (idx !== -1) setViewerIndex(idx);
-              }}
-              onLongPress={onLongPress}
-            >
-              <Image
-                source={{ uri: msg.content }}
-                className="w-[260px] h-[200px] rounded-[22px] border border-gray-100/50 self-center"
-                resizeMode="cover"
-              />
-            </TouchableOpacity>
-          ) : msg.type === "file" ? (
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() =>
-                openRemoteFile(
-                  msg.content,
-                  msg.metadata?.fileName || `file_${msg._id}`,
-                )
-              }
-              className={`overflow-hidden rounded-2xl ${
-                isSender ? "bg-white" : "bg-white"
-              }`}
-              style={{ width: 260 }}
-            >
-              {/* Top Section: Preview */}
-              <View className="h-36 bg-gray-100/50 justify-center overflow-hidden border-b border-gray-100">
-                {(() => {
-                  const fileName =
-                    msg.metadata?.fileName ||
-                    msg.content.split("/").pop() ||
-                    "";
-                  const ext = fileName.split(".").pop()?.toLowerCase();
-                  const isText = [
-                    "txt",
-                    "js",
-                    "ts",
-                    "json",
-                    "html",
-                    "css",
-                    "py",
-                    "java",
-                    "cpp",
-                    "md",
-                    "sql",
-                    "sh",
-                  ].includes(ext || "");
-                  const isPdf = ext === "pdf";
+            msg.metadata?.imageGroup ? (
+              (() => {
+                const visibleImages = (msg.metadata.imageGroup || [])
+                  .map((img: any, idx: number) => ({
+                    ...img,
+                    originalIndex: idx,
+                  }))
+                  .filter(
+                    (img: any) => !img.deletedByUsers?.includes(currentUserId),
+                  );
 
-                  if (isText) {
-                    return <FileTextPreview url={msg.content} />;
-                  } else if (isPdf) {
-                    return <FilePdfPreview url={msg.content} />;
+                if (visibleImages.length === 0) return null;
+
+                const count = visibleImages.length;
+                let itemWidth: any = "100%";
+                let itemHeight = 180;
+
+                if (count === 2) {
+                  itemWidth = "49%";
+                  itemHeight = 120;
+                } else if (count === 3) {
+                  itemWidth = "32.3%";
+                  itemHeight = 90;
+                } else if (count >= 4) {
+                  itemWidth = "49%";
+                  itemHeight = 100;
+                }
+
+                return (
+                  <View className="flex-row flex-wrap gap-1 justify-start w-[260px] p-1 bg-gray-50 rounded-2xl relative">
+                    {visibleImages.map((img: any, idx: number) => {
+                      const shouldShowPlaceholder =
+                        msg.isRevoked || img.isRevoked;
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          style={{ width: itemWidth, height: itemHeight }}
+                          className="rounded-lg overflow-hidden bg-gray-200 relative justify-center items-center"
+                          activeOpacity={0.9}
+                          onPress={() => {
+                            if (onPress) {
+                              onPress();
+                            } else if (!shouldShowPlaceholder) {
+                              const albumPhotos = visibleImages.map(
+                                (p: any) => ({
+                                  _id: `${msg._id}_img_${p.originalIndex}`,
+                                  content: p.url,
+                                  type: "image",
+                                  createdAt: msg.createdAt,
+                                  senderId: msg.senderId,
+                                  parentMessageId: msg._id,
+                                  albumIndex: p.originalIndex,
+                                  isRevoked: p.isRevoked,
+                                }),
+                              );
+                              if (onOpenGallery) {
+                                onOpenGallery(albumPhotos, idx);
+                              } else {
+                                const indexInChatImages = chatImages.findIndex(
+                                  (img) => img._id === msg._id,
+                                );
+                                if (indexInChatImages !== -1)
+                                  setViewerIndex(indexInChatImages);
+                              }
+                            }
+                          }}
+                          onLongPress={() => onLongPress(img.originalIndex)}
+                        >
+                          {shouldShowPlaceholder ? (
+                            <View className="items-center justify-center">
+                              <Text className="text-[10px] text-gray-400 italic">
+                                Đã thu hồi
+                              </Text>
+                            </View>
+                          ) : (
+                            <Image
+                              source={{ uri: img.url }}
+                              className="w-full h-full"
+                              resizeMode="cover"
+                            />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+
+                    {!msg.isRevoked && (
+                      <TouchableOpacity
+                        activeOpacity={0.8}
+                        onPress={() => onLongPress()}
+                        style={{
+                          position: "absolute",
+                          bottom: 8,
+                          right: 8,
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: "rgba(0,0,0,0.6)",
+                          justifyContent: "center",
+                          alignItems: "center",
+                        }}
+                      >
+                        <EllipsisHorizontalIcon size={20} color="white" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })()
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={() => {
+                  if (onPress) {
+                    onPress();
                   } else {
-                    return (
-                      <View className="flex-1 items-center justify-center bg-gray-50">
-                        <InformationCircleIcon size={64} color="#CBD5E1" />
-                        <Text className="text-[10px] text-gray-400 mt-2 font-medium">
-                          Bản xem trước không khả dụng
-                        </Text>
-                      </View>
-                    );
+                    if (onOpenGallery) {
+                      const idx = chatImages.findIndex(
+                        (img) => img._id === msg._id,
+                      );
+                      if (idx !== -1) {
+                        onOpenGallery(chatImages, idx);
+                      } else {
+                        onOpenGallery([msg], 0);
+                      }
+                    } else {
+                      const idx = chatImages.findIndex(
+                        (img) => img._id === msg._id,
+                      );
+                      if (idx !== -1) setViewerIndex(idx);
+                    }
                   }
-                })()}
-              </View>
+                }}
+                onLongPress={() => onLongPress()}
+              >
+                <Image
+                  source={{ uri: msg.content }}
+                  className="w-[260px] h-[200px] rounded-[22px] border border-gray-100/50 self-center"
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
+            )
+          ) : msg.type === "file" ? (
+            (() => {
+              const fileName =
+                msg.metadata?.fileName || msg.content.split("/").pop() || "";
+              const ext = fileName.split(".").pop()?.toLowerCase();
+              const isVideo = [
+                "mp4",
+                "mov",
+                "m4v",
+                "avi",
+                "3gp",
+                "mkv",
+              ].includes(ext || "");
 
-              {/* Bottom Section: Info Bar */}
-              <View className="flex-row items-center p-3 bg-sky-50">
-                <View
-                  className="w-12 h-12 items-center justify-center rounded-xl mr-3"
-                  style={{
-                    backgroundColor: (() => {
-                      const ext = msg.metadata?.fileName
-                        ?.split(".")
-                        .pop()
-                        ?.toLowerCase();
-                      if (ext === "pdf") return "#ef4444";
-                      if (["doc", "docx"].includes(ext || "")) return "#3b82f6";
-                      if (["xls", "xlsx"].includes(ext || "")) return "#22c55e";
-                      if (["ppt", "pptx"].includes(ext || "")) return "#f97316";
-                      return "#6b7280";
-                    })(),
-                  }}
-                >
-                  <Text className="text-white text-[10px] font-black uppercase">
-                    {msg.metadata?.fileName?.split(".").pop() || "FILE"}
-                  </Text>
-                </View>
-                <View className="flex-1">
-                  <Text
-                    className="text-[15px] font-medium text-gray-900"
-                    numberOfLines={1}
+              if (isVideo) {
+                return (
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => {
+                      if (onPress) {
+                        onPress();
+                      } else {
+                        openRemoteFile(msg.content, fileName);
+                      }
+                    }}
+                    onLongPress={() => onLongPress()}
+                    className="w-[260px] h-[160px] bg-black rounded-2xl justify-center items-center relative overflow-hidden"
                   >
-                    {msg.metadata?.fileName || "Tệp đính kèm"}
-                  </Text>
-                  <Text className="text-[12px] text-gray-500 mt-0.5 uppercase">
-                    {msg.metadata?.fileName?.split(".").pop() || "FILE"}
-                    {" • "}
-                    {msg.metadata?.fileSize
-                      ? msg.metadata.fileSize < 1024 * 1024
-                        ? (msg.metadata.fileSize / 1024).toFixed(0) + " KB"
-                        : (msg.metadata.fileSize / (1024 * 1024)).toFixed(1) +
-                          " MB"
-                      : "0 KB"}
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
+                    <View className="absolute inset-0 bg-black/40 justify-center items-center z-10">
+                      <View className="w-14 h-14 bg-white/30 rounded-full justify-center items-center border border-white/50">
+                        <PlayIcon size={30} color="white" />
+                      </View>
+                    </View>
+                    <Text
+                      className="absolute bottom-2 left-2 right-2 text-white text-[10px] font-bold z-20"
+                      numberOfLines={1}
+                    >
+                      {fileName}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }
+
+              return (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    if (onPress) {
+                      onPress();
+                    } else {
+                      openRemoteFile(
+                        msg.content,
+                        msg.metadata?.fileName || `file_${msg._id}`,
+                      );
+                    }
+                  }}
+                  onLongPress={() => {
+                    if (!msg.isRevoked) {
+                      onLongPress();
+                    }
+                  }}
+                  className={`overflow-hidden rounded-2xl bg-white`}
+                  style={{ width: 260 }}
+                >
+                  {/* Top Section: Preview */}
+                  <View className="h-36 bg-gray-100/50 justify-center overflow-hidden border-b border-gray-100">
+                    {(() => {
+                      const isText = [
+                        "txt",
+                        "js",
+                        "ts",
+                        "json",
+                        "html",
+                        "css",
+                        "py",
+                        "java",
+                        "cpp",
+                        "md",
+                        "sql",
+                        "sh",
+                      ].includes(ext || "");
+                      const isPdf = ext === "pdf";
+                      const isOffice = [
+                        "doc",
+                        "docx",
+                        "xls",
+                        "xlsx",
+                        "ppt",
+                        "pptx",
+                      ].includes(ext || "");
+
+                      if (isText) {
+                        return <FileTextPreview url={msg.content} />;
+                      } else if (isPdf) {
+                        return <FilePdfPreview url={msg.content} />;
+                      } else if (isOffice) {
+                        return <OfficeFilePreview url={msg.content} />;
+                      } else {
+                        return (
+                          <View className="flex-1 items-center justify-center bg-gray-50">
+                            <InformationCircleIcon size={64} color="#CBD5E1" />
+                            <Text className="text-[10px] text-gray-400 mt-2 font-medium">
+                              Bản xem trước không khả dụng
+                            </Text>
+                          </View>
+                        );
+                      }
+                    })()}
+                  </View>
+
+                  {/* Bottom Section: Info Bar */}
+                  <View className="flex-row items-center p-3 bg-sky-50">
+                    <View
+                      className="w-12 h-12 items-center justify-center rounded-xl mr-3"
+                      style={{
+                        backgroundColor: (() => {
+                          if (ext === "pdf") return "#ef4444";
+                          if (["doc", "docx"].includes(ext || ""))
+                            return "#3b82f6";
+                          if (["xls", "xlsx"].includes(ext || ""))
+                            return "#22c55e";
+                          if (["ppt", "pptx"].includes(ext || ""))
+                            return "#f97316";
+                          if (["zip", "rar", "tar", "7z"].includes(ext || ""))
+                            return "#7c3aed";
+                          return "#6b7280";
+                        })(),
+                      }}
+                    >
+                      <Text className="text-white text-[10px] font-black uppercase">
+                        {ext || "FILE"}
+                      </Text>
+                    </View>
+                    <View className="flex-1">
+                      <Text
+                        className="text-[15px] font-medium text-gray-900"
+                        numberOfLines={1}
+                      >
+                        {fileName || "Tệp đính kèm"}
+                      </Text>
+                      <Text className="text-[12px] text-gray-500 mt-0.5 uppercase">
+                        {ext || "FILE"}
+                        {" • "}
+                        {msg.metadata?.fileSize
+                          ? msg.metadata.fileSize < 1024 * 1024
+                            ? (msg.metadata.fileSize / 1024).toFixed(0) + " KB"
+                            : (msg.metadata.fileSize / (1024 * 1024)).toFixed(
+                                1,
+                              ) + " MB"
+                          : "0 KB"}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })()
           ) : msg.type === "text" ? (
             <Text
               className={`text-base leading-6 ${isSender ? "text-white" : "text-gray-900"}`}
@@ -319,13 +538,15 @@ export const MessageItem = ({
 
 const FileTextPreview = ({ url }: { url: string }) => {
   const [content, setContent] = React.useState<string>("Đang tải nội dung...");
+  const [wrap, setWrap] = React.useState<boolean>(false);
 
   React.useEffect(() => {
     let isMounted = true;
     fetch(url)
       .then((res) => res.text())
       .then((text) => {
-        if (isMounted) setContent(text.slice(0, 500).trim() || "Tệp tin trống");
+        if (isMounted)
+          setContent(text.slice(0, 1000).trim() || "Tệp tin trống");
       })
       .catch((err) => {
         console.error("[FilePreview] Fetch error:", err);
@@ -337,61 +558,105 @@ const FileTextPreview = ({ url }: { url: string }) => {
   }, [url]);
 
   return (
-    <View className="flex-1 p-3 bg-gray-50/80" style={{ minHeight: 128 }}>
-      <Text
-        className="text-[10px] text-gray-500 leading-4"
-        style={{
-          fontFamily: Platform.select({ ios: "Courier", android: "monospace" }),
-        }}
-        numberOfLines={7}
+    <View
+      className="flex-1 p-3 bg-gray-50/80 relative"
+      style={{ minHeight: 140 }}
+    >
+      <TouchableOpacity
+        onPress={() => setWrap(!wrap)}
+        className="absolute top-2 right-2 px-2 py-1 bg-gray-200/80 rounded-md z-10"
       >
-        {content}
-      </Text>
+        <Text className="text-[9px] font-bold text-gray-600">
+          {wrap ? "Không ngắt dòng" : "Ngắt dòng"}
+        </Text>
+      </TouchableOpacity>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={true}>
+        <Text
+          className="text-[10px] text-gray-500 leading-4"
+          style={{
+            fontFamily: Platform.select({
+              ios: "Courier",
+              android: "monospace",
+            }),
+          }}
+          numberOfLines={wrap ? undefined : 7}
+        >
+          {content}
+        </Text>
+      </ScrollView>
+    </View>
+  );
+};
+
+const FilePdfPreview = ({ url }: { url: string }) => {
+  return (
+    <View className="flex-1 overflow-hidden bg-white" pointerEvents="none">
+      <Pdf
+        source={{ uri: url, cache: true }}
+        singlePage={true} // Rất quan trọng: Chỉ render trang 1 làm thumbnail để tối ưu RAM cho FlatList
+        fitPolicy={0} // Fit theo chiều rộng
+        style={{
+          flex: 1,
+          backgroundColor: "white",
+          width: "100%",
+          height: "100%",
+          marginTop: -2,
+        }}
+        onError={(error) => {
+          console.warn("[FilePdfPreview] Lỗi render PDF:", error);
+        }}
+      />
     </View>
   );
 };
 
 // const FilePdfPreview = ({ url }: { url: string }) => {
+//   // iOS đọc trực tiếp URL, Android dùng Google Docs
+//   const previewUrl =
+//     Platform.OS === "android"
+//       ? `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`
+//       : url;
+
 //   return (
-//     <View className="flex-1 overflow-hidden bg-white" pointerEvents="none">
-//       <Pdf
-//         source={{ uri: url, cache: true }}
-//         singlePage={true} // Rất quan trọng: Chỉ render trang 1 làm thumbnail để tối ưu RAM cho FlatList
-//         fitPolicy={0} // Fit theo chiều rộng
-//         style={{
-//           flex: 1,
-//           backgroundColor: "white",
-//           width: "100%",
-//           height: "100%",
-//         }}
-//         onError={(error) => {
-//           console.warn("[FilePdfPreview] Lỗi render PDF:", error);
+//     <View className="flex-1 overflow-hidden bg-white">
+//       <WebView
+//         source={{ uri: previewUrl }}
+//         scrollEnabled={false}
+//         pointerEvents="none"
+//         javaScriptEnabled={true} // Cần thiết cho Google Docs trên Android
+//         domStorageEnabled={true} // Cần thiết cho Google Docs trên Android
+//         startInLoadingState={true}
+//         style={{ flex: 1, backgroundColor: "white" }}
+//         onHttpError={(syntheticEvent) => {
+//           const { nativeEvent } = syntheticEvent;
+//           console.warn("WebView HTTP error: ", nativeEvent);
 //         }}
 //       />
 //     </View>
 //   );
 // };
 
-const FilePdfPreview = ({ url }: { url: string }) => {
-  // iOS đọc trực tiếp URL, Android dùng Google Docs
-  const previewUrl =
-    Platform.OS === "android"
-      ? `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`
-      : url;
+const OfficeFilePreview = ({ url }: { url: string }) => {
+  const previewUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`;
 
   return (
-    <View className="flex-1 overflow-hidden bg-white">
+    <View className="flex-1 overflow-hidden bg-white" pointerEvents="none">
       <WebView
         source={{ uri: previewUrl }}
         scrollEnabled={false}
         pointerEvents="none"
-        javaScriptEnabled={true} // Cần thiết cho Google Docs trên Android
-        domStorageEnabled={true} // Cần thiết cho Google Docs trên Android
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
         startInLoadingState={true}
-        style={{ flex: 1, backgroundColor: "white" }}
+        style={{
+          flex: 1,
+          backgroundColor: "white",
+        }}
         onHttpError={(syntheticEvent) => {
-          const { nativeEvent } = syntheticEvent;
-          console.warn("WebView HTTP error: ", nativeEvent);
+          console.warn(
+            "[OfficeFilePreview] HTTP error: ",
+            syntheticEvent.nativeEvent,
+          );
         }}
       />
     </View>
