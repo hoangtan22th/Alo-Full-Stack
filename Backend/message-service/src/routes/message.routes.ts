@@ -15,6 +15,7 @@ const upload = multer({
 
 // Admin: Bulk fetch messages by IDs — must be BEFORE /:conversationId to avoid collision
 router.post("/bulk", messageController.getBulkMessages);
+router.post("/last-messages", messageController.getLastMessagesForConversations);
 router.get("/conversation/:conversationId/admin", messageController.getAdminConversationHistory);
 
 router.get("/:conversationId", messageController.getMessageHistory);
