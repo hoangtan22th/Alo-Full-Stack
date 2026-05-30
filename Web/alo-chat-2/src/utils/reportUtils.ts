@@ -61,7 +61,7 @@ export const generateEvidenceSnapshot = (
       senderId: msg.senderId,
       content: msg.content,
       contentType: msg.type.toUpperCase(),
-      sentAt: msg.createdAt,
+      sentAt: msg.createdAt ? msg.createdAt.replace('Z', '') : new Date().toISOString().replace('Z', ''),
       isAnchor: msg._id === anchorId,
       sequenceIndex: originalIndex,
       totalMessagesInConversation: conversationMessages.length,
