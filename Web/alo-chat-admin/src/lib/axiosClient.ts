@@ -1,8 +1,13 @@
-﻿import axios from "axios";
+import axios from "axios";
 
-const API_URL = "http://localhost:8888/api/v1/admin/management";
-const GATEWAY_URL =
-  process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8888";
+const getGatewayUrl = () => {
+  if (typeof window !== "undefined") {
+    return `http://${window.location.hostname}:8888`;
+  }
+  return process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8888";
+};
+const GATEWAY_URL = getGatewayUrl();
+const API_URL = `${GATEWAY_URL}/api/v1/admin/management`;
 
 export const axiosClient = axios.create({
   baseURL: API_URL,
