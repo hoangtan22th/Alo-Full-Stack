@@ -360,6 +360,8 @@ export default function ChatPage() {
     title: string;
     description: string;
     actionText: string;
+    type?: "danger" | "warning";
+    hideCancel?: boolean;
     onConfirm: () => void | Promise<void>;
   } | null>(null);
 
@@ -367,12 +369,16 @@ export default function ChatPage() {
     title: string;
     description: string;
     actionText: string;
+    type?: "danger" | "warning";
+    hideCancel?: boolean;
     onConfirm: () => void | Promise<void>;
   }) => {
     setConfirmModalConfig({
       title: config.title,
       description: config.description,
       actionText: config.actionText,
+      type: config.type || "danger",
+      hideCancel: config.hideCancel,
       onConfirm: async () => {
         await config.onConfirm();
         setConfirmModalOpen(false);
@@ -1786,7 +1792,14 @@ export default function ChatPage() {
     )
       return;
     if (filesList.length > 20) {
-      alert("Chỉ được gửi tối đa 20 file mỗi lần!");
+      showConfirm({
+        title: "Giới hạn số lượng tệp",
+        description: "Chỉ được gửi tối đa 20 file mỗi lần!",
+        actionText: "Đã hiểu",
+        type: "warning",
+        hideCancel: true,
+        onConfirm: () => {},
+      });
       return;
     }
 
@@ -1794,9 +1807,14 @@ export default function ChatPage() {
     // Kiểm tra từng file dưới 100MB
     for (const file of files) {
       if (file.size > 100 * 1024 * 1024) {
-        alert(
-          `File "${file.name}" vượt quá 100MB, vui lòng chọn file nhỏ hơn.`,
-        );
+        showConfirm({
+          title: "Dung lượng tệp quá lớn",
+          description: `Tệp "${file.name}" vượt quá giới hạn 100MB. Vui lòng chọn tệp nhỏ hơn.`,
+          actionText: "Đã hiểu",
+          type: "warning",
+          hideCancel: true,
+          onConfirm: () => {},
+        });
         return;
       }
     }
@@ -4589,7 +4607,11 @@ export default function ChatPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                confirmModalConfig.type === "warning"
+                  ? "bg-yellow-50 text-yellow-600"
+                  : "bg-red-50 text-red-600"
+              }`}>
                 <AlertTriangle size={32} />
               </div>
               <h3 className="text-xl font-bold text-slate-800 mb-2">
@@ -4600,15 +4622,21 @@ export default function ChatPage() {
               </p>
             </div>
             <div className="p-4 bg-slate-50 flex gap-3">
-              <button
-                onClick={() => setConfirmModalOpen(false)}
-                className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-white transition-colors text-sm cursor-pointer"
-              >
-                Hủy bỏ
-              </button>
+              {!confirmModalConfig.hideCancel && (
+                <button
+                  onClick={() => setConfirmModalOpen(false)}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-white transition-colors text-sm cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+              )}
               <button
                 onClick={confirmModalConfig.onConfirm}
-                className="flex-1 px-4 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-200 text-sm cursor-pointer"
+                className={`flex-1 px-4 py-2.5 text-white font-bold rounded-xl transition-colors shadow-lg text-sm cursor-pointer ${
+                  confirmModalConfig.type === "warning"
+                    ? "bg-yellow-500 hover:bg-yellow-600 shadow-yellow-200"
+                    : "bg-red-600 hover:bg-red-700 shadow-red-200"
+                }`}
               >
                 {confirmModalConfig.actionText}
               </button>
