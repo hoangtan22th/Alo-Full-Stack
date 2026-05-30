@@ -1541,3 +1541,84 @@ export async function getAdminConversationHistory(
     next(error);
   }
 }
+
+/**
+ * Lấy tin nhắn cuối cùng cho danh sách các cuộc hội thoại của một user cụ thể (loại bỏ tin đã xóa)
+ * POST /api/v1/messages/last-messages
+ */
+export async function getLastMessagesForConversations(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { conversationIds } = req.body;
+    const userId = getUserIdFromHeader(req);
+
+    if (!Array.isArray(conversationIds)) {
+      res.status(400).json({ error: "conversationIds must be an array" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    if (conversationIds.length === 0) {
+      res.json({ status: "success", data: {} });
+      return;
+    }
+
+    // Convert IDs to ObjectIds
+    const objectIds = conversationIds
+      .filter((id: string) => Types.ObjectId.isValid(id))
+      .map((id: string) => new Types.ObjectId(id));
+
+    // MongoDB Aggregation to find the last message for each conversation
+    // where deletedByUsers does not contain the current user ID
+    const aggregationResult = await Message.aggregate([
+      {
+        $match: {
+          conversationId: { $in: objectIds },
+          deletedByUsers: { $ne: userId }
+        }
+      },
+      {
+        $sort: { createdAt: -1 }
+      },
+      {
+        $group: {
+          _id: "$conversationId",
+          lastMessage: { $first: "$$ROOT" }
+        }
+      }
+    ]);
+
+    // Format output as a Map of conversationId -> messageDetails
+    const data: Record<string, any> = {};
+    aggregationResult.forEach((item) => {
+      const msg = item.lastMessage;
+      data[item._id.toString()] = {
+        _id: msg._id.toString(),
+        conversationId: msg.conversationId.toString(),
+        senderId: msg.senderId,
+        senderName: msg.senderName,
+        type: msg.type,
+        content: msg.content,
+        metadata: msg.metadata,
+        isRevoked: msg.isRevoked,
+        createdAt: msg.createdAt,
+      };
+    });
+
+    res.json({
+      status: "success",
+      data,
+    });
+  } catch (error) {
+    console.error("[MessageController] getLastMessagesForConversations error:", error);
+    next(error);
+  }
+}
+

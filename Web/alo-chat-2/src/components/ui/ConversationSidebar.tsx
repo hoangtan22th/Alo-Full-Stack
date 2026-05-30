@@ -377,6 +377,7 @@ export default function ConversationSidebar() {
               isGroup: g.isGroup,
               membersCount: g.members?.length,
               message: g.lastMessageContent || "Chưa có tin nhắn",
+              lastMessageId: g.lastMessage,
               time: timeString,
               unreadCount:
                 (currentUserId && g.unreadCount?.[currentUserId]) || 0,
@@ -503,6 +504,7 @@ export default function ConversationSidebar() {
             msg.type === "file"
               ? `[File] ${msg.metadata?.fileName || msg.content}`
               : msg.content;
+          convo.lastMessageId = msg._id || msg.id;
           convo.updatedAt = msg.createdAt || new Date().toISOString();
           convo.time = new Date(convo.updatedAt).toLocaleTimeString([], {
             hour: "2-digit",
@@ -522,6 +524,17 @@ export default function ConversationSidebar() {
           return [convo, ...next];
         });
       }),
+      socketService.onMessageRevoked((data: { messageId: string }) => {
+        setConversations((prev) =>
+          prev.map((c) => {
+            const matchesLastMsg = c.lastMessageId === data.messageId;
+            if (matchesLastMsg) {
+              return { ...c, message: "Tin nhắn đã được thu hồi" };
+            }
+            return c;
+          })
+        );
+      }),
       socketService.onMessagesRead(
         (data: { conversationId: string; userId: string }) => {
           const currentUserId =
@@ -539,8 +552,18 @@ export default function ConversationSidebar() {
       ),
     ];
 
+    const handleLocalMessageDeleted = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const deletedConvoId = customEvent.detail?.conversationId;
+      console.log("📢 [Sidebar] Local message deleted event received for conversation:", deletedConvoId);
+      fetchGroups();
+    };
+
+    window.addEventListener("message_deleted_for_me", handleLocalMessageDeleted);
+
     return () => {
       unsubs.forEach((unsub) => unsub());
+      window.removeEventListener("message_deleted_for_me", handleLocalMessageDeleted);
     };
   }, [fetchData, router, currentUser, fetchGroups]);
 

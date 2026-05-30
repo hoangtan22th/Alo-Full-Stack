@@ -476,6 +476,11 @@ export default function ChatPage() {
           setMessages((prev) => prev.filter((m) => !selectedMessageIds.has(m._id)));
           setIsMultiSelectMode(false);
           setSelectedMessageIds(new Set());
+          window.dispatchEvent(
+            new CustomEvent("message_deleted_for_me", {
+              detail: { conversationId },
+            })
+          );
         } else {
           toast.error("Có lỗi xảy ra khi xóa tin nhắn");
         }
@@ -1408,6 +1413,11 @@ export default function ChatPage() {
           // Optimistic Update: Xóa ngay ở local UI
           setMessages((prev) => prev.filter((m) => m._id !== messageId));
           await messageService.deleteMessageForMe(messageId);
+          window.dispatchEvent(
+            new CustomEvent("message_deleted_for_me", {
+              detail: { conversationId },
+            })
+          );
         } catch (error) {
           console.error("Lỗi xóa tin nhắn phía tôi:", error);
         }
@@ -2764,24 +2774,15 @@ export default function ChatPage() {
                                               : false;
 
                                             // 2. Logic số cột linh hoạt dựa trên số ảnh THỰC TẾ đang có
-                                            let numCols = 2;
-                                            let gridCols = "grid-cols-2";
+                                            let numCols = 3;
+                                            let gridCols = "grid-cols-3";
                                             if (count === 1) {
                                               gridCols = "grid-cols-1";
                                               numCols = 1;
-                                            } else if (count === 3) {
-                                              gridCols = "grid-cols-3";
-                                              numCols = 3;
-                                            } else if (
-                                              count >= 4 &&
-                                              isPortrait
-                                            ) {
-                                              gridCols = "grid-cols-4";
-                                              numCols = 4;
-                                            } else if (
-                                              count >= 4 &&
-                                              !isPortrait
-                                            ) {
+                                            } else if (count === 2) {
+                                              gridCols = "grid-cols-2";
+                                              numCols = 2;
+                                            } else if (count === 4) {
                                               gridCols = "grid-cols-2";
                                               numCols = 2;
                                             }
@@ -2854,8 +2855,6 @@ export default function ChatPage() {
                                                           ? "280px"
                                                           : "100%",
                                                     }),
-                                                  maxHeight: "420px",
-                                                  overflow: "hidden",
                                                 }}
                                               >
                                                 {visibleImages.map(
