@@ -63,6 +63,7 @@ import PollMessagePreview from "@/components/chat/PollMessagePreview";
 import PollDetailsModal from "@/components/ui/group/PollDetailsModal";
 import FileMessageBubble from "@/components/chat/FileMessageBubble";
 import TxtFileViewerModal from "@/components/chat/TxtFileViewerModal";
+import { UpdateDefaultEmojiModal } from "@/components/ui/UpdateDefaultEmojiModal";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -351,6 +352,9 @@ export default function ChatPage() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
 
+  const [defaultEmoji, setDefaultEmoji] = useState("👍");
+  const [isDefaultEmojiModalOpen, setIsDefaultEmojiModalOpen] = useState(false);
+
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [confirmModalConfig, setConfirmModalConfig] = useState<{
     title: string;
@@ -554,6 +558,10 @@ export default function ChatPage() {
     setShowMentionIndicator(false);
     setMentionToScrollId(null);
     setActiveEffect(null); // Reset effect when changing chat
+    if (typeof window !== "undefined" && conversationId) {
+      const saved = localStorage.getItem(`default_emoji_${conversationId}`);
+      setDefaultEmoji(saved || "👍");
+    }
   }, [conversationId]);
 
   // Trigger client-side particle effects based on message content
@@ -1704,6 +1712,51 @@ export default function ChatPage() {
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
       setMessageText(text);
       setReplyingTo(currentReply);
+    } finally {
+      setSending(false);
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
+  };
+
+  const handleSendDefaultEmoji = async () => {
+    if (!conversationId || sending) return;
+
+    const myId =
+      currentUser?.id || currentUser?._id || currentUser?.userId || "me";
+
+    setSending(true);
+
+    const tempId = `temp_${Date.now()}`;
+    const tempMsg: MessageDTO = {
+      _id: tempId,
+      conversationId,
+      senderId: myId,
+      senderName: currentUser?.fullName || "Tôi",
+      type: "text",
+      content: defaultEmoji,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+
+    try {
+      await messageService.sendMessage({
+        conversationId,
+        content: defaultEmoji,
+        type: "text",
+        senderName: currentUser?.fullName || "Tôi",
+      });
+
+      if (isStranger) {
+        groupService
+          .updateConversationFolder(conversationId, "priority")
+          .catch(console.error);
+      }
+    } catch (err) {
+      console.error("Lỗi gửi biểu tượng cảm xúc:", err);
+      setMessages((prev) => prev.filter((m) => m._id !== tempId));
     } finally {
       setSending(false);
       setTimeout(() => {
@@ -3778,9 +3831,23 @@ export default function ChatPage() {
                           <PaperAirplaneIcon className="w-6 h-6" />
                         </button>
                       ) : (
-                        <button className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90">
-                          {/* This matches the Like/Thumb icon in the image */}
-                          <span className="text-2xl">👍</span>
+                        <button 
+                          onClick={() => setIsDefaultEmojiModalOpen(true)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setIsDefaultEmojiModalOpen(true);
+                          }}
+                          className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90 cursor-pointer"
+                        >
+                          <span 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSendDefaultEmoji();
+                            }}
+                            className="text-2xl cursor-pointer select-none"
+                          >
+                            {defaultEmoji}
+                          </span>
                         </button>
                       )}
                     </div>
@@ -4545,6 +4612,21 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+
+      {/* Update Default Emoji Modal */}
+      <UpdateDefaultEmojiModal
+        isOpen={isDefaultEmojiModalOpen}
+        onClose={() => setIsDefaultEmojiModalOpen(false)}
+        currentEmoji={defaultEmoji}
+        onConfirm={(emoji) => {
+          setDefaultEmoji(emoji);
+          if (typeof window !== "undefined" && conversationId) {
+            localStorage.setItem(`default_emoji_${conversationId}`, emoji);
+          }
+          setIsDefaultEmojiModalOpen(false);
+          toast.success("Đã cập nhật biểu tượng cảm xúc mặc định");
+        }}
+      />
     </>
   );
 }
