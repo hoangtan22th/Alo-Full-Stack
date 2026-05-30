@@ -124,6 +124,14 @@ export default function ForwardMessageModal({
   // Gửi tin nhắn chuyển tiếp
   const handleForward = async () => {
     if (selectedIds.size === 0 || messages.length === 0 || sending) return;
+
+    // Lọc bỏ các tin nhắn đã bị thu hồi
+    const activeMessages = messages.filter((msg) => !msg.isRevoked);
+    if (activeMessages.length === 0) {
+      onClose();
+      return;
+    }
+
     setSending(true);
 
     const senderName =
@@ -137,7 +145,7 @@ export default function ForwardMessageModal({
       // Gửi từng message tới từng target conversation
       await Promise.all(
         targets.flatMap((targetId) =>
-          messages.map((msg) =>
+          activeMessages.map((msg) =>
             messageService.sendMessage({
               conversationId: targetId,
               content: msg.content,
@@ -151,7 +159,13 @@ export default function ForwardMessageModal({
                       fileSize: msg.metadata?.fileSize,
                       fileType: msg.metadata?.fileType,
                     }
-                  : {},
+                  : msg.type === "image"
+                    ? {
+                        imageGroup: msg.metadata?.imageGroup,
+                        width: msg.metadata?.width,
+                        height: msg.metadata?.height,
+                      }
+                    : {},
             }),
           ),
         ),

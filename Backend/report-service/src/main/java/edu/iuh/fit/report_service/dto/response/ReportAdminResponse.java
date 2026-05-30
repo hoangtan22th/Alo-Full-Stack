@@ -46,4 +46,10 @@ public class ReportAdminResponse {
     private LocalDateTime lockedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    private String snapshotHash;
+    private String aiSummary;
+    private String aiSuggestedAction;
+    private Double aiConfidence;
+    private LocalDateTime aiAnalyzedAt;
 }
