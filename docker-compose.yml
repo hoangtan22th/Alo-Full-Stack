@@ -460,7 +460,7 @@ services:
       - DOCKER_API_VERSION=1.40
       - REPO_USER=${DOCKER_USERNAME:-hoangtan22th}
       - REPO_PASS=${DOCKER_PASSWORD}
-    command: --interval 30 --cleanup
+    command: --interval 300 --cleanup
     restart: always
 
 # ==============================================================================
