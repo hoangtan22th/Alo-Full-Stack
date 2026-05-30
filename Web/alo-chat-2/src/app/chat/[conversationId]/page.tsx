@@ -3174,7 +3174,7 @@ export default function ChatPage() {
                                     {/* end: system call bypasses bubble wrapper */}
                                     {/* Hover Controls (Reaction & Menu & Redo) */}
                                     <div
-                                      className={`absolute bottom-0 ${isMine ? "right-full pr-2" : "left-full pl-2"} flex items-center gap-1 z-[1000] ${hoveredMsgId === msg._id && !isMultiSelectMode
+                                      className={`absolute bottom-0 ${isMine ? "right-full pr-2" : "left-full pl-2"} flex items-center gap-1 z-[1000] ${(hoveredMsgId === msg._id || activeReactionMenu === msg._id || activeMenu === msg._id) && !isMultiSelectMode
                                         ? "opacity-100 translate-y-0"
                                         : "opacity-0 translate-y-2 pointer-events-none"
                                         } transition-all duration-200`}
@@ -3207,7 +3207,7 @@ export default function ChatPage() {
 
                                           {activeReactionMenu === msg._id && (
                                             <div
-                                              className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                                              className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"} before:absolute before:left-0 before:right-0 before:h-4 before:content-[''] ${menuPosition === "bottom" ? "before:-top-3.5" : "before:-bottom-3.5"}`}
                                               onMouseLeave={() =>
                                                 setActiveReactionMenu(null)
                                               }
@@ -3295,7 +3295,7 @@ export default function ChatPage() {
 
                                         {activeMenu === msg._id && (
                                           <div
-                                            className={`absolute z-50 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 overflow-hidden right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                                            className={`absolute z-50 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"} before:absolute before:left-0 before:right-0 before:h-4 before:content-[''] ${menuPosition === "bottom" ? "before:-top-3.5" : "before:-bottom-3.5"}`}
                                             onMouseLeave={() =>
                                               setActiveMenu(null)
                                             }
