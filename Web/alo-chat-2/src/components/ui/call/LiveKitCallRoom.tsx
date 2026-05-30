@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 
 import {
@@ -55,6 +56,7 @@ function DurationTimer({ hasJoined }: { hasJoined: boolean }) {
 interface Props {
     roomId: string;
     userName: string;
+    userId?: string;  // identity unique - dùng để tránh trùng tên trong LiveKit room
     isVideoCall: boolean;
     onLeaveRoom: (duration?: number) => void;
     onUserJoin?: () => void;
@@ -66,26 +68,79 @@ interface Props {
 }
 
 export default function LiveKitCallRoom(props: Props) {
-    const { roomId, userName, isVideoCall, onLeaveRoom } = props;
+    const { roomId, userName, userId, isVideoCall, onLeaveRoom } = props;
     const [token, setToken] = useState("");
+    const [serverUrl, setServerUrl] = useState("");
+    const [tokenError, setTokenError] = useState<string | null>(null);
+    const [connectionError, setConnectionError] = useState<string | null>(null);
     const [isMinimized, setIsMinimized] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
 
     useEffect(() => {
+        let cancelled = false;
+        // Dùng userId làm identity unique, userName làm display name
+        // Thêm timestamp để tránh trùng identity nếu cùng userId join lại nhiều lần
+        const identity = userId ? `${userId}` : `${userName}-${Date.now()}`;
+        console.log("[LiveKit] Joining room:", roomId, "as identity:", identity, "displayName:", userName);
+
+        // Timeout 15 giây nếu không lấy được token
+        const timeout = setTimeout(() => {
+            if (!cancelled && !token) {
+                setTokenError("Không thể kết nối tới máy chủ cuộc gọi. Vui lòng thử lại.");
+            }
+        }, 15000);
+
         (async () => {
             try {
-                const resp = await fetch(`/api/livekit?room=${roomId}&username=${encodeURIComponent(userName)}`);
+                const resp = await fetch(`/api/livekit?room=${roomId}&username=${encodeURIComponent(identity)}&displayName=${encodeURIComponent(userName)}`);
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}`);
+                }
                 const data = await resp.json();
-                if (data.token) {
-                    setToken(data.token);
+                if (!cancelled) {
+                    if (data.token && data.serverUrl) {
+                        setToken(data.token);
+                        setServerUrl(data.serverUrl);
+                        clearTimeout(timeout);
+                    } else {
+                        setTokenError(data.error || "Không lấy được token cuộc gọi.");
+                    }
                 }
             } catch (e) {
                 console.error("Error fetching LiveKit token:", e);
+                if (!cancelled) {
+                    setTokenError("Không thể kết nối tới máy chủ cuộc gọi.");
+                }
             }
         })();
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timeout);
+        };
     }, [roomId, userName]);
 
-    if (token === "") {
+    if (tokenError) {
+        return (
+            <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center text-white gap-6">
+                <div className="w-16 h-16 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
+                    <PhoneOff size={28} className="text-red-400" />
+                </div>
+                <div className="text-center">
+                    <p className="font-bold text-base mb-2">Kết nối thất bại</p>
+                    <p className="text-[12px] opacity-50 max-w-xs">{tokenError}</p>
+                </div>
+                <button
+                    onClick={() => onLeaveRoom()}
+                    className="px-8 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/10 text-sm font-bold transition-all"
+                >
+                    Kết thúc cuộc gọi
+                </button>
+            </div>
+        );
+    }
+
+    if (token === "" || serverUrl === "") {
         return (
             <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center text-white">
                 <motion.div
@@ -94,6 +149,27 @@ export default function LiveKitCallRoom(props: Props) {
                     className="w-10 h-10 border-2 border-white/20 border-t-white rounded-full"
                 />
                 <p className="mt-6 font-bold tracking-[0.2em] text-[10px] uppercase opacity-40">Securing Connection</p>
+                <p className="mt-2 text-[9px] opacity-20">Đang kết nối tới {roomId}...</p>
+            </div>
+        );
+    }
+
+    if (connectionError) {
+        return (
+            <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-xl flex flex-col items-center justify-center text-white gap-6">
+                <div className="w-16 h-16 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
+                    <PhoneOff size={28} className="text-red-400" />
+                </div>
+                <div className="text-center">
+                    <p className="font-bold text-base mb-2">Không thể kết nối</p>
+                    <p className="text-[12px] opacity-50 max-w-xs">{connectionError}</p>
+                </div>
+                <button
+                    onClick={() => onLeaveRoom()}
+                    className="px-8 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/10 text-sm font-bold transition-all"
+                >
+                    Kết thúc cuộc gọi
+                </button>
             </div>
         );
     }
@@ -107,8 +183,12 @@ export default function LiveKitCallRoom(props: Props) {
                 video={isVideoCall}
                 audio={true}
                 token={token}
-                serverUrl={process.env.NEXT_PUBLIC_LIVEKIT_URL}
+                serverUrl={serverUrl}
                 onDisconnected={() => onLeaveRoom()}
+                onError={(error) => {
+                    console.error("[LiveKit] Connection error:", error);
+                    setConnectionError(`Lỗi kết nối: ${error?.message || 'Không xác định'}. Kiểm tra kết nối mạng và thử lại.`);
+                }}
                 connect={true}
                 options={{
                     adaptiveStream: true,

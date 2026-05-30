@@ -5,12 +5,17 @@ interface ChatState {
     onlineUsers: Record<string, { status: string; lastActive?: number }>;
     friendIds: Set<string>;
 
+    // --- Notifications State ---
+    unreadNotifsCount: number;
+
     // --- V2.1 Report System State ---
     isReportModalOpen: boolean;
     reportTargetId: string | null;
     reportTargetName: string | null;
     reportAnchorId: string | null;
     reportConversationType: "ONE_TO_ONE" | "GROUP" | null;
+    isReportSelectionMode: boolean;
+    selectedMessagesForReport: string[];
 
     // --- Actions ---
     setTyping: (conversationId: string, userId: string, isTyping: boolean) => void;
@@ -20,6 +25,12 @@ interface ChatState {
 
     openReportModal: (targetId: string, targetName?: string | null, anchorId?: string | null, conversationType?: "ONE_TO_ONE" | "GROUP") => void;
     closeReportModal: () => void;
+    setReportSelectionMode: (val: boolean) => void;
+    toggleMessageForReport: (messageId: string) => void;
+    clearReportSelection: () => void;
+
+    setUnreadNotifsCount: (count: number) => void;
+    incrementUnreadNotifsCount: () => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -27,12 +38,17 @@ export const useChatStore = create<ChatState>((set) => ({
     onlineUsers: {},
     friendIds: new Set(),
 
+    // --- Notifications State ---
+    unreadNotifsCount: 0,
+
     // --- V2.1 Report System State ---
     isReportModalOpen: false,
     reportTargetId: null,
     reportTargetName: null,
     reportAnchorId: null,
     reportConversationType: null,
+    isReportSelectionMode: false,
+    selectedMessagesForReport: [],
 
     setTyping: (conversationId, userId, isTyping) => {
         set((state) => {
@@ -92,4 +108,18 @@ export const useChatStore = create<ChatState>((set) => ({
             reportAnchorId: null,
             reportConversationType: null,
         }),
+
+    setReportSelectionMode: (val) => set({ isReportSelectionMode: val, selectedMessagesForReport: [] }),
+    toggleMessageForReport: (messageId) =>
+        set((state) => {
+            const current = state.selectedMessagesForReport;
+            const updated = current.includes(messageId)
+                ? current.filter((id) => id !== messageId)
+                : [...current, messageId];
+            return { selectedMessagesForReport: updated };
+        }),
+    clearReportSelection: () => set({ isReportSelectionMode: false, selectedMessagesForReport: [] }),
+
+    setUnreadNotifsCount: (count) => set({ unreadNotifsCount: count }),
+    incrementUnreadNotifsCount: () => set((state) => ({ unreadNotifsCount: state.unreadNotifsCount + 1 })),
 }));

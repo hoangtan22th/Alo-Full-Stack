@@ -10,6 +10,7 @@ export interface User {
   fullName: string;
   phoneNumber?: string;
   avatar?: string;
+  coverImage?: string;
   isOnline: boolean;
   isBanned: boolean;
   lastActive: string;

@@ -643,7 +643,57 @@ export const getMyGroups = async (
       return new Date(g.lastMessageAt) > new Date(clearedAt);
     });
 
-    res.status(200).json({ data: filteredGroups });
+    const conversationIds = filteredGroups.map((g) => g._id.toString());
+    const MESSAGE_SERVICE_URL = process.env.MESSAGE_SERVICE_URL || 'http://localhost:8083/api/v1/messages';
+    const baseMessageUrl = MESSAGE_SERVICE_URL.endsWith('/api/v1/messages') ? MESSAGE_SERVICE_URL : `${MESSAGE_SERVICE_URL}/api/v1/messages`;
+    
+    let lastMessagesMap: Record<string, any> = {};
+    if (conversationIds.length > 0) {
+      try {
+        const response = await fetch(`${baseMessageUrl}/last-messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-User-Id": currentUserId,
+            "Authorization": req.headers.authorization || "",
+          },
+          body: JSON.stringify({ conversationIds }),
+        });
+        if (response.ok) {
+          const resJson = await response.json();
+          lastMessagesMap = resJson.data || {};
+        }
+      } catch (fetchErr) {
+        console.error("[getMyGroups] Failed to fetch last messages from message-service:", fetchErr);
+      }
+    }
+
+    const enrichedGroups = filteredGroups.map((g) => {
+      const gObj = g.toObject() as any;
+      const lastMsg = lastMessagesMap[g._id.toString()];
+      if (lastMsg) {
+        gObj.lastMessage = lastMsg._id;
+        gObj.lastMessageAt = lastMsg.createdAt;
+        
+        if (lastMsg.isRevoked) {
+          gObj.lastMessageContent = "Tin nhắn đã được thu hồi";
+        } else {
+          if (lastMsg.type === "image") {
+            gObj.lastMessageContent = "[Hình ảnh]";
+          } else if (lastMsg.type === "file") {
+            gObj.lastMessageContent = "[Tệp tin]";
+          } else {
+            gObj.lastMessageContent = lastMsg.content || "";
+          }
+        }
+      } else {
+        gObj.lastMessage = null;
+        gObj.lastMessageContent = "Chưa có tin nhắn";
+      }
+      return gObj;
+    });
+
+    res.status(200).json({ data: enrichedGroups });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

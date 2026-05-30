@@ -1,7 +1,12 @@
 import "../polyfill";
 import { View, ActivityIndicator, DeviceEventEmitter } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { Stack, useRouter, useSegments, useLocalSearchParams } from "expo-router";
+import {
+  Stack,
+  useRouter,
+  useSegments,
+  useLocalSearchParams,
+} from "expo-router";
 import { useEffect, useState } from "react";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import { SocketProvider } from "../contexts/SocketContext";
@@ -9,7 +14,10 @@ import { CallProvider } from "../contexts/CallContext";
 import AppLockWrapper from "./components/AppLockWrapper";
 import InAppNotification from "../components/ui/InAppNotification";
 import "../global.css";
-import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
+import {
+  configureReanimatedLogger,
+  ReanimatedLogLevel,
+} from "react-native-reanimated";
 
 configureReanimatedLogger({ strict: false, level: ReanimatedLogLevel.error });
 
@@ -58,16 +66,13 @@ function RootLayoutNav() {
         // Kiểm tra nếu là thông báo bị mời ra khỏi nhóm
         if (data.type === "REMOVED") {
           const groupId = data.data?.groupId;
-          const currentPathId = segments[1];
+          const currentPathId = (segments as string[])[1];
           const queryId = searchParams.id;
 
           // Nếu đang ở màn hình chat của nhóm đó hoặc màn hình info của nhóm đó
-          // ['chat', 'id'] hoặc ['chat', 'info'] với ?id=...
+          // ['chat', 'id'] hoặc ['chat', 'info']
           const isAtChat = segments[0] === "chat" && currentPathId === groupId;
-          const isAtInfo =
-            segments[0] === "chat" &&
-            currentPathId === "info" &&
-            queryId === groupId;
+          const isAtInfo = segments[0] === "chat" && currentPathId === "info";
 
           if (isAtChat || isAtInfo) {
             console.log(
@@ -115,6 +120,9 @@ function RootLayoutNav() {
         <Stack.Screen name="register" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="chat/[id]" />
+        <Stack.Screen name="chat/info" />
+        <Stack.Screen name="chat/media" />
+        <Stack.Screen name="chat/forward" />
         <Stack.Screen name="groups/create-group" />
       </Stack>
 

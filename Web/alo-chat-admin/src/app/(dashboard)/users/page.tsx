@@ -78,22 +78,22 @@ export default function UserManagementPage() {
     if (currentStatus) {
       confirm({
         title: "Unban User",
-        description:
+        message:
           "Are you sure you want to unban this user? They will be able to log in again.",
         confirmText: "Unban User",
         cancelText: "Cancel",
-        type: "info",
+        destructive: false,
         onConfirm: () => unbanUser(id),
       });
       return;
     }
     confirm({
       title: "Ban User",
-      description:
+      message:
         "Are you sure you want to ban this user? They will not be able to log in anymore.",
       confirmText: "Ban User",
       cancelText: "Cancel",
-      type: "danger",
+      destructive: true,
       onConfirm: () => banUser(id),
     });
   };

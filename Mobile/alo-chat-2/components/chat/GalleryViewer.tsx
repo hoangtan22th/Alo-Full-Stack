@@ -7,8 +7,9 @@ import {
   View,
   FlatList,
   Modal,
+  Alert,
 } from "react-native";
-import { XMarkIcon } from "react-native-heroicons/outline";
+import { XMarkIcon, ArrowDownTrayIcon, ArrowUturnLeftIcon, TrashIcon } from "react-native-heroicons/outline";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
@@ -23,12 +24,15 @@ import {
   GestureDetector,
 } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { MessageDTO } from "../../services/messageService";
+import { MessageDTO, messageService } from "../../services/messageService";
+import { useAuth } from "../../contexts/AuthContext";
+import { Paths, File } from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 const { width: windowWidth, height: windowHeight } = Dimensions.get("window");
 
 interface GalleryViewerProps {
-  images: MessageDTO[];
+  images: any[]; // Allow synthetic album items with parentMessageId, etc.
   initialIndex: number;
   onClose: () => void;
   onIndexChange: (index: number) => void;
@@ -41,6 +45,9 @@ export const GalleryViewer = ({
   onIndexChange,
 }: GalleryViewerProps) => {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const currentUserId = user?.id || user?._id || user?.userId || null;
+
   const pagerX = useSharedValue(-initialIndex * windowWidth);
   const viewerIndexRef = useSharedValue(initialIndex);
   const [localIndex, setLocalIndex] = useState(initialIndex);
@@ -57,6 +64,71 @@ export const GalleryViewer = ({
       }, 50);
     }
   }, [localIndex]);
+
+  const currentImg = images[localIndex];
+  const isMine = currentImg?.senderId === currentUserId;
+  const isAlbumItem = currentImg && currentImg.parentMessageId !== undefined && currentImg.albumIndex !== undefined;
+
+  const handleDownload = async () => {
+    if (!currentImg?.content) return;
+    try {
+      const filename = `image_${Date.now()}.jpg`;
+      const destination = new File(Paths.cache, filename);
+      const downloadedFile = await File.downloadFileAsync(currentImg.content, destination, {
+        idempotent: true,
+      });
+      await Sharing.shareAsync(downloadedFile.uri);
+    } catch (err) {
+      console.error("Lỗi tải ảnh:", err);
+      Alert.alert("Lỗi", "Không thể tải ảnh xuống.");
+    }
+  };
+
+  const handleRevoke = async () => {
+    if (!isAlbumItem) {
+      Alert.alert("Lỗi", "Không thể thu hồi ảnh này.");
+      return;
+    }
+    Alert.alert("Thu hồi", "Bạn có chắc chắn muốn thu hồi ảnh này khỏi album?", [
+      { text: "Hủy", style: "cancel" },
+      {
+        text: "Thu hồi",
+        style: "destructive",
+        onPress: async () => {
+          const ok = await messageService.revokeImageInGroup(currentImg.parentMessageId, currentImg.albumIndex);
+          if (ok) {
+            Alert.alert("Thành công", "Đã thu hồi ảnh.");
+            onClose();
+          } else {
+            Alert.alert("Lỗi", "Không thể thu hồi ảnh.");
+          }
+        }
+      }
+    ]);
+  };
+
+  const handleDelete = async () => {
+    if (!isAlbumItem) {
+      Alert.alert("Lỗi", "Không thể xóa ảnh này.");
+      return;
+    }
+    Alert.alert("Xóa ảnh", "Bạn có chắc chắn muốn xóa ảnh này ở phía bạn?", [
+      { text: "Hủy", style: "cancel" },
+      {
+        text: "Xóa",
+        style: "destructive",
+        onPress: async () => {
+          const ok = await messageService.deleteImageInGroupForMe(currentImg.parentMessageId, currentImg.albumIndex);
+          if (ok) {
+            Alert.alert("Thành công", "Đã xóa ảnh.");
+            onClose();
+          } else {
+            Alert.alert("Lỗi", "Không thể xóa ảnh.");
+          }
+        }
+      }
+    ]);
+  };
 
   const panGesture = Gesture.Pan()
     .onUpdate((event) => {
@@ -97,12 +169,40 @@ export const GalleryViewer = ({
         <Text className="text-white font-bold text-lg">
           {localIndex + 1} / {images.length}
         </Text>
-        <TouchableOpacity
-          className="p-2 bg-black/50 rounded-full"
-          onPress={onClose}
-        >
-          <XMarkIcon size={28} color="white" />
-        </TouchableOpacity>
+
+        <View className="flex-row items-center gap-4">
+          <TouchableOpacity
+            className="p-2 bg-black/50 rounded-full"
+            onPress={handleDownload}
+          >
+            <ArrowDownTrayIcon size={24} color="white" />
+          </TouchableOpacity>
+
+          {isAlbumItem && isMine && (
+            <TouchableOpacity
+              className="p-2 bg-black/50 rounded-full"
+              onPress={handleRevoke}
+            >
+              <ArrowUturnLeftIcon size={24} color="white" />
+            </TouchableOpacity>
+          )}
+
+          {isAlbumItem && (
+            <TouchableOpacity
+              className="p-2 bg-black/50 rounded-full"
+              onPress={handleDelete}
+            >
+              <TrashIcon size={24} color="red" />
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            className="p-2 bg-black/50 rounded-full"
+            onPress={onClose}
+          >
+            <XMarkIcon size={28} color="white" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <GestureDetector gesture={panGesture}>

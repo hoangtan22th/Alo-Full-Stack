@@ -125,6 +125,7 @@ export default function NotesManagementScreen() {
           const success = await noteService.deleteNote(noteId);
           if (success) {
             setNotes((prev) => prev.filter((n) => n._id !== noteId));
+            Alert.alert("Thành công", "Ghi chú đã được xóa.");
           } else {
             Alert.alert("Lỗi", "Không thể xóa ghi chú.");
           }

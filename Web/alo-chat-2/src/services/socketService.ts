@@ -1,24 +1,43 @@
 import { io, Socket } from "socket.io-client";
 
-const SOCKET_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL ||
-  process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") ||
-  "http://localhost:8888";
+const getSocketUrl = () => {
+  if (typeof window !== "undefined") {
+    return `http://${window.location.hostname}:8888`;
+  }
+  return (
+    process.env.NEXT_PUBLIC_SOCKET_URL ||
+    process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") ||
+    "http://localhost:8888"
+  );
+};
+const SOCKET_URL = getSocketUrl();
 
 class SocketService {
   private socket: Socket | null = null;
   private listeners: Map<string, Set<(data: any) => void>> = new Map();
   private attachedEvents: Set<string> = new Set();
+  private activePostRooms: Set<string> = new Set();
 
   connect() {
-    if (this.socket) return;
-
     const token =
       typeof window !== "undefined"
         ? localStorage.getItem("accessToken")
         : null;
 
-    console.log("🔌 [Socket] Connecting...");
+    if (this.socket) {
+      // Nếu token thay đổi, cập nhật token mới và kết nối lại
+      if (this.socket.auth && (this.socket.auth as any).token !== token) {
+        console.log("🔄 [Socket] Token changed, reconnecting with new token...");
+        this.socket.auth = { token };
+        this.socket.disconnect().connect();
+      } else if (!this.socket.connected) {
+        console.log("🔌 [Socket] Already initialized but disconnected, connecting...");
+        this.socket.connect();
+      }
+      return;
+    }
+
+    console.log("🔌 [Socket] Connecting for the first time...");
 
     this.socket = io(SOCKET_URL, {
       auth: { token },
@@ -34,6 +53,12 @@ class SocketService {
       // Nhưng vì chúng ta dùng wrapper, chúng ta cần đảm bảo wrapper đã được gán
       this.listeners.forEach((_, event) => {
         this.attachSocketWrapper(event);
+      });
+
+      // Auto re-join active post rooms
+      this.activePostRooms.forEach((postId) => {
+        console.log(`[Socket] Auto re-joining post room post_${postId}`);
+        this.socket?.emit("joinPost", postId);
       });
     });
 
@@ -344,6 +369,83 @@ class SocketService {
     callback: (data: { title: string; conversationId: string }) => void,
   ) {
     return this.subscribe("REMINDER_DUE", callback);
+  }
+
+  // --- Social Post & Story Real-time ---
+  joinPost(postId: string) {
+    this.activePostRooms.add(postId);
+    if (this.socket?.connected) {
+      this.socket.emit("joinPost", postId);
+    }
+  }
+
+  leavePost(postId: string) {
+    this.activePostRooms.delete(postId);
+    if (this.socket?.connected) {
+      this.socket.emit("leavePost", postId);
+    }
+  }
+
+  emitPostInteraction(postId: string, eventType: string, payload: any) {
+    if (this.socket?.connected) {
+      this.socket.emit("postInteraction", { postId, eventType, payload });
+    }
+  }
+
+  onPostInteraction(callback: (data: { actorId: string; postId: string; eventType: string; payload: any }) => void) {
+    return this.subscribe("POST_INTERACTION", callback);
+  }
+
+  emitNewPost(friendIds: string[], post: any) {
+    if (this.socket?.connected) {
+      this.socket.emit("EMIT_NEW_POST", { friendIds, post });
+    }
+  }
+
+  onNewPostReceived(callback: (post: any) => void) {
+    return this.subscribe("NEW_POST_RECEIVED", callback);
+  }
+
+  emitPostDeleted(friendIds: string[], postId: string) {
+    if (this.socket?.connected) {
+      this.socket.emit("EMIT_POST_DELETED", { friendIds, postId });
+    }
+  }
+
+  onPostDeletedReceived(callback: (data: { postId: string }) => void) {
+    return this.subscribe("POST_DELETED_RECEIVED", callback);
+  }
+
+  emitNewStory(friendIds: string[], story: any) {
+    if (this.socket?.connected) {
+      this.socket.emit("EMIT_NEW_STORY", { friendIds, story });
+    }
+  }
+
+  onNewStoryReceived(callback: (story: any) => void) {
+    return this.subscribe("NEW_STORY_RECEIVED", callback);
+  }
+
+  emitStoryDeleted(friendIds: string[], storyId: string) {
+    if (this.socket?.connected) {
+      this.socket.emit("EMIT_STORY_DELETED", { friendIds, storyId });
+    }
+  }
+
+  onStoryDeletedReceived(callback: (data: { storyId: string }) => void) {
+    return this.subscribe("STORY_DELETED_RECEIVED", callback);
+  }
+
+  onNewNotification(callback: (notification: any) => void) {
+    return this.subscribe("NEW_NOTIFICATION", callback);
+  }
+
+  onStoryViewed(callback: (data: { storyId: string; viewerId: string; viewers: any[]; viewCount: number }) => void) {
+    return this.subscribe("STORY_VIEWED", callback);
+  }
+
+  onStoryReacted(callback: (data: { storyId: string; reactions: any[]; reactionCount: number }) => void) {
+    return this.subscribe("STORY_REACTED", callback);
   }
 }
 

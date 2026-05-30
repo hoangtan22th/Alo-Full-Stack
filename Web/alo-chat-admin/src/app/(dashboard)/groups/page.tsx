@@ -76,22 +76,22 @@ export default function GroupManagementPage() {
     if (isRestricted) {
       confirm({
         title: "Unban Group",
-        description:
+        message:
           "Are you sure you want to unban this group? Members will be able to access it again.",
         confirmText: "Unban Group",
         cancelText: "Cancel",
-        type: "info",
+        destructive: false,
         onConfirm: () => toggleBanGroup(id, false),
       });
       return;
     }
     confirm({
       title: "Ban Group",
-      description:
+      message:
         "Are you sure you want to ban this group? It will no longer be active.",
       confirmText: "Ban Group",
       cancelText: "Cancel",
-      type: "danger",
+      destructive: true,
       onConfirm: () => toggleBanGroup(id, true),
     });
   };
@@ -99,10 +99,10 @@ export default function GroupManagementPage() {
   const handleDisbandGroup = (id: string) => {
     confirm({
       title: "Giải tán nhóm",
-      description: "Bạn có chắc chắn muốn giải tán nhóm này không? Thao tác này sẽ giải tán nhóm vĩnh viễn và không thể khôi phục.",
+      message: "Bạn có chắc chắn muốn giải tán nhóm này không? Thao tác này sẽ giải tán nhóm vĩnh viễn và không thể khôi phục.",
       confirmText: "Giải tán",
       cancelText: "Hủy",
-      type: "danger",
+      destructive: true,
       onConfirm: () => disbandGroup(id),
     });
   };

@@ -1,8 +1,14 @@
 import axios, { type InternalAxiosRequestConfig } from "axios";
 import { useAuthStore } from "../store/useAuthStore";
 
-const BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888/api/v1";
+const getBaseUrl = () => {
+  if (typeof window !== "undefined") {
+    return `http://${window.location.hostname}:8888/api/v1`;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888/api/v1";
+};
+
+const BASE_URL = getBaseUrl();
 
 interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean;
@@ -13,7 +19,7 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 30000,
+  timeout: 60000,
 });
 
 // Biến cờ và hàng đợi xử lý refresh y hệt Mobile

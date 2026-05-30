@@ -60,7 +60,7 @@ export function ActivityDonutCard({ data }: ActivityDonutCardProps) {
               {data.length === 0 && <Cell fill="var(--color-surface-container-high)" />}
             </Pie>
             <Tooltip
-              formatter={(value: number, name: string) => [value, REASON_LABELS[name] || name]}
+              formatter={(value: any, name: any) => [value, REASON_LABELS[name] || name]}
               contentStyle={{
                 backgroundColor: "var(--color-surface-container-lowest)",
                 borderRadius: "12px",
