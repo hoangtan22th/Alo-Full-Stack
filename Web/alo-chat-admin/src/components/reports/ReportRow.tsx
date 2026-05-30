@@ -38,7 +38,7 @@ export function ReportRow({ report, onReview }: ReportRowProps) {
     locale: vi,
   });
 
-  const getMediaUrl = (url: string | undefined): string => {
+  const getMediaUrl = (url: string | null | undefined): string => {
     if (!url) return "";
     if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) return url;
     const backendHost = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8888";
@@ -125,10 +125,10 @@ export function ReportRow({ report, onReview }: ReportRowProps) {
             <span className="text-[10px] text-on-surface-variant italic opacity-40">Không có mô tả</span>
           )}
           <div className="flex gap-2.5">
-            {report.messageIds?.length > 0 && (
+            {report.messageSnapshots && report.messageSnapshots.length > 0 && (
               <div className="flex items-center gap-1 text-[9px] font-black uppercase text-primary tracking-tighter">
                 <ChatBubbleLeftEllipsisIcon className="w-2.5 h-2.5" />
-                {report.messageIds.length} Msgs
+                {report.messageSnapshots.length} Msgs
               </div>
             )}
             {report.imageUrls?.length > 0 && (

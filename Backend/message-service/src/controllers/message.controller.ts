@@ -659,12 +659,11 @@ export async function sendMessage(
  */
 const SENSITIVE_KEYWORDS_REGEX = new RegExp(
   "(" +
-  "otp|mã\\s*otp|mật\\s*khẩu|mat\\s*khau|cung\\s*cấp\\s*otp|gửi\\s*otp|trúng\\s*thưởng|nhận\\s*thưởng|trung\\s*thuong|nhan\\s*thuong|" +
-  "chuyển\\s*tiền\\s*gấp|chuyen\\s*tien\\s*gap|phạt\\s*nguội|công\\s*an|tòa\\s*án|viện\\s*kiểm\\s*sát|" +
-  "đm|dkm|đéo|lồn|cặc|óc\\s*chó|khốn\\s*nạn|mẹ\\s*kiếp|thằng\\s*chó|con\\s*chó|địt|dit\\s*me|vcl|đờ\\s*mờ|giết|đâm|chém|đánh\\s*chết|" +
-  "khiêu\\s*dâm|khieu\\s*dam|sex|gạ\\s*tình|ga\\s*tinh|chat\\s*sex|clip\\s*sex|phim\\s*heo|phim\\s*người\\s*lớn|phim\\s*18\\+|18\\s*cộng|" +
-  "bán\\s*dâm|ban\\s*dam|gái\\s*gọi|gai\\s*goi|phim\\s*sex|clip\\s*nóng|việc\\s*nhẹ\\s*lương\\s*cao|kiếm\\s*tiền\\s*online|" +
-  "nhà\\s*cái|cá\\s*cược|ca\\s*cuoc|đánh\\s*bạc|danh\\s*bac|tuyển\\s*dụng\\s*gấp|tuyen\\s*dung\\s*gap" +
+  "otp|mã\\s*otp|ma\\s*otp|cung\\s*cấp\\s*otp|cung\\s*cap\\s*otp|gửi\\s*otp|gui\\s*otp|nhập\\s*otp|nhap\\s*otp|" +
+  "trúng\\s*thưởng|nhận\\s*thưởng|trung\\s*thuong|nhan\\s*thuong|quà\\s*miễn\\s*phí|qua\\s*mien\\s*phi|quà\\s*tri\\s*ân|qua\\s*tri\\s*an|" +
+  "chuyển\\s*tiền\\s*gấp|chuyen\\s*tien\\s*gap|mượn\\s*tiền\\s*gấp|muon\\s*tien\\s*gap|nạp\\s*thẻ\\s*cào|nap\\s*the\\s*cao|" +
+  "phạt\\s*nguội|phat\\s*nguoi|công\\s*an|cong\\s*an|tòa\\s*án|toa\\s*an|viện\\s*kiểm\\s*sát|vien\\s*kiem\\s*sat|cục\\s*thuế|cuc\\s*thue|" +
+  "việc\\s*nhẹ\\s*lương\\s*cao|viec\\s*nhe\\s*luong\\s*cao|kiếm\\s*tiền\\s*online|kiem\\s*tien\\s*online|tuyển\\s*dụng\\s*gấp|tuyen\\s*dung\\s*gap|tuyển\\s*cộng\\s*tác\\s*viên|tuyen\\s*cong\\s*tac\\s*vien" +
   ")",
   "i"
 );

@@ -64,6 +64,32 @@ export default function ChatInfoScreen() {
   const { user } = useAuth();
   const currentUserId = user?.id || user?._id || user?.userId || null;
 
+  const flattenMedia = useCallback((msgs: MessageDTO[]) => {
+    const list: any[] = [];
+    msgs.forEach((m) => {
+      if (m.isRevoked) return;
+      if (m.metadata?.imageGroup) {
+        m.metadata.imageGroup.forEach((img: any, idx: number) => {
+          if (img.isRevoked) return;
+          if (img.deletedByUsers?.includes(currentUserId)) return;
+          list.push({
+            _id: `${m._id}_img_${idx}`,
+            content: img.url,
+            type: "image",
+            createdAt: m.createdAt,
+            senderId: m.senderId,
+            parentMessageId: m._id,
+            albumIndex: idx,
+            isRevoked: img.isRevoked,
+          });
+        });
+      } else {
+        list.push(m);
+      }
+    });
+    return list;
+  }, [currentUserId]);
+
   const isGroup = paramsIsGroup === "true";
 
   const [members, setMembers] = useState<any[]>([]);
@@ -76,7 +102,7 @@ export default function ChatInfoScreen() {
   );
   const [isLinkEnabled, setIsLinkEnabled] = useState(false);
   const [isHistoryVisible, setIsHistoryVisible] = useState(true);
-  const [mediaList, setMediaList] = useState<MessageDTO[]>([]);
+  const [mediaList, setMediaList] = useState<any[]>([]);
   const [fileList, setFileList] = useState<MessageDTO[]>([]);
   const [mediaCount, setMediaCount] = useState(0);
   const [fileCount, setFileCount] = useState(0);
@@ -249,8 +275,9 @@ export default function ChatInfoScreen() {
         return timeB - timeA;
       });
 
-      setMediaList(sortedMedia);
-      setMediaCount(media.length);
+      const flattenedMedia = flattenMedia(sortedMedia);
+      setMediaList(flattenedMedia);
+      setMediaCount(flattenedMedia.length);
 
       const { messages: files } = await messageService.getMessageHistory(
         id as string,
@@ -293,8 +320,11 @@ export default function ChatInfoScreen() {
       if (newMsg.conversationId === id && !newMsg.isRevoked) {
         if (newMsg.type === "image") {
           setMediaList((prev) => {
-            if (prev.find((m) => m._id === newMsg._id)) return prev;
-            const updated = [newMsg, ...prev];
+            const filtered = prev.filter(item => 
+              item.parentMessageId ? item.parentMessageId !== newMsg._id : item._id !== newMsg._id
+            );
+            const flattenedNew = flattenMedia([newMsg]);
+            const updated = [...flattenedNew, ...filtered];
             // Sắp xếp lại để mục mới nhất ở đầu
             return updated
               .sort((a, b) =>
@@ -318,7 +348,26 @@ export default function ChatInfoScreen() {
       }
     };
 
+    const handleMessageUpdated = (data: any) => {
+      const updatedMsg = data.message || data;
+      if (updatedMsg && updatedMsg.conversationId === id) {
+        if (updatedMsg.type === "image") {
+          setMediaList((prev) => {
+            const filtered = prev.filter(item => 
+              item.parentMessageId ? item.parentMessageId !== updatedMsg._id : item._id !== updatedMsg._id
+            );
+            const flattenedNew = flattenMedia([updatedMsg]);
+            const updated = [...flattenedNew, ...filtered];
+            return updated.sort((a, b) =>
+              (b.createdAt || "").localeCompare(a.createdAt || ""),
+            ).slice(0, 100);
+          });
+        }
+      }
+    };
+
     socket.on("message-received", handleMessageReceived);
+    socket.on("message-updated", handleMessageUpdated);
 
     // Join room để nhận thông báo realtime cho group này
     socket.emit("joinRoom", id);
@@ -354,6 +403,7 @@ export default function ChatInfoScreen() {
 
     return () => {
       socket.off("message-received", handleMessageReceived);
+      socket.off("message-updated", handleMessageUpdated);
       socket.off("GROUP_UPDATED", handleUpdate);
       socket.off("CONVERSATION_UPDATED", handleUpdate);
       socket.off("CONVERSATION_REMOVED", handleConversationRemoved);

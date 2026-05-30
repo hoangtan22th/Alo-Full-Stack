@@ -3,6 +3,9 @@ import Conversation from "../models/Conversation";
 import { uploadImageToS3, deleteImageFromS3 } from "../services/s3Service";
 import rabbitMQProducer from "../services/rabbitMQProducer";
 import groupService from "../services/groupService";
+import { redisClient } from "../config/redis";
+import UserDailyStat from "../models/UserDailyStat";
+import { findMostFrequent } from "../utils/stats.util";
 
 // Helper lấy danh sách bạn bè
 async function getFriendIds(
@@ -1724,7 +1727,22 @@ export const getGroupStatsAdmin = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
+  const cacheKey = "admin:stats:groups";
   try {
+    // 1. Check Redis Cache
+    try {
+      const cachedData = await redisClient.get(cacheKey);
+      if (cachedData) {
+        res.status(200).json({
+          data: JSON.parse(cachedData),
+        });
+        return;
+      }
+    } catch (cacheError) {
+      console.error("[getGroupStatsAdmin] Redis Cache Get Error:", cacheError);
+    }
+
+    // 2. Cache Miss - Query DB
     // 1. Tổng số nhóm
     const totalGroups = await Conversation.countDocuments({ isGroup: true });
 
@@ -1769,14 +1787,105 @@ export const getGroupStatsAdmin = async (
     const avgMembers =
       avgResult.length > 0 ? Math.round(avgResult[0].avgMembers) : 0;
 
+    const responseData = {
+      totalGroups,
+      createdToday,
+      createdYesterday,
+      createdTodayTrend,
+      avgMembers,
+    };
+
+    // 3. Cache in Redis for 300s (5 minutes)
+    try {
+      await redisClient.set(cacheKey, JSON.stringify(responseData), {
+        EX: 300,
+      });
+    } catch (cacheError) {
+      console.error("[getGroupStatsAdmin] Redis Cache Set Error:", cacheError);
+    }
+
     res.status(200).json({
-      data: {
-        totalGroups,
-        createdToday,
-        createdYesterday,
-        createdTodayTrend,
-        avgMembers,
+      data: responseData,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// 23. User: Lấy thống kê hoạt động cả năm
+export const getUserYearlyStats = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { userId, year } = req.query;
+
+    if (!userId || !year) {
+      res.status(400).json({ error: "Missing required parameters: userId and year" });
+      return;
+    }
+
+    const requestedYear = parseInt(year as string, 10);
+    if (isNaN(requestedYear)) {
+      res.status(400).json({ error: "Invalid parameter: year must be a number" });
+      return;
+    }
+
+    const startOfYear = new Date(requestedYear, 0, 1, 0, 0, 0, 0);
+    const endOfYear = new Date(requestedYear, 11, 31, 23, 59, 59, 999);
+
+    const stats = await UserDailyStat.aggregate([
+      {
+        $match: {
+          userId: userId as string,
+          date: { $gte: startOfYear, $lte: endOfYear },
+        },
       },
+      {
+        $group: {
+          _id: null,
+          totalMessagesSent: { $sum: "$messagesSent" },
+          totalGroupsJoined: { $sum: "$groupsJoined" },
+          totalCallMinutes: { $sum: "$totalCallMinutes" },
+          newFriendsAdded: { $sum: "$newFriendsAdded" },
+          dailyTopPartners: { $push: "$topChatPartnerId" },
+          dailyActiveHours: { $push: "$mostActiveHour" },
+        },
+      },
+    ]);
+
+    let responseData;
+    if (stats.length > 0) {
+      const data = stats[0];
+      const yearlyTopChatPartnerId = findMostFrequent<string>(data.dailyTopPartners);
+      const yearlyMostActiveHour = findMostFrequent<number>(data.dailyActiveHours);
+
+      responseData = {
+        userId,
+        year: requestedYear,
+        totalMessagesSent: data.totalMessagesSent,
+        totalGroupsJoined: data.totalGroupsJoined,
+        totalCallMinutes: data.totalCallMinutes,
+        newFriendsAdded: data.newFriendsAdded,
+        yearlyTopChatPartnerId,
+        yearlyMostActiveHour,
+      };
+    } else {
+      responseData = {
+        userId,
+        year: requestedYear,
+        totalMessagesSent: 0,
+        totalGroupsJoined: 0,
+        totalCallMinutes: 0,
+        newFriendsAdded: 0,
+        yearlyTopChatPartnerId: null,
+        yearlyMostActiveHour: null,
+      };
+    }
+
+    res.status(200).json({
+      status: 200,
+      data: responseData,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

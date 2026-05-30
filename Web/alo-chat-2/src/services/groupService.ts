@@ -477,4 +477,15 @@ export const groupService = {
       throw error;
     }
   },
+
+  getUserYearlyStats: async (userId: string, year: number) => {
+    try {
+      return await api.get<any, any>(`/groups/stats/yearly`, {
+        params: { userId, year },
+      });
+    } catch (error) {
+      console.error("Lỗi lấy thống kê năm của người dùng:", error);
+      throw error;
+    }
+  },
 };

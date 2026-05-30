@@ -63,6 +63,8 @@ import PollMessagePreview from "@/components/chat/PollMessagePreview";
 import PollDetailsModal from "@/components/ui/group/PollDetailsModal";
 import FileMessageBubble from "@/components/chat/FileMessageBubble";
 import TxtFileViewerModal from "@/components/chat/TxtFileViewerModal";
+import { parseReminderFromText } from "@/utils/reminderParser";
+import ReminderModal from "@/components/ui/group/ReminderModal";
 import { UpdateDefaultEmojiModal } from "@/components/ui/UpdateDefaultEmojiModal";
 
 /* ─────────────────────────────────────────
@@ -89,9 +91,16 @@ const getMediaUrl = (url: string | undefined): string => {
   ) {
     return url;
   }
-  const backendHost =
-    process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") ||
-    "http://localhost:8888";
+  const getBackendHost = () => {
+    if (typeof window !== "undefined") {
+      return `http://${window.location.hostname}:8888`;
+    }
+    return (
+      process.env.NEXT_PUBLIC_API_URL?.replace("/api/v1", "") ||
+      "http://localhost:8888"
+    );
+  };
+  const backendHost = getBackendHost();
   return `${backendHost}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
@@ -176,6 +185,12 @@ export default function ChatPage() {
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
   const [showPinnedModal, setShowPinnedModal] = useState(false);
   const [activePollId, setActivePollId] = useState<string | null>(null);
+  const [quickReminderPreset, setQuickReminderPreset] = useState<{
+    title: string;
+    date: string;
+    time: string;
+  } | null>(null);
+  const [showQuickReminderModal, setShowQuickReminderModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveOptions, setLeaveOptions] = useState({
@@ -201,6 +216,16 @@ export default function ChatPage() {
   const [mediaMessages, setMediaMessages] = useState<MessageDTO[]>([]);
   const [messageText, setMessageText] = useState("");
   const [conversationInfo, setConversationInfo] = useState<any>(null);
+  const latestReminderMessageId = useMemo(() => {
+    if (!messages || messages.length === 0 || !conversationInfo?.isGroup) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.type === "text" && !m.isRevoked && parseReminderFromText(m.content) !== null) {
+        return m._id;
+      }
+    }
+    return null;
+  }, [messages, conversationInfo?.isGroup]);
   const [previewingTxtFile, setPreviewingTxtFile] = useState<{ fileName: string; content: string } | null>(null);
 
   // Group Link Info Cache
@@ -1171,7 +1196,7 @@ export default function ChatPage() {
           console.log("✅ [Realtime] This group was BANNED/UNBANNED, refreshing info...");
           // Cập nhật state cục bộ ngay lập tức nếu có status trong data
           if (data.status) {
-            setConversationInfo(prev => prev ? { ...prev, status: data.status } : null);
+            setConversationInfo((prev: any) => prev ? { ...prev, status: data.status } : null);
           }
           fetchConversationInfo();
         }
@@ -1182,7 +1207,7 @@ export default function ChatPage() {
         console.log("📢 [Realtime] GROUP_DISBANDED event received:", data);
         if (String(data.groupId || data.conversationId) === String(activeConvoId)) {
           // Cập nhật state cục bộ để UI hiện banner "đã giải tán" ngay lập tức
-          setConversationInfo(prev => prev ? { ...prev, status: 'DISBANDED' } : null);
+          setConversationInfo((prev: any) => prev ? { ...prev, status: 'DISBANDED' } : null);
           toast.error(data.message || "Nhóm này đã bị giải tán do vi phạm.");
           
           // Đợi 2 giây để người dùng kịp thấy banner rồi mới redirect
@@ -2235,7 +2260,7 @@ export default function ChatPage() {
                       ? `${conversationInfo?.members?.length ?? ""} thành viên`
                       : isOnline
                         ? "Đang hoạt động"
-                        : getOfflineText(userStatus?.last_active)}
+                        : getOfflineText(userStatus?.lastActive)}
                   </p>
                 </div>
               </div>
@@ -3178,11 +3203,42 @@ export default function ChatPage() {
                                           );
                                         }
 
+                                        const parsed = conversationInfo?.isGroup ? parseReminderFromText(msg.content) : null;
+
                                         return (
-                                          <div
-                                            className={`px-2 py-1 text-[15px] font-medium leading-relaxed text-gray-900 break-words whitespace-pre-wrap text-justify`}
-                                          >
-                                            {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
+                                          <div className="flex flex-col">
+                                            <div
+                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap text-justify"
+                                            >
+                                              {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
+                                            </div>
+                                            {parsed && msg._id === latestReminderMessageId && (
+                                              <div 
+                                                className={`mt-2 pt-2 border-t-2 w-full flex justify-center
+                                                  ${isMine ? "border-blue-200" : "border-gray-300"}
+                                                `}
+                                              >
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setQuickReminderPreset({
+                                                      title: parsed.title,
+                                                      date: parsed.date,
+                                                      time: parsed.time
+                                                    });
+                                                    setShowQuickReminderModal(true);
+                                                  }}
+                                                  className={`text-[12px] font-black tracking-wide hover:underline transition-all select-none active:opacity-80 py-0.5
+                                                    ${isMine 
+                                                      ? "text-blue-800 hover:text-blue-950" 
+                                                      : "text-blue-800 hover:text-blue-950"
+                                                    }
+                                                  `}
+                                                >
+                                                  Tạo nhắc hẹn
+                                                </button>
+                                              </div>
+                                            )}
                                           </div>
                                         );
                                       })()
@@ -4588,6 +4644,19 @@ export default function ChatPage() {
           onClose={() => setPreviewingTxtFile(null)}
           fileName={previewingTxtFile.fileName}
           content={previewingTxtFile.content}
+        />
+      )}
+      {showQuickReminderModal && quickReminderPreset && (
+        <ReminderModal
+          conversationId={conversationId}
+          initialTitle={quickReminderPreset.title}
+          initialDate={quickReminderPreset.date}
+          initialTime={quickReminderPreset.time}
+          initialShowCreate={true}
+          onClose={() => {
+            setShowQuickReminderModal(false);
+            setQuickReminderPreset(null);
+          }}
         />
       )}
       <ChatEffects type={activeEffect} />

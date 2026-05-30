@@ -24,4 +24,7 @@ public interface ReportClient {
             @RequestHeader("X-Admin-Id") String adminId,
             @RequestBody AdminActionRequestDTO actionRequest
     );
+
+    @org.springframework.web.bind.annotation.GetMapping("/api/v1/admin/reports/count/violations")
+    ApiResponse<Long> countViolations(@org.springframework.web.bind.annotation.RequestParam("targetId") String targetId);
 }

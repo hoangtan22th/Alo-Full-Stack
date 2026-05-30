@@ -319,6 +319,7 @@ export default function CallProvider({ children }: { children: React.ReactNode }
             <LiveKitCallRoom
               roomId={callState.roomId}
               userName={currentUser?.fullName || "Tôi"}
+              userId={String(myId || currentUser?.fullName || "user")}
               isVideoCall={callState.isVideo}
               onLeaveRoom={(duration) => endCall(duration)}
               onUserJoin={handleUserJoined}

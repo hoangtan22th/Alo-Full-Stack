@@ -10,35 +10,35 @@ import GlobalNotificationHandler from "../components/layout/GlobalNotificationHa
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Alo Chat Web",
-  description: "Chat Application",
+    title: "Alo Chat Web",
+    description: "Chat Application",
 };
 
 export default function RootLayout({
-  children,
+    children,
 }: {
-  children: React.ReactNode;
+    children: React.ReactNode;
 }) {
-  return (
-    <html lang="vi" suppressHydrationWarning>
-      <body
-        suppressHydrationWarning
-        className={`${inter.className} min-h-screen text-black bg-white`}
-      >
-        <GoogleOAuthProvider
-          clientId={
-            process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "mock_client_id"
-          }
-        >
-          <AuthProvider>
-            <CallProvider>
-              <GlobalNotificationHandler />
-              <Toaster position="bottom-right" expand={true} richColors />
-              {children}
-            </CallProvider>
-          </AuthProvider>
-        </GoogleOAuthProvider>
-      </body>
-    </html>
-  );
+    return (
+        <html lang="vi" suppressHydrationWarning>
+            <body
+                suppressHydrationWarning
+                className={`${inter.className} min-h-screen text-black bg-white`}
+            >
+                <GoogleOAuthProvider
+                    clientId={
+                        process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "mock_client_id"
+                    }
+                >
+                    <AuthProvider>
+                        <CallProvider>
+                            <GlobalNotificationHandler />
+                            <Toaster position="bottom-right" expand={true} richColors />
+                            {children}
+                        </CallProvider>
+                    </AuthProvider>
+                </GoogleOAuthProvider>
+            </body>
+        </html>
+    );
 }

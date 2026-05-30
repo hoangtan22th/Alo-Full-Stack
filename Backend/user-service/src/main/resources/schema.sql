@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     timezone VARCHAR(255),
     locale VARCHAR(255),
     last_active_at DATETIME,
+    is_online BOOLEAN DEFAULT FALSE,
     account_status VARCHAR(50) DEFAULT 'ACTIVE',
+    warning_count INT DEFAULT 0,
     created_at DATETIME,
     updated_at DATETIME
-);
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

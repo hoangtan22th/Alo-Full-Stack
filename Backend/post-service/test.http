@@ -1,0 +1,111 @@
+### Cấu hình biến môi trường kiểm thử
+@gatewayUrl = http://localhost:8888/api/v1/posts
+@directUrl = http://localhost:8087/api/v1/posts
+@userId = 00000000-0000-0000-0000-000000000001
+@friendId = 00000000-0000-0000-0000-000000000002
+
+### ----------------------------------------------------
+### I. BÀI ĐĂNG (POSTS)
+### ----------------------------------------------------
+
+### 1. Tạo bài đăng mới (Dạng multipart/form-data)
+# Chú ý: Bạn có thể test trực tiếp qua cổng 8087 của service hoặc cổng 8888 của Gateway
+POST {{directUrl}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+X-User-Id: {{userId}}
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="content"
+
+Hôm nay thời tiết thật đẹp! Hello Alo Chat!
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="privacy"
+
+PUBLIC
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### Lưu lại Post ID trả về từ API trên để chạy các test case bên dưới:
+@postId = <Điền_Post_ID_vào_đây>
+
+### 2. Lấy trang chủ Newsfeed (Dòng thời gian chung của mình & bạn bè)
+GET {{directUrl}}/feed?limit=10&skip=0
+X-User-Id: {{userId}}
+
+### 3. Lấy dòng thời gian trang cá nhân của mình
+GET {{directUrl}}/user/{{userId}}?limit=10&skip=0
+X-User-Id: {{userId}}
+
+### 4. Lấy dòng thời gian trang cá nhân của người khác (Bạn bè)
+GET {{directUrl}}/user/{{friendId}}?limit=10&skip=0
+X-User-Id: {{userId}}
+
+### 5. Xem chi tiết bài viết cụ thể
+GET {{directUrl}}/{{postId}}
+X-User-Id: {{userId}}
+
+### 6. Thích / Bỏ thích bài viết
+POST {{directUrl}}/{{postId}}/like
+X-User-Id: {{userId}}
+
+### 7. Sửa bài đăng (Cập nhật nội dung & quyền riêng tư)
+PUT {{directUrl}}/{{postId}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+X-User-Id: {{userId}}
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="content"
+
+Nội dung bài đăng đã được cập nhật thành công!
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="privacy"
+
+FRIENDS_ONLY
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="keepMediaUrls"
+
+[]
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+
+### ----------------------------------------------------
+### II. BÌNH LUẬN (COMMENTS)
+### ----------------------------------------------------
+
+### 1. Viết bình luận gốc (Comment cấp 1)
+POST {{directUrl}}/{{postId}}/comments
+Content-Type: application/json
+X-User-Id: {{userId}}
+
+{
+  "content": "Bài viết tuyệt vời quá bạn ơi!"
+}
+
+### Lưu lại Comment ID trả về để test trả lời comment
+@commentId = <Điền_Comment_ID_vào_đây>
+
+### 2. Trả lời bình luận (Reply - Comment cấp 2)
+POST {{directUrl}}/{{postId}}/comments
+Content-Type: application/json
+X-User-Id: {{friendId}}
+
+{
+  "content": "Cảm ơn bạn nhiều nhé!",
+  "parentId": "{{commentId}}"
+}
+
+### 3. Lấy danh sách bình luận của bài đăng (Phân trang, kèm cấu trúc lồng)
+GET {{directUrl}}/{{postId}}/comments?limit=10&skip=0
+X-User-Id: {{userId}}
+
+### 4. Xóa bình luận
+DELETE {{directUrl}}/comments/{{commentId}}
+X-User-Id: {{userId}}
+
+
+### ----------------------------------------------------
+### III. XÓA BÀI VIẾT
+### ----------------------------------------------------
+
+### 1. Xóa bài đăng
+DELETE {{directUrl}}/{{postId}}
+X-User-Id: {{userId}}

@@ -6,13 +6,49 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { toast } from "sonner";
 import { contactService } from "@/services/contactService";
 import { groupService } from "@/services/groupService";
+import { postService } from "@/services/postService";
+import { userService, UserProfileDTO } from "@/services/userService";
 import { useRouter, usePathname } from "next/navigation";
 
+const userCache: Record<string, UserProfileDTO> = {};
+
+async function getUserProfile(userId: string): Promise<UserProfileDTO | null> {
+  if (userCache[userId]) return userCache[userId]!;
+  try {
+    const profile = await userService.getUserById(userId);
+    if (profile) {
+      userCache[userId] = profile;
+    }
+    return profile;
+  } catch (e) {
+    return null;
+  }
+}
+
 export default function GlobalNotificationHandler() {
-  const { setTyping, typingUsers, friendIds, setFriendIds, setOnlineStatus } = useChatStore();
+  const { 
+    setTyping, 
+    typingUsers, 
+    friendIds, 
+    setFriendIds, 
+    setOnlineStatus,
+    setUnreadNotifsCount,
+    incrementUnreadNotifsCount 
+  } = useChatStore();
   const { user: currentUser } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
+
+  // Fetch unread notifications count when user logged in
+  useEffect(() => {
+    if (currentUser) {
+      postService.getUnreadNotificationsCount()
+        .then((count) => {
+          setUnreadNotifsCount(count);
+        })
+        .catch(console.error);
+    }
+  }, [currentUser, setUnreadNotifsCount]);
 
   // Fetch friend list if not already available in store
   useEffect(() => {
@@ -29,17 +65,20 @@ export default function GlobalNotificationHandler() {
 
   const receiveAudio = useRef<HTMLAudioElement | null>(null);
   const typingAudio = useRef<HTMLAudioElement | null>(null);
+  const notifAudio = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       receiveAudio.current = new Audio("/audio_nhan.MP3");
       typingAudio.current = new Audio("/audio_soan.MP3");
       typingAudio.current.loop = true;
+      notifAudio.current = new Audio("/audio_nhan.MP3");
     }
 
     return () => {
       receiveAudio.current?.pause();
       typingAudio.current?.pause();
+      notifAudio.current?.pause();
     };
   }, []);
 
@@ -241,6 +280,41 @@ export default function GlobalNotificationHandler() {
       setOnlineStatus(data.userId, data.status);
     };
 
+    const onNewNotification = async (notif: any) => {
+      console.log("🚀 [GlobalNotification] Received real-time notification:", notif);
+      incrementUnreadNotifsCount();
+
+      if (notifAudio.current) {
+        notifAudio.current.currentTime = 0;
+        notifAudio.current.play().catch((e) => {
+          console.warn("🔔 [GlobalNotification] Notification sound play blocked:", e);
+        });
+      }
+
+      // Dispatch custom event to notify components to refresh notifications list
+      window.dispatchEvent(new CustomEvent("refresh_notifications"));
+
+      let senderName = "Ai đó";
+      if (notif.senderId) {
+        const profile = await getUserProfile(notif.senderId);
+        if (profile) {
+          senderName = profile.fullName;
+        }
+      }
+
+      toast.info(`${senderName} ${notif.message}`, {
+        duration: 5000,
+        action: {
+          label: "Xem ngay",
+          onClick: () => {
+            if (notif.postId) {
+              router.push(`/feed?postId=${notif.postId}`);
+            }
+          },
+        },
+      });
+    };
+
     socketService.onMessageReceived(onMessage);
     socketService.onTyping(onTyping);
     socketService.onStopTyping(onStopTyping);
@@ -254,6 +328,7 @@ export default function GlobalNotificationHandler() {
     socketService.onUserOnline(onUserOnline);
     socketService.onUserOffline(onUserOffline);
     socketService.onUserStatusResult(onUserStatusResult);
+    const unsubscribeNewNotification = socketService.onNewNotification(onNewNotification);
 
     return () => {
       socketService.removeListener("message-received", onMessage);
@@ -269,8 +344,9 @@ export default function GlobalNotificationHandler() {
       socketService.removeListener("USER_ONLINE", onUserOnline);
       socketService.removeListener("USER_OFFLINE", onUserOffline);
       socketService.removeListener("USER_STATUS_RESULT", onUserStatusResult);
+      unsubscribeNewNotification();
     };
-  }, [currentUser, pathname, router, setTyping]);
+  }, [currentUser, pathname, router, setTyping, incrementUnreadNotifsCount]);
 
   return null;
 }

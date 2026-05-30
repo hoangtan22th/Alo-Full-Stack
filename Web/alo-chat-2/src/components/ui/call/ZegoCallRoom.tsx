@@ -65,105 +65,114 @@ export default function ZegoCallRoom({
     let isMounted = true;
     let zp: any = null;
 
-    const timer = setTimeout(() => {
+    const initZego = async () => {
       if (!isMounted || !containerRef.current) return;
 
-      // Lấy AppID và Secret từ biến môi trường
-      const appID = Number(
-        process.env.NEXT_PUBLIC_ZEGO_APP_ID || (import.meta as any).env?.VITE_ZEGO_APP_ID,
-      );
-      const serverSecret =
-        process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET ||
-        (import.meta as any).env?.VITE_ZEGO_SERVER_SECRET;
+      try {
+        // Fetch credentials dynamically at runtime from our Next.js API route
+        const res = await fetch("/api/zego");
+        if (!res.ok) {
+          throw new Error("Failed to fetch ZEGO config from server");
+        }
+        const config = await res.json();
+        const appID = config.appID;
+        const serverSecret = config.serverSecret;
 
-      if (!appID || !serverSecret) {
-        console.error("Lỗi: Thiếu cấu hình ZegoCloud trong file .env");
-        return;
+        if (!appID || !serverSecret) {
+          console.error("Lỗi: Thiếu cấu hình ZegoCloud trong file .env");
+          return;
+        }
+
+        // Format ID chỉ chứa chữ và số để Zego không bị lỗi kết nối
+        const safeUserId = userId.replace(/[^a-zA-Z0-9_]/g, "") || "user_id";
+        const safeRoomId = roomId.replace(/[^a-zA-Z0-9_]/g, "") || "room_id";
+
+        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
+          appID,
+          serverSecret,
+          safeRoomId,
+          safeUserId,
+          userName,
+        );
+
+        zp = ZegoUIKitPrebuilt.create(kitToken);
+
+        zp.joinRoom({
+          container: containerRef.current,
+          maxUsers: isGroup ? 50 : 2,
+          scenario: {
+            // Tự động chọn kịch bản 1-1 hoặc Nhóm dựa trên prop isGroup
+            mode: ZegoUIKitPrebuilt.GroupCall,
+          },
+          layout: "Auto",
+
+          // ═══ SỬ DỤNG GIAO DIỆN MẶC ĐỊNH ═══
+          showPreJoinView: false, // Vào thẳng phòng không cần chờ
+          showLeaveRoomConfirmDialog: false, // Bấm cúp máy là thoát luôn, không hỏi lại
+
+          // Hiện đầy đủ các nút điều khiển mặc định của Zego
+          turnOnMicrophoneWhenJoining: true,
+          turnOnCameraWhenJoining: isVideoCall,
+          showMyCameraToggleButton: true,
+          showMyMicrophoneToggleButton: true,
+          showAudioVideoSettingsButton: true,
+          showScreenSharingButton: true,
+          showTextChat: false, // Tắt chat của Zego vì đã có Alo Chat
+          showUserList: isGroup,
+
+          // Hiển thị Avatar khi tắt cam
+          showAvatarInAudioMode: true,
+          showNonVideoUser: true,
+          avatarBuilder: (userInfo: any) => {
+            const fallback = `https://ui-avatars.com/api/?background=475569&color=fff&bold=true&name=${encodeURIComponent(userInfo.userName || "?")}`;
+            let url = fallback;
+
+            if (String(userInfo.userID) === String(safeUserId)) {
+              url = myAvatar || fallback;
+            } else if (!isGroup && targetAvatar) {
+              url = targetAvatar;
+            } else if (callbacksRef.current.avatarMap?.[userInfo.userID]) {
+              url = callbacksRef.current.avatarMap[userInfo.userID];
+            }
+
+            const div = document.createElement("div");
+            div.style.cssText =
+              "width:100%;height:100%;border-radius:50%;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.3);";
+            const img = document.createElement("img");
+            img.src = url;
+            img.style.cssText = "width:100%;height:100%;object-fit:cover;";
+            img.onerror = () => {
+              img.src = fallback;
+            };
+            div.appendChild(img);
+            return div;
+          },
+
+          onLeaveRoom: () => callbacksRef.current.onLeaveRoom(),
+          onUserJoin: (users: any[]) => {
+            console.log("📍 [Zego] onUserJoin triggered:", users);
+            participantCountRef.current += users.length;
+            callbacksRef.current.onUserJoin?.(users);
+          },
+          onUserLeave: (users: any[]) => {
+            participantCountRef.current -= users.length;
+            if (!isGroup) {
+              // 1-1: người kia out => mình cũng out
+              callbacksRef.current.onLeaveRoom();
+            } else if (participantCountRef.current <= 1) {
+              // Group: còn lại 1 mình => tự động thoát
+              callbacksRef.current.onLeaveRoom();
+            }
+            callbacksRef.current.onUserLeave?.(users);
+          },
+        });
+      } catch (error) {
+        console.error("Lỗi khi tải hoặc kết nối Zego Cloud:", error);
       }
+    };
 
-      // Format ID chỉ chứa chữ và số để Zego không bị lỗi kết nối
-      const safeUserId = userId.replace(/[^a-zA-Z0-9_]/g, "") || "user_id";
-      const safeRoomId = roomId.replace(/[^a-zA-Z0-9_]/g, "") || "room_id";
-
-      const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-        appID,
-        serverSecret,
-        safeRoomId,
-        safeUserId,
-        userName,
-      );
-
-      zp = ZegoUIKitPrebuilt.create(kitToken);
-
-      zp.joinRoom({
-        container: containerRef.current,
-        maxUsers: isGroup ? 50 : 2,
-        scenario: {
-          // Tự động chọn kịch bản 1-1 hoặc Nhóm dựa trên prop isGroup
-          mode: ZegoUIKitPrebuilt.GroupCall,
-        },
-        layout: "Auto",
-
-        // ═══ SỬ DỤNG GIAO DIỆN MẶC ĐỊNH ═══
-        showPreJoinView: false, // Vào thẳng phòng không cần chờ
-        showLeaveRoomConfirmDialog: false, // Bấm cúp máy là thoát luôn, không hỏi lại
-
-        // Hiện đầy đủ các nút điều khiển mặc định của Zego
-        turnOnMicrophoneWhenJoining: true,
-        turnOnCameraWhenJoining: isVideoCall,
-        showMyCameraToggleButton: true,
-        showMyMicrophoneToggleButton: true,
-        showAudioVideoSettingsButton: true,
-        showScreenSharingButton: true,
-        showTextChat: false, // Tắt chat của Zego vì đã có Alo Chat
-        showUserList: isGroup,
-
-        // Hiển thị Avatar khi tắt cam
-        showAvatarInAudioMode: true,
-        showNonVideoUser: true,
-        avatarBuilder: (userInfo: any) => {
-          const fallback = `https://ui-avatars.com/api/?background=475569&color=fff&bold=true&name=${encodeURIComponent(userInfo.userName || "?")}`;
-          let url = fallback;
-
-          if (String(userInfo.userID) === String(safeUserId)) {
-            url = myAvatar || fallback;
-          } else if (!isGroup && targetAvatar) {
-            url = targetAvatar;
-          } else if (callbacksRef.current.avatarMap?.[userInfo.userID]) {
-            url = callbacksRef.current.avatarMap[userInfo.userID];
-          }
-
-          const div = document.createElement("div");
-          div.style.cssText =
-            "width:100%;height:100%;border-radius:50%;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.3);";
-          const img = document.createElement("img");
-          img.src = url;
-          img.style.cssText = "width:100%;height:100%;object-fit:cover;";
-          img.onerror = () => {
-            img.src = fallback;
-          };
-          div.appendChild(img);
-          return div;
-        },
-
-        onLeaveRoom: () => callbacksRef.current.onLeaveRoom(),
-        onUserJoin: (users: any[]) => {
-          console.log("📍 [Zego] onUserJoin triggered:", users);
-          participantCountRef.current += users.length;
-          callbacksRef.current.onUserJoin?.(users);
-        },
-        onUserLeave: (users: any[]) => {
-          participantCountRef.current -= users.length;
-          if (!isGroup) {
-            // 1-1: người kia out => mình cũng out
-            callbacksRef.current.onLeaveRoom();
-          } else if (participantCountRef.current <= 1) {
-            // Group: còn lại 1 mình => tự động thoát
-            callbacksRef.current.onLeaveRoom();
-          }
-          callbacksRef.current.onUserLeave?.(users);
-        },
-      });
+    const timer = setTimeout(() => {
+      initZego();
     }, 300);
 
     return () => {

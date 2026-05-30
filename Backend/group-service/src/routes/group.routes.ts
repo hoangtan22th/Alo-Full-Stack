@@ -54,6 +54,7 @@ router.post("/api/v1/groups/assign-leader", groupController.assignNewLeader);
 // --- Admin APIs ---
 router.get("/api/v1/groups/admin/search", groupController.searchGroupsAdmin);
 router.get("/api/v1/groups/admin/stats", groupController.getGroupStatsAdmin);
+router.get("/api/v1/groups/stats/yearly", groupController.getUserYearlyStats);
 router.put(
   "/api/v1/groups/admin/:groupId/ban",
   groupController.toggleBanGroupAdmin,

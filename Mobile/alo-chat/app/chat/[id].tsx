@@ -128,6 +128,12 @@ export default function GlobalChatScreen() {
     string | null
   >(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [galleryImages, setGalleryImages] = useState<any[]>([]);
+
+  const handleOpenGallery = useCallback((imagesList: any[], index: number) => {
+    setGalleryImages(imagesList);
+    setViewerIndex(index);
+  }, []);
   const [replyingTo, setReplyingTo] = useState<MessageDTO | null>(null);
   const [highlightedMsgId, setHighlightedMsgId] = useState<string | null>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
@@ -244,22 +250,84 @@ export default function GlobalChatScreen() {
   const handleRevoke = async () => {
     if (!selectedMsg) return;
     const msgId = selectedMsg._id;
+    const sIndex = selectedImageIndex;
     closeModal();
-    const ok = await messageService.deleteMessage(msgId);
-    if (ok) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m._id === msgId ? { ...m, isRevoked: true, content: "" } : m,
-        ),
-      );
+
+    if (
+      sIndex !== null &&
+      sIndex !== undefined &&
+      selectedMsg.type === "image" &&
+      selectedMsg.metadata?.imageGroup
+    ) {
+      const ok = await messageService.revokeImageInGroup(msgId, sIndex);
+      if (ok) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m._id === msgId && m.metadata?.imageGroup) {
+              const newGroup = [...m.metadata.imageGroup];
+              if (newGroup[sIndex]) {
+                newGroup[sIndex] = { ...newGroup[sIndex], isRevoked: true };
+              }
+              const allRevoked = newGroup.every((img: any) => img.isRevoked);
+              return {
+                ...m,
+                isRevoked: allRevoked,
+                metadata: { ...m.metadata, imageGroup: newGroup },
+              };
+            }
+            return m;
+          }),
+        );
+      }
+    } else {
+      const ok = await messageService.deleteMessage(msgId);
+      if (ok) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === msgId ? { ...m, isRevoked: true, content: "" } : m,
+          ),
+        );
+      }
     }
   };
 
-  const handleDeleteLocal = () => {
+  const handleDeleteLocal = async () => {
     if (!selectedMsg) return;
     const msgId = selectedMsg._id;
+    const sIndex = selectedImageIndex;
     closeModal();
-    setMessages((prev) => prev.filter((m) => m._id !== msgId));
+
+    if (
+      sIndex !== null &&
+      sIndex !== undefined &&
+      selectedMsg.type === "image" &&
+      selectedMsg.metadata?.imageGroup
+    ) {
+      const ok = await messageService.deleteImageInGroupForMe(msgId, sIndex);
+      if (ok) {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m._id === msgId && m.metadata?.imageGroup) {
+              const newGroup = [...m.metadata.imageGroup];
+              if (newGroup[sIndex]) {
+                const arr = newGroup[sIndex].deletedByUsers || [];
+                newGroup[sIndex] = {
+                  ...newGroup[sIndex],
+                  deletedByUsers: [...arr, currentUserId],
+                };
+              }
+              return {
+                ...m,
+                metadata: { ...m.metadata, imageGroup: newGroup },
+              };
+            }
+            return m;
+          }),
+        );
+      }
+    } else {
+      setMessages((prev) => prev.filter((m) => m._id !== msgId));
+    }
   };
 
   const handleMultiCopy = () => {
@@ -422,12 +490,19 @@ export default function GlobalChatScreen() {
     return messages.find((m) => m._id === selectedMessageId);
   }, [selectedMessageId, messages]);
 
-  const onLongPressMessage = (msgId: string) => {
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
+    null,
+  );
+
+  const onLongPressMessage = (msgId: string, albumIndex?: number) => {
     const ref = messageRefs.current[msgId];
     if (ref) {
       ref.measureInWindow((x, y, width, height) => {
         setSelectedMsgLayout({ x, y, width, height });
         setSelectedMessageId(msgId);
+        if (albumIndex !== undefined) {
+          setSelectedImageIndex(albumIndex);
+        }
       });
     }
   };
@@ -435,6 +510,7 @@ export default function GlobalChatScreen() {
   const closeModal = () => {
     setSelectedMessageId(null);
     setSelectedMsgLayout(null);
+    setSelectedImageIndex(null);
   };
 
   const targetUserId =
@@ -790,6 +866,22 @@ export default function GlobalChatScreen() {
       });
     };
 
+    const handleMessageUpdated = (data: any) => {
+      const updatedMsg = data.message || data;
+      if (updatedMsg && updatedMsg._id) {
+        setMessages((prev: MessageDTO[]) =>
+          prev.map((m: MessageDTO) =>
+            m._id === updatedMsg._id ? updatedMsg : m,
+          ),
+        );
+        setPinnedMessages((prev: MessageDTO[]) =>
+          prev.map((m: MessageDTO) =>
+            m._id === updatedMsg._id ? updatedMsg : m,
+          ),
+        );
+      }
+    };
+
     const handleGroupBanned = (data: any) => {
       const updatedId = data.groupId || data.conversationId;
       if (String(updatedId) === String(resolvedConversationId)) {
@@ -808,6 +900,7 @@ export default function GlobalChatScreen() {
     socket.on("STOP_TYPING", handleStopTyping);
     socket.on("message-pinned", handleMessagePinned);
     socket.on("message-revoked", handleMessageRevoked);
+    socket.on("message-updated", handleMessageUpdated);
     socket.on("CONVERSATION_REMOVED", handleConversationRemoved);
     socket.on("GROUP_UPDATED", handleGroupUpdated);
     socket.on("GROUP_BANNED", handleGroupBanned);
@@ -821,6 +914,7 @@ export default function GlobalChatScreen() {
       socket.off("STOP_TYPING", handleStopTyping);
       socket.off("message-pinned", handleMessagePinned);
       socket.off("message-revoked", handleMessageRevoked);
+      socket.off("message-updated", handleMessageUpdated);
       socket.off("CONVERSATION_REMOVED", handleConversationRemoved);
       socket.off("GROUP_UPDATED", handleGroupUpdated);
       socket.off("GROUP_BANNED", handleGroupBanned);
@@ -1016,24 +1110,53 @@ export default function GlobalChatScreen() {
 
   const handleSendImage = async () => {
     if (!resolvedConversationId) return;
+    const replyData = getReplyData(replyingToRef.current);
     try {
       const imgRes = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
         allowsEditing: false,
         quality: 0.8,
         allowsMultipleSelection: true,
-      });
+        shouldDownloadFromNetwork: true,
+        videoExportPreset: 0,
+      } as any);
 
       if (imgRes.canceled || !imgRes.assets?.length) return;
 
-      const replyData = getReplyData(replyingToRef.current);
       setReplyingTo(null);
       const sentMessages: MessageDTO[] = [];
-      for (const asset of imgRes.assets) {
+      const assets = imgRes.assets || [];
+      const images = assets.filter((a) => a.type === "image");
+      const videos = assets.filter((a) => a.type === "video");
+
+      if (images.length > 1) {
+        const sentMessage = await messageService.sendImagesMessage({
+          conversationId: resolvedConversationId,
+          files: images,
+          senderName: currentUserName,
+          replyTo: replyData,
+        });
+        if (sentMessage) {
+          sentMessages.push(sentMessage);
+        }
+      } else if (images.length === 1) {
         const sentMessage = await messageService.sendFileMessage({
           conversationId: resolvedConversationId,
-          file: asset,
+          file: images[0],
           isImage: true,
+          senderName: currentUserName,
+          replyTo: replyData,
+        });
+        if (sentMessage) {
+          sentMessages.push(sentMessage);
+        }
+      }
+
+      for (const videoAsset of videos) {
+        const sentMessage = await messageService.sendFileMessage({
+          conversationId: resolvedConversationId,
+          file: videoAsset,
+          isImage: false,
           senderName: currentUserName,
           replyTo: replyData,
         });
@@ -1055,8 +1178,56 @@ export default function GlobalChatScreen() {
           100,
         );
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Lỗi gửi nhiều ảnh:", e);
+      if (e.message?.includes("3164")) {
+        setTimeout(async () => {
+          try {
+            const fileRes = await DocumentPicker.getDocumentAsync({
+              type: "video/*",
+              copyToCacheDirectory: true,
+              multiple: true,
+            });
+            if (fileRes.canceled || !fileRes.assets?.length) return;
+
+            const sentMessages: MessageDTO[] = [];
+            for (const asset of fileRes.assets) {
+              const sentMessage = await messageService.sendFileMessage({
+                conversationId: resolvedConversationId,
+                file: asset,
+                isImage: false,
+                senderName: currentUserName,
+                replyTo: replyData,
+              });
+              if (sentMessage) {
+                sentMessages.push(sentMessage);
+              }
+            }
+
+            if (sentMessages.length > 0) {
+              setMessages((prev: MessageDTO[]) => {
+                const newOnes = sentMessages.filter(
+                  (sm) => !prev.find((m) => m._id === sm._id),
+                );
+                return [...prev, ...newOnes];
+              });
+              setTimeout(
+                () =>
+                  flatListRef.current?.scrollToOffset({
+                    offset: 0,
+                    animated: true,
+                  }),
+                100,
+              );
+            }
+          } catch (docErr) {
+            console.error("Lỗi gửi video qua DocumentPicker:", docErr);
+            Alert.alert("Lỗi", "Không thể chọn hoặc tải tệp tin này.");
+          }
+        }, 1000);
+      } else {
+        Alert.alert("Lỗi", "Không thể chọn hoặc gửi tệp tin này.");
+      }
     }
   };
 
@@ -1212,10 +1383,10 @@ export default function GlobalChatScreen() {
             }}
             onHeaderClick={() => {
               if (isGroupChat) {
-                router.replace({
+                router.push({
                   pathname: "/chat/info",
                   params: {
-                    id: id as string,
+                    id: resolvedConversationId || id,
                     name: realtimeGroupName,
                     avatar: realtimeAvatar,
                     membersCount: realtimeMembersCount,
@@ -1224,17 +1395,11 @@ export default function GlobalChatScreen() {
                   },
                 });
               } else {
-                const autoIds = getAutoSelectedMessageIds();
                 router.push({
-                  pathname: "/chat/info",
+                  pathname: "/(tabs)/contacts/send-request",
                   params: {
-                    id: resolvedConversationId || id,
-                    name: realtimeGroupName,
-                    avatar: realtimeAvatar,
-                    membersCount: realtimeMembersCount,
-                    isGroup: "false",
-                    targetUserId,
-                    selectedMessageIds: JSON.stringify(autoIds),
+                    userId: targetUserId,
+                    from: "chat",
                   },
                 });
               }
@@ -1322,6 +1487,7 @@ export default function GlobalChatScreen() {
                       }
                       chatImages={chatImages}
                       setViewerIndex={setViewerIndex}
+                      onOpenGallery={handleOpenGallery}
                       messageRefs={messageRefs}
                       expandedTimeMsgId={expandedTimeMsgId}
                       setExpandedTimeMsgId={setExpandedTimeMsgId}
@@ -1369,14 +1535,15 @@ export default function GlobalChatScreen() {
                           msg={msg}
                           isSender={group.isSender}
                           isLastInBlock={idx === group.messages.length - 1}
-                          onLongPress={() =>
-                            !isSelectionMode && onLongPressMessage(msg._id)
+                          onLongPress={(albumIndex) =>
+                            !isSelectionMode &&
+                            onLongPressMessage(msg._id, albumIndex)
                           }
-                          onPress={() => {
-                            if (isSelectionMode) {
-                              toggleMessageSelection(msg._id);
-                            }
-                          }}
+                          onPress={
+                            isSelectionMode
+                              ? () => toggleMessageSelection(msg._id)
+                              : undefined
+                          }
                           isSelected={
                             isSelectionMode &&
                             selectedReportIds.includes(msg._id)
@@ -1386,6 +1553,7 @@ export default function GlobalChatScreen() {
                           }
                           chatImages={chatImages}
                           setViewerIndex={setViewerIndex}
+                          onOpenGallery={handleOpenGallery}
                           messageRefs={messageRefs}
                           expandedTimeMsgId={expandedTimeMsgId}
                           setExpandedTimeMsgId={setExpandedTimeMsgId}
@@ -1692,9 +1860,12 @@ export default function GlobalChatScreen() {
       </View>
 
       <GalleryViewerModal
-        images={chatImages}
+        images={galleryImages.length > 0 ? galleryImages : chatImages}
         initialIndex={viewerIndex ?? 0}
-        onClose={() => setViewerIndex(null)}
+        onClose={() => {
+          setViewerIndex(null);
+          setGalleryImages([]);
+        }}
         onIndexChange={setViewerIndex}
         visible={viewerIndex !== null}
       />
@@ -1708,6 +1879,7 @@ export default function GlobalChatScreen() {
         visible={!!selectedMessageId && !!selectedMsgLayout}
         selectedMsg={selectedMsg || null}
         layout={selectedMsgLayout}
+        selectedImageIndex={selectedImageIndex}
         onClose={closeModal}
         onReact={handleReact}
         onClearReactions={handleClearReactions}

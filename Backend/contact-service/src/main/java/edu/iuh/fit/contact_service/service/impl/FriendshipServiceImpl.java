@@ -18,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -302,5 +304,12 @@ public class FriendshipServiceImpl implements FriendshipService {
         return edu.iuh.fit.contact_service.dto.response.RelationStatusResponseDTO.builder()
                 .relationStatus("NOT_FRIEND")
                 .build();
+    }
+
+    @Override
+    public long countNewFriendsAddedYesterday(String userId) {
+        LocalDateTime startOfYesterday = LocalDate.now().minusDays(1).atStartOfDay();
+        LocalDateTime endOfYesterday = LocalDate.now().minusDays(1).atTime(java.time.LocalTime.MAX);
+        return friendshipRepository.countNewFriendsAdded(userId, startOfYesterday, endOfYesterday);
     }
 }

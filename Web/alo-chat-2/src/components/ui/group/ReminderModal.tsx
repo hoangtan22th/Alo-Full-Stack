@@ -16,20 +16,32 @@ interface ReminderModalProps {
   conversationId: string;
   canCreate?: boolean;
   onClose: () => void;
+  initialTitle?: string;
+  initialDate?: string;
+  initialTime?: string;
+  initialShowCreate?: boolean;
 }
 
-export default function ReminderModal({ conversationId, canCreate = true, onClose }: ReminderModalProps) {
+export default function ReminderModal({ 
+  conversationId, 
+  canCreate = true, 
+  onClose,
+  initialTitle = "",
+  initialDate = "",
+  initialTime = "",
+  initialShowCreate = false
+}: ReminderModalProps) {
   const [reminders, setReminders] = useState<ReminderDTO[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(initialShowCreate);
   const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
   
   const { userId: currentUserId } = useAuthStore();
 
   // Create Reminder State
-  const [title, setTitle] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
+  const [title, setTitle] = useState(initialTitle);
+  const [date, setDate] = useState(initialDate);
+  const [time, setTime] = useState(initialTime);
   const [repeat, setRepeat] = useState("NONE");
   const [remindFor, setRemindFor] = useState("GROUP");
 

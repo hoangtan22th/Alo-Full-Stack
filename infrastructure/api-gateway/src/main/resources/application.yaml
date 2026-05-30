@@ -40,11 +40,6 @@ spring:
               predicates:
                 - Path=/api/v1/messages/**, /api/v1/admin/messages/**
 
-            - id: notification-service
-              uri: lb://NOTIFICATION-SERVICE
-              predicates:
-                - Path=/api/v1/notifications/**
-
             - id: chatbot-service
               uri: lb://CHATBOT-SERVICE
               predicates:
@@ -64,6 +59,12 @@ spring:
               uri: lb://REALTIME-SERVICE
               predicates:
                 - Path=/socket.io/**, /api/v1/realtime/**
+
+            - id: post-service
+              uri: lb://POST-SERVICE
+              predicates:
+                - Path=/api/v1/posts/**, /api/v1/stories/**, /api/v1/notifications/**
+
 
 eureka:
   client:
