@@ -7,11 +7,15 @@ import {
   QuestionMarkCircleIcon,
   Cog8ToothIcon,
   UserIcon as UserOutline,
+  NewspaperIcon as NewspaperOutline,
+  BellIcon as BellOutline,
 } from "@heroicons/react/24/outline";
 import {
   UserIcon as UserSolid,
   ChatBubbleOvalLeftIcon as ChatSolid,
   UserGroupIcon as GroupSolid,
+  NewspaperIcon as NewspaperSolid,
+  BellIcon as BellSolid,
 } from "@heroicons/react/24/solid";
 import { useEffect, useRef, useState } from "react";
 
@@ -20,13 +24,16 @@ import UserMenu from "./UserMenu";
 import ProfileModal from "./ProfileModal";
 import SettingsMenu from "./SettingsMenu";
 import SettingsModal from "./SettingsModal";
+import NotificationMenu from "./NotificationMenu";
 import { useAuthStore } from "../../store/useAuthStore";
+import { useChatStore } from "../../store/useChatStore";
 
 export default function Sidebar() {
   const pathname = usePathname();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [showNotificationMenu, setShowNotificationMenu] = useState(false);
 
   //Khi bấm nào nút cài đặt trong Setting Menu, nó sẽ quản lý việc bật cái Setting model
   // Nếu để cái này ở Setting menu thì khi menu tắt cái model không biết dựa vào đâu
@@ -34,6 +41,7 @@ export default function Sidebar() {
 
   const menuRef = useRef<HTMLDivElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null); // Ref mới cho nút cài đặt
+  const notificationRef = useRef<HTMLDivElement>(null); // Ref cho thông báo
 
   // Hàm kiểm tra active link
   const isActive = (path: string) => pathname.includes(path);
@@ -51,6 +59,11 @@ export default function Sidebar() {
       if (settingsRef.current && !settingsRef.current.contains(target)) {
         setShowSettingsMenu(false);
       }
+      if (notificationRef.current && !notificationRef.current.contains(target)) {
+        if (target instanceof Element && !target.closest(".notification-menu-container")) {
+          setShowNotificationMenu(false);
+        }
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -58,6 +71,7 @@ export default function Sidebar() {
 
   // Sử dụng Zustand store lấy dữ liệu user
   const { user, fetchProfile } = useAuthStore();
+  const { unreadNotifsCount } = useChatStore();
 
   // Tính toán avatar trực tiếp từ state (Derived State) thay vì dùng useEffect để tránh lỗi ESLint
   const getAvatarUrl = () => {
@@ -90,8 +104,10 @@ export default function Sidebar() {
   }, [user, fetchProfile]);
 
   return (
-    <div className="w-19 h-screen bg-[#f4f5f7] flex flex-col items-center py-6 justify-between shrink-0 border-r border-gray-200">
-      {/* === PHẦN TRÊN === */}
+    <div className="flex h-screen shrink-0 z-40">
+      {/* Thin Sidebar Bar */}
+      <div className="w-19 h-full bg-[#f4f5f7] flex flex-col items-center py-6 justify-between shrink-0 border-r border-gray-200 relative">
+        {/* === PHẦN TRÊN === */}
       <div className="flex flex-col items-center gap-8 w-full">
         <Link
           href="/"
@@ -143,6 +159,40 @@ export default function Sidebar() {
             <GroupOutline className="w-6 h-6" />
           )}
         </Link>
+
+        {/* Nhật ký / Nhật ký dòng thời gian */}
+        <Link
+          href="/feed"
+          className={`w-12 h-12 flex items-center justify-center rounded-full transition-all ${isActive("/feed") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
+          title="Nhật ký"
+        >
+          {isActive("/feed") ? (
+            <NewspaperSolid className="w-6 h-6" />
+          ) : (
+            <NewspaperOutline className="w-6 h-6" />
+          )}
+        </Link>
+
+        {/* Thông báo */}
+        <div className="relative" ref={notificationRef}>
+          <button
+            onClick={() => setShowNotificationMenu(!showNotificationMenu)}
+            className={`w-12 h-12 flex items-center justify-center rounded-full transition-all relative ${showNotificationMenu ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
+            title="Thông báo"
+          >
+            {showNotificationMenu ? (
+              <BellSolid className="w-6 h-6 text-blue-600" />
+            ) : (
+              <BellOutline className="w-6 h-6" />
+            )}
+            
+            {unreadNotifsCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-4.5 h-4.5 flex items-center justify-center border border-white">
+                {unreadNotifsCount > 9 ? "9+" : unreadNotifsCount}
+              </span>
+            )}
+          </button>
+        </div>
 
         {/* <Link href="/archive" className="w-12 h-12 flex items-center justify-center rounded-full text-gray-600 hover:text-black hover:bg-gray-100 transition-all">
           <ArchiveOutline className="w-6 h-6" />
@@ -214,11 +264,16 @@ export default function Sidebar() {
         onClose={() => setIsSettingsModalOpen(false)}
       />
 
-      {/* ProfileModal nên để ở cuối, ngoài các div flex để tránh lỗi hiển thị */}
-      <ProfileModal
-        isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
-      />
+        {/* ProfileModal nên để ở cuối, ngoài các div flex để tránh lỗi hiển thị */}
+        <ProfileModal
+          isOpen={isProfileOpen}
+          onClose={() => setIsProfileOpen(false)}
+        />
+      </div>
+
+      {showNotificationMenu && (
+        <NotificationMenu onClose={() => setShowNotificationMenu(false)} />
+      )}
     </div>
   );
 }

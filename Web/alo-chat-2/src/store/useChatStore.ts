@@ -12,6 +12,9 @@ interface ChatState {
   reportAnchorId: string | null;
   reportConversationType: "ONE_TO_ONE" | "GROUP" | null;
 
+  // --- Notifications State ---
+  unreadNotifsCount: number;
+
   // --- Actions ---
   setTyping: (conversationId: string, userId: string, isTyping: boolean) => void;
   setBulkPresence: (presences: any) => void;
@@ -20,6 +23,9 @@ interface ChatState {
   
   openReportModal: (targetId: string, targetName?: string | null, anchorId?: string | null, conversationType?: "ONE_TO_ONE" | "GROUP") => void;
   closeReportModal: () => void;
+
+  setUnreadNotifsCount: (count: number) => void;
+  incrementUnreadNotifsCount: () => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -33,6 +39,9 @@ export const useChatStore = create<ChatState>((set) => ({
   reportTargetName: null,
   reportAnchorId: null,
   reportConversationType: null,
+
+  // --- Notifications State ---
+  unreadNotifsCount: 0,
 
   setTyping: (conversationId, userId, isTyping) => {
     set((state) => {
@@ -92,4 +101,7 @@ export const useChatStore = create<ChatState>((set) => ({
       reportAnchorId: null,
       reportConversationType: null,
     }),
+
+  setUnreadNotifsCount: (count) => set({ unreadNotifsCount: count }),
+  incrementUnreadNotifsCount: () => set((state) => ({ unreadNotifsCount: state.unreadNotifsCount + 1 })),
 }));

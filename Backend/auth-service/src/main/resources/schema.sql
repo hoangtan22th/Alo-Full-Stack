@@ -16,12 +16,12 @@ CREATE TABLE IF NOT EXISTS accounts (
     deleted_at DATETIME,
     created_at DATETIME,
     updated_at DATETIME
-);
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS roles (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(191) UNIQUE NOT NULL
-);
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- Insert mặc định Role nếu chưa có
 INSERT IGNORE INTO roles (id, name) VALUES (1, 'ROLE_USER'), (2, 'ROLE_ADMIN');
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS account_roles (
     PRIMARY KEY (account_id, role_id),
     FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
-);
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS user_sessions (
     id VARCHAR(191) PRIMARY KEY,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS user_sessions (
     created_at DATETIME,
     expires_at DATETIME,
     FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
-);
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS qr_sessions (
     qr_token VARCHAR(191) PRIMARY KEY,
@@ -53,4 +53,4 @@ CREATE TABLE IF NOT EXISTS qr_sessions (
     created_at DATETIME,
     expires_at DATETIME,
     time_to_live BIGINT
-);
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

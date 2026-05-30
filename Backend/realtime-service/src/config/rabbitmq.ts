@@ -84,10 +84,13 @@ export async function initRabbitMQ(io: Server) {
               });
           }
         } else if (payload.room) {
+          const targetRoom = payload.room.startsWith("post_") || payload.room.startsWith("room_") || payload.room.startsWith("user_")
+            ? payload.room
+            : `room_${payload.room}`;
           console.log(
-            `[Socket.IO] Emitting event '${payload.event}' to room: room_${payload.room}`,
+            `[Socket.IO] Emitting event '${payload.event}' to room: ${targetRoom}`,
           );
-          io.to(`room_${payload.room}`).emit(payload.event, payload.data);
+          io.to(targetRoom).emit(payload.event, payload.data);
         } else {
           console.log(`[Socket.IO] Emitting global event: '${payload.event}'`);
           io.emit(payload.event, payload.data);

@@ -13,7 +13,7 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 30000,
+  timeout: 60000,
 });
 
 // Biến cờ và hàng đợi xử lý refresh y hệt Mobile

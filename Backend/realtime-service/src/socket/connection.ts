@@ -215,6 +215,63 @@ export function initSocketConnection(io: Server) {
       io.to(`user_${data.recipientId}`).to(`user_${userId}`).emit("FRIEND_LIST_UPDATED", {});
     });
 
+    // 8. Social Post & Story Real-time Interactions
+    socket.on("joinPost", (postId: string) => {
+      console.log(`[Socket.IO] User ${userId} joining post room: post_${postId}`);
+      socket.join(`post_${postId}`);
+    });
+
+    socket.on("leavePost", (postId: string) => {
+      console.log(`[Socket.IO] User ${userId} leaving post room: post_${postId}`);
+      socket.leave(`post_${postId}`);
+    });
+
+    socket.on("postInteraction", (data: { postId: string; eventType: string; payload: any }) => {
+      console.log(`[Socket.IO] Post interaction from ${userId} on post_${data.postId}: ${data.eventType}`);
+      socket.to(`post_${data.postId}`).emit("POST_INTERACTION", {
+        actorId: userId,
+        postId: data.postId,
+        eventType: data.eventType,
+        payload: data.payload,
+      });
+    });
+
+    socket.on("EMIT_NEW_POST", (data: { friendIds: string[]; post: any }) => {
+      console.log(`[Socket.IO] New post by ${userId} to friends:`, data.friendIds);
+      if (data.friendIds && data.friendIds.length > 0) {
+        data.friendIds.forEach((id) => {
+          socket.to(`user_${id}`).emit("NEW_POST_RECEIVED", data.post);
+        });
+      }
+    });
+
+    socket.on("EMIT_POST_DELETED", (data: { friendIds: string[]; postId: string }) => {
+      console.log(`[Socket.IO] Post deleted by ${userId} to friends:`, data.friendIds);
+      if (data.friendIds && data.friendIds.length > 0) {
+        data.friendIds.forEach((id) => {
+          socket.to(`user_${id}`).emit("POST_DELETED_RECEIVED", { postId: data.postId });
+        });
+      }
+    });
+
+    socket.on("EMIT_NEW_STORY", (data: { friendIds: string[]; story: any }) => {
+      console.log(`[Socket.IO] New story by ${userId} to friends:`, data.friendIds);
+      if (data.friendIds && data.friendIds.length > 0) {
+        data.friendIds.forEach((id) => {
+          socket.to(`user_${id}`).emit("NEW_STORY_RECEIVED", data.story);
+        });
+      }
+    });
+
+    socket.on("EMIT_STORY_DELETED", (data: { friendIds: string[]; storyId: string }) => {
+      console.log(`[Socket.IO] Story deleted by ${userId} to friends:`, data.friendIds);
+      if (data.friendIds && data.friendIds.length > 0) {
+        data.friendIds.forEach((id) => {
+          socket.to(`user_${id}`).emit("STORY_DELETED_RECEIVED", { storyId: data.storyId });
+        });
+      }
+    });
+
     // ============================================
     // CONNECTION MANAGEMENT (DISCONNECT)
     // ============================================
