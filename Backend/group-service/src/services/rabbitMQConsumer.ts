@@ -30,6 +30,7 @@ export async function startRabbitMQConsumer() {
             let lastContent = msgContent || "";
             if (msgType === "image") lastContent = "[Hình ảnh]";
             else if (msgType === "file") lastContent = "[Tệp tin]";
+            else if (msgType === "contact") lastContent = "[Danh thiếp]";
 
             // 1. Tìm conversation để lấy danh sách members
             const conversation = await Conversation.findById(conversationId);

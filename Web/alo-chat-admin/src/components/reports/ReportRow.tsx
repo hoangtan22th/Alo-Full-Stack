@@ -41,7 +41,7 @@ export function ReportRow({ report, onReview }: ReportRowProps) {
   const getMediaUrl = (url: string | null | undefined): string => {
     if (!url) return "";
     if (url.startsWith("http") || url.startsWith("blob:") || url.startsWith("data:")) return url;
-    const backendHost = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8888";
+    const backendHost = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8888";
     return `${backendHost}${url.startsWith("/") ? "" : "/"}${url}`;
   };
 

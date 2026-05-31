@@ -643,7 +643,57 @@ export const getMyGroups = async (
       return new Date(g.lastMessageAt) > new Date(clearedAt);
     });
 
-    res.status(200).json({ data: filteredGroups });
+    const conversationIds = filteredGroups.map((g) => g._id.toString());
+    const MESSAGE_SERVICE_URL = process.env.MESSAGE_SERVICE_URL || 'http://localhost:8083/api/v1/messages';
+    const baseMessageUrl = MESSAGE_SERVICE_URL.endsWith('/api/v1/messages') ? MESSAGE_SERVICE_URL : `${MESSAGE_SERVICE_URL}/api/v1/messages`;
+    
+    let lastMessagesMap: Record<string, any> = {};
+    if (conversationIds.length > 0) {
+      try {
+        const response = await fetch(`${baseMessageUrl}/last-messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-User-Id": currentUserId,
+            "Authorization": req.headers.authorization || "",
+          },
+          body: JSON.stringify({ conversationIds }),
+        });
+        if (response.ok) {
+          const resJson = await response.json();
+          lastMessagesMap = resJson.data || {};
+        }
+      } catch (fetchErr) {
+        console.error("[getMyGroups] Failed to fetch last messages from message-service:", fetchErr);
+      }
+    }
+
+    const enrichedGroups = filteredGroups.map((g) => {
+      const gObj = g.toObject() as any;
+      const lastMsg = lastMessagesMap[g._id.toString()];
+      if (lastMsg) {
+        gObj.lastMessage = lastMsg._id;
+        gObj.lastMessageAt = lastMsg.createdAt;
+        
+        if (lastMsg.isRevoked) {
+          gObj.lastMessageContent = "Tin nhắn đã được thu hồi";
+        } else {
+          if (lastMsg.type === "image") {
+            gObj.lastMessageContent = "[Hình ảnh]";
+          } else if (lastMsg.type === "file") {
+            gObj.lastMessageContent = "[Tệp tin]";
+          } else {
+            gObj.lastMessageContent = lastMsg.content || "";
+          }
+        }
+      } else {
+        gObj.lastMessage = null;
+        gObj.lastMessageContent = "Chưa có tin nhắn";
+      }
+      return gObj;
+    });
+
+    res.status(200).json({ data: enrichedGroups });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -1318,7 +1368,7 @@ export const getOrCreateDirectConversation = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { targetUserId } = req.body;
+    const { targetUserId, checkOnly } = req.body;
     const currentUserId = (req.headers["x-user-id"] || "").toString();
 
     const existingConversation = await Conversation.findOne({
@@ -1331,6 +1381,11 @@ export const getOrCreateDirectConversation = async (
 
     if (existingConversation) {
       res.status(200).json(existingConversation);
+      return;
+    }
+
+    if (checkOnly) {
+      res.status(204).send();
       return;
     }
 
@@ -1351,6 +1406,37 @@ export const getOrCreateDirectConversation = async (
       .catch(console.error);
 
     res.status(201).json(newConversation);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const findDirectConversation = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { targetUserId } = req.query;
+    const currentUserId = (req.headers["x-user-id"] || "").toString();
+
+    if (!targetUserId) {
+      res.status(400).json({ error: "targetUserId is required" });
+      return;
+    }
+
+    const existingConversation = await Conversation.findOne({
+      isGroup: false,
+      $and: [
+        { "members.userId": currentUserId },
+        { "members.userId": String(targetUserId) },
+      ],
+    });
+
+    if (existingConversation) {
+      res.status(200).json({ exists: true, conversation: existingConversation });
+    } else {
+      res.status(200).json({ exists: false });
+    }
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

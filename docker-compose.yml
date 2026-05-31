@@ -281,11 +281,15 @@ services:
       - RABBITMQ_USER=${RABBITMQ_USER:-guest}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
       - MONGODB_URI=mongodb://mongodb:27017/alo_report_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - EUREKA_DEFAULT_ZONE=http://discovery-service:8761/eureka/
     depends_on:
       mongodb:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - alo-network
@@ -387,6 +391,35 @@ services:
     networks:
       - alo-network
 
+  post-service:
+    image: ${DOCKER_USERNAME:-hoangtan22th}/alo-post-service:latest
+    build:
+      context: .
+      dockerfile: Backend/post-service/Dockerfile
+    container_name: alo-post-service
+    ports:
+      - "8089:8089"
+    environment:
+      - PORT=8089
+
+      - NODE_ENV=production
+      - HOSTNAME=post-service
+      - IP_ADDR=post-service
+      - EUREKA_HOST=discovery-service
+      - EUREKA_PORT=8761
+      - MONGO_URI=mongodb://mongodb:27017/alo_post_db
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - alo-network
+
   voting-service:
     image: ${DOCKER_USERNAME:-hoangtan22th}/alo-voting-service:latest
     build:
@@ -398,6 +431,10 @@ services:
     environment:
       - PORT=8087
       - NODE_ENV=production
+      - HOSTNAME=voting-service
+      - IP_ADDR=voting-service
+      - EUREKA_HOST=discovery-service
+      - EUREKA_PORT=8761
       - MONGO_URI=mongodb://mongodb:27017/alo_voting_db
       - REDIS_URL=redis://redis:6379
       - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672
@@ -426,6 +463,13 @@ services:
     environment:
       - PORT=3001
       - NEXT_PUBLIC_API_URL=http://${EXPO_PUBLIC_IP_ADDRESS:-localhost}:8888
+      - NEXT_PUBLIC_ZEGO_APP_ID=${NEXT_PUBLIC_ZEGO_APP_ID}
+      - NEXT_PUBLIC_ZEGO_SERVER_SECRET=${NEXT_PUBLIC_ZEGO_SERVER_SECRET}
+      - NEXT_PUBLIC_LIVEKIT_URL=${NEXT_PUBLIC_LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+      - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - NEXT_PUBLIC_STIPOP_API_KEY=${NEXT_PUBLIC_STIPOP_API_KEY}
     depends_on:
       - api-gateway
     networks:
@@ -442,6 +486,8 @@ services:
     environment:
       - PORT=3002
       - NEXT_PUBLIC_API_URL=http://${EXPO_PUBLIC_IP_ADDRESS:-localhost}:8888
+      - NEXT_PUBLIC_ZEGO_APP_ID=${NEXT_PUBLIC_ZEGO_APP_ID}
+      - NEXT_PUBLIC_ZEGO_SERVER_SECRET=${NEXT_PUBLIC_ZEGO_SERVER_SECRET}
     depends_on:
       - api-gateway
     networks:

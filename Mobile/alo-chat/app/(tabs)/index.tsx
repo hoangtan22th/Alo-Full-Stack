@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -156,9 +156,11 @@ export default function MessagesScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [currentUserId]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [currentUserId])
+  );
 
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener("refresh_notifications", () => {

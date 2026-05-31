@@ -49,6 +49,7 @@ import {
   ChevronRightIcon,
   CheckIcon,
   PhotoIcon,
+  IdentificationIcon,
 } from "@heroicons/react/24/outline";
 import ReportModal from "@/components/ui/report/ReportModal";
 import { motion } from "framer-motion";
@@ -65,6 +66,9 @@ import FileMessageBubble from "@/components/chat/FileMessageBubble";
 import TxtFileViewerModal from "@/components/chat/TxtFileViewerModal";
 import { parseReminderFromText } from "@/utils/reminderParser";
 import ReminderModal from "@/components/ui/group/ReminderModal";
+import { UpdateDefaultEmojiModal } from "@/components/ui/UpdateDefaultEmojiModal";
+import SendContactCardModal from "@/components/ui/SendContactCardModal";
+import ContactCardBubble from "@/components/chat/ContactCardBubble";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -190,6 +194,7 @@ export default function ChatPage() {
     time: string;
   } | null>(null);
   const [showQuickReminderModal, setShowQuickReminderModal] = useState(false);
+  const [showContactCardModal, setShowContactCardModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveOptions, setLeaveOptions] = useState({
@@ -376,11 +381,16 @@ export default function ChatPage() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
 
+  const [defaultEmoji, setDefaultEmoji] = useState("👍");
+  const [isDefaultEmojiModalOpen, setIsDefaultEmojiModalOpen] = useState(false);
+
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [confirmModalConfig, setConfirmModalConfig] = useState<{
     title: string;
     description: string;
     actionText: string;
+    type?: "danger" | "warning";
+    hideCancel?: boolean;
     onConfirm: () => void | Promise<void>;
   } | null>(null);
 
@@ -388,12 +398,16 @@ export default function ChatPage() {
     title: string;
     description: string;
     actionText: string;
+    type?: "danger" | "warning";
+    hideCancel?: boolean;
     onConfirm: () => void | Promise<void>;
   }) => {
     setConfirmModalConfig({
       title: config.title,
       description: config.description,
       actionText: config.actionText,
+      type: config.type || "danger",
+      hideCancel: config.hideCancel,
       onConfirm: async () => {
         await config.onConfirm();
         setConfirmModalOpen(false);
@@ -491,6 +505,11 @@ export default function ChatPage() {
           setMessages((prev) => prev.filter((m) => !selectedMessageIds.has(m._id)));
           setIsMultiSelectMode(false);
           setSelectedMessageIds(new Set());
+          window.dispatchEvent(
+            new CustomEvent("message_deleted_for_me", {
+              detail: { conversationId },
+            })
+          );
         } else {
           toast.error("Có lỗi xảy ra khi xóa tin nhắn");
         }
@@ -579,6 +598,10 @@ export default function ChatPage() {
     setShowMentionIndicator(false);
     setMentionToScrollId(null);
     setActiveEffect(null); // Reset effect when changing chat
+    if (typeof window !== "undefined" && conversationId) {
+      const saved = localStorage.getItem(`default_emoji_${conversationId}`);
+      setDefaultEmoji(saved || "👍");
+    }
   }, [conversationId]);
 
   // Trigger client-side particle effects based on message content
@@ -808,6 +831,12 @@ export default function ChatPage() {
   /* ─── Fetch messages for current conversation ─── */
   const fetchMessages = useCallback(async () => {
     if (!conversationId || conversationId === BOT_ID) return;
+    if (conversationId.startsWith("new-")) {
+      setMessages([]);
+      setHasMore(false);
+      setPinnedMessages([]);
+      return;
+    }
     setLoadingMessages(true);
     setHasMore(true);
     try {
@@ -837,7 +866,8 @@ export default function ChatPage() {
       !hasMore ||
       loadingMoreHistory ||
       loadingMessages ||
-      conversationId === BOT_ID
+      conversationId === BOT_ID ||
+      conversationId.startsWith("new-")
     )
       return;
 
@@ -887,6 +917,10 @@ export default function ChatPage() {
 
   const fetchMediaHistory = useCallback(async () => {
     if (!conversationId || conversationId === BOT_ID) return;
+    if (conversationId.startsWith("new-")) {
+      setMediaMessages([]);
+      return;
+    }
     try {
       // Tải 200 tin nhắn gần nhất để trích xuất media cho InfoPanel
       const msgs = await messageService.getMessageHistory(
@@ -913,15 +947,32 @@ export default function ChatPage() {
   const fetchConversationInfo = useCallback(async () => {
     if (!conversationId || conversationId === BOT_ID) return;
     try {
-      const data: any = await groupService.getGroupById(conversationId);
-      const g = data?.data || data;
+      let g: any;
+      const currentUserId =
+        currentUser?.id || currentUser?._id || currentUser?.userId;
+
+      if (conversationId.startsWith("new-")) {
+        const otherId = conversationId.replace("new-", "");
+        g = {
+          _id: conversationId,
+          isGroup: false,
+          type: "DIRECT",
+          name: "Direct Chat",
+          groupAvatar: "",
+          members: [
+            { userId: currentUserId, role: "MEMBER" },
+            { userId: otherId, role: "MEMBER" },
+          ],
+        };
+      } else {
+        const data: any = await groupService.getGroupById(conversationId);
+        g = data?.data || data;
+      }
+
       if (!g) return;
 
       let displayName = g.name;
       let displayAvatar = g.groupAvatar;
-
-      const currentUserId =
-        currentUser?.id || currentUser?._id || currentUser?.userId;
 
       // Kiểm tra kỹ xem có phải là chat 1-1 hay không
       const isDirect =
@@ -1242,6 +1293,19 @@ export default function ChatPage() {
     }
   }, [conversationId, currentUser, fetchConversationInfo]);
 
+  useEffect(() => {
+    if (conversationId && conversationId.startsWith("new-")) {
+      const targetUserId = conversationId.replace("new-", "");
+      groupService.findDirectConversation(targetUserId)
+        .then((res) => {
+          if (res?.exists && res?.conversation?._id) {
+            router.replace(`/chat/${res.conversation._id}`);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [conversationId, router]);
+
   const handleStartCall = useCallback(
     (isVideo: boolean, forcedInviteeIds?: string[]) => {
       if (conversationInfo?.isGroup && !forcedInviteeIds) {
@@ -1419,6 +1483,11 @@ export default function ChatPage() {
           // Optimistic Update: Xóa ngay ở local UI
           setMessages((prev) => prev.filter((m) => m._id !== messageId));
           await messageService.deleteMessageForMe(messageId);
+          window.dispatchEvent(
+            new CustomEvent("message_deleted_for_me", {
+              detail: { conversationId },
+            })
+          );
         } catch (error) {
           console.error("Lỗi xóa tin nhắn phía tôi:", error);
         }
@@ -1653,6 +1722,32 @@ export default function ChatPage() {
     await fetchConversationInfo();
   }, [fetchConversationInfo]);
 
+  const getOrCreateRealConversationId = async (): Promise<string | null> => {
+    if (!conversationId) return null;
+    if (!conversationId.startsWith("new-")) return conversationId;
+
+    const targetUserId = conversationId.replace("new-", "");
+    try {
+      const conversation = await groupService.createDirectConversation(targetUserId);
+      const realConvoId =
+        conversation?._id ||
+        conversation?.id ||
+        conversation?.data?._id ||
+        conversation?.data?.id;
+
+      if (!realConvoId) {
+        toast.error("Không tạo được cuộc hội thoại");
+        return null;
+      }
+
+      router.replace(`/chat/${realConvoId}`);
+      return realConvoId;
+    } catch (error) {
+      toast.error("Lỗi khi kết nối cuộc hội thoại");
+      return null;
+    }
+  };
+
   /* ─── Send message ─── */
   const handleSend = async () => {
     const text = messageText.trim();
@@ -1662,6 +1757,12 @@ export default function ChatPage() {
       currentUser?.id || currentUser?._id || currentUser?.userId || "me";
 
     setSending(true);
+    const activeConvoId = await getOrCreateRealConversationId();
+    if (!activeConvoId) {
+      setSending(false);
+      return;
+    }
+
     setMessageText("");
     const currentReply = replyingTo;
     setReplyingTo(null);
@@ -1670,7 +1771,7 @@ export default function ChatPage() {
     const tempId = `temp_${Date.now()}`;
     const tempMsg: MessageDTO = {
       _id: tempId,
-      conversationId,
+      conversationId: activeConvoId,
       senderId: myId,
       senderName: currentUser?.fullName || "Tôi",
       type: "text",
@@ -1697,7 +1798,7 @@ export default function ChatPage() {
 
     try {
       await messageService.sendMessage({
-        conversationId,
+        conversationId: activeConvoId,
         content: text,
         type: "text",
         senderName: currentUser?.fullName || "Tôi",
@@ -1721,7 +1822,7 @@ export default function ChatPage() {
       // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
       if (isStranger) {
         groupService
-          .updateConversationFolder(conversationId, "priority")
+          .updateConversationFolder(activeConvoId, "priority")
           .catch(console.error);
       }
     } catch (err) {
@@ -1729,6 +1830,56 @@ export default function ChatPage() {
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
       setMessageText(text);
       setReplyingTo(currentReply);
+    } finally {
+      setSending(false);
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+    }
+  };
+
+  const handleSendDefaultEmoji = async () => {
+    if (!conversationId || sending) return;
+
+    const myId =
+      currentUser?.id || currentUser?._id || currentUser?.userId || "me";
+
+    setSending(true);
+    const activeConvoId = await getOrCreateRealConversationId();
+    if (!activeConvoId) {
+      setSending(false);
+      return;
+    }
+
+    const tempId = `temp_${Date.now()}`;
+    const tempMsg: MessageDTO = {
+      _id: tempId,
+      conversationId: activeConvoId,
+      senderId: myId,
+      senderName: currentUser?.fullName || "Tôi",
+      type: "text",
+      content: defaultEmoji,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+
+    try {
+      await messageService.sendMessage({
+        conversationId: activeConvoId,
+        content: defaultEmoji,
+        type: "text",
+        senderName: currentUser?.fullName || "Tôi",
+      });
+
+      if (isStranger) {
+        groupService
+          .updateConversationFolder(activeConvoId, "priority")
+          .catch(console.error);
+      }
+    } catch (err) {
+      console.error("Lỗi gửi biểu tượng cảm xúc:", err);
+      setMessages((prev) => prev.filter((m) => m._id !== tempId));
     } finally {
       setSending(false);
       setTimeout(() => {
@@ -1758,7 +1909,14 @@ export default function ChatPage() {
     )
       return;
     if (filesList.length > 20) {
-      alert("Chỉ được gửi tối đa 20 file mỗi lần!");
+      showConfirm({
+        title: "Giới hạn số lượng tệp",
+        description: "Chỉ được gửi tối đa 20 file mỗi lần!",
+        actionText: "Đã hiểu",
+        type: "warning",
+        hideCancel: true,
+        onConfirm: () => {},
+      });
       return;
     }
 
@@ -1766,9 +1924,14 @@ export default function ChatPage() {
     // Kiểm tra từng file dưới 100MB
     for (const file of files) {
       if (file.size > 100 * 1024 * 1024) {
-        alert(
-          `File "${file.name}" vượt quá 100MB, vui lòng chọn file nhỏ hơn.`,
-        );
+        showConfirm({
+          title: "Dung lượng tệp quá lớn",
+          description: `Tệp "${file.name}" vượt quá giới hạn 100MB. Vui lòng chọn tệp nhỏ hơn.`,
+          actionText: "Đã hiểu",
+          type: "warning",
+          hideCancel: true,
+          onConfirm: () => {},
+        });
         return;
       }
     }
@@ -1784,6 +1947,12 @@ export default function ChatPage() {
     const otherFiles = files.filter((f) => !f.type.startsWith("image/"));
 
     try {
+      const activeConvoId = await getOrCreateRealConversationId();
+      if (!activeConvoId) {
+        setUploadingFile(false);
+        return;
+      }
+
       // 1. Xử lý gửi ALBUM ảnh (nếu có nhiều hơn 1 ảnh)
       if (imageFiles.length > 1) {
         const tempId = `temp_album_${Date.now()}`;
@@ -1795,7 +1964,7 @@ export default function ChatPage() {
 
         const tempMsg: MessageDTO = {
           _id: tempId,
-          conversationId,
+          conversationId: activeConvoId,
           senderId: myId,
           senderName: currentUser?.fullName || "Tôi",
           type: "image",
@@ -1833,7 +2002,7 @@ export default function ChatPage() {
 
         try {
           await messageService.uploadImages(
-            conversationId,
+            activeConvoId,
             imageFiles,
             widths,
             heights,
@@ -1855,7 +2024,7 @@ export default function ChatPage() {
         const tempId = `temp_file_${Date.now()}_${i}`;
         const tempMsg: MessageDTO = {
           _id: tempId,
-          conversationId,
+          conversationId: activeConvoId,
           senderId: myId,
           senderName: currentUser?.fullName || "Tôi",
           type: file.type.startsWith("image/") ? "image" : "file",
@@ -1888,7 +2057,7 @@ export default function ChatPage() {
         setMessages((prev) => [...prev, tempMsg]);
         try {
           await messageService.uploadFile(
-            conversationId,
+            activeConvoId,
             file,
             currentReply,
             currentUser?.fullName || "Tôi",
@@ -1902,7 +2071,7 @@ export default function ChatPage() {
       // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
       if (isStranger) {
         groupService
-          .updateConversationFolder(conversationId, "priority")
+          .updateConversationFolder(activeConvoId, "priority")
           .catch(console.error);
       }
     } finally {
@@ -1970,6 +2139,12 @@ export default function ChatPage() {
       currentUser?.id || currentUser?._id || currentUser?.userId || "me";
 
     setSending(true);
+    const activeConvoId = await getOrCreateRealConversationId();
+    if (!activeConvoId) {
+      setSending(false);
+      return;
+    }
+
     const currentReply = replyingTo;
     setReplyingTo(null);
 
@@ -1977,7 +2152,7 @@ export default function ChatPage() {
     const tempId = `temp_sticker_${Date.now()}`;
     const tempMsg: MessageDTO = {
       _id: tempId,
-      conversationId,
+      conversationId: activeConvoId,
       senderId: myId,
       senderName: currentUser?.fullName || "Tôi",
       type: "image",
@@ -2005,7 +2180,7 @@ export default function ChatPage() {
 
     try {
       await messageService.sendMessage({
-        conversationId,
+        conversationId: activeConvoId,
         content: stickerUrl,
         type: "image",
         senderName: currentUser?.fullName || "Tôi",
@@ -2030,7 +2205,7 @@ export default function ChatPage() {
       // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
       if (isStranger) {
         groupService
-          .updateConversationFolder(conversationId, "priority")
+          .updateConversationFolder(activeConvoId, "priority")
           .catch(console.error);
       }
     } catch (err) {
@@ -2038,6 +2213,58 @@ export default function ChatPage() {
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
     } finally {
       setSending(false);
+    }
+  };
+
+  /* ─── Send contact card ─── */
+  const handleSendContactCard = async (
+    selectedFriends: any[],
+    includePhone: boolean,
+  ) => {
+    const activeConvoId = await getOrCreateRealConversationId();
+    if (!activeConvoId) return;
+
+    const myId =
+      currentUser?.id || currentUser?._id || currentUser?.userId || "me";
+
+    for (const friend of selectedFriends) {
+      const tempId = `temp_contact_${Date.now()}_${friend.id}`;
+      const tempMsg: MessageDTO = {
+        _id: tempId,
+        conversationId: activeConvoId,
+        senderId: myId,
+        senderName: currentUser?.fullName || "Tôi",
+        type: "contact",
+        content: friend.id,
+        metadata: {
+          contactId: friend.id,
+          contactName: friend.name,
+          contactAvatar: friend.avatar,
+          contactPhone: includePhone ? friend.phone : undefined,
+        },
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, tempMsg]);
+
+      try {
+        await messageService.sendMessage({
+          conversationId: activeConvoId,
+          content: friend.id,
+          type: "contact",
+          senderName: currentUser?.fullName || "Tôi",
+          metadata: {
+            contactId: friend.id,
+            contactName: friend.name,
+            contactAvatar: friend.avatar,
+            contactPhone: includePhone ? friend.phone : undefined,
+          },
+        });
+      } catch (err) {
+        console.error("Lỗi gửi danh thiếp:", err);
+        setMessages((prev) => prev.filter((m) => m._id !== tempId));
+      }
     }
   };
 
@@ -2718,24 +2945,15 @@ export default function ChatPage() {
                                               : false;
 
                                             // 2. Logic số cột linh hoạt dựa trên số ảnh THỰC TẾ đang có
-                                            let numCols = 2;
-                                            let gridCols = "grid-cols-2";
+                                            let numCols = 3;
+                                            let gridCols = "grid-cols-3";
                                             if (count === 1) {
                                               gridCols = "grid-cols-1";
                                               numCols = 1;
-                                            } else if (count === 3) {
-                                              gridCols = "grid-cols-3";
-                                              numCols = 3;
-                                            } else if (
-                                              count >= 4 &&
-                                              isPortrait
-                                            ) {
-                                              gridCols = "grid-cols-4";
-                                              numCols = 4;
-                                            } else if (
-                                              count >= 4 &&
-                                              !isPortrait
-                                            ) {
+                                            } else if (count === 2) {
+                                              gridCols = "grid-cols-2";
+                                              numCols = 2;
+                                            } else if (count === 4) {
                                               gridCols = "grid-cols-2";
                                               numCols = 2;
                                             }
@@ -2774,8 +2992,10 @@ export default function ChatPage() {
                                               baseImgH,
                                             );
                                             const cellWidth =
-                                              cellHeight *
-                                              (baseImgW / baseImgH);
+                                              count > 1
+                                                ? cellHeight
+                                                : cellHeight *
+                                                  (baseImgW / baseImgH);
                                             const gap = 4;
                                             let computedGridWidth =
                                               cellWidth * numCols +
@@ -2806,8 +3026,6 @@ export default function ChatPage() {
                                                           ? "280px"
                                                           : "100%",
                                                     }),
-                                                  maxHeight: "420px",
-                                                  overflow: "hidden",
                                                 }}
                                               >
                                                 {visibleImages.map(
@@ -2828,9 +3046,11 @@ export default function ChatPage() {
 
                                                     // CHÌA KHÓA: Giữ đúng kích thước gốc bằng aspectRatio của từng tấm
                                                     const itemAspect =
-                                                      img.width && img.height
-                                                        ? `${img.width}/${img.height}`
-                                                        : aspectR;
+                                                      count > 1
+                                                        ? "1"
+                                                        : img.width && img.height
+                                                          ? `${img.width}/${img.height}`
+                                                          : aspectR;
 
                                                     return (
                                                       <div
@@ -3031,6 +3251,8 @@ export default function ChatPage() {
                                           Tin nhắn đã được thu hồi
                                         </span>
                                       </div>
+                                    ) : msg.type === "contact" ? (
+                                      <ContactCardBubble msg={msg} />
                                     ) : (msg.type as any) === "system" &&
                                       msg.metadata
                                         ?.callType ? null /* Rendered outside bubble wrapper above */ : msg.type ===
@@ -3173,7 +3395,7 @@ export default function ChatPage() {
                                     {/* end: system call bypasses bubble wrapper */}
                                     {/* Hover Controls (Reaction & Menu & Redo) */}
                                     <div
-                                      className={`absolute bottom-0 ${isMine ? "right-full pr-2" : "left-full pl-2"} flex items-center gap-1 z-[1000] ${hoveredMsgId === msg._id && !isMultiSelectMode
+                                      className={`absolute bottom-0 ${isMine ? "right-full pr-2" : "left-full pl-2"} flex items-center gap-1 z-[1000] ${(hoveredMsgId === msg._id || activeReactionMenu === msg._id || activeMenu === msg._id) && !isMultiSelectMode
                                         ? "opacity-100 translate-y-0"
                                         : "opacity-0 translate-y-2 pointer-events-none"
                                         } transition-all duration-200`}
@@ -3206,7 +3428,7 @@ export default function ChatPage() {
 
                                           {activeReactionMenu === msg._id && (
                                             <div
-                                              className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                                              className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"} before:absolute before:left-0 before:right-0 before:h-4 before:content-[''] ${menuPosition === "bottom" ? "before:-top-3.5" : "before:-bottom-3.5"}`}
                                               onMouseLeave={() =>
                                                 setActiveReactionMenu(null)
                                               }
@@ -3294,7 +3516,7 @@ export default function ChatPage() {
 
                                         {activeMenu === msg._id && (
                                           <div
-                                            className={`absolute z-50 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 overflow-hidden right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"}`}
+                                            className={`absolute z-50 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 py-1.5 right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"} before:absolute before:left-0 before:right-0 before:h-4 before:content-[''] ${menuPosition === "bottom" ? "before:-top-3.5" : "before:-bottom-3.5"}`}
                                             onMouseLeave={() =>
                                               setActiveMenu(null)
                                             }
@@ -3712,6 +3934,14 @@ export default function ChatPage() {
                   >
                     <PaperClipIcon className="w-5 h-5" />
                   </button>
+                  {/* 5. Gửi danh thiếp */}
+                  <button
+                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition"
+                    onClick={() => setShowContactCardModal(true)}
+                    title="Gửi danh thiếp"
+                  >
+                    <IdentificationIcon className="w-5 h-5" />
+                  </button>
                 </div>
 
                 {/* Reply Preview Section */}
@@ -3834,9 +4064,23 @@ export default function ChatPage() {
                           <PaperAirplaneIcon className="w-6 h-6" />
                         </button>
                       ) : (
-                        <button className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90">
-                          {/* This matches the Like/Thumb icon in the image */}
-                          <span className="text-2xl">👍</span>
+                        <button 
+                          onClick={() => setIsDefaultEmojiModalOpen(true)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setIsDefaultEmojiModalOpen(true);
+                          }}
+                          className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90 cursor-pointer"
+                        >
+                          <span 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSendDefaultEmoji();
+                            }}
+                            className="text-2xl cursor-pointer select-none"
+                          >
+                            {defaultEmoji}
+                          </span>
                         </button>
                       )}
                     </div>
@@ -4587,7 +4831,11 @@ export default function ChatPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                confirmModalConfig.type === "warning"
+                  ? "bg-yellow-50 text-yellow-600"
+                  : "bg-red-50 text-red-600"
+              }`}>
                 <AlertTriangle size={32} />
               </div>
               <h3 className="text-xl font-bold text-slate-800 mb-2">
@@ -4598,15 +4846,21 @@ export default function ChatPage() {
               </p>
             </div>
             <div className="p-4 bg-slate-50 flex gap-3">
-              <button
-                onClick={() => setConfirmModalOpen(false)}
-                className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-white transition-colors text-sm cursor-pointer"
-              >
-                Hủy bỏ
-              </button>
+              {!confirmModalConfig.hideCancel && (
+                <button
+                  onClick={() => setConfirmModalOpen(false)}
+                  className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-white transition-colors text-sm cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+              )}
               <button
                 onClick={confirmModalConfig.onConfirm}
-                className="flex-1 px-4 py-2.5 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-200 text-sm cursor-pointer"
+                className={`flex-1 px-4 py-2.5 text-white font-bold rounded-xl transition-colors shadow-lg text-sm cursor-pointer ${
+                  confirmModalConfig.type === "warning"
+                    ? "bg-yellow-500 hover:bg-yellow-600 shadow-yellow-200"
+                    : "bg-red-600 hover:bg-red-700 shadow-red-200"
+                }`}
               >
                 {confirmModalConfig.actionText}
               </button>
@@ -4614,6 +4868,26 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+
+      {/* Update Default Emoji Modal */}
+      <UpdateDefaultEmojiModal
+        isOpen={isDefaultEmojiModalOpen}
+        onClose={() => setIsDefaultEmojiModalOpen(false)}
+        currentEmoji={defaultEmoji}
+        onConfirm={(emoji) => {
+          setDefaultEmoji(emoji);
+          if (typeof window !== "undefined" && conversationId) {
+            localStorage.setItem(`default_emoji_${conversationId}`, emoji);
+          }
+          setIsDefaultEmojiModalOpen(false);
+          toast.success("Đã cập nhật biểu tượng cảm xúc mặc định");
+        }}
+      />
+      <SendContactCardModal
+        isOpen={showContactCardModal}
+        onClose={() => setShowContactCardModal(false)}
+        onSend={handleSendContactCard}
+      />
     </>
   );
 }
