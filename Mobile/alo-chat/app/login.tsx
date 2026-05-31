@@ -121,17 +121,20 @@ export default function LoginScreen() {
         deviceId: deviceName,
       });
       
-      // Nếu API trả về requireOTP = true (bật bảo mật OTP 2 lớp)
-      if (res.requireOTP) {
+      const data = res.data?.data || res.data || res;
+
+      // Nếu API trả về requiresOtp = true (bật bảo mật OTP 2 lớp)
+      if (data.requiresOtp || data.requireOTP) {
         setShowLoginOtpModal(true);
         return;
       }
 
       // signIn() lưu cả 2 token + cập nhật trạng thái -> _layout.tsx tự chuyển vào Tabs
-      await signIn(res.accessToken, res.refreshToken);
+      await signIn(data.accessToken, data.refreshToken);
     } catch (error: any) {
+      console.log("Login Error:", error.message, error.code, error.config);
       if (!error.response) {
-        Alert.alert("Lỗi Kết Nối", "Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng hoặc địa chỉ IP.");
+        Alert.alert("Lỗi Kết Nối", `Không thể kết nối: ${error.message}`);
       } else {
         const msg = error.response?.data?.message || "Sai tài khoản hoặc mật khẩu";
         Alert.alert("Lỗi Đăng Nhập", msg);
@@ -155,14 +158,16 @@ export default function LoginScreen() {
         deviceName = `${Device.brand || "Máy"} ${Device.modelName || "Không xác định"} (${Platform.OS})`;
       }
 
-      const res: any = await api.post("/auth/verify-login-otp", {
+      const res: any = await api.post("/auth/login/verify-otp", {
         email,
         otp: loginOtp,
         deviceId: deviceName,
       });
+      const data = res.data?.data || res.data || res;
+      
       setShowLoginOtpModal(false);
       setLoginOtp(""); // reset
-      await signIn(res.accessToken, res.refreshToken);
+      await signIn(data.accessToken, data.refreshToken);
     } catch (error: any) {
       Alert.alert(
         "Lỗi Xác Thực",
