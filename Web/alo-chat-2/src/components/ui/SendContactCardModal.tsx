@@ -189,11 +189,10 @@ export default function SendContactCardModal({
                     >
                       {/* Checkbox button */}
                       <div
-                        className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
-                          isSelected
+                        className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${isSelected
                             ? "bg-blue-600 border-blue-600 text-white"
                             : "border-gray-300 hover:border-gray-400"
-                        }`}
+                          }`}
                       >
                         {isSelected && <CheckIcon className="w-3.5 h-3.5 stroke-[3]" />}
                       </div>

@@ -17,6 +17,9 @@ interface ChatState {
     isReportSelectionMode: boolean;
     selectedMessagesForReport: string[];
 
+    // --- Info Panel State ---
+    showInfoPanel: boolean;
+
     // --- Actions ---
     setTyping: (conversationId: string, userId: string, isTyping: boolean) => void;
     setBulkPresence: (presences: any) => void;
@@ -28,6 +31,8 @@ interface ChatState {
     setReportSelectionMode: (val: boolean) => void;
     toggleMessageForReport: (messageId: string) => void;
     clearReportSelection: () => void;
+
+    setShowInfoPanel: (val: boolean) => void;
 
     setUnreadNotifsCount: (count: number) => void;
     incrementUnreadNotifsCount: () => void;
@@ -49,6 +54,9 @@ export const useChatStore = create<ChatState>((set) => ({
     reportConversationType: null,
     isReportSelectionMode: false,
     selectedMessagesForReport: [],
+
+    // --- Info Panel State ---
+    showInfoPanel: true,
 
     setTyping: (conversationId, userId, isTyping) => {
         set((state) => {
@@ -119,6 +127,8 @@ export const useChatStore = create<ChatState>((set) => ({
             return { selectedMessagesForReport: updated };
         }),
     clearReportSelection: () => set({ isReportSelectionMode: false, selectedMessagesForReport: [] }),
+
+    setShowInfoPanel: (val) => set({ showInfoPanel: val }),
 
     setUnreadNotifsCount: (count) => set({ unreadNotifsCount: count }),
     incrementUnreadNotifsCount: () => set((state) => ({ unreadNotifsCount: state.unreadNotifsCount + 1 })),

@@ -367,7 +367,7 @@ export default function CreateGroupModal({
 
             <div
               className={`flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 mb-3 focus-within:ring-2 focus-within:ring-black transition-all mt-1 relative z-10 shrink-0 ${
-                selectedIds.length > 0 ? "w-[calc(50%-16px)]" : "w-full"
+                selectedIds.length > 0 ? "md:w-[calc(50%-16px)] w-full" : "w-full"
               }`}
             >
               <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 shrink-0" />
@@ -397,7 +397,7 @@ export default function CreateGroupModal({
               {/* Searched User Result */}
               {searchedUser && (
                 <div className={`mb-4 p-3 bg-gray-50 rounded-2xl border border-gray-200 animate-in slide-in-from-top-2 ${
-                  selectedIds.length > 0 ? "w-[calc(50%-16px)]" : "w-full"
+                  selectedIds.length > 0 ? "md:w-[calc(50%-16px)] w-full" : "w-full"
                 }`}>
                   <p className="text-[10px] font-black text-black uppercase tracking-widest mb-2">Kết quả tìm kiếm</p>
                   <div
@@ -436,7 +436,7 @@ export default function CreateGroupModal({
                   <div
                     key={i}
                     className={`flex items-center gap-3 p-3 rounded-xl animate-pulse transition-all ${
-                      selectedIds.length > 0 ? "w-[calc(50%-16px)]" : "w-full"
+                      selectedIds.length > 0 ? "md:w-[calc(50%-16px)] w-full" : "w-full"
                     }`}
                   >
                     <div className="w-5 h-5 rounded-full bg-gray-200 shrink-0" />
@@ -447,7 +447,7 @@ export default function CreateGroupModal({
               ) : filteredFriends.length === 0 ? (
                 <p
                   className={`text-center text-gray-400 text-sm py-8 font-medium italic transition-all ${
-                    selectedIds.length > 0 ? "w-[calc(50%-16px)]" : "w-full"
+                    selectedIds.length > 0 ? "md:w-[calc(50%-16px)] w-full" : "w-full"
                   }`}
                 >
                   {friends.length === 0
@@ -462,7 +462,7 @@ export default function CreateGroupModal({
                       key={f.id}
                       onClick={() => toggleFriend(f.id)}
                       className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all select-none hover:bg-gray-50 text-gray-800 ${
-                        selectedIds.length > 0 ? "w-[calc(50%-16px)]" : "w-full"
+                        selectedIds.length > 0 ? "md:w-[calc(50%-16px)] w-full" : "w-full"
                       }`}
                     >
                       <div
@@ -505,7 +505,7 @@ export default function CreateGroupModal({
 
             {/* === SLIDING PANEL FOR SELECTED FRIENDS === */}
             <div
-              className={`absolute top-0 bottom-0 bg-white shadow-[-10px_0_20px_-5px_rgba(0,0,0,0.05)] border-l border-gray-100 flex flex-col transition-all duration-300 rounded-l-2xl ${
+              className={`hidden md:flex absolute top-0 bottom-0 bg-white shadow-[-10px_0_20px_-5px_rgba(0,0,0,0.05)] border-l border-gray-100 flex-col transition-all duration-300 rounded-l-2xl ${
                 selectedIds.length > 0
                   ? "w-[calc(50%-16px)] opacity-100 translate-x-0 right-0"
                   : "w-[calc(50%-16px)] opacity-0 translate-x-[110%] absolute pointer-events-none -right-10"
