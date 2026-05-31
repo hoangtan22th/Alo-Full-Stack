@@ -124,6 +124,8 @@ const BOT_INFO = {
 /**
  * Helper to render message content with mentions highlighted in dark blue.
  */
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+
 function renderContentWithMentions(content: string, members: any[], userCache: any) {
   if (!content) return content;
 
@@ -140,26 +142,37 @@ function renderContentWithMentions(content: string, members: any[], userCache: a
   const regex = new RegExp(`@(${sortedNames.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join("|")})`, "g");
 
   const parts = content.split(regex);
-  if (parts.length === 1) return content;
 
   const result: (string | React.JSX.Element)[] = [];
-  let lastIndex = 0;
-
-  // Splitting with capture group returns the match in the array
-  // content: "Hello @Hoàng Tân how are you"
-  // sortedNames: ["Hoàng Tân"]
-  // parts: ["Hello ", "Hoàng Tân", " how are you"]
 
   for (let i = 0; i < parts.length; i++) {
     if (i % 2 === 1) {
       // Đây là phần match (tên được nhắc)
       result.push(
-        <span key={i} className="text-blue-800 font-black px-0.5">
+        <span key={`mention-${i}`} className="text-blue-800 font-black px-0.5">
           @{parts[i]}
         </span>
       );
     } else if (parts[i]) {
-      result.push(parts[i]);
+      const textParts = parts[i].split(URL_REGEX);
+      for (let j = 0; j < textParts.length; j++) {
+        if (j % 2 === 1) {
+          result.push(
+            <a
+              key={`url-${i}-${j}`}
+              href={textParts[j]}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline hover:text-blue-800 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {textParts[j]}
+            </a>
+          );
+        } else if (textParts[j]) {
+          result.push(textParts[j]);
+        }
+      }
     }
   }
 
@@ -3446,7 +3459,7 @@ export default function ChatPage() {
                                         return (
                                           <div className="flex flex-col">
                                             <div
-                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap"
+                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]"
                                             >
                                               {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
                                             </div>
