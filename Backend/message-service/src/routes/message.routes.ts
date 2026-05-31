@@ -19,6 +19,7 @@ router.post("/last-messages", messageController.getLastMessagesForConversations)
 router.get("/conversation/:conversationId/admin", messageController.getAdminConversationHistory);
 
 router.get("/:conversationId", messageController.getMessageHistory);
+router.post("/global-search", messageController.globalSearchMessages);
 router.get("/:conversationId/search", messageController.searchMessages);
 router.get("/:conversationId/pinned", messageController.getPinnedMessages);
 router.patch("/:messageId/pin", messageController.pinMessage);
