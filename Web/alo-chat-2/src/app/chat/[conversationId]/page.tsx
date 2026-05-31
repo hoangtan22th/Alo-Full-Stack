@@ -128,7 +128,7 @@ const BOT_INFO = {
  */
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 
-function renderContentWithMentions(content: string, members: any[], userCache: any) {
+function renderContentWithMentions(content: string, members: any[], userCache: any, isMine: boolean = false) {
   if (!content) return content;
 
   // Thu thập danh sách tên để match (bao gồm @Tất cả)
@@ -151,7 +151,7 @@ function renderContentWithMentions(content: string, members: any[], userCache: a
     if (i % 2 === 1) {
       // Đây là phần match (tên được nhắc)
       result.push(
-        <span key={`mention-${i}`} className="text-blue-800 font-black px-0.5">
+        <span key={`mention-${i}`} className={`font-black px-0.5 ${isMine ? "text-blue-200" : "text-blue-800"}`}>
           @{parts[i]}
         </span>
       );
@@ -165,7 +165,10 @@ function renderContentWithMentions(content: string, members: any[], userCache: a
               href={textParts[j]}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 hover:underline hover:text-blue-800 transition-colors"
+              className={isMine
+                ? "underline text-blue-200 hover:text-white transition-colors"
+                : "text-blue-600 hover:underline hover:text-blue-800 transition-colors"
+              }
               onClick={(e) => e.stopPropagation()}
             >
               {textParts[j]}
@@ -3793,7 +3796,7 @@ export default function ChatPage() {
                                               {parsedMsgContent.isRichText ? (
                                                 <div dangerouslySetInnerHTML={{ __html: parsedMsgContent.text }} className="rich-text-content" />
                                               ) : (
-                                                renderContentWithMentions(parsedMsgContent.text, conversationInfo?.members || [], userCache)
+                                                renderContentWithMentions(parsedMsgContent.text, conversationInfo?.members || [], userCache, isMine)
                                               )}
                                             </div>
                                             {parsedReminder && msg._id === latestReminderMessageId && (
@@ -4564,51 +4567,152 @@ export default function ChatPage() {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2">
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      placeholder={
-                        replyingTo
-                          ? `Nhập @, tin nhắn tới ${userCache[replyingTo.senderId]?.name || "người dùng"}`
-                          : "Nhập tin nhắn..."
-                      }
-                      value={messageText}
-                      onChange={handleInputChange}
-                      onKeyDown={handleKeyDown}
-                      className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
-                    />
-                    <div className="flex items-center gap-1">
-                      {messageText.trim() ? (
+                  {isFormatMode ? (
+                    <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                      {/* Format Toolbar */}
+                      <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-gray-100 bg-gray-50/60">
                         <button
-                          onClick={handleSend}
-                          disabled={sending}
-                          className="p-2 text-blue-600 hover:text-blue-700 transition active:scale-95 disabled:opacity-40"
+                          onMouseDown={(e) => { e.preventDefault(); execEditorCommand("bold"); }}
+                          className="px-2 py-1 text-[13px] font-black text-gray-700 hover:bg-gray-200 rounded transition"
+                          title="Đậm (Ctrl+B)"
                         >
-                          <PaperAirplaneIcon className="w-6 h-6" />
+                          B
                         </button>
-                      ) : (
                         <button
-                          onClick={() => setIsDefaultEmojiModalOpen(true)}
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            setIsDefaultEmojiModalOpen(true);
-                          }}
-                          className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90 cursor-pointer"
+                          onMouseDown={(e) => { e.preventDefault(); execEditorCommand("italic"); }}
+                          className="px-2 py-1 text-[13px] italic font-semibold text-gray-700 hover:bg-gray-200 rounded transition"
+                          title="Nghiêng (Ctrl+I)"
                         >
-                          <span
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSendDefaultEmoji();
+                          I
+                        </button>
+                        <button
+                          onMouseDown={(e) => { e.preventDefault(); execEditorCommand("underline"); }}
+                          className="px-2 py-1 text-[13px] underline font-semibold text-gray-700 hover:bg-gray-200 rounded transition"
+                          title="Gạch chân (Ctrl+U)"
+                        >
+                          U
+                        </button>
+                        <button
+                          onMouseDown={(e) => { e.preventDefault(); execEditorCommand("strikeThrough"); }}
+                          className="px-2 py-1 text-[13px] line-through font-semibold text-gray-700 hover:bg-gray-200 rounded transition"
+                          title="Gạch ngang"
+                        >
+                          S
+                        </button>
+                        <div className="w-px h-4 bg-gray-300 mx-1" />
+                        <label className="flex items-center gap-1 cursor-pointer px-2 py-1 hover:bg-gray-200 rounded transition" title="Màu chữ">
+                          <span className="text-[13px] font-bold" style={{ color: textColor }}>A</span>
+                          <input
+                            type="color"
+                            value={textColor}
+                            onChange={(e) => {
+                              setTextColor(e.target.value);
+                              execEditorCommand("foreColor", e.target.value);
                             }}
-                            className="text-2xl cursor-pointer select-none"
-                          >
-                            {defaultEmoji}
-                          </span>
-                        </button>
-                      )}
+                            className="w-4 h-4 cursor-pointer rounded border-0 p-0 bg-transparent"
+                          />
+                        </label>
+                      </div>
+                      {/* Contenteditable Editor */}
+                      <div className="flex items-end gap-2 px-3 py-2">
+                        <div
+                          ref={editorRef}
+                          contentEditable
+                          suppressContentEditableWarning
+                          onInput={handleEditorInput}
+                          onKeyDown={handleEditorKeyDown}
+                          onPaste={(e) => {
+                            const items = e.clipboardData?.items;
+                            if (!items) return;
+                            let hasFile = false;
+                            const dt = new DataTransfer();
+                            for (let i = 0; i < items.length; i++) {
+                              if (items[i].kind === "file") {
+                                const file = items[i].getAsFile();
+                                if (file) { dt.items.add(file); hasFile = true; }
+                              }
+                            }
+                            if (hasFile) {
+                              e.preventDefault();
+                              const mockEv = { target: { files: dt.files } } as unknown as React.ChangeEvent<HTMLInputElement>;
+                              handleFileChange(mockEv);
+                            } else {
+                              e.preventDefault();
+                              const text = e.clipboardData.getData("text/plain");
+                              document.execCommand("insertText", false, text);
+                            }
+                          }}
+                          data-placeholder="Nhập tin nhắn có định dạng..."
+                          className="flex-1 min-h-[36px] max-h-40 overflow-y-auto outline-none text-[15px] font-medium leading-relaxed break-words [&:empty]:before:content-[attr(data-placeholder)] [&:empty]:before:text-gray-400 [&:empty]:before:pointer-events-none"
+                        />
+                        <div className="flex items-center gap-1 shrink-0">
+                          {messageText.trim() ? (
+                            <button
+                              onClick={handleSend}
+                              disabled={sending}
+                              className="p-2 text-blue-600 hover:text-blue-700 transition active:scale-95 disabled:opacity-40"
+                            >
+                              <PaperAirplaneIcon className="w-6 h-6" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={handleSendDefaultEmoji}
+                              className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90 cursor-pointer"
+                            >
+                              <span className="text-2xl select-none">{defaultEmoji}</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        placeholder={
+                          replyingTo
+                            ? `Nhập @, tin nhắn tới ${userCache[replyingTo.senderId]?.name || "người dùng"}`
+                            : "Nhập tin nhắn..."
+                        }
+                        value={messageText}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyDown}
+                        onPaste={handlePaste}
+                        className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
+                      />
+                      <div className="flex items-center gap-1">
+                        {messageText.trim() ? (
+                          <button
+                            onClick={handleSend}
+                            disabled={sending}
+                            className="p-2 text-blue-600 hover:text-blue-700 transition active:scale-95 disabled:opacity-40"
+                          >
+                            <PaperAirplaneIcon className="w-6 h-6" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setIsDefaultEmojiModalOpen(true)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              setIsDefaultEmojiModalOpen(true);
+                            }}
+                            className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90 cursor-pointer"
+                          >
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSendDefaultEmoji();
+                              }}
+                              className="text-2xl cursor-pointer select-none"
+                            >
+                              {defaultEmoji}
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
