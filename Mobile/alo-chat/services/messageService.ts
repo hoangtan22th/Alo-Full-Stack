@@ -476,5 +476,27 @@ export const messageService = {
       return false;
     }
   },
+
+  deleteMessageForMe: async (messageId: string): Promise<boolean> => {
+    try {
+      await api.delete(`/messages/${messageId}/me`);
+      return true;
+    } catch (error) {
+      console.error("Lỗi xóa tin nhắn phía tôi:", error);
+      return false;
+    }
+  },
+
+  bulkDeleteMessagesForMe: async (messageIds: string[]): Promise<boolean> => {
+    try {
+      await api.delete(`/messages/bulk/me`, {
+        data: { messageIds },
+      });
+      return true;
+    } catch (error) {
+      console.error("Lỗi xóa nhiều tin nhắn phía tôi:", error);
+      return false;
+    }
+  },
 };
 

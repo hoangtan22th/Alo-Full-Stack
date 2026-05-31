@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -28,7 +28,7 @@ import {
   ChevronRightIcon,
   TrashIcon,
 } from "react-native-heroicons/outline";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { groupService } from "../../services/groupService";
 import { useSocket } from "../../contexts/SocketContext";
 import { useAuth } from "../../contexts/AuthContext";
@@ -144,9 +144,11 @@ export default function MessagesScreen() {
   } | null>(null);
   const itemRefs = useRef<Record<string, View>>({});
 
-  useEffect(() => {
-    fetchData();
-  }, [currentUserId]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [currentUserId])
+  );
 
   const { socket, onlineUsers, fetchBulkPresence } = useSocket();
 
