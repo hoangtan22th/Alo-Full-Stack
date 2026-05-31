@@ -33,6 +33,7 @@ import {
 import CreateGroupModal from "@/components/ui/group/CreateGroupModal";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { stripHtml, parseMessageContent } from "@/utils/html";
 
 // --- Sub-component: ManageLabelsModal ---
 function ManageLabelsModal({
@@ -1156,7 +1157,7 @@ export default function ConversationSidebar() {
                     >
                       {typingUsers[chat.id]?.length > 0
                         ? "Đang soạn tin..."
-                        : chat.message}
+                        : parseMessageContent(chat.message).plainText}
                     </p>
                     <button
                       onClick={(e) => toggleMenu(e, chat.id)}

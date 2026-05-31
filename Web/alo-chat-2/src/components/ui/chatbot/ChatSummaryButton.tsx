@@ -9,6 +9,7 @@ import {
 import { chatbotApi } from "@/api/chatbot.api";
 import { toast } from "sonner";
 import { MessageDTO } from "@/services/messageService";
+import { parseMessageContent } from "@/utils/html";
 
 interface Props {
   conversationId: string;
@@ -70,7 +71,7 @@ export default function ChatSummaryButton({
               : "Người dùng " + msg.senderId.slice(-4);
         }
 
-        let content = msg.content;
+        let content = msg.type === "text" ? parseMessageContent(msg.content).plainText : msg.content;
 
         // Nếu là file hoặc ảnh thì tóm tắt loại nội dung
         if (msg.type === "image") content = "[Hình ảnh]";
