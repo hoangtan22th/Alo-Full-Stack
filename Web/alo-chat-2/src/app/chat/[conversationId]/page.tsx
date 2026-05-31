@@ -390,7 +390,12 @@ export default function ChatPage() {
     }
   }, [messageText, conversationId, conversationInfo?.isGroup]);
   const [sending, setSending] = useState(false);
-  const [showInfoPanel, setShowInfoPanel] = useState(true);
+  const { showInfoPanel, setShowInfoPanel } = useChatStore(
+    useShallow((s) => ({
+      showInfoPanel: s.showInfoPanel,
+      setShowInfoPanel: s.setShowInfoPanel,
+    }))
+  );
   const [infoPanelTab, setInfoPanelTab] = useState<"info" | "search">("info");
   // Hover tooltip & context menu & reactions
   const [activeMenu, setActiveMenu] = useState<string | null>(null);

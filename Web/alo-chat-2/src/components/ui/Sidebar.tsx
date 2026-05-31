@@ -101,14 +101,62 @@ export default function Sidebar() {
   }, [user, fetchProfile]);
 
   return (
-    <div className="fixed md:relative bottom-0 left-0 w-full md:w-auto md:flex h-16 md:h-screen shrink-0 z-50 md:z-40">
+    <>
+      {/* MOBILE TOP HEADER */}
+      <div className="md:hidden w-full h-14 bg-white border-b border-gray-200 shadow-sm flex items-center justify-between px-4 shrink-0 pointer-events-auto">
+        <div className="flex items-center gap-2">
+          <img src="/alochat.svg" alt="Logo" className="w-8 h-8 object-cover" />
+          <span className="font-bold text-lg text-blue-600">Alo Chat</span>
+        </div>
+        <div className="flex items-center gap-4">
+          {/* Mobile Notifications */}
+          <div className="relative" ref={notificationRef}>
+            <button
+              onClick={() => setShowNotificationMenu(!showNotificationMenu)}
+              className={`w-9 h-9 flex items-center justify-center rounded-full transition-all relative ${showNotificationMenu ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
+              title="Thông báo"
+            >
+              {showNotificationMenu ? (
+                <BellSolid className="w-5 h-5 text-blue-600" />
+              ) : (
+                <BellOutline className="w-5 h-5" />
+              )}
+              {unreadNotifsCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold rounded-full w-4.5 h-4.5 flex items-center justify-center border border-white">
+                  {unreadNotifsCount > 9 ? "9+" : unreadNotifsCount}
+                </span>
+              )}
+            </button>
+          </div>
+          
+          {/* Mobile User Avatar */}
+          <Link
+            href={`/profile/timeline?userId=${user?.id || user?._id}`}
+            className="w-8 h-8 cursor-pointer rounded-full overflow-hidden border border-gray-300 active:scale-90 transition-transform block"
+          >
+            <img
+              src={avatarUrl}
+              alt="Avatar"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).onerror = null;
+                (e.target as HTMLImageElement).src =
+                  "https://ui-avatars.com/api/?name=U&background=E5E7EB&color=374151&rounded=true";
+              }}
+            />
+          </Link>
+        </div>
+      </div>
+
+      {/* SIDEBAR (Desktop) / BOTTOM BAR (Mobile) */}
+      <div className="fixed md:relative bottom-0 left-0 w-full md:w-auto md:flex h-16 md:h-screen shrink-0 z-[999] md:z-40 pointer-events-auto">
       {/* Thin Sidebar Bar */}
-      <div className="w-full md:w-19 h-full bg-[#f4f5f7] flex flex-row md:flex-col items-center py-2 md:py-6 px-2 md:px-0 justify-around md:justify-between shrink-0 border-t md:border-t-0 md:border-r border-gray-200 relative pb-safe">
+      <div className="w-full md:w-20 h-full bg-[#f4f5f7] flex flex-row md:flex-col items-center py-2 md:py-6 px-2 md:px-0 justify-around md:justify-between shrink-0 border-t md:border-t-0 md:border-r border-gray-200 relative">
         {/* === MAIN NAV SECTION === */}
-        <div className="flex flex-row md:flex-col items-center justify-around md:justify-start gap-1 md:gap-8 w-full md:w-auto flex-1 md:flex-none">
+        <div className="flex flex-row md:flex-col items-center justify-between md:justify-start gap-1 md:gap-8 w-full md:w-auto px-4 md:px-0 flex-1 md:flex-none">
           <Link
             href="/"
-            className="hidden md:flex w-10 h-10 rounded-full overflow-hidden mb-2 border-2 border-gray-100 shadow-sm hover:scale-110 transition-transform active:scale-95 bg-white items-center justify-center"
+            className="hidden md:flex w-10 h-10 shrink-0 rounded-full overflow-hidden mb-2 border-2 border-gray-100 shadow-sm hover:scale-110 transition-transform active:scale-95 bg-white items-center justify-center"
           >
             <img
               src="/alochat.svg"
@@ -119,7 +167,7 @@ export default function Sidebar() {
 
           <Link
             href="/chat"
-            className={`w-12 h-12 flex items-center justify-center rounded-full transition-all ${isActive("/chat") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
+            className={`w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full transition-all ${isActive("/chat") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
           >
             {isActive("/chat") ? (
               <ChatSolid className="w-6 h-6" />
@@ -131,7 +179,7 @@ export default function Sidebar() {
           {/* Contacts */}
           <Link
             href="/contacts"
-            className={`relative w-12 h-12 flex items-center justify-center rounded-full transition-all ${isActive("/contacts") && !isActive("/contacts/groups") && !isActive("/contacts/group-invites") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
+            className={`relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full transition-all ${isActive("/contacts") && !isActive("/contacts/groups") && !isActive("/contacts/group-invites") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
             title="Danh bạ"
           >
             {isActive("/contacts") &&
@@ -152,7 +200,7 @@ export default function Sidebar() {
           {/* Group Management */}
           <Link
             href="/contacts/groups"
-            className={`relative w-12 h-12 flex items-center justify-center rounded-full transition-all ${isActive("/contacts/groups") || isActive("/contacts/group-invites") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
+            className={`relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full transition-all ${isActive("/contacts/groups") || isActive("/contacts/group-invites") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
             title="Quản lý nhóm"
           >
             {isActive("/contacts/groups") ||
@@ -172,7 +220,7 @@ export default function Sidebar() {
           {/* Timeline / News Feed */}
           <Link
             href="/feed"
-            className={`w-12 h-12 flex items-center justify-center rounded-full transition-all ${isActive("/feed") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
+            className={`w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full transition-all ${isActive("/feed") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
             title="Nhật ký"
           >
             {isActive("/feed") ? (
@@ -182,8 +230,8 @@ export default function Sidebar() {
             )}
           </Link>
 
-          {/* Notifications */}
-          <div className="relative" ref={notificationRef}>
+          {/* Notifications (Desktop Only in this section) */}
+          <div className="relative hidden md:block" ref={notificationRef}>
             <button
               onClick={() => setShowNotificationMenu(!showNotificationMenu)}
               className={`w-12 h-12 flex items-center justify-center rounded-full transition-all relative ${showNotificationMenu ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
@@ -201,25 +249,6 @@ export default function Sidebar() {
                 </span>
               )}
             </button>
-          </div>
-
-          {/* USER AVATAR - Mobile only (moved to bottom on desktop) */}
-          <div className="relative md:hidden flex items-center" ref={menuRef}>
-            <div
-              onClick={() => setShowUserMenu(!showUserMenu)}
-              className="w-8 h-8 cursor-pointer rounded-full overflow-hidden border border-gray-300 active:scale-90 transition-transform"
-            >
-              <img
-                src={avatarUrl}
-                alt="Avatar"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).onerror = null;
-                  (e.target as HTMLImageElement).src =
-                    "https://ui-avatars.com/api/?name=U&background=E5E7EB&color=374151&rounded=true";
-                }}
-              />
-            </div>
           </div>
         </div>
 
@@ -247,7 +276,7 @@ export default function Sidebar() {
             )}
           </div>
 
-          {/* USER AVATAR */}
+          {/* USER AVATAR (Desktop) */}
           <div className="relative" ref={menuRef}>
             <div
               onClick={() => setShowUserMenu(!showUserMenu)}
@@ -264,20 +293,21 @@ export default function Sidebar() {
                 }}
               />
             </div>
-
-            {showUserMenu && (
-              <UserMenu
-                onClose={() => setShowUserMenu(false)}
-                onOpenProfile={() => setIsProfileOpen(true)}
-                onOpenWrapped={() => setIsWrappedOpen(true)}
-                onLogout={() => {
-                  useAuthStore.getState().logout();
-                  window.location.href = "/login";
-                }}
-              />
-            )}
           </div>
         </div>
+
+        {/* MOBILE USER MENU - Rendered here to work on all screen sizes */}
+        {showUserMenu && (
+          <UserMenu
+            onClose={() => setShowUserMenu(false)}
+            onOpenProfile={() => setIsProfileOpen(true)}
+            onOpenWrapped={() => setIsWrappedOpen(true)}
+            onLogout={() => {
+              useAuthStore.getState().logout();
+              window.location.href = "/login";
+            }}
+          />
+        )}
 
         <SettingsModal
           isOpen={isSettingsModalOpen}
@@ -301,5 +331,6 @@ export default function Sidebar() {
         <NotificationMenu onClose={() => setShowNotificationMenu(false)} />
       )}
     </div>
+    </>
   );
 }

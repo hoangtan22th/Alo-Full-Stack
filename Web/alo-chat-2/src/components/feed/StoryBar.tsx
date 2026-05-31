@@ -185,7 +185,7 @@ export default function StoryBar({ onStoryCreated }: StoryBarProps) {
 
   return (
     <>
-      <div className="bg-white dark:bg-zinc-950 rounded-3xl p-4 border border-gray-100 dark:border-zinc-800 shadow-sm">
+      <div className="bg-white dark:bg-zinc-950 rounded-3xl p-3 md:p-4 border border-gray-100 dark:border-zinc-800 shadow-sm">
         <div
           ref={scrollRef}
           className="flex gap-3.5 overflow-x-auto scrollbar-hide py-1.5"

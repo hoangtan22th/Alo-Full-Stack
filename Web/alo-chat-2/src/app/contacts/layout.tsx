@@ -13,7 +13,7 @@ export default function ContactsLayout({ children }: { children: React.ReactNode
   
   return (
     <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden text-gray-800 font-sans bg-white relative pb-16 md:pb-0">
-      <div className="z-50 shrink-0">
+      <div className="relative z-50 shrink-0">
         <Sidebar />
       </div>
       
