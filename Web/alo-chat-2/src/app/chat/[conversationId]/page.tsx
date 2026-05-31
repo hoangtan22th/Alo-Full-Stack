@@ -2497,15 +2497,26 @@ export default function ChatPage() {
             {/* Pinned Messages (nếu có) */}
             {pinnedMessages.length === 1 && (
               <div className="px-6 pt-3 pb-1">
-                <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2 shadow-sm">
+                <div 
+                  className="flex items-center gap-2 bg-yellow-50 hover:bg-yellow-100/80 transition cursor-pointer border border-yellow-200 rounded-xl px-4 py-2 shadow-sm"
+                  onClick={() => {
+                    const targetMsg = document.getElementById(`msg-${pinnedMessages[0]._id}`);
+                    if (targetMsg) {
+                      targetMsg.scrollIntoView({ behavior: "smooth", block: "center" });
+                      targetMsg.classList.add("bg-yellow-100/50");
+                      setTimeout(() => targetMsg.classList.remove("bg-yellow-100/50"), 2000);
+                    } else {
+                      toast.error("Không tìm thấy tin nhắn (có thể đã quá cũ)");
+                    }
+                  }}
+                >
                   <MapPinIcon className="w-5 h-5 text-yellow-500" />
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] font-bold text-yellow-800 truncate">
                       {pinnedMessages[0].type === "text"
                         ? pinnedMessages[0].content
                         : pinnedMessages[0].type === "file"
-                          ? pinnedMessages[0].metadata?.fileName ||
-                          "Tệp đính kèm"
+                          ? pinnedMessages[0].metadata?.fileName || "Tệp đính kèm"
                           : pinnedMessages[0].type === "image"
                             ? "[Ảnh]"
                             : "[Tin nhắn hệ thống]"}
@@ -2516,9 +2527,22 @@ export default function ChatPage() {
                     </div>
                   </div>
                   <button
-                    className="ml-2 p-1 rounded-full hover:bg-yellow-100 text-yellow-700"
+                    className="p-1 rounded-full hover:bg-yellow-200 text-yellow-700 ml-1"
+                    title="Chuyển tiếp"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setForwardingMessage(pinnedMessages[0]);
+                    }}
+                  >
+                    <PaperAirplaneIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    className="p-1 rounded-full hover:bg-yellow-200 text-yellow-700"
                     title="Bỏ ghim"
-                    onClick={() => handlePinMessage(pinnedMessages[0])}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePinMessage(pinnedMessages[0]);
+                    }}
                   >
                     <XMarkIcon className="w-4 h-4" />
                   </button>
@@ -2580,7 +2604,18 @@ export default function ChatPage() {
                     {pinnedMessages.map((msg) => (
                       <div
                         key={msg._id}
-                        className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2"
+                        className="flex items-center gap-2 bg-yellow-50 hover:bg-yellow-100/80 transition cursor-pointer border border-yellow-200 rounded-xl px-4 py-2"
+                        onClick={() => {
+                          setShowPinnedModal(false);
+                          const targetMsg = document.getElementById(`msg-${msg._id}`);
+                          if (targetMsg) {
+                            targetMsg.scrollIntoView({ behavior: "smooth", block: "center" });
+                            targetMsg.classList.add("bg-yellow-100/50");
+                            setTimeout(() => targetMsg.classList.remove("bg-yellow-100/50"), 2000);
+                          } else {
+                            toast.error("Không tìm thấy tin nhắn (có thể đã quá cũ)");
+                          }
+                        }}
                       >
                         <div className="flex-1 min-w-0">
                           <div className="text-[13px] font-bold text-yellow-800 truncate">
@@ -2598,9 +2633,23 @@ export default function ChatPage() {
                           </div>
                         </div>
                         <button
-                          className="ml-2 p-1 rounded-full hover:bg-yellow-100 text-yellow-700"
+                          className="p-1 rounded-full hover:bg-yellow-200 text-yellow-700 ml-1"
+                          title="Chuyển tiếp"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPinnedModal(false);
+                            setForwardingMessage(msg);
+                          }}
+                        >
+                          <PaperAirplaneIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          className="p-1 rounded-full hover:bg-yellow-200 text-yellow-700"
                           title="Bỏ ghim"
-                          onClick={() => handlePinMessage(msg)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePinMessage(msg);
+                          }}
                         >
                           <XMarkIcon className="w-4 h-4" />
                         </button>
@@ -2854,6 +2903,12 @@ export default function ChatPage() {
                                           : "border-gray-100"
                                       } ${bubbleRadius}`}
                                   >
+                                    {/* Sender Name for Group Chats */}
+                                    {isFirst && !isMine && conversationInfo?.isGroup && (
+                                      <span className="text-[11px] font-bold text-gray-500 mb-1 ml-0.5">
+                                        {senderName}
+                                      </span>
+                                    )}
                                     {/* Reply Quote Box */}
                                     {msg.replyTo &&
                                       msg.replyTo.messageId &&
@@ -3369,7 +3424,7 @@ export default function ChatPage() {
                                         return (
                                           <div className="flex flex-col">
                                             <div
-                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap text-justify"
+                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap"
                                             >
                                               {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
                                             </div>
@@ -3931,8 +3986,8 @@ export default function ChatPage() {
                         return (
                           <img
                             key={id}
-                            src={userProfile?.avatar || "https://i.pinimg.com/736x/c6/e5/65/c6e56503cfdd87da299f72dc416023d4.jpg"}
-                            alt={(userProfile as any)?.fullName || (userProfile as any)?.name || "Ai đó"}
+                            src={userProfile?.avatar ? getMediaUrl(userProfile.avatar) : "/avt-mac-dinh.jpg"}
+                            alt={getSenderDisplayName(id)}
                             className="w-5 h-5 rounded-full border-2 border-white object-cover shadow-sm"
                             style={{ zIndex: 3 - index }}
                           />
@@ -3940,20 +3995,11 @@ export default function ChatPage() {
                       })}
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-bold text-gray-700">
-                        {(() => {
-                          const names = typingForThisConvo
-                            .slice(0, 2)
-                            .map((id) => {
-                               const userProfile = userCache[id] || conversationInfo?.members?.find((m: any) => m.userId === id);
-                               return (userProfile as any)?.fullName?.split(' ').pop() || (userProfile as any)?.name?.split(' ').pop() || 'Ai đó';
-                            });
-                          const extraCount = typingForThisConvo.length - names.length;
-                          let nameStr = names.join(', ');
-                          if (extraCount > 0) nameStr += ` và ${extraCount} người khác`;
-                          return nameStr;
-                        })()}
-                      </span>
+                      {typingForThisConvo.length === 1 && (
+                        <span className="text-[11px] font-bold text-gray-700">
+                          {getSenderDisplayName(typingForThisConvo[0]).split(' ').pop()}
+                        </span>
+                      )}
                       <span className="text-[11px] text-gray-400 italic">đang soạn tin</span>
                       <div className="flex gap-0.5 ml-0.5 items-center">
                         <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
