@@ -57,6 +57,9 @@ jobs:
           - name: voting-service
             file: Backend/voting-service/Dockerfile
             image: alo-voting-service
+          - name: post-service
+            file: Backend/post-service/Dockerfile
+            image: alo-post-service
           - name: alo-chat-2
             file: Web/alo-chat-2/Dockerfile
             image: alo-chat-web
@@ -92,7 +95,7 @@ jobs:
             fi
             
             # SPECIAL RULE: If this is a Java service and common-service has changed, force build
-            if [ "$CHANGED" = "false" ] && [[ "${{ matrix.service.file }}" == Backend/* ]] && [[ "${{ matrix.service.file }}" != *message-service* ]] && [[ "${{ matrix.service.file }}" != *group-service* ]] && [[ "${{ matrix.service.file }}" != *realtime-service* ]] && [[ "${{ matrix.service.file }}" != *voting-service* ]]; then
+            if [ "$CHANGED" = "false" ] && [[ "${{ matrix.service.file }}" == Backend/* ]] && [[ "${{ matrix.service.file }}" != *message-service* ]] && [[ "${{ matrix.service.file }}" != *group-service* ]] && [[ "${{ matrix.service.file }}" != *realtime-service* ]] && [[ "${{ matrix.service.file }}" != *voting-service* ]] && [[ "${{ matrix.service.file }}" != *post-service* ]]; then
               if ! git diff --quiet ${{ github.event.before }} ${{ github.event.after }} -- "Backend/common-service"; then
                 echo "Backend/common-service changed! Forcing build for Java service ${{ matrix.service.name }}."
                 CHANGED=true
@@ -110,7 +113,7 @@ jobs:
               fi
               
               # SPECIAL RULE for common-service fallback
-              if [ "$CHANGED" = "false" ] && [[ "${{ matrix.service.file }}" == Backend/* ]] && [[ "${{ matrix.service.file }}" != *message-service* ]] && [[ "${{ matrix.service.file }}" != *group-service* ]] && [[ "${{ matrix.service.file }}" != *realtime-service* ]] && [[ "${{ matrix.service.file }}" != *voting-service* ]]; then
+              if [ "$CHANGED" = "false" ] && [[ "${{ matrix.service.file }}" == Backend/* ]] && [[ "${{ matrix.service.file }}" != *message-service* ]] && [[ "${{ matrix.service.file }}" != *group-service* ]] && [[ "${{ matrix.service.file }}" != *realtime-service* ]] && [[ "${{ matrix.service.file }}" != *voting-service* ]] && [[ "${{ matrix.service.file }}" != *post-service* ]]; then
                 if ! git diff --quiet HEAD~1 HEAD -- "Backend/common-service"; then
                   echo "Backend/common-service changed! Forcing build for Java service ${{ matrix.service.name }}."
                   CHANGED=true

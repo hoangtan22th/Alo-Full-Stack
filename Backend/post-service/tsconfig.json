@@ -2,9 +2,9 @@
   "compilerOptions": {
     "rootDir": "./",
     "outDir": "./dist",
-    "module": "ESNext",
-    "target": "esnext",
-    "moduleResolution": "bundler",
+    "module": "CommonJS",
+    "target": "ES2022",
+    "moduleResolution": "Node",
     "types": ["node"],
     "sourceMap": true,
     "declaration": true,
@@ -16,7 +16,8 @@
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*", "index.ts"],
   "exclude": ["node_modules", "dist"]
