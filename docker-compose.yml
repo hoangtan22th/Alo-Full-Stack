@@ -281,11 +281,15 @@ services:
       - RABBITMQ_USER=${RABBITMQ_USER:-guest}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-guest}
       - MONGODB_URI=mongodb://mongodb:27017/alo_report_db
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - EUREKA_DEFAULT_ZONE=http://discovery-service:8761/eureka/
     depends_on:
       mongodb:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - alo-network
