@@ -43,6 +43,8 @@ interface MessageItemProps {
   onOpenGallery?: (imagesList: any[], idx: number) => void;
 }
 
+import { GroupLinkBubble } from "./GroupLinkBubble";
+
 export const MessageItem = ({
   msg,
   isSender,
@@ -479,11 +481,36 @@ export const MessageItem = ({
               );
             })()
           ) : msg.type === "text" ? (
-            <Text
-              className={`text-base leading-6 ${isSender ? "text-white" : "text-gray-900"}`}
-            >
-              {msg.content}
-            </Text>
+            (() => {
+              const GROUP_LINK_REGEX = /(?:https?:\/\/)?alo\.chat\/g\/([a-f\d]{24})/i;
+              const groupMatch = msg.content?.match(GROUP_LINK_REGEX);
+              
+              if (groupMatch) {
+                const linkGroupId = groupMatch[1];
+                const textOnlyLink = msg.content.trim() === groupMatch[0].trim();
+                
+                return (
+                  <View className="flex-col">
+                    {/* {!textOnlyLink && (
+                      <Text
+                        className={`text-base leading-6 ${isSender ? "text-white" : "text-gray-900"}`}
+                      >
+                        {msg.content}
+                      </Text>
+                    )} */}
+                    <GroupLinkBubble msg={msg} linkGroupId={linkGroupId} />
+                  </View>
+                );
+              }
+
+              return (
+                <Text
+                  className={`text-base leading-6 ${isSender ? "text-white" : "text-gray-900"}`}
+                >
+                  {msg.content}
+                </Text>
+              );
+            })()
           ) : msg.type === "poll" ? (
             <PollMessagePreview
               pollId={msg.metadata?.pollId || ""}

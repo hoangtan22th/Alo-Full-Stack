@@ -80,6 +80,18 @@ export const groupService = {
     }
   },
 
+  getGroupInfoForLink: async (groupId: string) => {
+    try {
+      const res = await api.get<any, any>(`/groups/${groupId}/link-info`);
+      return res?.data?.data ? res.data.data : res?.data ? res.data : res;
+    } catch (error: any) {
+      if (error.response?.status !== 404) {
+        console.error("Lỗi lấy thông tin nhóm cho link:", error);
+      }
+      throw error;
+    }
+  },
+
   getGroupById: async (groupId: string) => {
     try {
       const data = await api.get<any, any>(`/groups/${groupId}`);

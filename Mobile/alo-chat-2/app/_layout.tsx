@@ -124,6 +124,7 @@ function RootLayoutNav() {
         <Stack.Screen name="chat/media" />
         <Stack.Screen name="chat/forward" />
         <Stack.Screen name="groups/create-group" />
+        <Stack.Screen name="chat/group-link-preview" options={{ presentation: "modal" }} />
       </Stack>
 
       <InAppNotification
