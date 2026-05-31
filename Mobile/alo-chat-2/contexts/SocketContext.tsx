@@ -5,7 +5,7 @@ import { io, Socket } from "socket.io-client";
 import { useAuth } from "./AuthContext";
 import { presenceService } from "../services/presenceService";
 import { userService } from "../services/userService";
-import { Audio } from "expo-av";
+import { createAudioPlayer } from "expo-audio";
 
 export type OnlineUser = {
   status: "online" | "offline";
@@ -38,17 +38,15 @@ export function useSocket() {
   return useContext(SocketContext);
 }
 
-const playNotificationSound = async () => {
+let notificationPlayer: any = null;
+
+const playNotificationSound = () => {
   try {
-    const { sound } = await Audio.Sound.createAsync(
-      require("../assets/audio_nhan.mp3")
-    );
-    await sound.playAsync();
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (status.isLoaded && status.didJustFinish) {
-        sound.unloadAsync();
-      }
-    });
+    if (!notificationPlayer) {
+      notificationPlayer = createAudioPlayer(require("../assets/audio_nhan.mp3"));
+    }
+    notificationPlayer.seekTo(0);
+    notificationPlayer.play();
   } catch (error) {
     console.log("Lỗi phát âm thanh thông báo:", error);
   }

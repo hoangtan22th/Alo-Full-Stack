@@ -25,11 +25,7 @@ export default function PersonalInfoScreen() {
   const { user, refreshUser } = useAuth();
 
   const handleBack = () => {
-    if (from === "timeline") {
-      router.push(`/profile/timeline?userId=${user?.id || user?._id}`);
-    } else {
-      router.back();
-    }
+    router.back();
   };
 
   const [loading, setLoading] = useState(true);

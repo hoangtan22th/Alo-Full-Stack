@@ -151,7 +151,7 @@ export default function StoryBar() {
                     colors={["#a855f7", "#ec4899", "#3b82f6"]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    className="w-16 h-16 rounded-full p-0.5 items-center justify-center"
+                    style={{ width: 64, height: 64, borderRadius: 32, padding: 2, alignItems: "center", justifyContent: "center" }}
                   >
                     <Image
                       source={{ uri: getAvatar(currentUser?.avatar, currentUser?.fullName) }}
@@ -222,7 +222,7 @@ export default function StoryBar() {
                   colors={["#2563eb", "#8b5cf6", "#ec4899"]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  className="w-16 h-16 rounded-full p-0.5 items-center justify-center"
+                  style={{ width: 64, height: 64, borderRadius: 32, padding: 2, alignItems: "center", justifyContent: "center" }}
                 >
                   <Image
                     source={{ uri: getAvatar(profile?.avatar, profile?.fullName) }}

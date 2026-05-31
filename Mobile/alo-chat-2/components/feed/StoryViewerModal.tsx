@@ -14,7 +14,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Video, Audio, ResizeMode } from "expo-av";
+import { useVideoPlayer, VideoView } from "expo-video";
+import { createAudioPlayer } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { postService, IStoryGroup, IStory, ReactionType } from "../../services/postService";
 import { userService, UserProfileDTO } from "../../services/userService";
@@ -74,17 +75,38 @@ export default function StoryViewerModal({
   // Floating emojis state
   const [flyingEmojis, setFlyingEmojis] = useState<{ id: number; emoji: string; left: number; bottom: number }[]>([]);
 
-  // Sound & Video refs
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const videoRef = useRef<Video | null>(null);
-
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const progressRef = useRef<number>(0);
-
   const currentGroup = storyGroups[groupIndex];
   const currentStory = currentGroup?.stories[storyIndex];
   const currentProfile = currentGroup ? userProfiles[currentGroup.userId] : null;
   const isOwnStory = currentGroup?.userId?.toLowerCase() === currentUserId?.toLowerCase();
+
+  const [sound, setSound] = useState<any>(null);
+
+  const videoPlayer = useVideoPlayer(
+    currentStory?.mediaType === "VIDEO" ? currentStory.mediaUrl : null,
+    (player) => {
+      player.loop = true;
+      player.muted = !!currentStory?.music || isMuted;
+      if (!paused) player.play();
+    }
+  );
+
+  useEffect(() => {
+    if (videoPlayer) {
+      if (paused) videoPlayer.pause();
+      else videoPlayer.play();
+    }
+  }, [paused, videoPlayer]);
+
+  useEffect(() => {
+    if (videoPlayer) {
+      videoPlayer.muted = !!currentStory?.music || isMuted;
+    }
+  }, [isMuted, currentStory, videoPlayer]);
+
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressRef = useRef<number>(0);
+
 
   // Tải âm thanh khi nhạc thay đổi
   useEffect(() => {
@@ -93,27 +115,20 @@ export default function StoryViewerModal({
     const loadAndPlayMusic = async () => {
       // Unload sound cũ
       if (sound) {
-        try {
-          const status = await sound.getStatusAsync();
-          if (status.isLoaded) {
-            await sound.unloadAsync();
-          }
-        } catch (e) {
-          console.log("Lỗi unload sound:", e);
-        }
+        try { sound.pause(); } catch(e){}
         setSound(null);
       }
 
       if (currentStory?.music?.url) {
         try {
-          const { sound: newSound } = await Audio.Sound.createAsync(
-            { uri: currentStory.music.url },
-            { shouldPlay: !paused, isMuted: isMuted, isLooping: true }
-          );
+          const newSound = createAudioPlayer(currentStory.music.url);
+          newSound.loop = true;
+          newSound.muted = isMuted;
           if (active) {
             setSound(newSound);
+            if (!paused) newSound.play();
           } else {
-            await newSound.unloadAsync();
+            newSound.pause();
           }
         } catch (e) {
           console.log("Lỗi tạo/tải nhạc nền Spotify:", e);
@@ -130,47 +145,24 @@ export default function StoryViewerModal({
 
   // Điều khiển play/pause âm thanh
   useEffect(() => {
-    const togglePlay = async () => {
-      if (sound) {
-        try {
-          const status = await sound.getStatusAsync();
-          if (status.isLoaded) {
-            if (paused) {
-              await sound.pauseAsync();
-            } else {
-              await sound.playAsync();
-            }
-          }
-        } catch (e) {
-          console.log("Lỗi play/pause sound:", e);
-        }
-      }
-    };
-    togglePlay();
+    if (sound) {
+      if (paused) sound.pause();
+      else sound.play();
+    }
   }, [paused, sound]);
 
   // Điều khiển mute âm thanh
   useEffect(() => {
-    const toggleMute = async () => {
-      if (sound) {
-        try {
-          const status = await sound.getStatusAsync();
-          if (status.isLoaded) {
-            await sound.setIsMutedAsync(isMuted);
-          }
-        } catch (e) {
-          console.log("Lỗi mute sound:", e);
-        }
-      }
-    };
-    toggleMute();
+    if (sound) {
+      sound.muted = isMuted;
+    }
   }, [isMuted, sound]);
 
   // Giải phóng âm thanh khi tắt modal
   useEffect(() => {
     return () => {
       if (sound) {
-        sound.unloadAsync().catch((err) => console.log("Lỗi unload sound on unmount:", err));
+        try { sound.pause(); } catch(e) {}
       }
     };
   }, [sound]);
@@ -371,13 +363,10 @@ export default function StoryViewerModal({
         >
           <View className="absolute inset-0 flex justify-center items-center">
             {currentStory.mediaType === "VIDEO" ? (
-              <Video
-                ref={videoRef}
-                source={{ uri: currentStory.mediaUrl }}
-                resizeMode={ResizeMode.CONTAIN}
-                shouldPlay={!paused}
-                isMuted={currentStory.music ? true : isMuted}
-                isLooping={true}
+              <VideoView
+                player={videoPlayer}
+                allowsFullscreen={false}
+                nativeControls={false}
                 style={{ width: "100%", height: "100%" }}
               />
             ) : (

@@ -16,7 +16,38 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Video, ResizeMode } from "expo-av";
+import { useVideoPlayer, VideoView } from "expo-video";
+
+// Helper Component cho Video Thumbnail để sử dụng hook
+function PostVideoThumbnail({ url }: { url: string }) {
+  const player = useVideoPlayer(url, (p) => {
+    p.loop = true;
+    p.muted = true;
+    p.pause();
+  });
+  return <VideoView player={player} style={{ width: "100%", height: "100%" }} nativeControls={false} />;
+}
+
+// Helper Component cho Fullscreen Video Modal
+function FullscreenVideoPlayer({ url, isMuted, show }: { url: string, isMuted: boolean, show: boolean }) {
+  const player = useVideoPlayer(url, (p) => {
+    p.loop = true;
+    p.muted = isMuted;
+    if (show) p.play(); else p.pause();
+  });
+  
+  React.useEffect(() => {
+    if (player) player.muted = isMuted;
+  }, [isMuted, player]);
+
+  React.useEffect(() => {
+    if (player) {
+      if (show) player.play(); else player.pause();
+    }
+  }, [show, player]);
+
+  return <VideoView player={player} allowsFullscreen nativeControls style={{ width: "100%", height: "100%" }} />;
+}
 import { LinearGradient } from "expo-linear-gradient";
 import { cssInterop } from "react-native-css-interop";
 import * as ImagePicker from "expo-image-picker";
@@ -116,7 +147,7 @@ export default function PostCard({
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
   const [isVideoMuted, setIsVideoMuted] = useState(false);
-  const postVideoRef = useRef<Video | null>(null);
+  // postVideoRef removed since expo-video manages it internally
 
   const handlePlayVideo = (url: string) => {
     setVideoUrl(url);
@@ -610,13 +641,7 @@ export default function PostCard({
               activeOpacity={0.9} 
               className="relative justify-center items-center h-64"
             >
-              <Video
-                source={{ uri: item.url }}
-                resizeMode={ResizeMode.COVER}
-                shouldPlay={false}
-                useNativeControls={false}
-                style={{ width: "100%", height: "100%" }}
-              />
+              <PostVideoThumbnail url={item.url} />
               <View className="absolute w-14 h-14 bg-black/60 rounded-full items-center justify-center">
                 <Ionicons name="play" size={30} color="white" style={{ marginLeft: 4 }} />
               </View>
@@ -640,13 +665,7 @@ export default function PostCard({
               className="flex-1 bg-gray-100 relative"
             >
               {item.type === "VIDEO" ? (
-                <Video
-                  source={{ uri: item.url }}
-                  resizeMode={ResizeMode.COVER}
-                  shouldPlay={false}
-                  useNativeControls={false}
-                  style={{ width: "100%", height: "100%" }}
-                />
+                <PostVideoThumbnail url={item.url} />
               ) : (
                 <Image source={{ uri: item.url }} className="w-full h-full object-cover" />
               )}
@@ -676,13 +695,7 @@ export default function PostCard({
           className="flex-1 bg-gray-100 relative"
         >
           {firstItem.type === "VIDEO" ? (
-            <Video
-              source={{ uri: firstItem.url }}
-              resizeMode={ResizeMode.COVER}
-              shouldPlay={false}
-              useNativeControls={false}
-              style={{ width: "100%", height: "100%" }}
-            />
+            <PostVideoThumbnail url={firstItem.url} />
           ) : (
             <Image source={{ uri: firstItem.url }} className="w-full h-full object-cover" />
           )}
@@ -707,13 +720,7 @@ export default function PostCard({
                 className="flex-1 bg-gray-100 relative"
               >
                 {item.type === "VIDEO" ? (
-                  <Video
-                    source={{ uri: item.url }}
-                    resizeMode={ResizeMode.COVER}
-                    shouldPlay={false}
-                    useNativeControls={false}
-                    style={{ width: "100%", height: "100%" }}
-                  />
+                  <PostVideoThumbnail url={item.url} />
                 ) : (
                   <Image source={{ uri: item.url }} className="w-full h-full object-cover" />
                 )}
@@ -1273,16 +1280,9 @@ export default function PostCard({
       {/* ============ Fullscreen Video Player Modal ============ */}
       <Modal visible={showVideoModal} transparent={false} animationType="fade">
         <View style={{ flex: 1, backgroundColor: "black", justifyContent: "center", alignItems: "center" }}>
-          <Video
-            ref={postVideoRef}
-            source={{ uri: videoUrl }}
-            resizeMode={ResizeMode.CONTAIN}
-            shouldPlay={showVideoModal}
-            isMuted={isVideoMuted}
-            isLooping={true}
-            useNativeControls={true}
-            style={{ width: "100%", height: "100%" }}
-          />
+          {showVideoModal && videoUrl ? (
+            <FullscreenVideoPlayer url={videoUrl} isMuted={isVideoMuted} show={showVideoModal} />
+          ) : null}
           {/* Close button */}
           <TouchableOpacity 
             onPress={() => {
