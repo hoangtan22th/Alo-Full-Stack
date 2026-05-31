@@ -101,14 +101,14 @@ export default function Sidebar() {
   }, [user, fetchProfile]);
 
   return (
-    <div className="flex h-screen shrink-0 z-40">
+    <div className="fixed md:relative bottom-0 left-0 w-full md:w-auto md:flex h-16 md:h-screen shrink-0 z-50 md:z-40">
       {/* Thin Sidebar Bar */}
-      <div className="w-19 h-full bg-[#f4f5f7] flex flex-col items-center py-6 justify-between shrink-0 border-r border-gray-200 relative">
-        {/* === TOP SECTION === */}
-        <div className="flex flex-col items-center gap-8 w-full">
+      <div className="w-full md:w-19 h-full bg-[#f4f5f7] flex flex-row md:flex-col items-center py-2 md:py-6 px-2 md:px-0 justify-around md:justify-between shrink-0 border-t md:border-t-0 md:border-r border-gray-200 relative pb-safe">
+        {/* === MAIN NAV SECTION === */}
+        <div className="flex flex-row md:flex-col items-center justify-around md:justify-start gap-1 md:gap-8 w-full md:w-auto flex-1 md:flex-none">
           <Link
             href="/"
-            className="w-10 h-10 rounded-full overflow-hidden mb-2 border-2 border-gray-100 shadow-sm hover:scale-110 transition-transform active:scale-95 bg-white flex items-center justify-center"
+            className="hidden md:flex w-10 h-10 rounded-full overflow-hidden mb-2 border-2 border-gray-100 shadow-sm hover:scale-110 transition-transform active:scale-95 bg-white items-center justify-center"
           >
             <img
               src="/alochat.svg"
@@ -202,10 +202,29 @@ export default function Sidebar() {
               )}
             </button>
           </div>
+
+          {/* USER AVATAR - Mobile only (moved to bottom on desktop) */}
+          <div className="relative md:hidden flex items-center" ref={menuRef}>
+            <div
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="w-8 h-8 cursor-pointer rounded-full overflow-hidden border border-gray-300 active:scale-90 transition-transform"
+            >
+              <img
+                src={avatarUrl}
+                alt="Avatar"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).onerror = null;
+                  (e.target as HTMLImageElement).src =
+                    "https://ui-avatars.com/api/?name=U&background=E5E7EB&color=374151&rounded=true";
+                }}
+              />
+            </div>
+          </div>
         </div>
 
-        {/* === BOTTOM SECTION === */}
-        <div className="flex flex-col items-center gap-6 w-full">
+        {/* === BOTTOM SECTION (Desktop Only) === */}
+        <div className="hidden md:flex flex-col items-center gap-6 w-full">
           <button className="text-gray-600 hover:text-black transition-colors">
             <QuestionMarkCircleIcon className="w-6 h-6" />
           </button>
