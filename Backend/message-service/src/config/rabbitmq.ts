@@ -1,6 +1,7 @@
 import amqp, { Connection, Channel } from 'amqplib';
 import { startPollWorker } from '../workers/pollWorker';
 import { startReportWorker } from '../workers/reportWorker';
+import { startSecurityWorker } from '../workers/securityWorker';
 
 // fix vội
 // let connection: Connection | null = null;
@@ -66,13 +67,20 @@ export async function connectRabbitMQ(): Promise<Channel> {
     await channel.assertQueue(QUEUES.REPORT, { durable: true });
     await channel.bindQueue(QUEUES.REPORT, EXCHANGES.ADMIN, 'report.*');
     
+    // Khởi tạo queue cho admin/security events khác (như security.alert)
+    const securityQueue = 'message_security_queue';
+    await channel.assertQueue(securityQueue, { durable: true });
+    await channel.bindQueue(securityQueue, EXCHANGES.ADMIN, 'security.alert');
+
     console.log(`[RabbitMQ] Queue '${QUEUES.MESSAGE}' ready for Message events`);
     console.log(`[RabbitMQ] Queue '${QUEUES.POLL}' ready for Poll events`);
     console.log(`[RabbitMQ] Queue '${QUEUES.REPORT}' ready for Report events`);
+    console.log(`[RabbitMQ] Queue '${securityQueue}' ready for Security events`);
 
     // Khởi động các worker tiêu thụ (consumers)
     startPollWorker(channel);
     startReportWorker(channel);
+    startSecurityWorker(channel);
 
     connection?.on('error', (err: any) => {
       console.error('[RabbitMQ] Connection error:', err);
