@@ -1861,7 +1861,7 @@ export const getUserYearlyStats = async (
       return;
     }
 
-    const requestedYear = parseInt(year as string, 10);
+    const requestedYear = Number(year as string);
     if (isNaN(requestedYear)) {
       res.status(400).json({ error: "Invalid parameter: year must be a number" });
       return;
