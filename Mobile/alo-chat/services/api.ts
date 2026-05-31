@@ -6,7 +6,7 @@ const IP_ADDRESS = process.env.EXPO_PUBLIC_IP_ADDRESS;
 
 const api = axios.create({
   baseURL: `http://${IP_ADDRESS}:8888/api/v1`,
-  timeout: 10000,
+  timeout: 30000,
 });
 
 // Biến cờ để tránh gọi refresh nhiều lần cùng lúc
