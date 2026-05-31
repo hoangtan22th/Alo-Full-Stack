@@ -103,6 +103,17 @@ export const messageService = {
       return null;
     }
   },
+  globalSearch: async (conversationIds: string[], query: string, filterType: 'all' | 'file' = 'all') => {
+    try {
+      const res = await api.post(`/messages/global-search?query=${encodeURIComponent(query)}&filterType=${filterType}`, {
+        conversationIds
+      });
+      return extractData(res) || [];
+    } catch (error) {
+      console.error("Lỗi search toàn cục:", error);
+      return [];
+    }
+  },
   // Lấy lịch sử tin nhắn của một cuộc hội thoại
   getMessageHistory: async (
     conversationId: string,

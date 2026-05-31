@@ -50,6 +50,7 @@ import {
   CheckIcon,
   PhotoIcon,
   IdentificationIcon,
+  MicrophoneIcon,
 } from "@heroicons/react/24/outline";
 import ReportModal from "@/components/ui/report/ReportModal";
 import { motion } from "framer-motion";
@@ -192,6 +193,12 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // Audio state for ringtone
   const ringtoneRef = useRef<HTMLAudioElement>(null);
@@ -2103,6 +2110,123 @@ export default function ChatPage() {
         groupService
           .updateConversationFolder(activeConvoId, "priority")
           .catch(console.error);
+      }
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        if (audioChunksRef.current.length === 0) return;
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const file = new File([audioBlob], 'voice_message.webm', { type: 'audio/webm' });
+        await handleSendAudio(file);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      toast.error("Không thể truy cập microphone");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.onstop = null; // Prevent sending
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      audioChunksRef.current = [];
+      setIsRecording(false);
+      setRecordingTime(0);
+    }
+  };
+
+  useEffect(() => {
+    let interval: any;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isRecording]);
+
+  const handleSendAudio = async (file: File) => {
+    const activeConvoId =
+      conversationId.startsWith("new-") && newConversationId
+        ? newConversationId
+        : conversationId;
+        
+    setUploadingFile(true);
+    try {
+      const tempId = `temp-${Date.now()}`;
+      const tempMsg: MessageDTO = {
+        _id: tempId,
+        conversationId: activeConvoId,
+        senderId: currentUser?.id || currentUser?._id || "",
+        content: URL.createObjectURL(file), // Local preview
+        type: "file",
+        isRevoked: false,
+        replyTo: replyingTo
+          ? {
+            _id: replyingTo._id,
+            senderId: replyingTo.senderId,
+            content:
+              replyingTo.type === "file"
+                ? replyingTo.metadata?.fileName || replyingTo.content
+                : replyingTo.content,
+            type: replyingTo.type,
+          }
+          : undefined,
+        createdAt: new Date().toISOString(),
+        metadata: {
+          fileName: "Tin nhắn thoại",
+          fileSize: file.size,
+          fileType: file.type,
+        },
+      };
+      setMessages((prev) => [...prev, tempMsg]);
+      setReplyingTo(null);
+      
+      try {
+        await messageService.uploadFile(
+          activeConvoId,
+          file,
+          replyingTo,
+          currentUser?.fullName || "Tôi",
+        );
+      } catch (err) {
+        console.error("Lỗi gửi file âm thanh:", err);
+        setMessages((prev) => prev.filter((m) => m._id !== tempId));
       }
     } finally {
       setUploadingFile(false);
@@ -4214,22 +4338,45 @@ export default function ChatPage() {
                   )}
 
                   <div className="flex items-center gap-2">
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      placeholder={
-                        replyingTo
-                          ? `Nhập @, tin nhắn tới ${userCache[replyingTo.senderId]?.name || "người dùng"}`
-                          : "Nhập tin nhắn..."
-                      }
-                      value={messageText}
-                      onChange={handleInputChange}
-                      onKeyDown={handleKeyDown}
-                      onPaste={handlePaste}
-                      className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
-                    />
+                    {isRecording ? (
+                      <div className="flex-1 flex items-center justify-between bg-red-50 text-red-600 rounded-xl px-4 py-2 border border-red-100">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                          <span className="text-[14px] font-bold">Đang ghi âm... {formatDuration(recordingTime)}</span>
+                        </div>
+                        <button 
+                          onClick={cancelRecording}
+                          className="text-[12px] font-bold text-red-400 hover:text-red-600 transition"
+                        >
+                          Hủy
+                        </button>
+                      </div>
+                    ) : (
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        placeholder={
+                          replyingTo
+                            ? `Nhập @, tin nhắn tới ${userCache[replyingTo.senderId]?.name || "người dùng"}`
+                            : "Nhập tin nhắn..."
+                        }
+                        value={messageText}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyDown}
+                        onPaste={handlePaste}
+                        className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
+                      />
+                    )}
                     <div className="flex items-center gap-1">
-                      {messageText.trim() ? (
+                      {isRecording ? (
+                        <button
+                          onClick={stopRecording}
+                          disabled={sending || uploadingFile}
+                          className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition active:scale-95 shadow-sm"
+                        >
+                          <PaperAirplaneIcon className="w-5 h-5" />
+                        </button>
+                      ) : messageText.trim() ? (
                         <button
                           onClick={handleSend}
                           disabled={sending}
@@ -4238,24 +4385,32 @@ export default function ChatPage() {
                           <PaperAirplaneIcon className="w-6 h-6" />
                         </button>
                       ) : (
-                        <button 
-                          onClick={() => setIsDefaultEmojiModalOpen(true)}
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            setIsDefaultEmojiModalOpen(true);
-                          }}
-                          className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90 cursor-pointer"
-                        >
-                          <span 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSendDefaultEmoji();
-                            }}
-                            className="text-2xl cursor-pointer select-none"
+                        <>
+                          <button
+                            onClick={startRecording}
+                            className="p-2 text-gray-400 hover:text-red-500 transition active:scale-90"
                           >
-                            {defaultEmoji}
-                          </span>
-                        </button>
+                            <MicrophoneIcon className="w-6 h-6" />
+                          </button>
+                          <button 
+                            onClick={() => setIsDefaultEmojiModalOpen(true)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              setIsDefaultEmojiModalOpen(true);
+                            }}
+                            className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90 cursor-pointer"
+                          >
+                            <span 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSendDefaultEmoji();
+                              }}
+                              className="text-2xl cursor-pointer select-none"
+                            >
+                              {defaultEmoji}
+                            </span>
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
