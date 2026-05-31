@@ -890,7 +890,7 @@ export default function ConversationSidebar() {
 
   return (
     <>
-      <div className="w-full md:w-[320px] lg:w-85 flex flex-col border-r border-gray-100 shrink-0 h-full relative overflow-hidden">
+      <div className="w-full md:w-[280px] lg:w-[280px] flex flex-col border-r border-gray-100 shrink-0 h-full relative overflow-hidden">
         <div className="p-5 flex flex-col gap-5">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-black tracking-tight text-black">

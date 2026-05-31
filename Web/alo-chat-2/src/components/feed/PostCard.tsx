@@ -1005,7 +1005,7 @@ export default function PostCard({ post, onDeleteSuccess, onLikeUpdate, onEditSu
   const availableUsers = [author, ...Object.values(commentAuthors)].filter(Boolean) as UserProfileDTO[];
 
   return (
-    <div id={`post-${post._id}`} className="bg-white rounded-3xl p-6 mb-5 border border-gray-100 shadow-sm transition-all duration-300 hover:shadow-md flex flex-col">
+    <div id={`post-${post._id}`} className="bg-white rounded-3xl p-4 md:p-6 mb-5 border border-gray-100 shadow-sm transition-all duration-300 hover:shadow-md flex flex-col">
       {/* Header Profile Section */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">

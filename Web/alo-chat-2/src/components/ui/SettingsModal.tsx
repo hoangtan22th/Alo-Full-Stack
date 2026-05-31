@@ -49,19 +49,19 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
          2. Sửa text-white -> text-gray-900 (màu chữ chính tối đi)
          3. Sửa border-gray-700 -> border-gray-200 (viền nhẹ hơn)
       */}
-      <div className="flex w-212.5 h-150 bg-white text-gray-900 rounded-lg overflow-hidden shadow-2xl border border-gray-200">
+      <div className="flex flex-col md:flex-row w-full h-full md:w-[850px] md:h-[600px] md:max-h-[85vh] bg-white text-gray-900 md:rounded-lg overflow-hidden shadow-2xl md:border border-gray-200 animate-in zoom-in-95 duration-200">
         {/* SIDEBAR BÊN TRÁI */}
         {/* 4. Sửa bg-[#24272b] -> bg-[#f4f5f7] (nền sidebar xám nhẹ)
            5. Sửa border-gray-700 -> border-gray-200
         */}
-        <div className="w-70 bg-[#f4f5f7] border-r border-gray-200 p-4">
-          <h2 className="text-xl font-bold mb-6 px-2 text-gray-950">Cài đặt</h2>
-          <nav className="space-y-1">
+        <div className="w-full md:w-70 bg-[#f4f5f7] border-b md:border-b-0 md:border-r border-gray-200 p-4 shrink-0 overflow-x-auto scrollbar-hide">
+          <h2 className="text-xl font-bold mb-4 md:mb-6 px-2 text-gray-950">Cài đặt</h2>
+          <nav className="flex md:flex-col gap-2 md:space-y-1">
             {menuItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`flex items-center w-full px-3 py-2.5 rounded-md text-sm transition-all ${
+                className={`flex items-center shrink-0 w-auto md:w-full px-3 py-2.5 rounded-md text-sm transition-all ${
                   activeTab === item.id
                     ? "bg-blue-100 text-blue-700 font-semibold" // 6. Màu khi Active (xanh dương nhẹ)
                     : "text-gray-700 hover:bg-gray-100 hover:text-gray-950" // 7. Màu thường & hover
