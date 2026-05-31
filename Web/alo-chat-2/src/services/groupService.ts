@@ -261,6 +261,19 @@ export const groupService = {
     }
   },
 
+  // Tìm cuộc hội thoại 1-1 xem đã tồn tại chưa
+  findDirectConversation: async (targetUserId: string) => {
+    try {
+      const data = await api.get<any, any>(`/groups/direct/find`, {
+        params: { targetUserId },
+      });
+      return data;
+    } catch (error) {
+      console.error("Lỗi tìm cuộc hội thoại 1-1:", error);
+      throw error;
+    }
+  },
+
   // --- Quản lý Nhãn (Labels) ---
   getLabels: async () => {
     try {
