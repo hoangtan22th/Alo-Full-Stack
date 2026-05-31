@@ -2937,25 +2937,26 @@ export default function ChatPage() {
                               }}
                             >
                               {/* Avatar placeholder */}
-                              <div className="w-8 shrink-0">
-                                {!isMine &&
-                                  isLast &&
-                                  (senderAvatar ? (
-                                    <img
-                                      src={senderAvatar}
-                                      alt={senderName}
-                                      title={senderName}
-                                      className="w-8 h-8 rounded-full object-cover"
-                                    />
-                                  ) : (
-                                    <div
-                                      className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px]"
-                                      title={senderName}
-                                    >
-                                      {senderName.charAt(0).toUpperCase()}
-                                    </div>
-                                  ))}
-                              </div>
+                              {!isMine && (
+                                <div className="w-8 shrink-0">
+                                  {isLast &&
+                                    (senderAvatar ? (
+                                      <img
+                                        src={senderAvatar}
+                                        alt={senderName}
+                                        title={senderName}
+                                        className="w-8 h-8 rounded-full object-cover"
+                                      />
+                                    ) : (
+                                      <div
+                                        className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px]"
+                                        title={senderName}
+                                      >
+                                        {senderName.charAt(0).toUpperCase()}
+                                      </div>
+                                    ))}
+                                </div>
+                              )}
 
                               {/* Bubble */}
                               <div className={`relative max-w-[65%] flex flex-col ${isMine ? "items-end" : "items-start"} transition-all duration-300 ${isMultiSelectMode ? "p-1 rounded-2xl" : ""
