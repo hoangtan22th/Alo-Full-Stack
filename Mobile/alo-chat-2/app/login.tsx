@@ -132,7 +132,10 @@ export default function LoginScreen() {
       await signIn(data.accessToken, data.refreshToken);
     } catch (error: any) {
       if (!error.response) {
-        Alert.alert("Lỗi Kết Nối", "Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng hoặc địa chỉ IP.");
+        Alert.alert(
+          "Lỗi Kết Nối",
+          `Không thể kết nối đến máy chủ.\nURL: ${error.config?.baseURL || ""}${error.config?.url || ""}\nLỗi: ${error.message}`
+        );
       } else {
         const msg = error.response?.data?.message || "Sai tài khoản hoặc mật khẩu";
         Alert.alert("Lỗi Đăng Nhập", msg);
