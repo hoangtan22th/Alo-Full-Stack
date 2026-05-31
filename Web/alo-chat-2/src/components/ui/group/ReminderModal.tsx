@@ -11,6 +11,7 @@ import {
 import { reminderService, ReminderDTO } from "@/services/reminderService";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/useAuthStore";
+import { messageService } from "@/services/messageService";
 
 interface ReminderModalProps {
   conversationId: string;
@@ -94,6 +95,18 @@ export default function ReminderModal({
         const created = await reminderService.createReminder(conversationId, payload);
         if (created) {
           toast.success("Đã tạo nhắc hẹn mới");
+          
+          // Gửi tin nhắn hệ thống thông báo cho nhóm
+          try {
+            await messageService.sendMessage({
+              conversationId,
+              type: "system",
+              content: `⏰ Đã tạo nhắc hẹn: "${title}" vào lúc ${time} ngày ${date.split('-').reverse().join('/')}`
+            });
+          } catch (error) {
+            console.error("Lỗi gửi tin nhắn hệ thống thông báo nhắc hẹn", error);
+          }
+
           handleReset();
           fetchReminders();
         }

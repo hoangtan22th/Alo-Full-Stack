@@ -3829,18 +3829,7 @@ export default function ChatPage() {
                       </div>
                     );
                   })}
-                  {typingForThisConvo.length > 0 && (
-                    <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-100 rounded-2xl w-fit ml-12 mb-6 shadow-sm animate-in fade-in slide-in-from-left-2 duration-300">
-                      <div className="flex gap-1">
-                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                        <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" />
-                      </div>
-                      <span className="text-[12px] font-bold text-gray-500 italic">
-                        Đang soạn tin...
-                      </span>
-                    </div>
-                  )}
+
                   <div ref={messagesEndRef} />
                 </div>
               )}
@@ -3933,6 +3922,47 @@ export default function ChatPage() {
               </div>
             ) : (
               <div className="bg-white border-t border-gray-200 shrink-0">
+                {/* Typing Indicator Above Form */}
+                {typingForThisConvo.length > 0 && (
+                  <div className="px-4 py-2 bg-white flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-200 border-b border-gray-50">
+                    <div className="flex -space-x-1.5 mr-1">
+                      {typingForThisConvo.slice(0, 3).map((id, index) => {
+                        const userProfile = userCache[id] || conversationInfo?.members?.find((m: any) => m.userId === id);
+                        return (
+                          <img
+                            key={id}
+                            src={userProfile?.avatar || "https://i.pinimg.com/736x/c6/e5/65/c6e56503cfdd87da299f72dc416023d4.jpg"}
+                            alt={(userProfile as any)?.fullName || (userProfile as any)?.name || "Ai đó"}
+                            className="w-5 h-5 rounded-full border-2 border-white object-cover shadow-sm"
+                            style={{ zIndex: 3 - index }}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-gray-700">
+                        {(() => {
+                          const names = typingForThisConvo
+                            .slice(0, 2)
+                            .map((id) => {
+                               const userProfile = userCache[id] || conversationInfo?.members?.find((m: any) => m.userId === id);
+                               return (userProfile as any)?.fullName?.split(' ').pop() || (userProfile as any)?.name?.split(' ').pop() || 'Ai đó';
+                            });
+                          const extraCount = typingForThisConvo.length - names.length;
+                          let nameStr = names.join(', ');
+                          if (extraCount > 0) nameStr += ` và ${extraCount} người khác`;
+                          return nameStr;
+                        })()}
+                      </span>
+                      <span className="text-[11px] text-gray-400 italic">đang soạn tin</span>
+                      <div className="flex gap-0.5 ml-0.5 items-center">
+                        <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                        <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                        <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" />
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {/* Hidden file input — chỉ chọn file (không phải ảnh) */}
                 <input
                   type="file"
