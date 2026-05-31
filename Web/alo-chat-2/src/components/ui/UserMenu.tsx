@@ -18,7 +18,9 @@ export default function UserMenu({
   onLogout,
   onClose,
 }: UserMenuProps) {
-      const handleLogout = async (e: React.MouseEvent) => {
+  const { user } = useAuthStore();
+  
+  const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const isConfirmed = window.confirm("Xác nhận đăng xuất? Bạn sẽ cần đăng nhập lại.");

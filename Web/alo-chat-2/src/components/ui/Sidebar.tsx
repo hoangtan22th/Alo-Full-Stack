@@ -293,21 +293,22 @@ export default function Sidebar() {
                 }}
               />
             </div>
+            {/* MOBILE USER MENU - Rendered here to work on all screen sizes */}
+            {showUserMenu && (
+              <UserMenu
+                onClose={() => setShowUserMenu(false)}
+                onOpenProfile={() => setIsProfileOpen(true)}
+                onOpenWrapped={() => setIsWrappedOpen(true)}
+                onLogout={() => {
+                  useAuthStore.getState().logout();
+                  window.location.href = "/login";
+                }}
+              />
+            )}
           </div>
         </div>
 
-        {/* MOBILE USER MENU - Rendered here to work on all screen sizes */}
-        {showUserMenu && (
-          <UserMenu
-            onClose={() => setShowUserMenu(false)}
-            onOpenProfile={() => setIsProfileOpen(true)}
-            onOpenWrapped={() => setIsWrappedOpen(true)}
-            onLogout={() => {
-              useAuthStore.getState().logout();
-              window.location.href = "/login";
-            }}
-          />
-        )}
+
 
         <SettingsModal
           isOpen={isSettingsModalOpen}
