@@ -1,4 +1,5 @@
 import React from "react";
+import { useRouter } from "expo-router";
 import {
   Image,
   LayoutAnimation,
@@ -7,6 +8,8 @@ import {
   TouchableOpacity,
   View,
   ScrollView,
+  ActivityIndicator,
+  TouchableWithoutFeedback,
 } from "react-native";
 import {
   InformationCircleIcon,
@@ -58,6 +61,7 @@ export const MessageItem = ({
   isSelected,
   onOpenGallery,
 }: MessageItemProps) => {
+  const router = useRouter();
   const { user } = useAuth();
   const currentUserId = user?.id || user?._id || user?.userId || null;
   const timeString = new Date(msg.createdAt).toLocaleTimeString([], {
@@ -172,7 +176,15 @@ export const MessageItem = ({
               Tin nhắn đã bị thu hồi
             </Text>
           ) : msg.type === "image" ? (
-            msg.metadata?.imageGroup ? (
+            msg.metadata?.isSticker ? (
+              <TouchableWithoutFeedback onLongPress={() => onLongPress()}>
+                <Image
+                  source={{ uri: msg.content }}
+                  className="w-[120px] h-[120px] self-center my-1"
+                  resizeMode="contain"
+                />
+              </TouchableWithoutFeedback>
+            ) : msg.metadata?.imageGroup ? (
               (() => {
                 const visibleImages = (msg.metadata.imageGroup || [])
                   .map((img: any, idx: number) => ({
@@ -477,6 +489,65 @@ export const MessageItem = ({
               pollId={msg.metadata?.pollId || ""}
               isSender={isSender}
             />
+          ) : msg.type === "contact" ? (
+            <View className="w-[260px] bg-white rounded-2xl p-4 shadow-sm" style={{ alignSelf: "center" }}>
+              <View className="flex-row items-center mb-2.5">
+                <View className="bg-blue-50 px-2 py-0.5 rounded-md">
+                  <Text className="text-[10px] text-blue-600 font-black uppercase tracking-wider">Danh thiếp</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  if (msg.metadata?.contactId) {
+                    router.push({
+                      pathname: "/contacts/send-request",
+                      params: {
+                        userId: msg.metadata.contactId,
+                        fullName: msg.metadata.contactName,
+                        phone: msg.metadata.contactPhone || "",
+                        avatarUrl: msg.metadata.contactAvatar || "",
+                        from: "chat",
+                        chatId: msg.conversationId,
+                      },
+                    });
+                  }
+                }}
+                className="flex-row items-center mb-4"
+              >
+                {msg.metadata?.contactAvatar ? (
+                  <Image source={{ uri: msg.metadata.contactAvatar }} className="w-12 h-12 rounded-full mr-3" />
+                ) : (
+                  <View className="w-12 h-12 rounded-full bg-blue-100 items-center justify-center mr-3">
+                    <Text className="text-blue-600 font-bold text-[16px]">{(msg.metadata?.contactName || "?").charAt(0).toUpperCase()}</Text>
+                  </View>
+                )}
+                <View className="flex-1">
+                  <Text className="text-[14px] font-black text-gray-900" numberOfLines={1}>{msg.metadata?.contactName}</Text>
+                  <Text className="text-[11px] text-gray-500 font-medium mt-0.5" numberOfLines={1}>
+                    {msg.metadata?.contactPhone ? `SĐT: ${msg.metadata.contactPhone}` : "Số điện thoại bảo mật"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <View className="h-[1px] bg-gray-100 mb-3" />
+              <TouchableOpacity
+                onPress={() => {
+                  if (msg.metadata?.contactId) {
+                    router.push({
+                      pathname: "/chat/[id]",
+                      params: {
+                        id: msg.metadata.contactId,
+                        name: msg.metadata.contactName,
+                        avatar: msg.metadata.contactAvatar || "",
+                      },
+                    });
+                  }
+                }}
+                className="w-full py-2 bg-blue-50 rounded-xl items-center justify-center flex-row"
+              >
+                <Text className="text-blue-600 font-black text-[13px]">Nhắn tin</Text>
+              </TouchableOpacity>
+            </View>
           ) : null}
         </View>
       </TouchableOpacity>

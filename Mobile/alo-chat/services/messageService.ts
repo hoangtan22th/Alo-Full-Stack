@@ -20,7 +20,7 @@ export interface MessageDTO {
   conversationId: string;
   senderId: string;
   senderName?: string;
-  type: "text" | "image" | "file" | "system" | "poll";
+  type: "text" | "image" | "file" | "system" | "poll" | "contact";
   content: string;
   metadata?: {
     fileName?: string;
@@ -28,6 +28,11 @@ export interface MessageDTO {
     fileType?: string;
     pollId?: string;
     imageGroup?: any[];
+    contactId?: string;
+    contactName?: string;
+    contactAvatar?: string;
+    contactPhone?: string;
+    isSticker?: boolean;
   };
   isRead: boolean;
   isRevoked?: boolean;
@@ -46,7 +51,7 @@ export interface MessageDTO {
 
 export interface SendMessagePayload {
   conversationId: string;
-  type?: "text" | "image" | "file" | "poll" | "system";
+  type?: "text" | "image" | "file" | "poll" | "system" | "contact";
   content: string;
   senderName?: string;
   metadata?: Record<string, any>;

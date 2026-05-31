@@ -64,6 +64,8 @@ import { ReactionDetailsSheet } from "../../components/chat/ReactionDetailsSheet
 import { MessageContextMenu } from "../../components/chat/MessageContextMenu";
 import { ReportModal } from "../../components/ReportModal";
 import { ReportTargetModal } from "../../components/ReportTargetModal";
+import { SendContactCardModal } from "../../components/chat/SendContactCardModal";
+import { StickerPickerModal } from "../../components/chat/StickerPickerModal";
 import { TargetType } from "../../services/reportService";
 
 export default function GlobalChatScreen() {
@@ -145,6 +147,8 @@ export default function GlobalChatScreen() {
   const [groupDetails, setGroupDetails] = useState<any>(null);
   const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
+  const [isSendContactModalVisible, setIsSendContactModalVisible] = useState(false);
+  const [isStickerModalVisible, setIsStickerModalVisible] = useState(false);
   const [reportTarget, setReportTarget] = useState<{
     type: TargetType;
     id: string;
@@ -1318,6 +1322,106 @@ export default function GlobalChatScreen() {
     }
   };
 
+  const handleSendContactCard = async (selectedFriends: any[], includePhone: boolean) => {
+    if (!resolvedConversationId) return;
+    const actualConversationId = await ensureConversationId();
+    if (!actualConversationId) return;
+
+    for (const friend of selectedFriends) {
+      const tempId = `temp_contact_${Date.now()}_${friend.id}`;
+      const tempMsg: MessageDTO = {
+        _id: tempId,
+        conversationId: actualConversationId,
+        senderId: currentUserId as string,
+        senderName: currentUserName,
+        type: "contact",
+        content: friend.id,
+        metadata: {
+          contactId: friend.id,
+          contactName: friend.name,
+          contactAvatar: friend.avatar,
+          contactPhone: includePhone ? friend.phone : undefined,
+        },
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, tempMsg]);
+
+      try {
+        const sentMessage = await messageService.sendMessage({
+          conversationId: actualConversationId,
+          content: friend.id,
+          type: "contact",
+          senderName: currentUserName,
+          metadata: {
+            contactId: friend.id,
+            contactName: friend.name,
+            contactAvatar: friend.avatar,
+            contactPhone: includePhone ? friend.phone : undefined,
+          },
+        });
+        
+        if (sentMessage) {
+          setMessages((prev) => prev.map(m => m._id === tempId ? sentMessage : m));
+        }
+      } catch (err) {
+        console.error("Lỗi gửi danh thiếp:", err);
+        setMessages((prev) => prev.filter((m) => m._id !== tempId));
+      }
+    }
+    
+    setTimeout(
+      () =>
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
+      100,
+    );
+  };
+
+  const handleSendSticker = async (stickerUrl: string) => {
+    if (!resolvedConversationId) return;
+    const actualConversationId = await ensureConversationId();
+    if (!actualConversationId) return;
+
+    const tempId = `temp_sticker_${Date.now()}`;
+    const tempMsg: MessageDTO = {
+      _id: tempId,
+      conversationId: actualConversationId,
+      senderId: currentUserId as string,
+      senderName: currentUserName,
+      type: "image",
+      content: stickerUrl,
+      metadata: { isSticker: true },
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, tempMsg]);
+
+    try {
+      const sentMessage = await messageService.sendMessage({
+        conversationId: actualConversationId,
+        content: stickerUrl,
+        type: "image",
+        senderName: currentUserName,
+        metadata: { isSticker: true },
+      });
+
+      if (sentMessage) {
+        setMessages((prev) => prev.map(m => m._id === tempId ? sentMessage : m));
+      }
+    } catch (err) {
+      console.error("Lỗi gửi sticker:", err);
+      setMessages((prev) => prev.filter((m) => m._id !== tempId));
+    }
+
+    setTimeout(
+      () =>
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
+      100,
+    );
+  };
+
   interface MsgGroup {
     isSender: boolean;
     senderId: string;
@@ -1788,6 +1892,8 @@ export default function GlobalChatScreen() {
               onSendMessage={sendMessage}
               onSendImage={handleSendImage}
               onSendFile={handleSendFile}
+              onSendContact={() => setIsSendContactModalVisible(true)}
+              onOpenSticker={() => setIsStickerModalVisible(true)}
               onCreatePoll={async () => {
                 const actualId = await ensureConversationId();
                 if (actualId) {
@@ -2045,6 +2151,18 @@ export default function GlobalChatScreen() {
           setReportTarget(null);
           setReportMessageIds([]);
         }}
+      />
+      
+      <SendContactCardModal
+        visible={isSendContactModalVisible}
+        onClose={() => setIsSendContactModalVisible(false)}
+        onSend={handleSendContactCard}
+      />
+
+      <StickerPickerModal
+        visible={isStickerModalVisible}
+        onClose={() => setIsStickerModalVisible(false)}
+        onSelectSticker={handleSendSticker}
       />
     </KeyboardAvoidingView>
   );
