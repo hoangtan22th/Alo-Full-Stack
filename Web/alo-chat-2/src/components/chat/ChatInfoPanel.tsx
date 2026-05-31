@@ -208,7 +208,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   const mediaList = useMemo(() => {
     const list: any[] = [];
     messages.forEach((m) => {
-      if (m.type === "image" && !m.metadata?.isSticker) {
+      if (m.type === "image" && !m.metadata?.isSticker && !m.isRevoked) {
         if (m.metadata?.imageGroup) {
           list.push(
             ...m.metadata.imageGroup
@@ -250,7 +250,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   // Lọc file
   const fileList = useMemo(() => {
     return messages
-      .filter((m) => m.type === "file")
+      .filter((m) => m.type === "file" && !m.isRevoked)
       .slice(-4)
       .reverse();
   }, [messages]);

@@ -426,6 +426,43 @@ export class MessageDataService {
     }
   }
 
+  async globalSearchMessages(
+    conversationIds: string[],
+    query: string,
+    userId: string,
+    filterType: 'all' | 'file' = 'all',
+    limit: number = 50,
+  ): Promise<IMessage[]> {
+    try {
+      const validObjIds = conversationIds
+        .filter(id => Types.ObjectId.isValid(id))
+        .map(id => new Types.ObjectId(id));
+
+      const dbQuery: any = {
+        conversationId: { $in: validObjIds },
+        isRevoked: false,
+        deletedByUsers: { $ne: userId },
+      };
+
+      if (filterType === 'file') {
+        dbQuery.type = 'file';
+        if (query.trim()) {
+          dbQuery['metadata.fileName'] = { $regex: query, $options: "i" };
+        }
+      } else {
+        dbQuery.content = { $regex: query, $options: "i" };
+      }
+
+      return await Message.find(dbQuery)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
+    } catch (error) {
+      console.error("[MessageDataService] Failed to global search messages:", error);
+      throw error;
+    }
+  }
+
   /**
    * Thu hồi nhiều tin nhắn cùng lúc (bulk revoke)
    * Chỉ thu hồi những tin của chính user đó và trong vòng 24h
