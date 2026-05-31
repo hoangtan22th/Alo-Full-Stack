@@ -259,10 +259,10 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
 
   return (
     <>
-      {/* Backdrop cho Mobile/Tablet */}
+      {/* Backdrop cho Mobile/Tablet/Small Desktop */}
       {show && (
         <div 
-          className="lg:hidden fixed inset-0 bg-black/20 z-[190] backdrop-blur-sm transition-opacity"
+          className="xl:hidden fixed inset-0 bg-black/20 z-[190] backdrop-blur-sm transition-opacity"
           onClick={onClose}
         />
       )}
@@ -270,8 +270,8 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
         className={`
           flex flex-col shrink-0 bg-white h-full transition-all duration-300 ease-in-out 
           border-l border-gray-100 shadow-2xl z-[200] overflow-hidden
-          fixed top-0 right-0 bottom-0 lg:static
-          ${show ? "translate-x-0 w-[85%] sm:w-[340px] xl:w-90" : "translate-x-full lg:translate-x-0 lg:w-0"}
+          fixed top-0 right-0 bottom-0 xl:static
+          ${show ? "translate-x-0 w-[85%] sm:w-[340px] xl:w-90" : "translate-x-full xl:translate-x-0 xl:w-0"}
         `}
       >
       <div className="flex h-full flex-col">

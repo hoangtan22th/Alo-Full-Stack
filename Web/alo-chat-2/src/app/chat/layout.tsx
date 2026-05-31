@@ -11,7 +11,9 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-white text-black relative">
-      <Sidebar />
+      <div className={`${isConversationActive ? 'hidden md:block' : 'block'} shrink-0 z-50`}>
+        <Sidebar />
+      </div>
       
       {/* 
         Trên mobile: Ẩn ConversationSidebar nếu đang mở 1 cuộc trò chuyện.
