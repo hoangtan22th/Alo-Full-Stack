@@ -7,12 +7,14 @@ import {
   Cog6ToothIcon as Cog6OutlineIcon,
   UserGroupIcon as UserGroupOutlineIcon,
   UsersIcon as UserOutlineIcon,
+  NewspaperIcon as NewspaperOutlineIcon,
 } from "react-native-heroicons/outline";
 import {
   ChatBubbleLeftEllipsisIcon as ChatSolidIcon,
   Cog6ToothIcon as Cog6SolidIcon,
   UserGroupIcon as UserGroupSolidIcon,
   UsersIcon as UserSolidIcon,
+  NewspaperIcon as NewspaperSolidIcon,
 } from "react-native-heroicons/solid";
 
 export default function TabLayout() {
@@ -96,6 +98,18 @@ export default function TabLayout() {
               <UserGroupSolidIcon size={24} color={color} />
             ) : (
               <UserGroupOutlineIcon size={24} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="feed"
+        options={{
+          title: "Nhật ký",
+          tabBarIcon: ({ color, focused }) =>
+            focused ? (
+              <NewspaperSolidIcon size={24} color={color} />
+            ) : (
+              <NewspaperOutlineIcon size={24} color={color} />
             ),
         }}
       />

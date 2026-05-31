@@ -17,7 +17,7 @@ export const uploadFileToS3 = async (
   maxRetries: number = 3,
 ): Promise<string> => {
   const extension = originalName.split(".").pop() || "bin";
-  const normalizedOriginalName = originalName.split(".")[0]?.replace(/\s+/g, "_") || "unnamed";
+  const normalizedOriginalName = originalName.split(".")[0]?.replace(/[^a-zA-Z0-9_-]/g, "_") || "unnamed";
   const fileName = `${folder}/${uuidv4()}_${normalizedOriginalName}.${extension}`;
 
   const isVideo = mimetype.startsWith("video/");

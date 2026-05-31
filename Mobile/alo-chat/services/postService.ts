@@ -1,8 +1,24 @@
 import api from "./api";
 
-// ============ Types ============
+// ============ Emoji map cho Reactions ============
 
-export type ReactionType = 'LIKE' | 'HEART' | 'HAHA' | 'WOW' | 'SAD' | 'ANGRY';
+export const REACTION_EMOJI: Record<ReactionType, string> = {
+  LIKE: '👍',
+  HEART: '❤️',
+  HAHA: '😂',
+  WOW: '😮',
+  SAD: '😢',
+  ANGRY: '😡',
+};
+
+export const REACTION_LABELS: Record<ReactionType, string> = {
+  LIKE: 'Thích',
+  HEART: 'Yêu thích',
+  HAHA: 'Haha',
+  WOW: 'Wow',
+  SAD: 'Buồn',
+  ANGRY: 'Phẫn nộ',
+};
 
 export interface IMedia {
   url: string;
@@ -15,24 +31,28 @@ export interface IReaction {
   type: ReactionType;
 }
 
+export type ReactionType = 'LIKE' | 'HEART' | 'HAHA' | 'WOW' | 'SAD' | 'ANGRY';
+
 export interface IPost {
   _id: string;
   userId: string;
   content?: string;
   media: IMedia[];
-  privacy: "PUBLIC" | "FRIENDS_ONLY" | "PRIVATE" | "CUSTOM";
-  reactions: IReaction[];
-  reactionCount: number;
-  tags: string[];
-  allowedUsers: string[];
-  blockedUsers: string[];
-  backgroundTemplate?: string; // Mood status background template
-  // Backward compatible
+  privacy: "PUBLIC" | "FRIENDS_ONLY" | "PRIVATE";
   likes: string[];
   likeCount: number;
   commentCount: number;
+  reactions?: IReaction[];
+  reactionCount?: number;
+  tags?: string[];
+  backgroundTemplate?: string;
   createdAt: string;
   updatedAt: string;
+  user?: {
+    id: string;
+    fullName: string;
+    avatar: string;
+  };
 }
 
 export interface IComment {
@@ -40,13 +60,18 @@ export interface IComment {
   postId: string;
   userId: string;
   content?: string;
-  mediaUrl?: string; // Image inside comment
+  mediaUrl?: string;
   parentId: string | null;
   reactions?: IReaction[];
   reactionCount?: number;
   createdAt: string;
   updatedAt: string;
   replies?: IComment[];
+  user?: {
+    id: string;
+    fullName: string;
+    avatar: string;
+  };
 }
 
 export interface IStoryViewer {
@@ -71,7 +96,7 @@ export interface IStory {
   reactions?: IReaction[];
   reactionCount?: number;
   privacy: "PUBLIC" | "FRIENDS_ONLY" | "PRIVATE" | "CUSTOM";
-  duration?: number; // Thời lượng xem (ms)
+  duration?: number;
   createdAt: string;
   expiresAt: string;
 }
@@ -81,47 +106,13 @@ export interface IStoryGroup {
   stories: IStory[];
 }
 
-// ============ Emoji map cho Reactions ============
-
-export const REACTION_EMOJI: Record<ReactionType, string> = {
-  LIKE: '👍',
-  HEART: '❤️',
-  HAHA: '😂',
-  WOW: '😮',
-  SAD: '😢',
-  ANGRY: '😡',
-};
-
-export const REACTION_LABELS: Record<ReactionType, string> = {
-  LIKE: 'Thích',
-  HEART: 'Yêu thích',
-  HAHA: 'Haha',
-  WOW: 'Wow',
-  SAD: 'Buồn',
-  ANGRY: 'Phẫn nộ',
-};
-
-export interface INotification {
-  _id: string;
-  recipientId: string;
-  senderId: string;
-  type: 'LIKE_POST' | 'REACT_POST' | 'COMMENT_POST' | 'REPLY_COMMENT' | 'TAG_POST' | 'NEW_POST';
-  postId?: string;
-  commentId?: string;
-  message: string;
-  isRead: boolean;
-  createdAt: string;
-}
-
-// ============ Post Service ============
-
 export const postService = {
   getHomeFeed: async (limit: number = 10, skip: number = 0): Promise<IPost[]> => {
     try {
-      const data = await api.get<any, any>(`/posts/feed`, {
+      const response = await api.get<any, any>(`/posts/feed`, {
         params: { limit, skip },
       });
-      return data || [];
+      return response || [];
     } catch (error) {
       console.error("Lỗi getHomeFeed:", error);
       return [];
@@ -130,10 +121,10 @@ export const postService = {
 
   getUserTimeline: async (userId: string, limit: number = 10, skip: number = 0): Promise<IPost[]> => {
     try {
-      const data = await api.get<any, any>(`/posts/user/${userId}`, {
+      const response = await api.get<any, any>(`/posts/user/${userId}`, {
         params: { limit, skip },
       });
-      return data || [];
+      return response || [];
     } catch (error) {
       console.error("Lỗi getUserTimeline:", error);
       return [];
@@ -142,26 +133,20 @@ export const postService = {
 
   getPostDetails: async (postId: string): Promise<IPost | null> => {
     try {
-      const data = await api.get<any, any>(`/posts/${postId}`);
-      return data || null;
+      const response = await api.get<any, any>(`/posts/${postId}`);
+      return response || null;
     } catch (error) {
       console.error("Lỗi getPostDetails:", error);
       return null;
     }
   },
 
-  /**
-   * Tạo bài viết mới
-   * - Hỗ trợ upload progress callback cho video
-   * - Timeout tăng lên 120s cho video upload
-   */
   createPost: async (
-    content: string,
-    files: File[],
-    privacy: string = "FRIENDS_ONLY",
-    onUploadProgress?: (progress: number) => void,
+    content: string, 
+    files: any[], 
+    privacy: string = "PUBLIC",
     tags?: string[],
-    backgroundTemplate?: string,
+    backgroundTemplate?: string
   ): Promise<IPost | null> => {
     try {
       const formData = new FormData();
@@ -171,34 +156,26 @@ export const postService = {
       if (tags && tags.length > 0) {
         formData.append("tags", JSON.stringify(tags));
       }
-
       if (backgroundTemplate) {
         formData.append("backgroundTemplate", backgroundTemplate);
       }
 
       if (files && files.length > 0) {
-        files.forEach((file) => {
-          formData.append("files", file);
+        files.forEach((file, index) => {
+          formData.append("files", {
+            uri: file.uri,
+            type: file.type || "image/jpeg",
+            name: file.fileName || `file_${index}.jpg`,
+          } as any);
         });
       }
 
-      const hasVideo = files.some((f) => f.type.startsWith("video/"));
-
-      const data = await api.post<any, any>(`/posts`, formData, {
+      const response = await api.post<any, any>(`/posts`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
-        // Tăng timeout cho video upload (120s thay vì 60s mặc định)
-        timeout: hasVideo ? 120000 : 60000,
-        ...(onUploadProgress && {
-          onUploadProgress: (progressEvent: any) => {
-            const total = progressEvent.total || 1;
-            const progress = Math.round((progressEvent.loaded * 100) / total);
-            onUploadProgress(progress);
-          },
-        }),
       });
-      return data || null;
+      return response || null;
     } catch (error) {
       console.error("Lỗi createPost:", error);
       return null;
@@ -209,7 +186,7 @@ export const postService = {
     postId: string,
     content: string,
     privacy: string,
-    files: File[],
+    files: any[],
     keepMediaUrls: string[],
     tags?: string[]
   ): Promise<IPost | null> => {
@@ -218,26 +195,26 @@ export const postService = {
       formData.append("content", content);
       formData.append("privacy", privacy);
       formData.append("keepMediaUrls", JSON.stringify(keepMediaUrls));
-
       if (tags) {
         formData.append("tags", JSON.stringify(tags));
       }
 
       if (files && files.length > 0) {
-        files.forEach((file) => {
-          formData.append("files", file);
+        files.forEach((file, index) => {
+          formData.append("files", {
+            uri: file.uri,
+            type: file.type || "image/jpeg",
+            name: file.fileName || `file_${index}.jpg`,
+          } as any);
         });
       }
 
-      const hasVideo = files.some((f) => f.type.startsWith("video/"));
-
-      const data = await api.put<any, any>(`/posts/${postId}`, formData, {
+      const response = await api.put<any, any>(`/posts/${postId}`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
-        timeout: hasVideo ? 120000 : 60000,
       });
-      return data || null;
+      return response || null;
     } catch (error) {
       console.error("Lỗi editPost:", error);
       return null;
@@ -254,26 +231,10 @@ export const postService = {
     }
   },
 
-  /**
-   * Thả biểu cảm bài viết (React)
-   */
-  reactToPost: async (postId: string, type: ReactionType): Promise<IPost | null> => {
-    try {
-      const data = await api.post<any, any>(`/posts/${postId}/react`, { type });
-      return data || null;
-    } catch (error) {
-      console.error("Lỗi reactToPost:", error);
-      return null;
-    }
-  },
-
-  /**
-   * Toggle Like (backward compatible)
-   */
   toggleLikePost: async (postId: string): Promise<IPost | null> => {
     try {
-      const data = await api.post<any, any>(`/posts/${postId}/like`);
-      return data || null;
+      const response = await api.post<any, any>(`/posts/${postId}/like`);
+      return response || null;
     } catch (error) {
       console.error("Lỗi toggleLikePost:", error);
       return null;
@@ -282,43 +243,48 @@ export const postService = {
 
   getComments: async (postId: string, limit: number = 20, skip: number = 0): Promise<IComment[]> => {
     try {
-      const data = await api.get<any, any>(`/posts/${postId}/comments`, {
+      const response = await api.get<any, any>(`/posts/${postId}/comments`, {
         params: { limit, skip },
       });
-      return data || [];
+      return response || [];
     } catch (error) {
       console.error("Lỗi getComments:", error);
       return [];
     }
   },
 
-  createComment: async (postId: string, content?: string, parentId?: string, file?: File): Promise<IComment | null> => {
+  createComment: async (postId: string, content?: string, parentId?: string, file?: any): Promise<IComment | null> => {
     try {
-      const formData = new FormData();
-      if (content) formData.append("content", content);
-      if (parentId) formData.append("parentId", parentId);
-      if (file) formData.append("file", file);
+      if (file) {
+        const formData = new FormData();
+        if (content) formData.append("content", content);
+        if (parentId) formData.append("parentId", parentId);
+        formData.append("file", {
+          uri: file.uri,
+          type: file.type || "image/jpeg",
+          name: file.fileName || "comment_image.jpg",
+        } as any);
 
-      const data = await api.post<any, any>(`/posts/${postId}/comments`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
-      return data || null;
+        const response = await api.post<any, any>(`/posts/${postId}/comments`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        return response || null;
+      } else {
+        const payload: any = { content };
+        if (parentId) payload.parentId = parentId;
+
+        const response = await api.post<any, any>(`/posts/${postId}/comments`, payload);
+        return response || null;
+      }
     } catch (error) {
       console.error("Lỗi createComment:", error);
       return null;
     }
   },
 
-  /**
-   * Xóa bình luận — trả về { success, deletedCount }
-   * deletedCount cho biết số lượng comments đã xóa (bao gồm replies)
-   */
   deleteComment: async (commentId: string): Promise<{ success: boolean; deletedCount: number }> => {
     try {
       const response = await api.delete<any, any>(`/posts/comments/${commentId}`);
-      // Backend trả về: { status: 200, message: '...', data: { deletedCount: N } }
       const deletedCount = response?.deletedCount || response?.data?.deletedCount || 1;
       return { success: true, deletedCount };
     } catch (error) {
@@ -327,27 +293,45 @@ export const postService = {
     }
   },
 
-  /**
-   * Thả cảm xúc bình luận (React)
-   */
+  // ============ Reaction APIs ============
+
+  reactToPost: async (postId: string, type: ReactionType): Promise<IPost | null> => {
+    try {
+      const response = await api.post<any, any>(`/posts/${postId}/react`, { type });
+      return response || null;
+    } catch (error) {
+      console.error("Lỗi reactToPost:", error);
+      return null;
+    }
+  },
+
   reactToComment: async (commentId: string, type: ReactionType): Promise<IComment | null> => {
     try {
-      const data = await api.post<any, any>(`/posts/comments/${commentId}/react`, { type });
-      return data || null;
+      const response = await api.post<any, any>(`/posts/comments/${commentId}/react`, { type });
+      return response || null;
     } catch (error) {
       console.error("Lỗi reactToComment:", error);
       return null;
     }
   },
 
-  // ============ Notification API ============
-
-  getNotifications: async (limit: number = 20, skip: number = 0): Promise<INotification[]> => {
+  getSpotifyToken: async (): Promise<string | null> => {
     try {
-      const data = await api.get<any, any>(`/notifications`, {
+      const response = await api.get<any, any>(`/posts/spotify/token`);
+      return response?.accessToken || null;
+    } catch (error) {
+      console.error("Lỗi getSpotifyToken:", error);
+      return null;
+    }
+  },
+
+  // ============ Notification APIs ============
+  getNotifications: async (limit: number = 20, skip: number = 0): Promise<any[]> => {
+    try {
+      const response = await api.get<any, any>(`/notifications`, {
         params: { limit, skip },
       });
-      return data || [];
+      return response || [];
     } catch (error) {
       console.error("Lỗi getNotifications:", error);
       return [];
@@ -356,8 +340,8 @@ export const postService = {
 
   getUnreadNotificationsCount: async (): Promise<number> => {
     try {
-      const data = await api.get<any, any>(`/notifications/unread-count`);
-      return data?.unreadCount || 0;
+      const response = await api.get<any, any>(`/notifications/unread-count`);
+      return response?.unreadCount || 0;
     } catch (error) {
       console.error("Lỗi getUnreadNotificationsCount:", error);
       return 0;
@@ -383,32 +367,23 @@ export const postService = {
       return false;
     }
   },
-  getSpotifyToken: async (): Promise<string | null> => {
-    try {
-      const data = await api.get<any, any>(`/posts/spotify/token`);
-      return data?.accessToken || null;
-    } catch (error) {
-      console.error("Lỗi getSpotifyToken:", error);
-      return null;
-    }
-  },
 
-  // ============ Story API ============
-
-  /**
-   * Đăng Story mới
-   */
+  // ============ Story APIs ============
   createStory: async (
-    file: File,
+    file: any,
     caption?: string,
     privacy: string = "FRIENDS_ONLY",
-    onUploadProgress?: (progress: number) => void,
     music?: { title: string; artist: string; url: string; lyrics?: string },
     duration?: number
   ): Promise<IStory | null> => {
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", {
+        uri: file.uri,
+        type: file.type || "image/jpeg",
+        name: file.fileName || "story_file.jpg",
+      } as any);
+
       if (caption) formData.append("caption", caption);
       formData.append("privacy", privacy);
       if (duration) formData.append("duration", String(duration));
@@ -416,107 +391,76 @@ export const postService = {
         formData.append("music", JSON.stringify(music));
       }
 
-      const isVideo = file.type.startsWith("video/");
-
-      const data = await api.post<any, any>(`/stories`, formData, {
+      const response = await api.post<any, any>(`/stories`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
-        timeout: isVideo ? 120000 : 60000,
-        ...(onUploadProgress && {
-          onUploadProgress: (progressEvent: any) => {
-            const total = progressEvent.total || 1;
-            const progress = Math.round((progressEvent.loaded * 100) / total);
-            onUploadProgress(progress);
-          },
-        }),
       });
-      return data || null;
+      return response || null;
     } catch (error) {
       console.error("Lỗi createStory:", error);
       return null;
     }
   },
 
-  /**
-   * Lấy Story Feed (nhóm theo user)
-   */
   getStoryFeed: async (): Promise<IStoryGroup[]> => {
     try {
-      const data = await api.get<any, any>(`/stories/feed`);
-      return data || [];
+      const response = await api.get<any, any>(`/stories/feed`);
+      return response || [];
     } catch (error) {
       console.error("Lỗi getStoryFeed:", error);
       return [];
     }
   },
 
-  /**
-   * Lấy danh sách story đã lưu trữ
-   */
   getArchivedStories: async (): Promise<IStory[]> => {
     try {
-      const data = await api.get<any, any>(`/stories/archive`);
-      return data || [];
+      const response = await api.get<any, any>(`/stories/archive`);
+      return response || [];
     } catch (error) {
       console.error("Lỗi getArchivedStories:", error);
       return [];
     }
   },
 
-  /**
-   * Đăng lại story từ kho lưu trữ
-   */
   repostStory: async (storyId: string): Promise<IStory | null> => {
     try {
-      const data = await api.post<any, any>(`/stories/${storyId}/repost`);
-      return data || null;
+      const response = await api.post<any, any>(`/stories/${storyId}/repost`);
+      return response || null;
     } catch (error) {
       console.error("Lỗi repostStory:", error);
       return null;
     }
   },
 
-  /**
-   * Đánh dấu đã xem Story
-   */
   viewStory: async (storyId: string): Promise<IStory | null> => {
     try {
-      const data = await api.post<any, any>(`/stories/${storyId}/view`);
-      return data || null;
+      const response = await api.post<any, any>(`/stories/${storyId}/view`);
+      return response || null;
     } catch (error) {
       console.error("Lỗi viewStory:", error);
       return null;
     }
   },
 
-  /**
-   * Thả cảm xúc Story
-   */
   reactToStory: async (storyId: string, type: ReactionType): Promise<IStory | null> => {
     try {
-      const data = await api.post<any, any>(`/stories/${storyId}/react`, { type });
-      return data || null;
+      const response = await api.post<any, any>(`/stories/${storyId}/react`, { type });
+      return response || null;
     } catch (error) {
       console.error("Lỗi reactToStory:", error);
       return null;
     }
   },
 
-  /**
-   * Lấy chi tiết một Story cụ thể
-   */
   getStoryDetails: async (storyId: string): Promise<IStory | null> => {
     try {
-      const data = await api.get<any, any>(`/stories/${storyId}`);
-      return data || null;
+      const response = await api.get<any, any>(`/stories/${storyId}`);
+      return response || null;
     } catch (error) {
       console.error("Lỗi getStoryDetails:", error);
       return null;
     }
   },
 
-  /**
-   * Xóa Story
-   */
   deleteStory: async (storyId: string): Promise<boolean> => {
     try {
       await api.delete(`/stories/${storyId}`);
@@ -527,9 +471,6 @@ export const postService = {
     }
   },
 
-  /**
-   * Xóa vĩnh viễn Story (khỏi DB + S3, không thể khôi phục)
-   */
   deleteStoryPermanently: async (storyId: string): Promise<boolean> => {
     try {
       await api.delete(`/stories/${storyId}/permanent`);
@@ -545,8 +486,8 @@ export const postService = {
    */
   getUserStories: async (targetUserId: string): Promise<IStory[]> => {
     try {
-      const data = await api.get<any, any>(`/stories/user/${targetUserId}`);
-      return data || [];
+      const response = await api.get<any, any>(`/stories/user/${targetUserId}`);
+      return response || [];
     } catch (error) {
       console.error("Lỗi getUserStories:", error);
       return [];

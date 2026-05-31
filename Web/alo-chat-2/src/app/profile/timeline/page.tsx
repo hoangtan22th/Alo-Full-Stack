@@ -21,7 +21,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
 import { userService, UserProfileDTO } from "@/services/userService";
-import { postService, IPost } from "@/services/postService";
+import { postService, IPost, IStory, IStoryGroup } from "@/services/postService";
+import StoryViewer from "@/components/feed/StoryViewer";
 import { contactService } from "@/services/contactService";
 import { groupService } from "@/services/groupService";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -69,6 +70,13 @@ function TimelineContent() {
   const currentUserId = currentUser?.id || currentUser?._id;
   const isMe = !userId || userId === currentUserId;
 
+  const [userStories, setUserStories] = useState<IStory[]>([]);
+  const [viewingStoryGroupIndex, setViewingStoryGroupIndex] = useState<number | null>(null);
+
+  const hasUnviewed = userStories.some(
+    (s) => !s.viewers?.some((v) => v.userId?.toLowerCase() === currentUserId?.toLowerCase())
+  );
+
   // Resolve target userId
   useEffect(() => {
     const paramId = searchParams.get("userId");
@@ -79,11 +87,21 @@ function TimelineContent() {
     }
   }, [searchParams, currentUserId]);
 
+  const loadUserStories = async () => {
+    try {
+      const stories = await postService.getUserStories(userId);
+      setUserStories(stories || []);
+    } catch (err) {
+      console.error("Lỗi tải story người dùng:", err);
+    }
+  };
+
   // Load profile, posts, and relation status
   useEffect(() => {
     if (!userId) return;
     loadUserProfile();
     loadUserTimeline(true);
+    loadUserStories();
     loadFriendCount();
     if (!isMe) {
       loadRelationStatus();
@@ -421,43 +439,79 @@ function TimelineContent() {
 
       {/* 2. PROFILE HERO & HEADER SECTION */}
       <div className="bg-white border-b border-gray-100 px-8 pb-6 shrink-0 shadow-sm relative">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center md:items-end gap-6 -mt-16 md:-mt-20 relative z-10">
-          {/* Avatar frame */}
-          <div className="relative">
-            <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white overflow-hidden bg-gray-200 shadow-xl relative shrink-0">
-              <img
-                src={getAvatar(profile?.avatar, profile?.fullName)}
-                alt="Profile avatar"
-                className="w-full h-full object-cover"
-              />
-              {uploadingAvatar && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center md:items-start gap-6 relative z-10">
+          {/* Avatar frame (Pulled up) */}
+          <div className="relative -mt-16 md:-mt-20 shrink-0">
+            {userStories.length > 0 ? (
+              <div 
+                onClick={() => setViewingStoryGroupIndex(0)}
+                className={`w-32 h-32 md:w-40 md:h-40 rounded-full p-[3.5px] shadow-xl relative cursor-pointer transition-all duration-300 hover:scale-105 active:scale-95 ${
+                  hasUnviewed
+                    ? "bg-gradient-to-tr from-blue-500 via-purple-500 to-pink-500"
+                    : "bg-gray-300 dark:bg-zinc-700"
+                }`}
+              >
+                <div className="w-full h-full rounded-full border-[3px] border-white dark:border-zinc-950 overflow-hidden bg-gray-200 relative">
+                  <img
+                    src={getAvatar(profile?.avatar, profile?.fullName)}
+                    alt="Profile avatar"
+                    className="w-full h-full object-cover"
+                  />
+                  {uploadingAvatar && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            {isMe && (
-              <>
-                <button
-                  onClick={() => avatarInputRef.current?.click()}
-                  className="absolute bottom-1.5 right-1.5 p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full border-2 border-white shadow-md transition-all active:scale-90"
-                  title="Thay đổi ảnh đại diện"
-                >
-                  <CameraIcon className="w-4 h-4 stroke-2" />
-                </button>
-                <input
-                  type="file"
-                  ref={avatarInputRef}
-                  onChange={handleAvatarChange}
-                  accept="image/*"
-                  className="hidden"
+                {isMe && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      avatarInputRef.current?.click();
+                    }}
+                    className="absolute bottom-1.5 right-1.5 p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full border-2 border-white shadow-md transition-all active:scale-90"
+                    title="Thay đổi ảnh đại diện"
+                  >
+                    <CameraIcon className="w-4 h-4 stroke-2" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white overflow-hidden bg-gray-200 shadow-xl relative">
+                <img
+                  src={getAvatar(profile?.avatar, profile?.fullName)}
+                  alt="Profile avatar"
+                  className="w-full h-full object-cover"
                 />
-              </>
+                {uploadingAvatar && (
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                  </div>
+                )}
+                {isMe && (
+                  <button
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="absolute bottom-1.5 right-1.5 p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full border-2 border-white shadow-md transition-all active:scale-90"
+                    title="Thay đổi ảnh đại diện"
+                  >
+                    <CameraIcon className="w-4 h-4 stroke-2" />
+                  </button>
+                )}
+              </div>
+            )}
+            {isMe && (
+              <input
+                type="file"
+                ref={avatarInputRef}
+                onChange={handleAvatarChange}
+                accept="image/*"
+                className="hidden"
+              />
             )}
           </div>
 
-          {/* User information & Actions Row */}
-          <div className="flex-1 text-center md:text-left flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2">
+          {/* User information & Actions Row (Starts below cover photo) */}
+          <div className="flex-1 text-center md:text-left flex flex-col md:flex-row md:items-start justify-between gap-6 pt-3 md:pt-4">
             <div>
               <div className="flex items-center justify-center md:justify-start gap-2.5">
                 <h1 className="text-2xl font-black text-gray-900">{profile?.fullName}</h1>
@@ -469,13 +523,13 @@ function TimelineContent() {
               </div>
               <p className="text-xs text-gray-500 mt-1 font-semibold">{profile?.email || profile?.phoneNumber}</p>
               {friendCount > 0 && (
-                <p className="text-xs text-gray-500 mt-1 font-semibold flex items-center gap-1">
+                <p className="text-xs text-gray-500 mt-1 font-semibold flex items-center justify-center md:justify-start gap-1">
                   <UsersIcon className="w-3.5 h-3.5" />
                   <span>{friendCount} bạn bè</span>
                 </p>
               )}
               {profile?.bio && (
-                <p className="text-sm text-gray-600 mt-2 max-w-lg italic font-medium">
+                <p className="text-sm text-gray-600 mt-3 max-w-lg italic font-medium">
                   "{profile.bio}"
                 </p>
               )}
@@ -746,6 +800,37 @@ function TimelineContent() {
           loadUserTimeline(true);
         }}
       />
+
+      {/* Story Viewer Modal */}
+      {viewingStoryGroupIndex !== null && userStories.length > 0 && (
+        <StoryViewer
+          storyGroups={[
+            {
+              userId: userId,
+              stories: userStories
+            }
+          ]}
+          initialGroupIndex={viewingStoryGroupIndex}
+          userProfiles={{
+            [userId]: profile || (currentUser as UserProfileDTO)
+          }}
+          onClose={() => setViewingStoryGroupIndex(null)}
+          onStoryDeleted={(storyId) => {
+            setUserStories((prev) => prev.filter((s) => s._id !== storyId));
+            setViewingStoryGroupIndex(null);
+          }}
+          onStoryViewed={(storyId, viewers, viewCount) => {
+            setUserStories((prev) =>
+              prev.map((s) => (s._id === storyId ? { ...s, viewers, viewCount } : s))
+            );
+          }}
+          onStoryReacted={(storyId, reactions, reactionCount) => {
+            setUserStories((prev) =>
+              prev.map((s) => (s._id === storyId ? { ...s, reactions, reactionCount } : s))
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

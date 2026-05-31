@@ -29,6 +29,8 @@ import {
   TrashIcon,
 } from "react-native-heroicons/outline";
 import { useRouter, useFocusEffect } from "expo-router";
+import { postService } from "../../services/postService";
+import { Ionicons } from "@expo/vector-icons";
 import { groupService } from "../../services/groupService";
 import { useSocket } from "../../contexts/SocketContext";
 import { useAuth } from "../../contexts/AuthContext";
@@ -125,6 +127,7 @@ export default function MessagesScreen() {
   const [loading, setLoading] = useState(true);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
 
   // Labels & Pin states
   const [labels, setLabels] = useState<any[]>([]);
@@ -144,10 +147,34 @@ export default function MessagesScreen() {
   } | null>(null);
   const itemRefs = useRef<Record<string, View>>({});
 
+  const fetchUnreadNotifsCount = async () => {
+    try {
+      const count = await postService.getUnreadNotificationsCount();
+      setUnreadNotifsCount(count);
+    } catch (err) {
+      console.log("Lỗi tải số thông báo chưa đọc:", err);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchData();
     }, [currentUserId])
+  );
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener("refresh_notifications", () => {
+      fetchUnreadNotifsCount();
+    });
+    return () => {
+      sub.remove();
+    };
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchUnreadNotifsCount();
+    }, [])
   );
 
   const { socket, onlineUsers, fetchBulkPresence } = useSocket();
@@ -256,7 +283,7 @@ export default function MessagesScreen() {
     try {
       setLoading(true);
       const groups = await fetchGroups();
-      await Promise.all([fetchLabelsInfo(), fetchPinnedInfo()]);
+      await Promise.all([fetchLabelsInfo(), fetchPinnedInfo(), fetchUnreadNotifsCount()]);
 
       // Fetch bulk presence for 1-1 chats
       if (Array.isArray(groups)) {
@@ -588,9 +615,19 @@ export default function MessagesScreen() {
           <TouchableOpacity>
             <Bars3Icon size={28} color="#000" />
           </TouchableOpacity>
-          <Text className="text-2xl font-bold ml-4">Messages</Text>
+          <Text className="text-2xl font-bold ml-4">Tin nhắn</Text>
         </View>
         <View className="flex-row items-center gap-4">
+          <TouchableOpacity onPress={() => router.push("/profile/notifications" as any)} className="relative p-1">
+            <Ionicons name="notifications-outline" size={26} color="#000" />
+            {unreadNotifsCount > 0 && (
+              <View className="absolute -top-0.5 -right-0.5 bg-red-500 rounded-full min-w-[18px] h-[18px] items-center justify-center px-1">
+                <Text className="text-[9px] font-bold text-white">
+                  {unreadNotifsCount > 9 ? "9+" : unreadNotifsCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push("/scan-qr" as any)}>
             <QrCodeIcon size={28} color="#000" />
           </TouchableOpacity>

@@ -39,33 +39,71 @@ const MOOD_CLASSES: Record<string, string> = {
   sky: "bg-gradient-to-r from-cyan-400 to-blue-600 text-white",
 };
 
-const renderCommentContent = (content: string) => {
+const renderCommentContent = (content: string, availableUsers: UserProfileDTO[] = []) => {
   if (!content) return null;
-  const regex = /@(\p{Lu}\p{L}*(?:\s+\p{Lu}\p{L}*)+|[\w\p{L}\d_-]+)/gu;
+
+  // Thu thập các tên người dùng hợp lệ trong post (tác giả, người bình luận)
+  const validUsers = availableUsers.filter((u) => u && u.fullName);
+  // Sắp xếp theo độ dài tên giảm dần để match tên dài trước
+  validUsers.sort((a, b) => b.fullName.length - a.fullName.length);
+
   const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match;
-  regex.lastIndex = 0;
+  let remaining = content;
+  let keyIndex = 0;
 
-  while ((match = regex.exec(content)) !== null) {
-    const matchIndex = match.index;
-    const matchText = match[0];
-
-    if (matchIndex > lastIndex) {
-      parts.push(content.substring(lastIndex, matchIndex));
+  while (remaining.length > 0) {
+    // Tìm vị trí của dấu @
+    const atIndex = remaining.indexOf("@");
+    if (atIndex === -1) {
+      parts.push(remaining);
+      break;
     }
 
-    parts.push(
-      <span key={matchIndex} className="font-bold text-blue-600 dark:text-blue-400">
-        {matchText}
-      </span>
-    );
+    // Push phần text trước dấu @
+    if (atIndex > 0) {
+      parts.push(remaining.substring(0, atIndex));
+    }
 
-    lastIndex = regex.lastIndex;
-  }
+    const afterAt = remaining.substring(atIndex + 1);
+    let matchedUser: UserProfileDTO | null = null;
 
-  if (lastIndex < content.length) {
-    parts.push(content.substring(lastIndex));
+    // Kiểm tra xem phần sau dấu @ có khớp với tên nào trong known users không
+    for (const user of validUsers) {
+      if (afterAt.toLowerCase().startsWith(user.fullName.toLowerCase())) {
+        matchedUser = user;
+        break;
+      }
+    }
+
+    if (matchedUser) {
+      // Nếu khớp chính xác với một user đã biết
+      parts.push(
+        <Link
+          key={keyIndex++}
+          href={`/profile/timeline?userId=${matchedUser._id || matchedUser.id}`}
+          className="font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+        >
+          @{afterAt.substring(0, matchedUser.fullName.length)}
+        </Link>
+      );
+      remaining = afterAt.substring(matchedUser.fullName.length);
+    } else {
+      // Fallback: Thử dùng regex cơ bản để match 1 từ (chữ thường hoặc hoa)
+      const fallbackRegex = /^([\w\p{L}\d_-]+)/u;
+      const match = afterAt.match(fallbackRegex);
+      if (match) {
+        parts.push(
+          <span key={keyIndex++} className="font-bold text-blue-600 dark:text-blue-400">
+            @{match[1]}
+          </span>
+        );
+        remaining = afterAt.substring(match[1].length);
+      } else {
+        // Không match được gì, coi như text bình thường
+        parts.push("@");
+        remaining = afterAt;
+      }
+    }
   }
 
   return parts.length > 0 ? parts : content;
@@ -217,25 +255,33 @@ export default function PostCard({ post, onDeleteSuccess, onLikeUpdate, onEditSu
     if (post.tags && post.tags.length > 0) {
       const fetchTaggedProfiles = async () => {
         try {
-          const profiles: UserProfileDTO[] = [];
-          await Promise.all(
+          const resolved = await Promise.all(
             post.tags.map(async (uid) => {
               if (userCache[uid]) {
-                profiles.push(userCache[uid]!);
-                return;
+                return userCache[uid]!;
               }
               try {
                 const prof = await userService.getUserById(uid);
                 if (prof) {
                   userCache[uid] = prof;
-                  profiles.push(prof);
+                  return prof;
                 }
               } catch (e) {
                 console.error("Failed to load profile for tag:", uid, e);
               }
+              return null;
             })
           );
-          setTaggedUsers(profiles);
+
+          const validProfiles = resolved.filter((p): p is UserProfileDTO => p !== null);
+          const uniqueProfilesMap = new Map<string, UserProfileDTO>();
+          validProfiles.forEach((p) => {
+            const id = p.id || p._id;
+            if (id) {
+              uniqueProfilesMap.set(id, p);
+            }
+          });
+          setTaggedUsers(Array.from(uniqueProfilesMap.values()));
         } catch (err) {
           console.error("Failed to load tagged users:", err);
         }
@@ -955,9 +1001,8 @@ export default function PostCard({ post, onDeleteSuccess, onLikeUpdate, onEditSu
     );
   };
 
-  // Sử dụng replies từ backend response (đã group sẵn) thay vì tự group lại
-  // Backend trả về: [{ _id, content, replies: [...] }, ...] — dùng trực tiếp
   const rootComments = comments.filter((c) => !c.parentId);
+  const availableUsers = [author, ...Object.values(commentAuthors)].filter(Boolean) as UserProfileDTO[];
 
   return (
     <div id={`post-${post._id}`} className="bg-white rounded-3xl p-6 mb-5 border border-gray-100 shadow-sm transition-all duration-300 hover:shadow-md flex flex-col">
@@ -1250,27 +1295,26 @@ export default function PostCard({ post, onDeleteSuccess, onLikeUpdate, onEditSu
             <div className="flex flex-col gap-4 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
               {rootComments.map((comment) => {
                 const commentUser = commentAuthors[comment.userId];
-                // Ưu tiên dùng replies từ backend (đã group sẵn)
                 const replies = comment.replies || [];
                 const isCommentOwner = comment.userId === currentUserId;
 
                 return (
                   <div key={comment._id} className="flex flex-col gap-2 group/comment">
                     <div className="flex gap-3 items-start">
-                      <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 mt-0.5 border border-gray-100">
+                      <Link href={`/profile/timeline?userId=${comment.userId}`} className="w-8 h-8 rounded-full overflow-hidden shrink-0 mt-0.5 border border-gray-100 hover:opacity-80 transition-opacity">
                         <img
                           src={getAvatar(commentUser?.avatar, commentUser?.fullName)}
                           alt="Commenter avatar"
                           className="w-full h-full object-cover"
                         />
-                      </div>
+                      </Link>
                       <div className="flex-1 flex flex-col items-start">
                         <div className="bg-gray-50 dark:bg-zinc-800 rounded-2xl px-4 py-2 text-sm max-w-[90%] relative">
-                          <span className="font-bold text-gray-900 text-xs block mb-0.5">
+                          <Link href={`/profile/timeline?userId=${comment.userId}`} className="font-bold text-gray-900 text-xs block mb-0.5 hover:underline">
                             {commentUser?.fullName || "Đang tải..."}
-                          </span>
+                          </Link>
                           {comment.content && (
-                            <span className="text-gray-800 leading-relaxed break-words block">{renderCommentContent(comment.content)}</span>
+                            <span className="text-gray-800 leading-relaxed break-words block">{renderCommentContent(comment.content, availableUsers)}</span>
                           )}
                           {comment.mediaUrl && (
                             <div className="mt-2 rounded-lg overflow-hidden max-w-[200px] max-h-[150px] border border-gray-100 cursor-zoom-in">
@@ -1368,20 +1412,20 @@ export default function PostCard({ post, onDeleteSuccess, onLikeUpdate, onEditSu
 
                           return (
                             <div key={reply._id} className="flex gap-3 items-start group/reply">
-                              <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 mt-0.5 border border-gray-100">
+                              <Link href={`/profile/timeline?userId=${reply.userId}`} className="w-7 h-7 rounded-full overflow-hidden shrink-0 mt-0.5 border border-gray-100 hover:opacity-80 transition-opacity">
                                 <img
                                   src={getAvatar(replyUser?.avatar, replyUser?.fullName)}
                                   alt="Replier avatar"
                                   className="w-full h-full object-cover"
                                 />
-                              </div>
+                              </Link>
                               <div className="flex-1 flex flex-col items-start">
                                 <div className="bg-gray-50 dark:bg-zinc-800 rounded-2xl px-3 py-1.5 text-xs max-w-[90%] relative">
-                                  <span className="font-bold text-gray-900 text-[11px] block mb-0.5">
+                                  <Link href={`/profile/timeline?userId=${reply.userId}`} className="font-bold text-gray-900 text-[11px] block mb-0.5 hover:underline">
                                     {replyUser?.fullName || "Đang tải..."}
-                                  </span>
+                                  </Link>
                                   {reply.content && (
-                                    <span className="text-gray-800 leading-relaxed break-words block">{renderCommentContent(reply.content)}</span>
+                                    <span className="text-gray-800 leading-relaxed break-words block">{renderCommentContent(reply.content, availableUsers)}</span>
                                   )}
                                   {reply.mediaUrl && (
                                     <div className="mt-2 rounded-lg overflow-hidden max-w-[150px] max-h-[120px] border border-gray-100 cursor-zoom-in">
