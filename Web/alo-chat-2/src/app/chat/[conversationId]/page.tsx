@@ -384,6 +384,8 @@ export default function ChatPage() {
   }, [messageText, conversationId, conversationInfo?.isGroup]);
   const [sending, setSending] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   // Hover tooltip & context menu & reactions
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [activeReactionMenu, setActiveReactionMenu] = useState<string | null>(
@@ -1417,18 +1419,22 @@ export default function ChatPage() {
         setIsInitialLoad(false);
       }, 100);
     } else {
-      // Chỉ tự động cuộn xuống nếu đang ở gần đáy (trong khoảng 200px)
-      const container = scrollContainerRef.current;
-      if (container) {
-        const { scrollTop, scrollHeight, clientHeight } = container;
-        // Kiểm tra xem có đang ở gần đáy không
-        const isNearBottom = scrollHeight - scrollTop - clientHeight < 200;
-        if (isNearBottom) {
-          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      setTimeout(() => {
+        const container = scrollContainerRef.current;
+        if (container) {
+          const { scrollTop, scrollHeight, clientHeight } = container;
+          const myId = currentUser?.id || currentUser?._id;
+          const lastMsg = messages[messages.length - 1];
+          const isMyMsg = lastMsg?.senderId === myId;
+          const isNearBottom = scrollHeight - scrollTop - clientHeight < 500;
+          
+          if (isNearBottom || isMyMsg) {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+          }
         }
-      }
+      }, 50);
     }
-  }, [messages, isInitialLoad]);
+  }, [messages, isInitialLoad, currentUser]);
 
   /* ─── Infinite Scroll Observer ─── */
   useEffect(() => {
@@ -2472,7 +2478,10 @@ export default function ChatPage() {
                   <VideoCameraIcon className="w-5 h-5" />
                 </button>
 
-                <button className="hover:text-black transition">
+                <button 
+                  onClick={() => setShowSearch(!showSearch)}
+                  className={`transition ${showSearch ? "text-black" : "hover:text-gray-600"}`}
+                >
                   <MagnifyingGlassIcon className="w-5 h-5" />
                 </button>
                 <button
@@ -2483,6 +2492,60 @@ export default function ChatPage() {
                 </button>
               </div>
             </div>
+
+            {/* Search Bar */}
+            {showSearch && (
+              <div className="px-6 py-3 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-2">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Tìm kiếm tin nhắn..."
+                    autoFocus
+                    className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-[14px] outline-none focus:border-blue-500 transition-colors shadow-sm"
+                  />
+                  <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                </div>
+                {searchQuery.trim() !== "" && (
+                  <div className="max-h-[300px] overflow-y-auto flex flex-col gap-1 bg-white rounded-xl border border-gray-100 shadow-sm p-1 z-10">
+                    {messages
+                      .filter((m) => m.type === "text" && m.content?.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .slice(-20)
+                      .reverse()
+                      .map((m) => (
+                        <div
+                          key={m._id}
+                          onClick={() => {
+                            const target = document.getElementById(`msg-${m._id}`);
+                            if (target) {
+                              target.scrollIntoView({ behavior: "smooth", block: "center" });
+                              target.classList.add("bg-yellow-100", "transition-colors", "duration-1000");
+                              setTimeout(() => {
+                                target.classList.remove("bg-yellow-100");
+                              }, 2000);
+                            }
+                            setShowSearch(false);
+                            setSearchQuery("");
+                          }}
+                          className="px-3 py-2 hover:bg-gray-50 cursor-pointer rounded-lg flex flex-col gap-0.5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[12px] font-bold text-gray-700">{m.senderName}</span>
+                            <span className="text-[10px] text-gray-400">{formatTime(m.createdAt)}</span>
+                          </div>
+                          <p className="text-[13px] text-gray-600 truncate">{m.content}</p>
+                        </div>
+                      ))}
+                    {messages.filter((m) => m.type === "text" && m.content?.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                      <div className="px-3 py-4 text-center text-[12px] text-gray-500">
+                        Không tìm thấy tin nhắn nào khớp
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Stranger Warning Banner */}
             {isStranger && (
