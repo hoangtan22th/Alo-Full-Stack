@@ -17,6 +17,7 @@ COPY Web/alo-chat-admin/src ./src
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV NEXT_PUBLIC_API_URL=http://54.255.57.50:8888
 
 # Build the NextJS application
 RUN npm run build

@@ -34,7 +34,7 @@ public class MessageSnapshot {
     private String contentType;
 
     @Field("sent_at")
-    private LocalDateTime sentAt;
+    private String sentAt;
 
     @Field("is_anchor")
     @JsonProperty("isAnchor")
