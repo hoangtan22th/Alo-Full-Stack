@@ -66,6 +66,8 @@ interface ChatInfoPanelProps {
   userCache?: Record<string, { name: string; avatar: string }>;
   otherUserId?: string | null;
   onOpenPollDetails?: (pollId: string) => void;
+  activeTab?: "info" | "search";
+  onTabChange?: (tab: "info" | "search") => void;
 }
 
 const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
@@ -87,6 +89,8 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   userCache = {},
   otherUserId,
   onOpenPollDetails,
+  activeTab = "info",
+  onTabChange,
 }) => {
   const { onlineUsers } = useChatStore(
     useShallow((s) => ({
@@ -122,6 +126,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [showCommonGroupsModal, setShowCommonGroupsModal] = useState(false);
   const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
+
+  // Search State
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Group Info Editing State
   const [isEditingName, setIsEditingName] = useState(false);
@@ -257,17 +264,112 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
     >
       <div className="flex h-full flex-col">
         {/* Header */}
-        <div className="px-5 py-4 flex justify-end border-b border-gray-50">
-          {/* <h2 className="text-[16px] font-black text-gray-900 tracking-tight">Thông tin (Debug: {messages.length})</h2> */}
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition text-gray-400 hover:text-gray-600"
-          >
-            <XMarkIcon className="w-5 h-5" />
-          </button>
-        </div>
+        {activeTab !== "search" && (
+          <div className="px-5 py-4 flex justify-end border-b border-gray-50">
+            {/* <h2 className="text-[16px] font-black text-gray-900 tracking-tight">Thông tin (Debug: {messages.length})</h2> */}
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-full transition text-gray-400 hover:text-gray-600"
+            >
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+          </div>
+        )}
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+          {/* SEARCH VIEW */}
+          {activeTab === "search" && (
+            <div className="absolute inset-0 bg-white z-10 flex flex-col">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
+                <h2 className="text-[16px] font-black text-gray-900 tracking-tight">Tìm kiếm trong trò chuyện</h2>
+                <button
+                  onClick={() => onTabChange?.("info")}
+                  className="p-2 hover:bg-gray-100 rounded-full transition text-gray-400 hover:text-gray-600"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
+                <div className="relative mb-4">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Nhập từ khóa để tìm kiếm"
+                    autoFocus
+                    className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-[14px] outline-none focus:border-blue-500 transition-colors shadow-sm"
+                  />
+                  <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                </div>
+                
+                {/* Filters Mock */}
+                <div className="flex items-center gap-2 mb-6">
+                  <span className="text-[12px] text-gray-500 font-medium">Lọc theo:</span>
+                  <button className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-[12px] text-gray-700 font-medium transition">
+                    <UserIcon className="w-3.5 h-3.5" />
+                    Người gửi
+                    <ChevronDownIcon className="w-3 h-3 ml-1" />
+                  </button>
+                  <button className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-[12px] text-gray-700 font-medium transition">
+                    <ClockIcon className="w-3.5 h-3.5" />
+                    Ngày gửi
+                    <ChevronDownIcon className="w-3 h-3 ml-1" />
+                  </button>
+                </div>
+
+                {searchQuery.trim() === "" ? (
+                  <div className="flex flex-col items-center justify-center pt-10 pb-6 text-center opacity-70">
+                    <div className="w-32 h-32 bg-blue-50/50 rounded-full flex items-center justify-center mb-6">
+                      <MagnifyingGlassIcon className="w-20 h-20 text-blue-300" />
+                    </div>
+                    <h3 className="text-[14px] font-bold text-gray-700 mb-2">✨ Tìm tin nhắn cực nhanh!</h3>
+                    <p className="text-[12px] text-gray-500 leading-relaxed px-4">
+                      Kết quả chính xác, tiết kiệm thời gian.<br/>Nhập từ khóa và trải nghiệm ngay!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {messages
+                      .filter((m) => m.type === "text" && m.content?.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .reverse()
+                      .map((m) => (
+                        <div
+                          key={m._id}
+                          onClick={() => {
+                            const target = document.getElementById(`msg-${m._id}`);
+                            if (target) {
+                              target.scrollIntoView({ behavior: "smooth", block: "center" });
+                              target.classList.add("bg-yellow-100", "transition-colors", "duration-1000");
+                              setTimeout(() => {
+                                target.classList.remove("bg-yellow-100");
+                              }, 2000);
+                            }
+                          }}
+                          className="p-3 hover:bg-gray-50 cursor-pointer rounded-xl flex flex-col gap-1 transition"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[13px] font-bold text-gray-800">{m.senderName}</span>
+                            <span className="text-[11px] text-gray-400">
+                              {new Date(m.createdAt || "").toLocaleDateString("vi-VN", {
+                                day: "2-digit", month: "2-digit", year: "2-digit",
+                                hour: "2-digit", minute: "2-digit"
+                              })}
+                            </span>
+                          </div>
+                          <p className="text-[13px] text-gray-600 line-clamp-2">{m.content}</p>
+                        </div>
+                      ))}
+                    {messages.filter((m) => m.type === "text" && m.content?.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                      <div className="py-10 text-center text-[13px] text-gray-500 font-medium">
+                        Không tìm thấy kết quả nào cho "{searchQuery}"
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Profile Section */}
           <div className="flex flex-col items-center pt-8 pb-6 border-b border-gray-50">
             <div className="relative mb-4 group">
@@ -350,7 +452,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
             <div className="flex items-center gap-4 mt-7">
               <ActionButton icon={<BellSlashIcon />} label="Tắt báo" />
               <ActionButton icon={<MapPinIcon />} label="Ghim" />
-              <ActionButton icon={<MagnifyingGlassIcon />} label="Tìm kiếm" />
+              <ActionButton icon={<MagnifyingGlassIcon />} label="Tìm kiếm" onClick={() => onTabChange?.("search")} />
               {isGroup ? (
                 <ActionButton
                   icon={<UserGroupIcon />}
