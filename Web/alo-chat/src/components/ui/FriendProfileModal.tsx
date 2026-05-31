@@ -165,6 +165,11 @@ export default function FriendProfileModal({
             <h1 className="text-[17px] font-black text-gray-900">
               {userData?.fullName || "Đang tải..."}
             </h1>
+            {userData?.bio && (
+              <p className="text-[13px] text-gray-600 mt-1.5 leading-snug">
+                {userData.bio}
+              </p>
+            )}
 
             {/* ✅ KHU VỰC NÚT BẤM CHÍNH ĐÃ FIX LOGIC */}
             <div className="mt-4 space-y-2">
@@ -227,7 +232,7 @@ export default function FriendProfileModal({
                   ] || "Bảo mật"
                 }
               />
-              <InfoRow label="Ngày sinh" value="••/••/••••" />
+              <InfoRow label="Ngày sinh" value={userData?.dateOfBirth ? new Date(userData.dateOfBirth).toLocaleDateString("vi-VN") : "Bảo mật"} />
               <InfoRow
                 label="Điện thoại"
                 value={userData?.phoneNumber || "Bảo mật"}

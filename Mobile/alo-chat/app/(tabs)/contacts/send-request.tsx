@@ -24,6 +24,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { userService, UserProfileDTO } from "../../../services/userService";
 import { contactService } from "../../../services/contactService";
+import { groupService } from "../../../services/groupService";
 
 export default function UserProfileScreen() {
   const router = useRouter();
@@ -331,45 +332,63 @@ export default function UserProfileScreen() {
 
           {/* --- Phần 3: Chức năng dựa theo Status --- */}
           <View className="px-5 mb-8">
-            {currentStatus === "ACCEPTED" && (
-              <View
-                className="flex-row justify-center mt-2"
-                style={{ gap: 24 }}
-              >
-                <ActionButton
-                  icon={
-                    <ChatBubbleBottomCenterTextIcon size={22} color="#1f2937" />
-                  }
-                  label="NHẮN TIN"
-                  onPress={() => {
-                    if (from === "chat") {
-                      if (typeof router.dismiss === "function") {
-                        router.dismiss(1);
-                      } else {
-                        router.back();
-                      }
+            {/* Luôn hiển thị các nút Nhắn tin, Gọi điện, Video cho dù là bạn hay không */}
+            <View
+              className="flex-row justify-center mt-2"
+              style={{ gap: 24 }}
+            >
+              <ActionButton
+                icon={
+                  <ChatBubbleBottomCenterTextIcon size={22} color="#1f2937" />
+                }
+                label="NHẮN TIN"
+                onPress={async () => {
+                  if (from === "chat") {
+                    if (typeof router.dismiss === "function") {
+                      router.dismiss(1);
                     } else {
+                      router.back();
+                    }
+                  } else {
+                    try {
+                      // Kiểm tra xem đã có cuộc hội thoại chưa bằng tham số checkOnly = true
+                      const convo = await groupService.createDirectConversation(userId as string, true);
+                        
+                      const chatId = convo ? (convo._id || convo.id) : `temp-${userId}`;
                       router.push({
                         pathname: "/chat/[id]",
                         params: {
-                          id: userId as string,
+                          id: chatId,
+                          targetUserId: userId as string,
+                          name: displayFullName,
+                          avatar: displayAvatar.uri,
+                        },
+                      });
+                    } catch (err) {
+                      console.error(err);
+                      // Fallback to temp if error
+                      router.push({
+                        pathname: "/chat/[id]",
+                        params: {
+                          id: `temp-${userId}`,
+                          targetUserId: userId as string,
                           name: displayFullName,
                           avatar: displayAvatar.uri,
                         },
                       });
                     }
-                  }}
-                />
-                <ActionButton
-                  icon={<PhoneIcon size={22} color="#1f2937" />}
-                  label="GỌI ĐIỆN"
-                />
-                <ActionButton
-                  icon={<VideoCameraIcon size={24} color="#1f2937" />}
-                  label="VIDEO"
-                />
-              </View>
-            )}
+                  }
+                }}
+              />
+              <ActionButton
+                icon={<PhoneIcon size={22} color="#1f2937" />}
+                label="GỌI ĐIỆN"
+              />
+              <ActionButton
+                icon={<VideoCameraIcon size={24} color="#1f2937" />}
+                label="VIDEO"
+              />
+            </View>
 
             {currentStatus === "NOT_FRIEND" && (
               <View className="items-center w-full">

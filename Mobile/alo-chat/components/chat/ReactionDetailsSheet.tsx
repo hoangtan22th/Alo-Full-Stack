@@ -92,11 +92,31 @@ export const ReactionDetailsSheet = ({
 
     const tabs = [
       { key: "all", label: "Tất cả", data: allTabContent },
-      ...uniqueEmojis.map((emoji) => ({
-        key: emoji,
-        label: EMOJI_MAP[emoji] || emoji,
-        data: reactions.filter((r: any) => r.emoji === emoji),
-      })),
+      ...uniqueEmojis.map((emoji) => {
+        const emojiReactions = reactions.filter((r: any) => r.emoji === emoji);
+        // Nhóm theo user cho tab emoji cụ thể
+        const emojiUserMap: Record<string, any> = {};
+        emojiReactions.forEach((r: any) => {
+          if (!emojiUserMap[r.userId]) {
+            const cached = userCache[r.userId];
+            emojiUserMap[r.userId] = {
+              userId: r.userId,
+              fullName: cached?.fullName || r.fullName || "Người dùng",
+              avatar: cached?.avatar || r.avatarUrl || r.avatar,
+              emoji: r.emoji,
+              count: 0,
+            };
+          }
+          emojiUserMap[r.userId].count += (r.count || 1);
+        });
+
+        return {
+          key: emoji,
+          label: EMOJI_MAP[emoji] || emoji,
+          data: Object.values(emojiUserMap).sort((a: any, b: any) => b.count - a.count),
+          totalCount: emojiReactions.reduce((acc: number, r: any) => acc + (r.count || 1), 0),
+        };
+      }),
     ];
 
     return tabs;
@@ -229,12 +249,7 @@ export const ReactionDetailsSheet = ({
                               (acc: number, r: any) => acc + (r.count || 1),
                               0,
                             )
-                          : (reactionDetailMsg?.reactions ?? [])
-                              .filter((r: any) => r.emoji === tab.key)
-                              .reduce(
-                                (acc: number, r: any) => acc + (r.count || 1),
-                                0,
-                              )}
+                          : tab.totalCount}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -302,9 +317,16 @@ export const ReactionDetailsSheet = ({
                             </View>
                           </View>
                           {!isTabAll && (
-                            <Text className="text-2xl">
-                              {EMOJI_MAP[item.emoji] || item.emoji}
-                            </Text>
+                            <View className="flex-row items-center gap-1">
+                              {item.count > 1 && (
+                                <Text className="text-gray-500 font-bold text-[14px]">
+                                  x{item.count}
+                                </Text>
+                              )}
+                              <Text className="text-2xl">
+                                {EMOJI_MAP[item.emoji] || item.emoji}
+                              </Text>
+                            </View>
                           )}
                         </View>
                       );

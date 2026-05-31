@@ -21,11 +21,11 @@ import java.util.List;
 public class ReportCreationRequest {
 
     @NotBlank(message = "Reporter ID cannot be null")
-    @Size(min = 36, max = 36, message = "Reporter ID must be exactly 36 characters")
+    @Size(max = 255, message = "Reporter ID is too long")
     private String reporterId;
 
     @NotBlank(message = "Target ID cannot be null")
-    @Size(min = 36, max = 36, message = "Target ID must be exactly 36 characters")
+    @Size(max = 255, message = "Target ID is too long")
     private String targetId;
 
     @NotNull(message = "Target Type is required")
@@ -38,7 +38,7 @@ public class ReportCreationRequest {
     private ConversationType conversationType;
 
     @NotBlank(message = "Conversation ID is required")
-    @Size(min = 36, max = 36, message = "Conversation ID must be exactly 36 characters")
+    @Size(max = 255, message = "Conversation ID is too long")
     private String conversationId;
 
     @NotNull(message = "Report Reason is required")

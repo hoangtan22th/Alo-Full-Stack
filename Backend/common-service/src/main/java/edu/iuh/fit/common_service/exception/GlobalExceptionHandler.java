@@ -49,6 +49,9 @@ public class GlobalExceptionHandler {
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getFieldErrors()
                 .forEach(e -> errors.put(e.getField(), e.getDefaultMessage()));
+                
+        System.err.println("[DEBUG] Validation Error 400: " + errors);
+        
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(400, "Dữ liệu không hợp lệ", errors));
     }
@@ -56,6 +59,7 @@ public class GlobalExceptionHandler {
     // Bắt lỗi missing request param
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ApiResponse<Void>> handleMissingParam(MissingServletRequestParameterException ex) {
+        System.err.println("[DEBUG] Missing Param 400: " + ex.getParameterName());
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(400, "Thiếu tham số: " + ex.getParameterName()));
     }
@@ -63,6 +67,7 @@ public class GlobalExceptionHandler {
     // Bắt lỗi resource not found (URL sai)
     @ExceptionHandler(NoHandlerFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNotFound(NoHandlerFoundException ex) {
+        System.err.println("[DEBUG] 404 Not Found: " + ex.getRequestURL());
         return ResponseEntity.status(404)
                 .body(ApiResponse.error(404, "Không tìm thấy endpoint: " + ex.getRequestURL()));
     }

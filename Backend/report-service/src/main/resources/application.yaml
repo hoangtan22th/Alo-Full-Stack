@@ -11,6 +11,9 @@ spring:
       password: ${RABBITMQ_PASSWORD}
   mongodb:
     uri: ${MONGODB_URI}
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
 
 eureka:
   client:

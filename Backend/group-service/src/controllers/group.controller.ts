@@ -1368,7 +1368,7 @@ export const getOrCreateDirectConversation = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { targetUserId } = req.body;
+    const { targetUserId, checkOnly } = req.body;
     const currentUserId = (req.headers["x-user-id"] || "").toString();
 
     const existingConversation = await Conversation.findOne({
@@ -1381,6 +1381,11 @@ export const getOrCreateDirectConversation = async (
 
     if (existingConversation) {
       res.status(200).json(existingConversation);
+      return;
+    }
+
+    if (checkOnly) {
+      res.status(204).send();
       return;
     }
 
