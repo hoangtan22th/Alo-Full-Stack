@@ -2991,19 +2991,25 @@ export default function ChatPage() {
                                   )
                                 ) : (
                                   <div
-                                    className={`relative p-1.5 px-2 border shadow-sm ${msg.type === "file" && !isRevoked
+                                    className={`relative transition-all duration-200 ${
+                                      (msg.type === "text" || !msg.type || isRevoked)
+                                        ? `p-1.5 px-2 border shadow-sm ${
+                                            isMine
+                                              ? "bg-[#18181B] text-white border-zinc-800 shadow-zinc-950/5"
+                                              : "bg-[#F4F4F5] text-zinc-900 border-gray-100 shadow-gray-900/5"
+                                          }`
+                                        : "p-0 border-transparent bg-transparent shadow-none"
+                                    } ${
+                                      msg.type === "file" && !isRevoked
                                         ? "w-[320px] max-w-[480px]"
                                         : "w-fit max-w-full"
-                                      } ${isMine
-                                        ? "bg-[#18181B] text-white shadow-zinc-950/5"
-                                        : "bg-[#F4F4F5] text-zinc-900 shadow-gray-900/5"
-                                      } ${conversationInfo?.isHighlightEnabled &&
-                                        adminIds.has(String(msg.senderId))
+                                    } ${
+                                      conversationInfo?.isHighlightEnabled &&
+                                      adminIds.has(String(msg.senderId)) &&
+                                      (msg.type === "text" || !msg.type || isRevoked)
                                         ? "border-amber-300 ring-2 ring-amber-200/50"
-                                        : isMine
-                                          ? "border-zinc-800"
-                                          : "border-gray-100"
-                                      } ${bubbleRadius} text-left`}
+                                        : ""
+                                    } ${bubbleRadius} text-left`}
                                   >
                                     {/* Reply Quote Box */}
                                     {msg.replyTo &&

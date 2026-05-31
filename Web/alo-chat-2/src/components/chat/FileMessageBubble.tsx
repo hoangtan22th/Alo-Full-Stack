@@ -123,7 +123,7 @@ export default function FileMessageBubble({
   const previewLines = txtContent ? txtContent.split("\n").slice(0, 2) : [];
 
   return (
-    <div className="flex flex-col gap-2 w-full">
+    <div className="flex flex-col gap-2 w-full p-3 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow transition-shadow duration-200">
 
       {/* 1. Inline content preview for .txt files */}
       {isTxt && (
