@@ -3607,7 +3607,7 @@ export default function ChatPage() {
 
                                           {activeReactionMenu === msg._id && (
                                             <div
-                                              className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"} before:absolute before:left-0 before:right-0 before:h-4 before:content-[''] ${menuPosition === "bottom" ? "before:-top-3.5" : "before:-bottom-3.5"}`}
+                                              className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 ${isMine ? "right-0" : "left-0"} ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"} before:absolute before:left-0 before:right-0 before:h-4 before:content-[''] ${menuPosition === "bottom" ? "before:-top-3.5" : "before:-bottom-3.5"}`}
                                               onMouseLeave={() =>
                                                 setActiveReactionMenu(null)
                                               }
