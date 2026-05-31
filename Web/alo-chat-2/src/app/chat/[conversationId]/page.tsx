@@ -2995,15 +2995,15 @@ export default function ChatPage() {
                                         ? "w-[320px] max-w-[480px]"
                                         : "w-fit max-w-full"
                                       } ${isMine
-                                        ? "bg-blue-50/80 shadow-blue-900/5"
-                                        : "bg-white shadow-gray-900/5"
+                                        ? "bg-[#18181B] text-white shadow-zinc-950/5"
+                                        : "bg-[#F4F4F5] text-zinc-900 shadow-gray-900/5"
                                       } ${conversationInfo?.isHighlightEnabled &&
                                         adminIds.has(String(msg.senderId))
                                         ? "border-amber-300 ring-2 ring-amber-200/50"
                                         : isMine
-                                          ? "border-blue-100"
+                                          ? "border-zinc-800"
                                           : "border-gray-100"
-                                      } ${bubbleRadius}`}
+                                      } ${bubbleRadius} text-left`}
                                   >
                                     {/* Reply Quote Box */}
                                     {msg.replyTo &&
@@ -3011,9 +3011,9 @@ export default function ChatPage() {
                                       !isRevoked && (
                                         <div
                                           className={`mb-2 px-3 py-2 border-l-[3px] border-blue-600 ${isMine
-                                            ? "bg-white/50"
+                                            ? "bg-white/10"
                                             : "bg-blue-50/50"
-                                            } rounded-r-lg text-left cursor-pointer hover:bg-white/80 transition-colors w-full min-w-[150px] max-w-full overflow-hidden`}
+                                            } rounded-r-lg text-left cursor-pointer hover:opacity-90 transition-opacity w-full min-w-[150px] max-w-full overflow-hidden`}
                                           onClick={() => {
                                             const targetMsg =
                                               document.getElementById(
@@ -3044,12 +3044,12 @@ export default function ChatPage() {
                                               />
                                             )}
                                             <div className="flex-1 min-w-0">
-                                              <p className="text-[13px] font-bold text-gray-800 truncate">
+                                              <p className={`text-[13px] font-bold truncate ${isMine ? "text-blue-200" : "text-gray-800"}`}>
                                                 {getSenderDisplayName(
                                                   msg.replyTo.senderId,
                                                 )}
                                               </p>
-                                              <p className="text-[13px] text-gray-500 line-clamp-1 leading-tight mt-0.5 whitespace-normal">
+                                              <p className={`text-[13px] line-clamp-1 leading-tight mt-0.5 whitespace-normal ${isMine ? "text-gray-300" : "text-gray-500"}`}>
                                                 {msg.replyTo.type === "image"
                                                   ? "[Hình ảnh]"
                                                   : msg.replyTo.type === "file"

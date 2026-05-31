@@ -57,7 +57,7 @@ export default function MessageBubble({ message, currentUserId }: Props) {
 
       <div
         className={`max-w-[85%] px-4 py-2.5 rounded-2xl shadow-sm transition-all relative
-          ${isMine ? "bg-blue-600 text-white rounded-br-sm" : "bg-white border border-gray-100 rounded-bl-sm"}
+          ${isMine ? "bg-[#18181B] text-white rounded-br-sm" : "bg-[#F4F4F5] text-zinc-900 border border-gray-100 rounded-bl-sm"}
           ${isReportSelectionMode && !isSelected ? "opacity-50 filter grayscale" : ""}
           ${isSelected ? "ring-2 ring-blue-300" : ""}
         `}
