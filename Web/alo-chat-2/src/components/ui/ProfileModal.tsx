@@ -55,6 +55,8 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
   const [gender, setGender] = useState<Gender>("Nam");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [bio, setBio] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
 
   const [avatarUrl, setAvatarUrl] = useState("/avt-mac-dinh.jpg");
   const [coverImageUrl, setCoverImageUrl] = useState("/black.jpg");
@@ -98,6 +100,8 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         setFullName(userData.fullName || "");
         setPhone(userData.phoneNumber || "");
         setEmail(userData.email || "");
+        setBio(userData.bio || "");
+        setDateOfBirth(userData.dateOfBirth || "");
         setAvatarUrl(userData.avatar || "/avt-mac-dinh.jpg");
         setCoverImageUrl(userData.coverImage || "/black.jpg");
 
@@ -149,8 +153,11 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
         fullName,
         gender: genderRevMap[gender],
         phoneNumber: phone,
+        email,
+        bio,
+        dateOfBirth: dateOfBirth || null,
       });
-
+      
       if (avatarFile) {
         const formData = new FormData();
         formData.append("file", avatarFile);
@@ -303,11 +310,19 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
               <div className="grid grid-cols-1 gap-4">
                 <FormInput
+                  label="Ngày sinh"
+                  value={dateOfBirth}
+                  onChange={setDateOfBirth}
+                  type="date"
+                  isEditing={isEditing}
+                  loading={loading}
+                />
+                <FormInput
                   label="Số điện thoại"
                   value={phone}
                   onChange={setPhone}
                   type="tel"
-                  isEditing={false}
+                  isEditing={isEditing}
                   loading={loading}
                 />
                 <FormInput
@@ -315,9 +330,25 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                   value={email}
                   onChange={setEmail}
                   type="email"
-                  isEditing={false}
+                  isEditing={isEditing}
                   loading={loading}
                 />
+                <div className="w-full text-left">
+                  <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">
+                    Tiểu sử
+                  </label>
+                  <textarea
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    disabled={!isEditing || loading}
+                    rows={3}
+                    className={`w-full px-4 py-2.5 rounded-xl text-[13px] transition-all outline-none border-2 font-semibold resize-none ${
+                      isEditing
+                        ? "bg-white border-gray-200 text-gray-900 focus:border-black shadow-sm"
+                        : "bg-[#f9f9f9] border-transparent text-gray-500 cursor-not-allowed"
+                    }`}
+                  />
+                </div>
               </div>
             </div>
 

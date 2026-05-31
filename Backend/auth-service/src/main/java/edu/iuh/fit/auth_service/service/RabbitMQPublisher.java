@@ -33,6 +33,18 @@ public class RabbitMQPublisher {
         log.info("Published UserRegisteredEvent for userID: {}", userId);
     }
 
+    public void publishSecurityAlert(String userId, String message) {
+        try {
+            java.util.Map<String, Object> payload = new java.util.HashMap<>();
+            payload.put("userId", userId);
+            payload.put("message", message);
+            rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE_ADMIN, "security.alert", payload);
+            log.info("Published SECURITY_ALERT for userID: {}", userId);
+        } catch (Exception e) {
+            log.error("❌ Error publishing SECURITY_ALERT event: " + e.getMessage());
+        }
+    }
+
     public void publishForceLogoutEvent(String userId, java.util.List<String> killedSessionIds, String message) {
         try {
             java.util.Map<String, Object> payload = new java.util.HashMap<>();

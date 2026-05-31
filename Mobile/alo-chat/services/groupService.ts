@@ -328,12 +328,14 @@ export const groupService = {
   },
 
   // Lấy hoặc tạo cuộc hội thoại 1-1
-  createDirectConversation: async (targetUserId: string) => {
+  createDirectConversation: async (targetUserId: string, checkOnly?: boolean) => {
     try {
-      const res = await api.post<any, any>(`/groups/direct`, { targetUserId });
+      const res = await api.post<any, any>(`/groups/direct`, { targetUserId, checkOnly });
+      if (res?.status === 204) return null;
       // Backend trả về { status, data: { _id, ... } } hoặc trực tiếp { _id, ... } tùy vào interceptor
       return res?.data?.data ? res.data.data : res?.data ? res.data : res;
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.response?.status === 404 || error?.response?.status === 204) return null;
       console.error("Lỗi tạo cuộc hội thoại 1-1:", error);
       throw error;
     }

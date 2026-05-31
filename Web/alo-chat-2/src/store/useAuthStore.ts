@@ -91,6 +91,9 @@ export const useAuthStore = create<AuthState>()(
             localStorage.removeItem("accessToken");
             localStorage.removeItem("refreshToken");
           }
+          
+          // Xóa lịch sử tìm kiếm khi đăng xuất
+          localStorage.removeItem("search_phone_history");
 
           return {
             accessToken: null,

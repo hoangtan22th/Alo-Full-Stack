@@ -9,9 +9,11 @@ import {
   EnvelopeIcon,
   PaperAirplaneIcon,
 } from "@heroicons/react/24/outline";
+import { useNotificationStore } from "../../store/useNotificationStore";
 
 export default function ContactSidebar() {
   const pathname = usePathname();
+  const { friendRequestCount, groupInviteCount } = useNotificationStore();
   const navItemClass = (isActive: boolean) =>
     `p-3 rounded-xl cursor-pointer flex items-center gap-3 transition-all text-[14px] ${
       isActive
@@ -46,10 +48,17 @@ export default function ContactSidebar() {
 
             <Link
               href="/contacts/requests"
-              className={navItemClass(pathname === "/contacts/requests")}
+              className={`${navItemClass(pathname === "/contacts/requests")} justify-between`}
             >
-              <UserPlusIcon className="w-5 h-5" />
-              Lời mời kết bạn
+              <div className="flex items-center gap-3">
+                <UserPlusIcon className="w-5 h-5" />
+                Lời mời kết bạn
+              </div>
+              {friendRequestCount > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  {friendRequestCount > 99 ? "99+" : friendRequestCount}
+                </span>
+              )}
             </Link>
             <Link
               href="/contacts/sent-requests"
@@ -70,10 +79,17 @@ export default function ContactSidebar() {
             </Link>
             <Link
               href="/contacts/group-invites"
-              className={navItemClass(pathname === "/contacts/group-invites")}
+              className={`${navItemClass(pathname === "/contacts/group-invites")} justify-between`}
             >
-              <EnvelopeIcon className="w-5 h-5" />
-              Lời mời vào nhóm
+              <div className="flex items-center gap-3">
+                <EnvelopeIcon className="w-5 h-5" />
+                Lời mời vào nhóm
+              </div>
+              {groupInviteCount > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  {groupInviteCount > 99 ? "99+" : groupInviteCount}
+                </span>
+              )}
             </Link>
           </>
         )}

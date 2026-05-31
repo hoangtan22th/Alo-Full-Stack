@@ -649,6 +649,8 @@ export default function ConversationSidebar() {
     }
   };
 
+  const [tempUserCache, setTempUserCache] = useState<Record<string, any>>({});
+
   const toggleMenu = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (openMenuId === id) {
@@ -660,21 +662,104 @@ export default function ConversationSidebar() {
     }
   };
 
-  const sortedConversations = [...conversations].sort((a, b) => {
+  const conversationsWithTemp = useMemo(() => {
+    if (conversationId && conversationId.startsWith("new-")) {
+      const targetUserId = conversationId.replace("new-", "");
+      const exists = conversations.some(
+        (c) => c.id === conversationId || c.otherMemberUserId === targetUserId
+      );
+      if (!exists) {
+        let otherUser = tempUserCache[targetUserId];
+        if (!otherUser) {
+          axiosClient.get(`/users/${targetUserId}`)
+            .then((res) => {
+              const u = res?.data?.data || res?.data || res;
+              if (u) {
+                setTempUserCache(prev => ({ ...prev, [targetUserId]: u }));
+              }
+            })
+            .catch(console.error);
+        }
+        
+        const chatName =
+          otherUser?.fullName ||
+          otherUser?.username ||
+          otherUser?.name ||
+          "Người dùng";
+        const chatAvatar = otherUser?.avatar || "";
+        const isFriend = friendIds.has(targetUserId);
+        
+        const tempConvo = {
+          id: conversationId,
+          name: chatName,
+          avatar: chatAvatar,
+          isGroup: false,
+          membersCount: 2,
+          message: "Cuộc trò chuyện tạm thời",
+          lastMessageId: "",
+          time: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          unreadCount: 0,
+          updatedAt: new Date().toISOString(),
+          otherMemberUserId: targetUserId,
+          folder: isFriend ? "priority" : "stranger",
+        };
+        
+        if (conversations.length > 0) {
+          return [conversations[0], tempConvo, ...conversations.slice(1)];
+        } else {
+          return [tempConvo];
+        }
+      }
+    }
+    return conversations;
+  }, [conversationId, conversations, friendIds, tempUserCache, fetchGroups]);
+
+  // Auto-switch tab to match active conversation
+  useEffect(() => {
+    if (!conversationId || conversationsWithTemp.length === 0) return;
+    
+    const activeConvo = conversationsWithTemp.find(c => (c.id || c._id) === conversationId);
+    if (activeConvo) {
+      const isStrangerConvo =
+        !activeConvo.isGroup &&
+        activeConvo.id !== BOT_ID &&
+        activeConvo.otherMemberUserId &&
+        !friendIds.has(activeConvo.otherMemberUserId);
+        
+      const folder = activeConvo.folder;
+      
+      const isOther =
+        folder === "other" ||
+        folder === "stranger" ||
+        (!folder && isStrangerConvo);
+        
+      if (isOther && activeTab !== "Khác") {
+        setActiveTab("Khác");
+      } else if (!isOther && activeTab !== "Ưu tiên") {
+        setActiveTab("Ưu tiên");
+      }
+    }
+  }, [conversationId, conversationsWithTemp, friendIds, activeTab]);
+
+  const sortedConversations = [...conversationsWithTemp].sort((a, b) => {
     const aPinned = pinnedIds.has(a.id);
     const bPinned = pinnedIds.has(b.id);
     if (aPinned && !bPinned) return -1;
     if (!aPinned && bPinned) return 1;
 
+    const BOT_IDS = ["alo-bot", "00000000-0000-0000-0000-000000000000", "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"];
     if (activeTab === "Khác") {
       const aIsStranger =
         !a.isGroup &&
-        a.id !== BOT_ID &&
+        !BOT_IDS.includes(a.id) &&
         a.otherMemberUserId &&
         !friendIds.has(a.otherMemberUserId);
       const bIsStranger =
         !b.isGroup &&
-        b.id !== BOT_ID &&
+        !BOT_IDS.includes(b.id) &&
         b.otherMemberUserId &&
         !friendIds.has(b.otherMemberUserId);
       if (aIsStranger && !bIsStranger) return -1;
@@ -690,22 +775,23 @@ export default function ConversationSidebar() {
       .includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
 
+    const BOT_IDS = ["alo-bot", "00000000-0000-0000-0000-000000000000", "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"];
     const folder = chat.folder;
     const isStrangerConvo =
       chat.isGroup === false &&
-      chat.id !== BOT_ID &&
+      !BOT_IDS.includes(chat.id) &&
       chat.otherMemberUserId &&
       !friendIds.has(chat.otherMemberUserId);
 
     let tabMatch = false;
     if (activeTab === "Ưu tiên") {
       // Ưu tiên: Nhóm, Bot, hoặc Bạn bè (không phải folder Other)
-      tabMatch = folder === "priority" || (!folder && !isStrangerConvo) || chat.isGroup === true || chat.id === BOT_ID;
+      tabMatch = folder === "priority" || (!folder && !isStrangerConvo) || chat.isGroup === true || BOT_IDS.includes(chat.id);
     } else if (activeTab === "Khác") {
       // Khác: Folder Other, hoặc Người lạ (không phải folder Priority)
       tabMatch =
         (folder === "other" || folder === "stranger" || (!folder && isStrangerConvo)) &&
-        chat.isGroup !== true && chat.id !== BOT_ID;
+        chat.isGroup !== true && !BOT_IDS.includes(chat.id);
     } else {
       return false;
     }
@@ -731,12 +817,13 @@ export default function ConversationSidebar() {
     let pCount = 0;
     let oCount = 0;
 
-    conversations.forEach((chat) => {
+    conversationsWithTemp.forEach((chat) => {
       if (chat.unreadCount > 0) {
         const folder = chat.folder;
+        const BOT_IDS = ["alo-bot", "00000000-0000-0000-0000-000000000000", "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"];
         const isStrangerConvo =
           !chat.isGroup &&
-          chat.id !== BOT_ID &&
+          !BOT_IDS.includes(chat.id) &&
           chat.otherMemberUserId &&
           !friendIds.has(chat.otherMemberUserId);
 
@@ -744,13 +831,13 @@ export default function ConversationSidebar() {
           folder === "priority" ||
           (!folder && !isStrangerConvo) ||
           chat.isGroup === true ||
-          chat.id === BOT_ID;
+          BOT_IDS.includes(chat.id);
         const isOther =
           (folder === "other" ||
             folder === "stranger" ||
             (!folder && isStrangerConvo)) &&
           chat.isGroup !== true &&
-          chat.id !== BOT_ID;
+          !BOT_IDS.includes(chat.id);
 
         if (isPriority) pCount++;
         else if (isOther) oCount++;
@@ -758,7 +845,7 @@ export default function ConversationSidebar() {
     });
 
     return { priorityUnreadCount: pCount, otherUnreadCount: oCount };
-  }, [conversations, friendIds]);
+  }, [conversationsWithTemp, friendIds]);
 
   return (
     <>

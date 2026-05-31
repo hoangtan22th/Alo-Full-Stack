@@ -209,6 +209,20 @@ export class MessageDataService {
         .skip(skip)
         .lean();
 
+      // Kiểm tra trạng thái thu hồi của các tin nhắn được trả lời (replyTo)
+      const replyIds = messages
+        .filter((m: any) => m.replyTo && m.replyTo.messageId)
+        .map((m: any) => m.replyTo.messageId);
+
+      let revokedReplyIdSet = new Set<string>();
+      if (replyIds.length > 0) {
+        const revokedReplies = await Message.find({
+          _id: { $in: replyIds.map((id: string) => new Types.ObjectId(id)) },
+          isRevoked: true
+        }).select('_id').lean();
+        revokedReplyIdSet = new Set(revokedReplies.map((m: any) => String(m._id)));
+      }
+
       // Reverse và xử lý hiển thị tin đã thu hồi
       return messages.reverse().map((msg: any) => {
         if (msg.isRevoked) {
@@ -217,6 +231,10 @@ export class MessageDataService {
             msg.content = "Tin nhắn đã được thu hồi";
           }
           // Note: Người gửi vẫn nhận được nội dung gốc để thực hiện Redo/Sửa nhanh
+        }
+        // Xử lý replyTo
+        if (msg.replyTo && msg.replyTo.messageId && revokedReplyIdSet.has(String(msg.replyTo.messageId))) {
+          msg.replyTo.content = "[Tin nhắn đã thu hồi]";
         }
         return msg;
       });

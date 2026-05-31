@@ -539,6 +539,19 @@ export const postService = {
       return false;
     }
   },
+
+  /**
+   * Lấy stories của một user cụ thể
+   */
+  getUserStories: async (targetUserId: string): Promise<IStory[]> => {
+    try {
+      const data = await api.get<any, any>(`/stories/user/${targetUserId}`);
+      return data || [];
+    } catch (error) {
+      console.error("Lỗi getUserStories:", error);
+      return [];
+    }
+  },
 };
 
 export default postService;

@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useAuthStore } from "../../store/useAuthStore";
+import { useNotificationStore } from "../../store/useNotificationStore";
 import { useRouter, usePathname } from "next/navigation";
 import Swal from "sweetalert2";
 import { socketService } from "../../services/socketService";
@@ -14,6 +15,7 @@ export default function AuthProvider({
   children: React.ReactNode;
 }) {
   const { isAuthenticated, user, logout, fetchProfile } = useAuthStore();
+  const { fetchInitialCounts, incrementFriendRequestCount, incrementGroupInviteCount } = useNotificationStore();
   const router = useRouter();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
@@ -26,8 +28,11 @@ export default function AuthProvider({
     if (token && !user) {
       console.log("🔄 [Auth] Profile missing on reload, fetching...");
       fetchProfile();
+      fetchInitialCounts();
+    } else if (token) {
+      fetchInitialCounts();
     }
-  }, [user, fetchProfile]);
+  }, [user, fetchProfile, fetchInitialCounts]);
 
   // 2. Logic Socket - Tách biệt hoàn toàn
   useEffect(() => {
@@ -59,7 +64,7 @@ export default function AuthProvider({
       console.log("🛡️ [Auth] Authenticated -> /chat");
       router.replace("/chat");
     }
-  }, [mounted, isAuthenticated, pathname]); // Bỏ router khỏi deps nếu có thể
+  }, [mounted, isAuthenticated, pathname]);
 
   // 4. Social Handlers
   const handleFriendRequestReceived = useCallback(
@@ -71,11 +76,22 @@ export default function AuthProvider({
           onClick: () => router.push("/contacts/requests"),
         },
       });
+      incrementFriendRequestCount();
       window.dispatchEvent(
         new CustomEvent("new_friend_request", { detail: data }),
       );
     },
-    [router],
+    [router, incrementFriendRequestCount],
+  );
+
+  const handleGroupInviteReceived = useCallback(
+    (data: any) => {
+      toast.info("👥 Lời mời tham gia nhóm!", {
+        description: `Bạn được mời vào nhóm: ${data.groupName || "..."}`,
+      });
+      incrementGroupInviteCount();
+    },
+    [incrementGroupInviteCount],
   );
 
   const handleFriendRequestAccepted = useCallback((data: any) => {
@@ -167,6 +183,7 @@ export default function AuthProvider({
       socketService.onFriendRequestReceived(handleFriendRequestReceived),
       socketService.onFriendRequestAccepted(handleFriendRequestAccepted),
       socketService.onFriendListUpdated(handleFriendListUpdated),
+      socketService.onNewInvitation(handleGroupInviteReceived),
       socketService.onReminderDue(handleReminderDue),
       socketService.onMessageReceived(handleMessageReceived),
     ];
@@ -183,6 +200,7 @@ export default function AuthProvider({
     handleFriendRequestReceived,
     handleFriendRequestAccepted,
     handleFriendListUpdated,
+    handleGroupInviteReceived,
     handleReminderDue,
     handleMessageReceived,
   ]);

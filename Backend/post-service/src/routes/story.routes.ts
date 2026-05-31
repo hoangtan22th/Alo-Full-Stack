@@ -7,15 +7,18 @@ const router = Router();
 
 // Danh sách MIME type được phép cho Story
 const ALLOWED_TYPES = [
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-  'video/mp4', 'video/webm', 'video/quicktime',
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif', 'image/jpg', 'image/svg+xml',
+  'video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v', 'video/3gpp', 'video/avi', 'video/mpeg',
+  'application/octet-stream',
 ];
 
 const fileFilter = (req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
   if (ALLOWED_TYPES.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error(`Loại file không được hỗ trợ cho Story: ${file.mimetype}`));
+    const err = new Error(`Loại file không được hỗ trợ cho Story: ${file.mimetype}`);
+    (err as any).status = 400;
+    cb(err);
   }
 };
 

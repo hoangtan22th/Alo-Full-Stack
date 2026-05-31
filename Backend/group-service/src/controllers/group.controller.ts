@@ -163,10 +163,10 @@ export const createGroup = async (
       }
     }
 
-    // Kiểm tra số lượng: Người tạo + Danh sách mời phải >= 3
-    if (!userIds || !Array.isArray(userIds) || userIds.length < 2) {
+    // Nếu từ poll hoặc copy, cho phép ít thành viên, nếu không thì cứ lưu tùy ý (đã kiểm tra ở UI)
+    if (!userIds || !Array.isArray(userIds)) {
       res.status(400).json({
-        error: "Nhóm phải có ít nhất 3 thành viên (bao gồm người tạo)",
+        error: "Danh sách thành viên không hợp lệ",
       });
       return;
     }
@@ -178,26 +178,8 @@ export const createGroup = async (
     const authHeader = req.headers.authorization;
     console.log(`[CreateGroup] Check danh sách userIds truyền vào:`, userIds, (fromPoll || isCopy) ? `(${fromPoll ? "fromPoll" : "isCopy"} - skip friend check)` : "");
 
-    if (!fromPoll && !isCopy) {
-      // Bổ sung truyền header Authorization JWT qua Request Fetch nội bộ
-      const friendIds = await getFriendIds(creatorId, authHeader);
-
-      // So sánh dạng string thuần tuý do Node & Java có thể chênh lệch Object ID
-      const normalizedFriendIds = friendIds.map((f) => f.toString());
-      const nonFriends = userIds.filter(
-        (id) => !normalizedFriendIds.includes(id.toString()),
-      );
-
-      if (nonFriends.length > 0) {
-        console.log(
-          `[CreateGroup] Từ chối! Phát hiện users chưa kết bạn: ${nonFriends.join(", ")}`,
-        );
-        res.status(403).json({
-          error: "Chỉ được phép mời người đã kết bạn vào nhóm",
-        });
-        return;
-      }
-    }
+    // Cho phép thêm người lạ khi tạo nhóm theo yêu cầu
+    // if (!fromPoll && !isCopy) { ... }
     // Handle Image Upload (Nếu có)
     if (req.file) {
       try {
@@ -1368,7 +1350,7 @@ export const getOrCreateDirectConversation = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { targetUserId } = req.body;
+    const { targetUserId, checkOnly } = req.body;
     const currentUserId = (req.headers["x-user-id"] || "").toString();
 
     const existingConversation = await Conversation.findOne({
@@ -1381,6 +1363,11 @@ export const getOrCreateDirectConversation = async (
 
     if (existingConversation) {
       res.status(200).json(existingConversation);
+      return;
+    }
+
+    if (checkOnly) {
+      res.status(204).send();
       return;
     }
 
@@ -1401,6 +1388,37 @@ export const getOrCreateDirectConversation = async (
       .catch(console.error);
 
     res.status(201).json(newConversation);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const findDirectConversation = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { targetUserId } = req.query;
+    const currentUserId = (req.headers["x-user-id"] || "").toString();
+
+    if (!targetUserId) {
+      res.status(400).json({ error: "targetUserId is required" });
+      return;
+    }
+
+    const existingConversation = await Conversation.findOne({
+      isGroup: false,
+      $and: [
+        { "members.userId": currentUserId },
+        { "members.userId": String(targetUserId) },
+      ],
+    });
+
+    if (existingConversation) {
+      res.status(200).json({ exists: true, conversation: existingConversation });
+    } else {
+      res.status(200).json({ exists: false });
+    }
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -1825,7 +1843,7 @@ export const getUserYearlyStats = async (
       return;
     }
 
-    const requestedYear = parseInt(year as string, 10);
+    const requestedYear = Number(year as string);
     if (isNaN(requestedYear)) {
       res.status(400).json({ error: "Invalid parameter: year must be a number" });
       return;

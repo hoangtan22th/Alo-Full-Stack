@@ -49,6 +49,7 @@ import {
   ChevronRightIcon,
   CheckIcon,
   PhotoIcon,
+  IdentificationIcon,
 } from "@heroicons/react/24/outline";
 import ReportModal from "@/components/ui/report/ReportModal";
 import { motion } from "framer-motion";
@@ -64,8 +65,12 @@ import PollDetailsModal from "@/components/ui/group/PollDetailsModal";
 import FileMessageBubble from "@/components/chat/FileMessageBubble";
 import TxtFileViewerModal from "@/components/chat/TxtFileViewerModal";
 import { parseReminderFromText } from "@/utils/reminderParser";
+import { parsePollFromText } from "@/utils/voteParser";
 import ReminderModal from "@/components/ui/group/ReminderModal";
+import PollModal from "@/components/ui/group/PollModal";
 import { UpdateDefaultEmojiModal } from "@/components/ui/UpdateDefaultEmojiModal";
+import SendContactCardModal from "@/components/ui/SendContactCardModal";
+import ContactCardBubble from "@/components/chat/ContactCardBubble";
 
 /* ─────────────────────────────────────────
    Helpers
@@ -177,6 +182,17 @@ export default function ChatPage() {
 
   // Audio state for ringtone
   const ringtoneRef = useRef<HTMLAudioElement>(null);
+  const [showQuickReminderModal, setShowQuickReminderModal] = useState(false);
+  const [quickReminderPreset, setQuickReminderPreset] = useState<{
+    title: string;
+    date: string;
+    time: string;
+  } | null>(null);
+
+  const [showQuickPollModal, setShowQuickPollModal] = useState(false);
+  const [quickPollPreset, setQuickPollPreset] = useState<{
+    question: string;
+  } | null>(null);
 
   /* ---------- chat area state ---------- */
   const { user: currentUser } = useAuthStore();
@@ -185,12 +201,7 @@ export default function ChatPage() {
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
   const [showPinnedModal, setShowPinnedModal] = useState(false);
   const [activePollId, setActivePollId] = useState<string | null>(null);
-  const [quickReminderPreset, setQuickReminderPreset] = useState<{
-    title: string;
-    date: string;
-    time: string;
-  } | null>(null);
-  const [showQuickReminderModal, setShowQuickReminderModal] = useState(false);
+  const [showContactCardModal, setShowContactCardModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveOptions, setLeaveOptions] = useState({
@@ -217,7 +228,7 @@ export default function ChatPage() {
   const [messageText, setMessageText] = useState("");
   const [conversationInfo, setConversationInfo] = useState<any>(null);
   const latestReminderMessageId = useMemo(() => {
-    if (!messages || messages.length === 0 || !conversationInfo?.isGroup) return null;
+    if (!messages || messages.length === 0) return null;
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
       if (m.type === "text" && !m.isRevoked && parseReminderFromText(m.content) !== null) {
@@ -225,7 +236,7 @@ export default function ChatPage() {
       }
     }
     return null;
-  }, [messages, conversationInfo?.isGroup]);
+  }, [messages]);
   const [previewingTxtFile, setPreviewingTxtFile] = useState<{ fileName: string; content: string } | null>(null);
 
   // Group Link Info Cache
@@ -827,6 +838,12 @@ export default function ChatPage() {
   /* ─── Fetch messages for current conversation ─── */
   const fetchMessages = useCallback(async () => {
     if (!conversationId || conversationId === BOT_ID) return;
+    if (conversationId.startsWith("new-")) {
+      setMessages([]);
+      setHasMore(false);
+      setPinnedMessages([]);
+      return;
+    }
     setLoadingMessages(true);
     setHasMore(true);
     try {
@@ -856,7 +873,8 @@ export default function ChatPage() {
       !hasMore ||
       loadingMoreHistory ||
       loadingMessages ||
-      conversationId === BOT_ID
+      conversationId === BOT_ID ||
+      conversationId.startsWith("new-")
     )
       return;
 
@@ -906,6 +924,10 @@ export default function ChatPage() {
 
   const fetchMediaHistory = useCallback(async () => {
     if (!conversationId || conversationId === BOT_ID) return;
+    if (conversationId.startsWith("new-")) {
+      setMediaMessages([]);
+      return;
+    }
     try {
       // Tải 200 tin nhắn gần nhất để trích xuất media cho InfoPanel
       const msgs = await messageService.getMessageHistory(
@@ -932,15 +954,32 @@ export default function ChatPage() {
   const fetchConversationInfo = useCallback(async () => {
     if (!conversationId || conversationId === BOT_ID) return;
     try {
-      const data: any = await groupService.getGroupById(conversationId);
-      const g = data?.data || data;
+      let g: any;
+      const currentUserId =
+        currentUser?.id || currentUser?._id || currentUser?.userId;
+
+      if (conversationId.startsWith("new-")) {
+        const otherId = conversationId.replace("new-", "");
+        g = {
+          _id: conversationId,
+          isGroup: false,
+          type: "DIRECT",
+          name: "Direct Chat",
+          groupAvatar: "",
+          members: [
+            { userId: currentUserId, role: "MEMBER" },
+            { userId: otherId, role: "MEMBER" },
+          ],
+        };
+      } else {
+        const data: any = await groupService.getGroupById(conversationId);
+        g = data?.data || data;
+      }
+
       if (!g) return;
 
       let displayName = g.name;
       let displayAvatar = g.groupAvatar;
-
-      const currentUserId =
-        currentUser?.id || currentUser?._id || currentUser?.userId;
 
       // Kiểm tra kỹ xem có phải là chat 1-1 hay không
       const isDirect =
@@ -1012,13 +1051,18 @@ export default function ChatPage() {
                 String(f.recipientId) === String(otherId),
             );
 
+            const BOT_IDS = ["alo-bot", "00000000-0000-0000-0000-000000000000", "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"];
+            const isBot = BOT_IDS.includes(otherId);
+
             console.log("[DEBUG] Relationship check:", {
               otherId,
               isFriend,
               currentStatus,
+              isBot
             });
             setIsStranger(
               !isFriend &&
+              !isBot &&
               currentStatus !== "I_SENT_REQUEST" &&
               currentStatus !== "YOU_SENT_REQUEST" &&
               currentStatus !== "THEY_SENT_REQUEST",
@@ -1260,6 +1304,19 @@ export default function ChatPage() {
       fetchConversationInfo();
     }
   }, [conversationId, currentUser, fetchConversationInfo]);
+
+  useEffect(() => {
+    if (conversationId && conversationId.startsWith("new-")) {
+      const targetUserId = conversationId.replace("new-", "");
+      groupService.findDirectConversation(targetUserId)
+        .then((res) => {
+          if (res?.exists && res?.conversation?._id) {
+            router.replace(`/chat/${res.conversation._id}`);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [conversationId, router]);
 
   const handleStartCall = useCallback(
     (isVideo: boolean, forcedInviteeIds?: string[]) => {
@@ -1677,6 +1734,32 @@ export default function ChatPage() {
     await fetchConversationInfo();
   }, [fetchConversationInfo]);
 
+  const getOrCreateRealConversationId = async (): Promise<string | null> => {
+    if (!conversationId) return null;
+    if (!conversationId.startsWith("new-")) return conversationId;
+
+    const targetUserId = conversationId.replace("new-", "");
+    try {
+      const conversation = await groupService.createDirectConversation(targetUserId);
+      const realConvoId =
+        conversation?._id ||
+        conversation?.id ||
+        conversation?.data?._id ||
+        conversation?.data?.id;
+
+      if (!realConvoId) {
+        toast.error("Không tạo được cuộc hội thoại");
+        return null;
+      }
+
+      router.replace(`/chat/${realConvoId}`);
+      return realConvoId;
+    } catch (error) {
+      toast.error("Lỗi khi kết nối cuộc hội thoại");
+      return null;
+    }
+  };
+
   /* ─── Send message ─── */
   const handleSend = async () => {
     const text = messageText.trim();
@@ -1686,6 +1769,12 @@ export default function ChatPage() {
       currentUser?.id || currentUser?._id || currentUser?.userId || "me";
 
     setSending(true);
+    const activeConvoId = await getOrCreateRealConversationId();
+    if (!activeConvoId) {
+      setSending(false);
+      return;
+    }
+
     setMessageText("");
     const currentReply = replyingTo;
     setReplyingTo(null);
@@ -1694,7 +1783,7 @@ export default function ChatPage() {
     const tempId = `temp_${Date.now()}`;
     const tempMsg: MessageDTO = {
       _id: tempId,
-      conversationId,
+      conversationId: activeConvoId,
       senderId: myId,
       senderName: currentUser?.fullName || "Tôi",
       type: "text",
@@ -1721,7 +1810,7 @@ export default function ChatPage() {
 
     try {
       await messageService.sendMessage({
-        conversationId,
+        conversationId: activeConvoId,
         content: text,
         type: "text",
         senderName: currentUser?.fullName || "Tôi",
@@ -1745,7 +1834,7 @@ export default function ChatPage() {
       // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
       if (isStranger) {
         groupService
-          .updateConversationFolder(conversationId, "priority")
+          .updateConversationFolder(activeConvoId, "priority")
           .catch(console.error);
       }
     } catch (err) {
@@ -1768,11 +1857,16 @@ export default function ChatPage() {
       currentUser?.id || currentUser?._id || currentUser?.userId || "me";
 
     setSending(true);
+    const activeConvoId = await getOrCreateRealConversationId();
+    if (!activeConvoId) {
+      setSending(false);
+      return;
+    }
 
     const tempId = `temp_${Date.now()}`;
     const tempMsg: MessageDTO = {
       _id: tempId,
-      conversationId,
+      conversationId: activeConvoId,
       senderId: myId,
       senderName: currentUser?.fullName || "Tôi",
       type: "text",
@@ -1784,7 +1878,7 @@ export default function ChatPage() {
 
     try {
       await messageService.sendMessage({
-        conversationId,
+        conversationId: activeConvoId,
         content: defaultEmoji,
         type: "text",
         senderName: currentUser?.fullName || "Tôi",
@@ -1792,7 +1886,7 @@ export default function ChatPage() {
 
       if (isStranger) {
         groupService
-          .updateConversationFolder(conversationId, "priority")
+          .updateConversationFolder(activeConvoId, "priority")
           .catch(console.error);
       }
     } catch (err) {
@@ -1865,6 +1959,12 @@ export default function ChatPage() {
     const otherFiles = files.filter((f) => !f.type.startsWith("image/"));
 
     try {
+      const activeConvoId = await getOrCreateRealConversationId();
+      if (!activeConvoId) {
+        setUploadingFile(false);
+        return;
+      }
+
       // 1. Xử lý gửi ALBUM ảnh (nếu có nhiều hơn 1 ảnh)
       if (imageFiles.length > 1) {
         const tempId = `temp_album_${Date.now()}`;
@@ -1876,7 +1976,7 @@ export default function ChatPage() {
 
         const tempMsg: MessageDTO = {
           _id: tempId,
-          conversationId,
+          conversationId: activeConvoId,
           senderId: myId,
           senderName: currentUser?.fullName || "Tôi",
           type: "image",
@@ -1914,7 +2014,7 @@ export default function ChatPage() {
 
         try {
           await messageService.uploadImages(
-            conversationId,
+            activeConvoId,
             imageFiles,
             widths,
             heights,
@@ -1936,7 +2036,7 @@ export default function ChatPage() {
         const tempId = `temp_file_${Date.now()}_${i}`;
         const tempMsg: MessageDTO = {
           _id: tempId,
-          conversationId,
+          conversationId: activeConvoId,
           senderId: myId,
           senderName: currentUser?.fullName || "Tôi",
           type: file.type.startsWith("image/") ? "image" : "file",
@@ -1969,7 +2069,7 @@ export default function ChatPage() {
         setMessages((prev) => [...prev, tempMsg]);
         try {
           await messageService.uploadFile(
-            conversationId,
+            activeConvoId,
             file,
             currentReply,
             currentUser?.fullName || "Tôi",
@@ -1983,7 +2083,7 @@ export default function ChatPage() {
       // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
       if (isStranger) {
         groupService
-          .updateConversationFolder(conversationId, "priority")
+          .updateConversationFolder(activeConvoId, "priority")
           .catch(console.error);
       }
     } finally {
@@ -2051,6 +2151,12 @@ export default function ChatPage() {
       currentUser?.id || currentUser?._id || currentUser?.userId || "me";
 
     setSending(true);
+    const activeConvoId = await getOrCreateRealConversationId();
+    if (!activeConvoId) {
+      setSending(false);
+      return;
+    }
+
     const currentReply = replyingTo;
     setReplyingTo(null);
 
@@ -2058,7 +2164,7 @@ export default function ChatPage() {
     const tempId = `temp_sticker_${Date.now()}`;
     const tempMsg: MessageDTO = {
       _id: tempId,
-      conversationId,
+      conversationId: activeConvoId,
       senderId: myId,
       senderName: currentUser?.fullName || "Tôi",
       type: "image",
@@ -2086,7 +2192,7 @@ export default function ChatPage() {
 
     try {
       await messageService.sendMessage({
-        conversationId,
+        conversationId: activeConvoId,
         content: stickerUrl,
         type: "image",
         senderName: currentUser?.fullName || "Tôi",
@@ -2111,7 +2217,7 @@ export default function ChatPage() {
       // Nếu đang là người lạ, tự động chuyển vào Ưu tiên khi nhắn lại
       if (isStranger) {
         groupService
-          .updateConversationFolder(conversationId, "priority")
+          .updateConversationFolder(activeConvoId, "priority")
           .catch(console.error);
       }
     } catch (err) {
@@ -2119,6 +2225,58 @@ export default function ChatPage() {
       setMessages((prev) => prev.filter((m) => m._id !== tempId));
     } finally {
       setSending(false);
+    }
+  };
+
+  /* ─── Send contact card ─── */
+  const handleSendContactCard = async (
+    selectedFriends: any[],
+    includePhone: boolean,
+  ) => {
+    const activeConvoId = await getOrCreateRealConversationId();
+    if (!activeConvoId) return;
+
+    const myId =
+      currentUser?.id || currentUser?._id || currentUser?.userId || "me";
+
+    for (const friend of selectedFriends) {
+      const tempId = `temp_contact_${Date.now()}_${friend.id}`;
+      const tempMsg: MessageDTO = {
+        _id: tempId,
+        conversationId: activeConvoId,
+        senderId: myId,
+        senderName: currentUser?.fullName || "Tôi",
+        type: "contact",
+        content: friend.id,
+        metadata: {
+          contactId: friend.id,
+          contactName: friend.name,
+          contactAvatar: friend.avatar,
+          contactPhone: includePhone ? friend.phone : undefined,
+        },
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, tempMsg]);
+
+      try {
+        await messageService.sendMessage({
+          conversationId: activeConvoId,
+          content: friend.id,
+          type: "contact",
+          senderName: currentUser?.fullName || "Tôi",
+          metadata: {
+            contactId: friend.id,
+            contactName: friend.name,
+            contactAvatar: friend.avatar,
+            contactPhone: includePhone ? friend.phone : undefined,
+          },
+        });
+      } catch (err) {
+        console.error("Lỗi gửi danh thiếp:", err);
+        setMessages((prev) => prev.filter((m) => m._id !== tempId));
+      }
     }
   };
 
@@ -3105,6 +3263,8 @@ export default function ChatPage() {
                                           Tin nhắn đã được thu hồi
                                         </span>
                                       </div>
+                                    ) : msg.type === "contact" ? (
+                                      <ContactCardBubble msg={msg} />
                                     ) : (msg.type as any) === "system" &&
                                       msg.metadata
                                         ?.callType ? null /* Rendered outside bubble wrapper above */ : msg.type ===
@@ -3203,7 +3363,8 @@ export default function ChatPage() {
                                           );
                                         }
 
-                                        const parsed = conversationInfo?.isGroup ? parseReminderFromText(msg.content) : null;
+                                        const parsedReminder = parseReminderFromText(msg.content);
+                                        const parsedPoll = conversationInfo?.isGroup ? parsePollFromText(msg.content) : null;
 
                                         return (
                                           <div className="flex flex-col">
@@ -3212,7 +3373,7 @@ export default function ChatPage() {
                                             >
                                               {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
                                             </div>
-                                            {parsed && msg._id === latestReminderMessageId && (
+                                            {parsedReminder && msg._id === latestReminderMessageId && (
                                               <div 
                                                 className={`mt-2 pt-2 border-t-2 w-full flex justify-center
                                                   ${isMine ? "border-blue-200" : "border-gray-300"}
@@ -3222,9 +3383,9 @@ export default function ChatPage() {
                                                   onClick={(e) => {
                                                     e.stopPropagation();
                                                     setQuickReminderPreset({
-                                                      title: parsed.title,
-                                                      date: parsed.date,
-                                                      time: parsed.time
+                                                      title: parsedReminder.title,
+                                                      date: parsedReminder.date,
+                                                      time: parsedReminder.time
                                                     });
                                                     setShowQuickReminderModal(true);
                                                   }}
@@ -3236,6 +3397,31 @@ export default function ChatPage() {
                                                   `}
                                                 >
                                                   Tạo nhắc hẹn
+                                                </button>
+                                              </div>
+                                            )}
+                                            {parsedPoll && (
+                                              <div 
+                                                className={`mt-2 pt-2 border-t-2 w-full flex justify-center
+                                                  ${isMine ? "border-blue-200" : "border-gray-300"}
+                                                `}
+                                              >
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setQuickPollPreset({
+                                                      question: parsedPoll.question,
+                                                    });
+                                                    setShowQuickPollModal(true);
+                                                  }}
+                                                  className={`text-[12px] font-black tracking-wide hover:underline transition-all select-none active:opacity-80 py-0.5
+                                                    ${isMine 
+                                                      ? "text-blue-800 hover:text-blue-950" 
+                                                      : "text-blue-800 hover:text-blue-950"
+                                                    }
+                                                  `}
+                                                >
+                                                  Tạo bình chọn
                                                 </button>
                                               </div>
                                             )}
@@ -3739,6 +3925,12 @@ export default function ChatPage() {
                   </p>
                 </div>
               </div>
+            ) : (!conversationInfo?.isGroup && otherUserId && ["alo-bot", "00000000-0000-0000-0000-000000000000", "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"].includes(otherUserId)) ? (
+              <div className="bg-white border-t border-gray-200 shrink-0 flex items-center justify-center p-6">
+                <p className="text-gray-500 font-medium italic text-[13px] text-center">
+                  Bạn không thể gửi tin nhắn cho tài khoản Bot của hệ thống.
+                </p>
+              </div>
             ) : (
               <div className="bg-white border-t border-gray-200 shrink-0">
                 {/* Hidden file input — chỉ chọn file (không phải ảnh) */}
@@ -3785,6 +3977,14 @@ export default function ChatPage() {
                     title="Gửi file"
                   >
                     <PaperClipIcon className="w-5 h-5" />
+                  </button>
+                  {/* 5. Gửi danh thiếp */}
+                  <button
+                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition"
+                    onClick={() => setShowContactCardModal(true)}
+                    title="Gửi danh thiếp"
+                  >
+                    <IdentificationIcon className="w-5 h-5" />
                   </button>
                 </div>
 
@@ -4659,6 +4859,21 @@ export default function ChatPage() {
           }}
         />
       )}
+      {showQuickPollModal && quickPollPreset && (
+        <PollModal
+          conversationId={conversationId}
+          initialQuestion={quickPollPreset.question}
+          canCreate={(() => {
+            const role = conversationInfo?.members?.find((m: any) => m.userId === (currentUser?.id || currentUser?._id))?.role?.toLowerCase();
+            const isManager = role === "leader" || role === "deputy";
+            return isManager || conversationInfo?.permissions?.createPolls === "EVERYONE";
+          })()}
+          onClose={() => {
+            setShowQuickPollModal(false);
+            setQuickPollPreset(null);
+          }}
+        />
+      )}
       <ChatEffects type={activeEffect} />
 
       {/* Confirmation Modal */}
@@ -4726,6 +4941,11 @@ export default function ChatPage() {
           setIsDefaultEmojiModalOpen(false);
           toast.success("Đã cập nhật biểu tượng cảm xúc mặc định");
         }}
+      />
+      <SendContactCardModal
+        isOpen={showContactCardModal}
+        onClose={() => setShowContactCardModal(false)}
+        onSend={handleSendContactCard}
       />
     </>
   );

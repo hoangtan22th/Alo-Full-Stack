@@ -178,4 +178,247 @@ public class ReportServiceImplTest {
 
         verify(reportRepository, times(1)).save(any(Report.class));
     }
+    // -------------------------------------------------------------
+    // resolveReport Tests (UT KiemDuyetVaXuLyViPham)
+    // -------------------------------------------------------------
+
+    // TC_09: Report ID không tồn tại
+    @Test
+    void test_TC09_resolveReport_ReportNotFound_ShouldThrowException() {
+        edu.iuh.fit.report_service.dto.request.AdminActionRequest actionRequest = edu.iuh.fit.report_service.dto.request.AdminActionRequest.builder()
+                .action(edu.iuh.fit.report_service.dto.request.AdminActionRequest.AdminAction.WARN)
+                .adminNotes("Test note")
+                .build();
+        when(reportRepository.findById("invalid-id")).thenReturn(java.util.Optional.empty());
+
+        assertThrows(RuntimeException.class, () -> reportService.resolveReport("invalid-id", actionRequest, "admin1"));
+    }
+
+    // TC_01: Test valid VP (User - Dismiss)
+    @Test
+    void test_TC01_resolveReport_UserDismiss_ShouldReject() {
+        Report report = new Report();
+        report.setId("report1");
+        report.setReporterId("reporter1");
+        report.setTargetType(TargetType.USER);
+        report.setTargetId("user1");
+        report.setTargetName("Nguyễn Văn A");
+
+        edu.iuh.fit.report_service.dto.request.AdminActionRequest actionRequest = edu.iuh.fit.report_service.dto.request.AdminActionRequest.builder()
+                .action(edu.iuh.fit.report_service.dto.request.AdminActionRequest.AdminAction.DISMISS)
+                .adminNotes("Test note")
+                .targetName("Nguyễn Văn A")
+                .build();
+
+        when(reportRepository.findById("report1")).thenReturn(java.util.Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(i -> i.getArguments()[0]);
+
+        edu.iuh.fit.report_service.dto.response.ReportAdminResponse response = reportService.resolveReport("report1", actionRequest, "admin1");
+
+        assertEquals(ReportStatus.REJECTED, response.getStatus());
+        verify(rabbitTemplate, never()).convertAndSend(eq(edu.iuh.fit.report_service.config.RabbitMQConfig.EXCHANGE_NAME), eq(edu.iuh.fit.report_service.config.RabbitMQConfig.ROUTING_KEY_USER_WARNED), any(Object.class));
+        verify(rabbitTemplate, never()).convertAndSend(eq(edu.iuh.fit.report_service.config.RabbitMQConfig.EXCHANGE_NAME), eq(edu.iuh.fit.report_service.config.RabbitMQConfig.ROUTING_KEY_USER_BANNED), any(Object.class));
+    }
+
+    // TC_02: Test valid VP (User - Warn)
+    @Test
+    void test_TC02_resolveReport_UserWarn_ShouldResolveAndPublishEvent() {
+        Report report = new Report();
+        report.setId("report1");
+        report.setTargetType(TargetType.USER);
+        report.setTargetId("user1");
+        report.setTargetName("Nguyễn Văn A");
+
+        edu.iuh.fit.report_service.dto.request.AdminActionRequest actionRequest = edu.iuh.fit.report_service.dto.request.AdminActionRequest.builder()
+                .action(edu.iuh.fit.report_service.dto.request.AdminActionRequest.AdminAction.WARN)
+                .adminNotes("Test note")
+                .targetName("Nguyễn Văn A")
+                .build();
+
+        when(reportRepository.findById("report1")).thenReturn(java.util.Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(i -> i.getArguments()[0]);
+
+        edu.iuh.fit.report_service.dto.response.ReportAdminResponse response = reportService.resolveReport("report1", actionRequest, "admin1");
+
+        assertEquals(ReportStatus.RESOLVED, response.getStatus());
+        verify(rabbitTemplate, times(1)).convertAndSend(eq(edu.iuh.fit.report_service.config.RabbitMQConfig.EXCHANGE_NAME), eq(edu.iuh.fit.report_service.config.RabbitMQConfig.ROUTING_KEY_USER_WARNED), any(Object.class));
+    }
+
+    // TC_03: Test valid VP (User - Ban)
+    @Test
+    void test_TC03_resolveReport_UserBan_ShouldResolveAndPublishEvent() {
+        Report report = new Report();
+        report.setId("report1");
+        report.setTargetType(TargetType.USER);
+        report.setTargetId("user1");
+        report.setTargetName("Nguyễn Văn A");
+
+        edu.iuh.fit.report_service.dto.request.AdminActionRequest actionRequest = edu.iuh.fit.report_service.dto.request.AdminActionRequest.builder()
+                .action(edu.iuh.fit.report_service.dto.request.AdminActionRequest.AdminAction.BAN)
+                .adminNotes("Test note")
+                .targetName("Nguyễn Văn A")
+                .build();
+
+        when(reportRepository.findById("report1")).thenReturn(java.util.Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(i -> i.getArguments()[0]);
+
+        edu.iuh.fit.report_service.dto.response.ReportAdminResponse response = reportService.resolveReport("report1", actionRequest, "admin1");
+
+        assertEquals(ReportStatus.RESOLVED, response.getStatus());
+        verify(rabbitTemplate, times(1)).convertAndSend(eq(edu.iuh.fit.report_service.config.RabbitMQConfig.EXCHANGE_NAME), eq(edu.iuh.fit.report_service.config.RabbitMQConfig.ROUTING_KEY_USER_BANNED), any(Object.class));
+    }
+
+    // TC_04: Test valid VP (Group - Warn)
+    @Test
+    void test_TC04_resolveReport_GroupWarn_ShouldResolveAndPublishEvent() {
+        Report report = new Report();
+        report.setId("report1");
+        report.setTargetType(TargetType.GROUP);
+        report.setTargetId("group1");
+        report.setTargetName("Nhóm A");
+
+        edu.iuh.fit.report_service.dto.request.AdminActionRequest actionRequest = edu.iuh.fit.report_service.dto.request.AdminActionRequest.builder()
+                .action(edu.iuh.fit.report_service.dto.request.AdminActionRequest.AdminAction.WARN)
+                .adminNotes("Test note")
+                .targetName("Nhóm A")
+                .build();
+
+        when(reportRepository.findById("report1")).thenReturn(java.util.Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(i -> i.getArguments()[0]);
+
+        edu.iuh.fit.report_service.dto.response.ReportAdminResponse response = reportService.resolveReport("report1", actionRequest, "admin1");
+
+        assertEquals(ReportStatus.RESOLVED, response.getStatus());
+        verify(rabbitTemplate, times(1)).convertAndSend(eq(edu.iuh.fit.report_service.config.RabbitMQConfig.EXCHANGE_NAME), eq(edu.iuh.fit.report_service.config.RabbitMQConfig.ROUTING_KEY_GROUP_WARNED), any(Object.class));
+    }
+
+    // TC_05: Test valid VP (Group - Ban)
+    @Test
+    void test_TC05_resolveReport_GroupBan_ShouldResolveAndPublishEvent() {
+        Report report = new Report();
+        report.setId("report1");
+        report.setTargetType(TargetType.GROUP);
+        report.setTargetId("group1");
+        report.setTargetName("Nhóm A");
+
+        edu.iuh.fit.report_service.dto.request.AdminActionRequest actionRequest = edu.iuh.fit.report_service.dto.request.AdminActionRequest.builder()
+                .action(edu.iuh.fit.report_service.dto.request.AdminActionRequest.AdminAction.BAN)
+                .adminNotes("Test note")
+                .targetName("Nhóm A")
+                .build();
+
+        when(reportRepository.findById("report1")).thenReturn(java.util.Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(i -> i.getArguments()[0]);
+
+        edu.iuh.fit.report_service.dto.response.ReportAdminResponse response = reportService.resolveReport("report1", actionRequest, "admin1");
+
+        assertEquals(ReportStatus.RESOLVED, response.getStatus());
+        verify(rabbitTemplate, times(1)).convertAndSend(eq(edu.iuh.fit.report_service.config.RabbitMQConfig.EXCHANGE_NAME), eq(edu.iuh.fit.report_service.config.RabbitMQConfig.ROUTING_KEY_GROUP_BANNED), any(Object.class));
+    }
+
+    // TC_06: Test valid VP (Group - Disband)
+    @Test
+    void test_TC06_resolveReport_GroupDisband_ShouldResolveAndPublishEvent() {
+        Report report = new Report();
+        report.setId("report1");
+        report.setTargetType(TargetType.GROUP);
+        report.setTargetId("group1");
+        report.setTargetName("Nhóm A");
+
+        edu.iuh.fit.report_service.dto.request.AdminActionRequest actionRequest = edu.iuh.fit.report_service.dto.request.AdminActionRequest.builder()
+                .action(edu.iuh.fit.report_service.dto.request.AdminActionRequest.AdminAction.DISBAND_GROUP)
+                .adminNotes("Test note")
+                .targetName("Nhóm A")
+                .build();
+
+        when(reportRepository.findById("report1")).thenReturn(java.util.Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(i -> i.getArguments()[0]);
+
+        edu.iuh.fit.report_service.dto.response.ReportAdminResponse response = reportService.resolveReport("report1", actionRequest, "admin1");
+
+        assertEquals(ReportStatus.RESOLVED, response.getStatus());
+        verify(rabbitTemplate, times(1)).convertAndSend(eq(edu.iuh.fit.report_service.config.RabbitMQConfig.EXCHANGE_NAME), eq(edu.iuh.fit.report_service.config.RabbitMQConfig.ROUTING_KEY_GROUP_DISBANDED), any(Object.class));
+    }
+
+    // TC_07: Auto-Resolve Duplicate
+    @Test
+    void test_TC07_resolveReport_AutoResolveDuplicates_ShouldResolveOtherPending() {
+        Report report = new Report();
+        report.setId("report1");
+        report.setTargetType(TargetType.USER);
+        report.setTargetId("user1");
+        report.setTargetName("Nguyễn Văn A");
+
+        edu.iuh.fit.report_service.dto.request.AdminActionRequest actionRequest = edu.iuh.fit.report_service.dto.request.AdminActionRequest.builder()
+                .action(edu.iuh.fit.report_service.dto.request.AdminActionRequest.AdminAction.BAN)
+                .adminNotes("Test note")
+                .targetName("Nguyễn Văn A")
+                .build();
+
+        Report duplicateReport = new Report();
+        duplicateReport.setId("report2");
+        duplicateReport.setStatus(ReportStatus.PENDING);
+
+        when(reportRepository.findById("report1")).thenReturn(java.util.Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(i -> i.getArguments()[0]);
+        when(reportRepository.findByTargetIdAndStatus("user1", ReportStatus.PENDING)).thenReturn(List.of(duplicateReport));
+
+        reportService.resolveReport("report1", actionRequest, "admin1");
+
+        assertEquals(ReportStatus.RESOLVED, duplicateReport.getStatus());
+        assertTrue(duplicateReport.getAdminNotes().contains("Hệ thống tự động xử lý gộp"));
+        verify(reportRepository, times(1)).saveAll(List.of(duplicateReport));
+    }
+
+    // TC_08: Fetch targetName if empty
+    @Test
+    void test_TC08_resolveReport_FetchTargetNameIfEmpty() {
+        Report report = new Report();
+        report.setId("report1");
+        report.setTargetType(TargetType.USER);
+        report.setTargetId("user1");
+        
+        edu.iuh.fit.report_service.dto.request.AdminActionRequest actionRequest = edu.iuh.fit.report_service.dto.request.AdminActionRequest.builder()
+                .action(edu.iuh.fit.report_service.dto.request.AdminActionRequest.AdminAction.WARN)
+                .adminNotes("Test note")
+                // Missing targetName
+                .build();
+
+        when(reportRepository.findById("report1")).thenReturn(java.util.Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(i -> i.getArguments()[0]);
+        
+        UserResponse mockUser = UserResponse.builder().fullName("Fetched User").build();
+        when(userClient.getUserById("user1")).thenReturn(ApiResponse.success(mockUser));
+
+        edu.iuh.fit.report_service.dto.response.ReportAdminResponse response = reportService.resolveReport("report1", actionRequest, "admin1");
+
+        verify(userClient, atLeast(1)).getUserById("user1");
+        // Verify that the event publisher uses the fetched name implicitly (the targetName in response or report is fetched)
+    }
+
+    // TC_13: Invalid action for USER (DISBAND_GROUP)
+    @Test
+    void test_TC13_resolveReport_InvalidActionForUser_ShouldNotChangeStatus() {
+        Report report = new Report();
+        report.setId("report1");
+        report.setStatus(ReportStatus.PENDING); // Initial status
+        report.setReporterId("reporter1");
+        report.setTargetType(TargetType.USER);
+        report.setTargetId("user1");
+        report.setTargetName("Nguyễn Văn A");
+
+        edu.iuh.fit.report_service.dto.request.AdminActionRequest actionRequest = edu.iuh.fit.report_service.dto.request.AdminActionRequest.builder()
+                .action(edu.iuh.fit.report_service.dto.request.AdminActionRequest.AdminAction.DISBAND_GROUP)
+                .adminNotes("Test note")
+                .targetName("Nguyễn Văn A")
+                .build();
+
+        when(reportRepository.findById("report1")).thenReturn(java.util.Optional.of(report));
+        when(reportRepository.save(any(Report.class))).thenAnswer(i -> i.getArguments()[0]);
+
+        edu.iuh.fit.report_service.dto.response.ReportAdminResponse response = reportService.resolveReport("report1", actionRequest, "admin1");
+
+        assertEquals(ReportStatus.PENDING, response.getStatus()); // Status unchanged
+        verify(rabbitTemplate, never()).convertAndSend(eq(edu.iuh.fit.report_service.config.RabbitMQConfig.EXCHANGE_NAME), eq(edu.iuh.fit.report_service.config.RabbitMQConfig.ROUTING_KEY_GROUP_DISBANDED), any(Object.class));
+    }
 }

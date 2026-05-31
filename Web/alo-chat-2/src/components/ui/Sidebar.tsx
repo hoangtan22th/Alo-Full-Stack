@@ -28,6 +28,7 @@ import NotificationMenu from "./NotificationMenu";
 import YearInReviewModal from "./YearInReviewModal";
 import { useAuthStore } from "../../store/useAuthStore";
 import { useChatStore } from "../../store/useChatStore";
+import { useNotificationStore } from "../../store/useNotificationStore";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -70,6 +71,7 @@ export default function Sidebar() {
   // Auth & Chat states
   const { user, fetchProfile } = useAuthStore();
   const { unreadNotifsCount } = useChatStore();
+  const { friendRequestCount, groupInviteCount } = useNotificationStore();
 
   const getAvatarUrl = () => {
     if (!user)
@@ -129,7 +131,7 @@ export default function Sidebar() {
           {/* Contacts */}
           <Link
             href="/contacts"
-            className={`w-12 h-12 flex items-center justify-center rounded-full transition-all ${isActive("/contacts") && !isActive("/contacts/groups") && !isActive("/contacts/group-invites") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
+            className={`relative w-12 h-12 flex items-center justify-center rounded-full transition-all ${isActive("/contacts") && !isActive("/contacts/groups") && !isActive("/contacts/group-invites") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
             title="Danh bạ"
           >
             {isActive("/contacts") &&
@@ -139,12 +141,18 @@ export default function Sidebar() {
             ) : (
               <UserOutline className="w-6 h-6" />
             )}
+            
+            {friendRequestCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-4.5 h-4.5 flex items-center justify-center border border-white">
+                {friendRequestCount > 9 ? "9+" : friendRequestCount}
+              </span>
+            )}
           </Link>
 
           {/* Group Management */}
           <Link
             href="/contacts/groups"
-            className={`w-12 h-12 flex items-center justify-center rounded-full transition-all ${isActive("/contacts/groups") || isActive("/contacts/group-invites") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
+            className={`relative w-12 h-12 flex items-center justify-center rounded-full transition-all ${isActive("/contacts/groups") || isActive("/contacts/group-invites") ? "bg-gray-200 text-black" : "text-gray-600 hover:text-black hover:bg-gray-100"}`}
             title="Quản lý nhóm"
           >
             {isActive("/contacts/groups") ||
@@ -152,6 +160,12 @@ export default function Sidebar() {
               <GroupSolid className="w-6 h-6" />
             ) : (
               <GroupOutline className="w-6 h-6" />
+            )}
+            
+            {groupInviteCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-4.5 h-4.5 flex items-center justify-center border border-white">
+                {groupInviteCount > 9 ? "9+" : groupInviteCount}
+              </span>
             )}
           </Link>
 
