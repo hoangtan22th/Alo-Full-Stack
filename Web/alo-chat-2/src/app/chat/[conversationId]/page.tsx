@@ -2891,7 +2891,7 @@ export default function ChatPage() {
                     return (
                       <div
                         key={`group-${groupIdx}`}
-                        className={`flex flex-col gap-0.5 w-full ${isMine ? "items-end" : "items-start"} mb-3`}
+                        className={`flex flex-col gap-1.5 w-full ${isMine ? "items-end" : "items-start"} mb-3`}
                       >
                         {gMsgs.map((msg, msgIdx) => {
                           const isLast = msgIdx === gMsgs.length - 1;
