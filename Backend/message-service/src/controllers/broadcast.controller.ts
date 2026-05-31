@@ -8,6 +8,19 @@ export const createBroadcast = async (req: Request, res: Response) => {
   try {
     const { title, content, botType } = req.body;
 
+    if (!title || typeof title !== "string" || title.trim().length === 0) {
+      return res.status(400).json({ success: false, message: "Tiêu đề không được rỗng" });
+    }
+    if (!content || typeof content !== "string" || content.trim().length === 0) {
+      return res.status(400).json({ success: false, message: "Nội dung không được rỗng" });
+    }
+    if (title.length > 200) {
+      return res.status(400).json({ success: false, message: "Vượt quá độ dài tiêu đề" });
+    }
+    if (content.length > 2000) {
+      return res.status(400).json({ success: false, message: "Vượt quá độ dài nội dung" });
+    }
+
     const senderId = SYSTEM_BOTS[botType as BotType] || SYSTEM_BOTS.SYSTEM;
 
     // 1. Create Campaign record
