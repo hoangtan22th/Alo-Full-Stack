@@ -384,8 +384,7 @@ export default function ChatPage() {
   }, [messageText, conversationId, conversationInfo?.isGroup]);
   const [sending, setSending] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [infoPanelTab, setInfoPanelTab] = useState<"info" | "search">("info");
   // Hover tooltip & context menu & reactions
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [activeReactionMenu, setActiveReactionMenu] = useState<string | null>(
@@ -2479,73 +2478,29 @@ export default function ChatPage() {
                 </button>
 
                 <button 
-                  onClick={() => setShowSearch(!showSearch)}
-                  className={`transition ${showSearch ? "text-black" : "hover:text-gray-600"}`}
+                  onClick={() => {
+                    setShowInfoPanel(true);
+                    setInfoPanelTab("search");
+                  }}
+                  className={`transition ${infoPanelTab === "search" && showInfoPanel ? "text-black" : "hover:text-gray-600"}`}
                 >
                   <MagnifyingGlassIcon className="w-5 h-5" />
                 </button>
                 <button
-                  onClick={() => setShowInfoPanel(!showInfoPanel)}
-                  className={`transition ${showInfoPanel ? "text-black" : "hover:text-gray-600"}`}
+                  onClick={() => {
+                    if (showInfoPanel && infoPanelTab === "info") {
+                      setShowInfoPanel(false);
+                    } else {
+                      setShowInfoPanel(true);
+                      setInfoPanelTab("info");
+                    }
+                  }}
+                  className={`transition ${showInfoPanel && infoPanelTab === "info" ? "text-black" : "hover:text-gray-600"}`}
                 >
                   <InformationCircleIcon className="w-5 h-5" />
                 </button>
               </div>
             </div>
-
-            {/* Search Bar */}
-            {showSearch && (
-              <div className="px-6 py-3 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-2">
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Tìm kiếm tin nhắn..."
-                    autoFocus
-                    className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-[14px] outline-none focus:border-blue-500 transition-colors shadow-sm"
-                  />
-                  <MagnifyingGlassIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                </div>
-                {searchQuery.trim() !== "" && (
-                  <div className="max-h-[300px] overflow-y-auto flex flex-col gap-1 bg-white rounded-xl border border-gray-100 shadow-sm p-1 z-10">
-                    {messages
-                      .filter((m) => m.type === "text" && m.content?.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .slice(-20)
-                      .reverse()
-                      .map((m) => (
-                        <div
-                          key={m._id}
-                          onClick={() => {
-                            const target = document.getElementById(`msg-${m._id}`);
-                            if (target) {
-                              target.scrollIntoView({ behavior: "smooth", block: "center" });
-                              target.classList.add("bg-yellow-100", "transition-colors", "duration-1000");
-                              setTimeout(() => {
-                                target.classList.remove("bg-yellow-100");
-                              }, 2000);
-                            }
-                            setShowSearch(false);
-                            setSearchQuery("");
-                          }}
-                          className="px-3 py-2 hover:bg-gray-50 cursor-pointer rounded-lg flex flex-col gap-0.5"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-[12px] font-bold text-gray-700">{m.senderName}</span>
-                            <span className="text-[10px] text-gray-400">{formatTime(m.createdAt)}</span>
-                          </div>
-                          <p className="text-[13px] text-gray-600 truncate">{m.content}</p>
-                        </div>
-                      ))}
-                    {messages.filter((m) => m.type === "text" && m.content?.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
-                      <div className="px-3 py-4 text-center text-[12px] text-gray-500">
-                        Không tìm thấy tin nhắn nào khớp
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Stranger Warning Banner */}
             {isStranger && (
@@ -4500,6 +4455,8 @@ export default function ChatPage() {
           {/* ═══ CỘT PHẢI: THÔNG TIN CHI TIẾT ═══ */}
           <ChatInfoPanel
             show={showInfoPanel}
+            activeTab={infoPanelTab}
+            onTabChange={setInfoPanelTab}
             conversationId={conversationId}
             conversationInfo={conversationInfo}
             messages={messages}
