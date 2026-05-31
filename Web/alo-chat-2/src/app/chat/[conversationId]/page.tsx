@@ -124,6 +124,8 @@ const BOT_INFO = {
 /**
  * Helper to render message content with mentions highlighted in dark blue.
  */
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+
 function renderContentWithMentions(content: string, members: any[], userCache: any) {
   if (!content) return content;
 
@@ -140,26 +142,37 @@ function renderContentWithMentions(content: string, members: any[], userCache: a
   const regex = new RegExp(`@(${sortedNames.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join("|")})`, "g");
 
   const parts = content.split(regex);
-  if (parts.length === 1) return content;
 
   const result: (string | React.JSX.Element)[] = [];
-  let lastIndex = 0;
-
-  // Splitting with capture group returns the match in the array
-  // content: "Hello @Hoàng Tân how are you"
-  // sortedNames: ["Hoàng Tân"]
-  // parts: ["Hello ", "Hoàng Tân", " how are you"]
 
   for (let i = 0; i < parts.length; i++) {
     if (i % 2 === 1) {
       // Đây là phần match (tên được nhắc)
       result.push(
-        <span key={i} className="text-blue-800 font-black px-0.5">
+        <span key={`mention-${i}`} className="text-blue-800 font-black px-0.5">
           @{parts[i]}
         </span>
       );
     } else if (parts[i]) {
-      result.push(parts[i]);
+      const textParts = parts[i].split(URL_REGEX);
+      for (let j = 0; j < textParts.length; j++) {
+        if (j % 2 === 1) {
+          result.push(
+            <a
+              key={`url-${i}-${j}`}
+              href={textParts[j]}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline hover:text-blue-800 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {textParts[j]}
+            </a>
+          );
+        } else if (textParts[j]) {
+          result.push(textParts[j]);
+        }
+      }
     }
   }
 
@@ -371,6 +384,7 @@ export default function ChatPage() {
   }, [messageText, conversationId, conversationInfo?.isGroup]);
   const [sending, setSending] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(true);
+  const [infoPanelTab, setInfoPanelTab] = useState<"info" | "search">("info");
   // Hover tooltip & context menu & reactions
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [activeReactionMenu, setActiveReactionMenu] = useState<string | null>(
@@ -1404,18 +1418,22 @@ export default function ChatPage() {
         setIsInitialLoad(false);
       }, 100);
     } else {
-      // Chỉ tự động cuộn xuống nếu đang ở gần đáy (trong khoảng 200px)
-      const container = scrollContainerRef.current;
-      if (container) {
-        const { scrollTop, scrollHeight, clientHeight } = container;
-        // Kiểm tra xem có đang ở gần đáy không
-        const isNearBottom = scrollHeight - scrollTop - clientHeight < 200;
-        if (isNearBottom) {
-          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      setTimeout(() => {
+        const container = scrollContainerRef.current;
+        if (container) {
+          const { scrollTop, scrollHeight, clientHeight } = container;
+          const myId = currentUser?.id || currentUser?._id;
+          const lastMsg = messages[messages.length - 1];
+          const isMyMsg = lastMsg?.senderId === myId;
+          const isNearBottom = scrollHeight - scrollTop - clientHeight < 500;
+          
+          if (isNearBottom || isMyMsg) {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+          }
         }
-      }
+      }, 50);
     }
-  }, [messages, isInitialLoad]);
+  }, [messages, isInitialLoad, currentUser]);
 
   /* ─── Infinite Scroll Observer ─── */
   useEffect(() => {
@@ -2091,6 +2109,28 @@ export default function ChatPage() {
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const items = e.clipboardData.items;
+    let hasFile = false;
+    const dt = new DataTransfer();
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === "file") {
+        const file = items[i].getAsFile();
+        if (file) {
+          dt.items.add(file);
+          hasFile = true;
+        }
+      }
+    }
+    if (hasFile) {
+      e.preventDefault();
+      const mockEvent = {
+        target: { files: dt.files },
+      } as unknown as React.ChangeEvent<HTMLInputElement>;
+      handleFileChange(mockEvent);
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     const pos = e.target.selectionStart || 0;
@@ -2437,12 +2477,25 @@ export default function ChatPage() {
                   <VideoCameraIcon className="w-5 h-5" />
                 </button>
 
-                <button className="hover:text-black transition">
+                <button 
+                  onClick={() => {
+                    setShowInfoPanel(true);
+                    setInfoPanelTab("search");
+                  }}
+                  className={`transition ${infoPanelTab === "search" && showInfoPanel ? "text-black" : "hover:text-gray-600"}`}
+                >
                   <MagnifyingGlassIcon className="w-5 h-5" />
                 </button>
                 <button
-                  onClick={() => setShowInfoPanel(!showInfoPanel)}
-                  className={`transition ${showInfoPanel ? "text-black" : "hover:text-gray-600"}`}
+                  onClick={() => {
+                    if (showInfoPanel && infoPanelTab === "info") {
+                      setShowInfoPanel(false);
+                    } else {
+                      setShowInfoPanel(true);
+                      setInfoPanelTab("info");
+                    }
+                  }}
+                  className={`transition ${showInfoPanel && infoPanelTab === "info" ? "text-black" : "hover:text-gray-600"}`}
                 >
                   <InformationCircleIcon className="w-5 h-5" />
                 </button>
@@ -2497,15 +2550,26 @@ export default function ChatPage() {
             {/* Pinned Messages (nếu có) */}
             {pinnedMessages.length === 1 && (
               <div className="px-6 pt-3 pb-1">
-                <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2 shadow-sm">
+                <div 
+                  className="flex items-center gap-2 bg-yellow-50 hover:bg-yellow-100/80 transition cursor-pointer border border-yellow-200 rounded-xl px-4 py-2 shadow-sm"
+                  onClick={() => {
+                    const targetMsg = document.getElementById(`msg-${pinnedMessages[0]._id}`);
+                    if (targetMsg) {
+                      targetMsg.scrollIntoView({ behavior: "smooth", block: "center" });
+                      targetMsg.classList.add("bg-yellow-100/50");
+                      setTimeout(() => targetMsg.classList.remove("bg-yellow-100/50"), 2000);
+                    } else {
+                      toast.error("Không tìm thấy tin nhắn (có thể đã quá cũ)");
+                    }
+                  }}
+                >
                   <MapPinIcon className="w-5 h-5 text-yellow-500" />
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] font-bold text-yellow-800 truncate">
                       {pinnedMessages[0].type === "text"
                         ? pinnedMessages[0].content
                         : pinnedMessages[0].type === "file"
-                          ? pinnedMessages[0].metadata?.fileName ||
-                          "Tệp đính kèm"
+                          ? pinnedMessages[0].metadata?.fileName || "Tệp đính kèm"
                           : pinnedMessages[0].type === "image"
                             ? "[Ảnh]"
                             : "[Tin nhắn hệ thống]"}
@@ -2516,9 +2580,22 @@ export default function ChatPage() {
                     </div>
                   </div>
                   <button
-                    className="ml-2 p-1 rounded-full hover:bg-yellow-100 text-yellow-700"
+                    className="p-1 rounded-full hover:bg-yellow-200 text-yellow-700 ml-1"
+                    title="Chuyển tiếp"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setForwardingMessage(pinnedMessages[0]);
+                    }}
+                  >
+                    <PaperAirplaneIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    className="p-1 rounded-full hover:bg-yellow-200 text-yellow-700"
                     title="Bỏ ghim"
-                    onClick={() => handlePinMessage(pinnedMessages[0])}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePinMessage(pinnedMessages[0]);
+                    }}
                   >
                     <XMarkIcon className="w-4 h-4" />
                   </button>
@@ -2580,7 +2657,18 @@ export default function ChatPage() {
                     {pinnedMessages.map((msg) => (
                       <div
                         key={msg._id}
-                        className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2"
+                        className="flex items-center gap-2 bg-yellow-50 hover:bg-yellow-100/80 transition cursor-pointer border border-yellow-200 rounded-xl px-4 py-2"
+                        onClick={() => {
+                          setShowPinnedModal(false);
+                          const targetMsg = document.getElementById(`msg-${msg._id}`);
+                          if (targetMsg) {
+                            targetMsg.scrollIntoView({ behavior: "smooth", block: "center" });
+                            targetMsg.classList.add("bg-yellow-100/50");
+                            setTimeout(() => targetMsg.classList.remove("bg-yellow-100/50"), 2000);
+                          } else {
+                            toast.error("Không tìm thấy tin nhắn (có thể đã quá cũ)");
+                          }
+                        }}
                       >
                         <div className="flex-1 min-w-0">
                           <div className="text-[13px] font-bold text-yellow-800 truncate">
@@ -2598,9 +2686,23 @@ export default function ChatPage() {
                           </div>
                         </div>
                         <button
-                          className="ml-2 p-1 rounded-full hover:bg-yellow-100 text-yellow-700"
+                          className="p-1 rounded-full hover:bg-yellow-200 text-yellow-700 ml-1"
+                          title="Chuyển tiếp"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowPinnedModal(false);
+                            setForwardingMessage(msg);
+                          }}
+                        >
+                          <PaperAirplaneIcon className="w-4 h-4" />
+                        </button>
+                        <button
+                          className="p-1 rounded-full hover:bg-yellow-200 text-yellow-700"
                           title="Bỏ ghim"
-                          onClick={() => handlePinMessage(msg)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePinMessage(msg);
+                          }}
                         >
                           <XMarkIcon className="w-4 h-4" />
                         </button>
@@ -2739,7 +2841,7 @@ export default function ChatPage() {
                     return (
                       <div
                         key={`group-${groupIdx}`}
-                        className={`flex flex-col gap-0.5 w-full ${isMine ? "items-end" : "items-start"} mb-3`}
+                        className={`flex flex-col gap-1 w-full ${isMine ? "items-end" : "items-start"} mb-4`}
                       >
                         {gMsgs.map((msg, msgIdx) => {
                           const isLast = msgIdx === gMsgs.length - 1;
@@ -2854,6 +2956,12 @@ export default function ChatPage() {
                                           : "border-gray-100"
                                       } ${bubbleRadius}`}
                                   >
+                                    {/* Sender Name for Group Chats */}
+                                    {isFirst && !isMine && conversationInfo?.isGroup && (
+                                      <span className="text-[11px] font-bold text-gray-500 mb-1 ml-0.5">
+                                        {senderName}
+                                      </span>
+                                    )}
                                     {/* Reply Quote Box */}
                                     {msg.replyTo &&
                                       msg.replyTo.messageId &&
@@ -3369,7 +3477,7 @@ export default function ChatPage() {
                                         return (
                                           <div className="flex flex-col">
                                             <div
-                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap text-justify"
+                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]"
                                             >
                                               {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
                                             </div>
@@ -3931,8 +4039,8 @@ export default function ChatPage() {
                         return (
                           <img
                             key={id}
-                            src={userProfile?.avatar || "https://i.pinimg.com/736x/c6/e5/65/c6e56503cfdd87da299f72dc416023d4.jpg"}
-                            alt={(userProfile as any)?.fullName || (userProfile as any)?.name || "Ai đó"}
+                            src={userProfile?.avatar ? getMediaUrl(userProfile.avatar) : "/avt-mac-dinh.jpg"}
+                            alt={getSenderDisplayName(id)}
                             className="w-5 h-5 rounded-full border-2 border-white object-cover shadow-sm"
                             style={{ zIndex: 3 - index }}
                           />
@@ -3940,20 +4048,11 @@ export default function ChatPage() {
                       })}
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-bold text-gray-700">
-                        {(() => {
-                          const names = typingForThisConvo
-                            .slice(0, 2)
-                            .map((id) => {
-                               const userProfile = userCache[id] || conversationInfo?.members?.find((m: any) => m.userId === id);
-                               return (userProfile as any)?.fullName?.split(' ').pop() || (userProfile as any)?.name?.split(' ').pop() || 'Ai đó';
-                            });
-                          const extraCount = typingForThisConvo.length - names.length;
-                          let nameStr = names.join(', ');
-                          if (extraCount > 0) nameStr += ` và ${extraCount} người khác`;
-                          return nameStr;
-                        })()}
-                      </span>
+                      {typingForThisConvo.length === 1 && (
+                        <span className="text-[11px] font-bold text-gray-700">
+                          {getSenderDisplayName(typingForThisConvo[0]).split(' ').pop()}
+                        </span>
+                      )}
                       <span className="text-[11px] text-gray-400 italic">đang soạn tin</span>
                       <div className="flex gap-0.5 ml-0.5 items-center">
                         <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
@@ -4126,6 +4225,7 @@ export default function ChatPage() {
                       value={messageText}
                       onChange={handleInputChange}
                       onKeyDown={handleKeyDown}
+                      onPaste={handlePaste}
                       className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
                     />
                     <div className="flex items-center gap-1">
@@ -4355,6 +4455,8 @@ export default function ChatPage() {
           {/* ═══ CỘT PHẢI: THÔNG TIN CHI TIẾT ═══ */}
           <ChatInfoPanel
             show={showInfoPanel}
+            activeTab={infoPanelTab}
+            onTabChange={setInfoPanelTab}
             conversationId={conversationId}
             conversationInfo={conversationInfo}
             messages={messages}

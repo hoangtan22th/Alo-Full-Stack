@@ -38,6 +38,11 @@ export default function LoginScreen() {
   const [forgotNewPassword, setForgotNewPassword] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
 
+  // --- THÊM STATE CHO OTP ĐĂNG NHẬP ---
+  const [showLoginOtpModal, setShowLoginOtpModal] = useState(false);
+  const [loginOtp, setLoginOtp] = useState("");
+  const [loginOtpLoading, setLoginOtpLoading] = useState(false);
+
   const handleSendForgotOtp = async () => {
     if (!forgotEmail) {
       Alert.alert("Lỗi", "Vui lòng nhập email");
@@ -115,8 +120,16 @@ export default function LoginScreen() {
         password,
         deviceId: deviceName,
       });
+
+      const data = res.data?.data || res.data || res;
+
+      if (data.requiresOtp || data.requireOTP) {
+        setShowLoginOtpModal(true);
+        return;
+      }
+
       // signIn() lưu cả 2 token + cập nhật trạng thái -> _layout.tsx tự chuyển vào Tabs
-      await signIn(res.accessToken, res.refreshToken);
+      await signIn(data.accessToken, data.refreshToken);
     } catch (error: any) {
       if (!error.response) {
         Alert.alert("Lỗi Kết Nối", "Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại mạng hoặc địa chỉ IP.");
@@ -126,6 +139,40 @@ export default function LoginScreen() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyLoginOtp = async () => {
+    if (!loginOtp) {
+      Alert.alert("Lỗi", "Vui lòng nhập mã OTP");
+      return;
+    }
+    setLoginOtpLoading(true);
+    try {
+      let deviceName = "Unknown Device";
+      if (Platform.OS === "web") {
+        deviceName = "Trình duyệt Web";
+      } else {
+        deviceName = `${Device.brand || "Máy"} ${Device.modelName || "Không xác định"} (${Platform.OS})`;
+      }
+
+      const res: any = await api.post("/auth/login/verify-otp", {
+        email,
+        otp: loginOtp,
+        deviceId: deviceName,
+      });
+      const data = res.data?.data || res.data || res;
+
+      setShowLoginOtpModal(false);
+      setLoginOtp(""); // reset
+      await signIn(data.accessToken, data.refreshToken);
+    } catch (error: any) {
+      Alert.alert(
+        "Lỗi Xác Thực",
+        error.response?.data?.message || "Mã OTP không hợp lệ",
+      );
+    } finally {
+      setLoginOtpLoading(false);
     }
   };
 
@@ -400,6 +447,73 @@ export default function LoginScreen() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {/* --- MODAL NHẬP OTP ĐĂNG NHẬP --- */}
+      <Modal
+        visible={showLoginOtpModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLoginOtpModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View className="flex-1 justify-end bg-black/50">
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+            >
+              <View className="bg-white rounded-t-3xl p-6 pb-20">
+                <View className="flex-row justify-between items-center mb-2 border-b border-gray-100 pb-4">
+                  <Text className="text-xl font-bold text-gray-900">
+                    Xác thực thiết bị mới
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowLoginOtpModal(false)}
+                    className="p-2"
+                  >
+                    <Text className="text-red-500 font-bold">Thoát</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View>
+                  <Text className="text-sm text-gray-500 mb-6 mt-2">
+                    Hệ thống nhận thấy bạn đang đăng nhập từ một thiết bị mới.
+                    Vui lòng nhập mã xác thực OTP gồm 6 chữ số vừa được gửi đến email <Text className="font-bold text-black">{email}</Text>.
+                  </Text>
+
+                  <Text className="text-xs font-bold text-gray-500 mb-2 tracking-wider">
+                    MÃ OTP (6 SỐ)
+                  </Text>
+                  <View className="bg-gray-100 rounded-2xl px-4 py-4 mb-8 border-[1px] border-gray-200">
+                    <TextInput
+                      value={loginOtp}
+                      onChangeText={setLoginOtp}
+                      keyboardType="number-pad"
+                      className="text-base text-gray-900 tracking-[0.5em] text-center"
+                      placeholder="••••••"
+                      maxLength={6}
+                      placeholderTextColor="#9ca3af"
+                    />
+                  </View>
+
+                  <TouchableOpacity
+                    disabled={loginOtpLoading}
+                    onPress={handleVerifyLoginOtp}
+                    className="bg-gray-900 py-4 rounded-full items-center justify-center flex-row shadow-sm"
+                  >
+                    {loginOtpLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text className="text-white font-bold text-base">
+                        Xác Nhận Đăng Nhập
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </KeyboardAvoidingView>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
     </KeyboardAvoidingView>
   );
 }
