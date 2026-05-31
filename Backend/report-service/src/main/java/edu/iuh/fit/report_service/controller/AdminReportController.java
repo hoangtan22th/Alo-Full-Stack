@@ -9,17 +9,20 @@ import edu.iuh.fit.report_service.entity.ReportStatus;
 import edu.iuh.fit.report_service.entity.TargetType;
 import edu.iuh.fit.report_service.service.ReportService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/admin/reports")
 @RequiredArgsConstructor
+@Validated
 public class AdminReportController {
 
     private final ReportService reportService;
@@ -41,8 +44,8 @@ public class AdminReportController {
 
     @RequestMapping(value = "/{reportId}/action", method = {RequestMethod.PATCH, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<ReportAdminResponse>> resolveReport(
-            @PathVariable String reportId,
-            @RequestHeader("X-Admin-Id") String adminId,
+            @PathVariable @Size(min = 36, max = 36, message = "Report ID must be exactly 36 characters") String reportId,
+            @RequestHeader("X-Admin-Id") @Size(min = 36, max = 36, message = "Admin ID must be exactly 36 characters") String adminId,
             @Valid @RequestBody AdminActionRequest actionRequest) {
 
         ReportAdminResponse response = reportService.resolveReport(reportId, actionRequest, adminId);
