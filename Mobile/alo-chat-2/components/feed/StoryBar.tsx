@@ -139,7 +139,7 @@ export default function StoryBar() {
   };
 
   return (
-    <View className="bg-white rounded-3xl p-4 border border-gray-100 shadow-sm mb-4">
+    <View className="bg-white rounded-3xl p-4 border border-gray-100 mb-4">
       <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-3 py-1">
         {/* Nút Tạo Story của tôi */}
         <View className="items-center mr-3 relative">

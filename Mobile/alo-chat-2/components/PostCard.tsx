@@ -989,7 +989,7 @@ export default function PostCard({
   const reactionSummary = getReactionSummary();
 
   return (
-    <View className="bg-white rounded-3xl p-5 mb-4 border border-gray-100 shadow-sm">
+    <View className="bg-white rounded-3xl p-5 mb-4 border border-gray-100">
       {/* Header */}
       <View className="flex-row justify-between items-center mb-3">
         <TouchableOpacity className="flex-row items-center flex-1" onPress={navigateToProfile}>

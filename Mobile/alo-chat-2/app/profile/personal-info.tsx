@@ -15,8 +15,8 @@ import {
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { ArrowLeftIcon, CheckIcon } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import api from "../../../services/api";
-import { useAuth } from "../../../contexts/AuthContext";
+import api from "../../services/api";
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function PersonalInfoScreen() {
   const insets = useSafeAreaInsets();

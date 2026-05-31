@@ -172,7 +172,7 @@ export default function FeedScreen() {
         <StoryBar />
 
         {/* Khung tạo bài viết nhanh */}
-        <View className="bg-white p-4 rounded-3xl flex-row items-center border border-gray-100 shadow-sm gap-3">
+        <View className="bg-white p-4 rounded-3xl flex-row items-center border border-gray-100 gap-3">
           <Image
             source={{ uri: getAvatar(user?.avatar, user?.fullName) }}
             className="w-10 h-10 rounded-full bg-gray-100"
@@ -194,7 +194,7 @@ export default function FeedScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#f9fafb", paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: "#fff", paddingTop: insets.top }}>
       {/* Header bar */}
       <View className="flex-row justify-between items-center px-5 py-3 bg-white border-b border-gray-100">
         <Text className="text-xl font-bold text-gray-900">Nhật ký</Text>
