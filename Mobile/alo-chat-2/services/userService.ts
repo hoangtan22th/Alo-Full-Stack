@@ -2,6 +2,7 @@ import api from "./api";
 
 export interface UserProfileDTO {
   id: string;
+  _id?: string;
   email: string;
   fullName: string;
   phoneNumber: string;
