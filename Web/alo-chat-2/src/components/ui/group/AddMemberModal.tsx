@@ -30,7 +30,6 @@ export default function AddMemberModal({
   const [loading, setLoading] = useState(false);
   
   // Phone search state
-  const [phoneSearch, setPhoneSearch] = useState("");
   const [searchedUser, setSearchedUser] = useState<any>(null);
   const [searchingPhone, setSearchingPhone] = useState(false);
 
@@ -83,12 +82,12 @@ export default function AddMemberModal({
     }
   };
 
-  const handlePhoneSearch = async () => {
-    if (!phoneSearch.trim()) return;
+  const handlePhoneSearch = async (phone: string) => {
+    if (!phone) return;
     setSearchingPhone(true);
     setSearchedUser(null);
     try {
-      const user = await contactService.searchUserByPhone(phoneSearch);
+      const user = await contactService.searchUserByPhone(phone);
       if (user) {
         // Check if already in group
         const isMember = currentMembers.some(m => String(m.userId) === String(user.userId));
@@ -117,8 +116,27 @@ export default function AddMemberModal({
         selectedUserIds.map(async userId => {
           const user = friends.find(f => f.displayId === userId);
           if (user?.isStranger) {
-            return groupService.inviteToGroup(groupId, userId);
+            // Gửi link qua tin nhắn 1-1 cho người lạ
+            const link = `https://alo.chat/g/${groupId}`;
+            const messageContent = `Tôi muốn mời bạn tham gia nhóm: ${link}`;
+            try {
+              const res: any = await axiosClient.post("/groups/direct", { targetUserId: userId });
+              const directConvoId = res?.data?._id || res?._id || res?.data?.data?._id;
+              
+              if (directConvoId) {
+                await axiosClient.post("/messages", {
+                  conversationId: directConvoId,
+                  content: messageContent,
+                  type: "text"
+                });
+              }
+              return { status: "invited" };
+            } catch (e) {
+              console.error("Lỗi gửi link cho người lạ:", e);
+              throw new Error("Không thể gửi link cho người lạ");
+            }
           } else {
+            // Thêm bạn bè trực tiếp vào nhóm
             return groupService.addMember(groupId, userId);
           }
         })
@@ -129,13 +147,13 @@ export default function AddMemberModal({
 
       let msg = "";
       if (addCount > 0) msg += `Đã thêm ${addCount} thành viên. `;
-      if (inviteCount > 0) msg += `Đã gửi lời mời tới ${inviteCount} người.`;
+      if (inviteCount > 0) msg += `Đã gửi link mời tới ${inviteCount} người lạ.`;
       
       toast.success(msg || "Thao tác thành công!");
       onSuccess();
       onClose();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || "Lỗi khi thêm thành viên!");
+      toast.error(err.response?.data?.error || err.message || "Lỗi khi thêm thành viên!");
     } finally {
       setLoading(false);
     }
@@ -164,33 +182,29 @@ export default function AddMemberModal({
 
         {/* Search */}
         <div className="px-6 py-4 border-b border-gray-50 flex flex-col gap-3">
-          <div className="relative">
+          <div className="relative flex items-center">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input 
               type="text"
-              placeholder="Tìm bạn bè theo tên..."
+              placeholder="Nhập tên hoặc SĐT để tìm..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-black/5 transition"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && /^\d{10,11}$/.test(searchQuery.trim())) {
+                  handlePhoneSearch(searchQuery.trim());
+                }
+              }}
+              className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-20 py-2.5 text-sm font-medium focus:ring-2 focus:ring-black/10 transition"
             />
-          </div>
-
-          <div className="flex gap-2">
-            <input 
-              type="text"
-              placeholder="Tìm theo SĐT để mời..."
-              value={phoneSearch}
-              onChange={(e) => setPhoneSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handlePhoneSearch()}
-              className="flex-1 bg-gray-50 border-none rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-black/10 transition"
-            />
-            <button 
-              onClick={handlePhoneSearch}
-              disabled={searchingPhone}
-              className="px-4 py-2 bg-black text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition disabled:bg-gray-200"
-            >
-              {searchingPhone ? "..." : "Tìm"}
-            </button>
+            {/^\d{10,11}$/.test(searchQuery.trim()) && (
+              <button 
+                onClick={() => handlePhoneSearch(searchQuery.trim())}
+                disabled={searchingPhone}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-black text-white rounded-[10px] font-bold text-xs hover:bg-gray-800 transition disabled:opacity-50"
+              >
+                {searchingPhone ? "..." : "Tìm"}
+              </button>
+            )}
           </div>
         </div>
 

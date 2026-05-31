@@ -39,9 +39,19 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<Map<String, String>>> login(@RequestBody LoginRequest request,
+    public ResponseEntity<ApiResponse<Map<String, Object>>> login(@RequestBody LoginRequest request,
             HttpServletRequest httpRequest, HttpServletResponse response) {
-        Map<String, String> tokens = authService.login(request, httpRequest, response);
+        Map<String, Object> tokens = authService.login(request, httpRequest, response);
+        return ResponseEntity.ok(ApiResponse.success(tokens));
+    }
+
+    @PostMapping("/login/verify-otp")
+    public ResponseEntity<ApiResponse<Map<String, String>>> verifyLoginOtp(@RequestBody Map<String, String> request,
+            HttpServletRequest httpRequest, HttpServletResponse response) {
+        String email = request.get("email");
+        String otp = request.get("otp");
+        String deviceId = request.get("deviceId");
+        Map<String, String> tokens = authService.verifyLoginOtp(email, otp, deviceId, httpRequest, response);
         return ResponseEntity.ok(ApiResponse.success(tokens));
     }
 

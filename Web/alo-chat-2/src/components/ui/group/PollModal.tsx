@@ -13,16 +13,17 @@ interface PollModalProps {
   canCreate?: boolean;
   onClose: () => void;
   onOpenDetails?: (pollId: string) => void;
+  initialQuestion?: string;
 }
 
-export default function PollModal({ conversationId, canCreate = true, onClose, onOpenDetails }: PollModalProps) {
+export default function PollModal({ conversationId, canCreate = true, onClose, onOpenDetails, initialQuestion }: PollModalProps) {
   const [polls, setPolls] = useState<PollDTO[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(!!initialQuestion);
   const [displayCount, setDisplayCount] = useState(5);
   
   // Create Poll State
-  const [question, setQuestion] = useState("");
+  const [question, setQuestion] = useState(initialQuestion || "");
   const [options, setOptions] = useState(["", ""]);
   
   // Advanced Settings State

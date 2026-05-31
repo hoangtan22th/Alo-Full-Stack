@@ -12,6 +12,7 @@ import axiosClient from "@/services/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useRouter } from "next/navigation";
 import { getMediaUrl } from "@/utils/media";
+import { contactService } from "@/services/contactService";
 
 // ===========================
 // INTERFACES & HELPERS
@@ -107,6 +108,11 @@ export default function CreateGroupModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [strangerIds, setStrangerIds] = useState<string[]>([]);
+
+  // Phone search state
+  const [searchedUser, setSearchedUser] = useState<any>(null);
+  const [searchingPhone, setSearchingPhone] = useState(false);
 
   // Load current user và friends
   useEffect(() => {
@@ -156,10 +162,46 @@ export default function CreateGroupModal({
     loadData();
   }, []);
 
-  const toggleFriend = (id: string) => {
+  const toggleFriend = (id: string, userObj?: any) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
+    if (userObj && !friends.find((f) => f.id === id)) {
+      setFriends((prev) => [
+        ...prev,
+        {
+          id: userObj.userId,
+          fullName: userObj.fullName,
+          avatar: userObj.avatarUrl,
+          phone: userObj.phone,
+        },
+      ]);
+      if (userObj.relationStatus === "NOT_FRIEND") {
+        setStrangerIds((prev) => [...prev, id]);
+      }
+    }
+  };
+
+  const handlePhoneSearch = async (phone: string) => {
+    if (!phone) return;
+    setSearchingPhone(true);
+    setSearchedUser(null);
+    try {
+      const user = await contactService.searchUserByPhone(phone);
+      if (user) {
+        if (selectedIds.includes(user.userId) || currentUserId === user.userId) {
+          toast.info("Người dùng này đã được chọn hoặc là chính bạn");
+        } else {
+          setSearchedUser(user);
+        }
+      } else {
+        toast.error("Không tìm thấy người dùng với số điện thoại này");
+      }
+    } catch (error) {
+      toast.error("Lỗi khi tìm kiếm");
+    } finally {
+      setSearchingPhone(false);
+    }
   };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,17 +221,20 @@ export default function CreateGroupModal({
       return;
     }
     if (selectedIds.length < 2) {
-      setError("Chọn ít nhất 2 bạn bè");
+      setError("Chọn ít nhất 2 người");
       return;
     }
 
     setLoading(true);
     setError("");
 
+    const friendsToCreate = selectedIds.filter(id => !strangerIds.includes(id));
+    const strangersToInvite = selectedIds.filter(id => strangerIds.includes(id));
+
     try {
       const result = await createGroup({
         name: name.trim(),
-        userIds: selectedIds,
+        userIds: friendsToCreate,
         avatarFile: avatarFile || undefined,
         groupAvatar: !avatarFile ? initialAvatarUrl : undefined,
       });
@@ -200,8 +245,32 @@ export default function CreateGroupModal({
         return;
       }
 
-      toast.success(`Đã tạo nhóm "${name}" thành công!`);
       const convoId = result.data?._id || result.data?.id;
+
+      // Gửi link cho người lạ
+      if (strangersToInvite.length > 0 && convoId) {
+        const link = `https://alo.chat/g/${convoId}`;
+        const messageContent = `Tôi muốn mời bạn tham gia nhóm "${name}": ${link}`;
+        
+        for (const strangerId of strangersToInvite) {
+          try {
+            const res: any = await axiosClient.post("/groups/direct", { targetUserId: strangerId });
+            const directConvoId = res?.data?._id || res?._id || res?.data?.data?._id;
+            
+            if (directConvoId) {
+              await axiosClient.post("/messages", {
+                conversationId: directConvoId,
+                content: messageContent,
+                type: "text"
+              });
+            }
+          } catch (e) {
+            console.error("Lỗi gửi link cho người lạ:", e);
+          }
+        }
+      }
+
+      toast.success(`Đã tạo nhóm "${name}" thành công!`);
       onSuccess();
       onClose();
       if (convoId) {
@@ -303,13 +372,64 @@ export default function CreateGroupModal({
               <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 shrink-0" />
               <input
                 className="bg-transparent flex-1 text-sm font-medium focus:outline-none"
-                placeholder="Tìm tên..."
+                placeholder="Tìm tên hoặc nhập SĐT..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && /^\d{10,11}$/.test(search.trim())) {
+                    handlePhoneSearch(search.trim());
+                  }
+                }}
               />
+              {/^\d{10,11}$/.test(search.trim()) && (
+                <button 
+                  onClick={() => handlePhoneSearch(search.trim())}
+                  disabled={searchingPhone}
+                  className="px-3 py-1.5 bg-black text-white rounded-[10px] font-bold text-xs hover:bg-gray-800 transition disabled:opacity-50"
+                >
+                  {searchingPhone ? "..." : "Tìm"}
+                </button>
+              )}
             </div>
 
             <div className="space-y-1 flex-1 min-h-90 overflow-y-auto pr-1 scrollbar-hide">
+              {/* Searched User Result */}
+              {searchedUser && (
+                <div className={`mb-4 p-3 bg-gray-50 rounded-2xl border border-gray-200 animate-in slide-in-from-top-2 ${
+                  selectedIds.length > 0 ? "w-[calc(50%-16px)]" : "w-full"
+                }`}>
+                  <p className="text-[10px] font-black text-black uppercase tracking-widest mb-2">Kết quả tìm kiếm</p>
+                  <div
+                    onClick={() => toggleFriend(searchedUser.userId, searchedUser)}
+                    className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition ${
+                      selectedIds.includes(searchedUser.userId) 
+                        ? "bg-black text-white shadow-lg" 
+                        : "bg-white hover:bg-gray-100 text-gray-700 shadow-sm"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <img
+                          src={searchedUser.avatarUrl || "/avt-mac-dinh.jpg"}
+                          className="w-9 h-9 rounded-full object-cover"
+                        />
+                        {selectedIds.includes(searchedUser.userId) && (
+                          <div className="absolute -bottom-1 -right-1 bg-white rounded-full">
+                            <CheckIcon className="w-3.5 h-3.5 text-black font-bold" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm truncate">{searchedUser.fullName}</p>
+                        <p className="text-[10px] opacity-70 truncate">{searchedUser.phone}</p>
+                      </div>
+                    </div>
+                    {searchedUser.relationStatus === "NOT_FRIEND" && (
+                      <span className="text-[9px] font-black uppercase bg-yellow-400 text-black px-1.5 py-0.5 rounded-md shrink-0">Người lạ</span>
+                    )}
+                  </div>
+                </div>
+              )}
               {friendsLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <div

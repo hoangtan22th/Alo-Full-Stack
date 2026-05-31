@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { socketService } from "@/services/socketService";
 import { groupService } from "@/services/groupService";
 import { toast } from "sonner";
+import { useNotificationStore } from "@/store/useNotificationStore";
 
 export default function FriendRequestPage() {
   const router = useRouter();
@@ -85,15 +86,18 @@ export default function FriendRequestPage() {
             content: "🎉 Hai bạn đã trở thành bạn bè. Hãy bắt đầu trò chuyện!",
           });
           setSelectedRequest(null);
+          useNotificationStore.getState().decrementFriendRequestCount();
           router.push(`/chat/${convoId}`);
         } else {
           fetchRequests();
           setSelectedRequest(null);
+          useNotificationStore.getState().decrementFriendRequestCount();
         }
       } else {
         await axiosClient.delete(`/contacts/${requestId}/decline`);
         setRequests((prev) => prev.filter((req) => req.id !== requestId));
         setSelectedRequest(null);
+        useNotificationStore.getState().decrementFriendRequestCount();
         toast.success("Đã từ chối lời mời");
       }
     } catch (err) {
