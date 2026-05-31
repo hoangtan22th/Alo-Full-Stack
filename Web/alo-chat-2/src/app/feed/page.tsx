@@ -221,7 +221,7 @@ export function FeedPageContent() {
   return (
     <div className="flex flex-col h-screen w-full overflow-hidden bg-slate-50/50">
       {/* Top Navbar */}
-      <div className="h-16 border-b border-gray-100 flex items-center justify-between px-8 bg-white shrink-0 z-10 shadow-xs">
+      <div className="h-16 border-b border-gray-100 flex items-center justify-between px-4 md:px-8 bg-white shrink-0 z-10 shadow-xs">
         <div className="flex items-center gap-2">
           <BookOpenIcon className="w-5 h-5 text-blue-600" />
           <h1 className="text-lg font-bold text-gray-900">Nhật ký</h1>
@@ -236,7 +236,7 @@ export function FeedPageContent() {
 
       {/* Scrollable feed container */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        <div className="max-w-6xl mx-auto w-full px-8 py-6 flex flex-col lg:flex-row gap-6 items-start justify-center">
+        <div className="max-w-6xl mx-auto w-full px-3 sm:px-6 md:px-8 py-4 md:py-6 flex flex-col lg:flex-row gap-6 items-start justify-center">
           {/* Middle Column: Feed list */}
           <div className="flex-1 max-w-2xl flex flex-col gap-5">
             {/* Story Bar */}

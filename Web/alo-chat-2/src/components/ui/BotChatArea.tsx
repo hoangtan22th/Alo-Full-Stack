@@ -10,7 +10,9 @@ import {
   TrashIcon,
   InformationCircleIcon,
   ArrowPathIcon,
+  ChevronLeftIcon,
 } from "@heroicons/react/24/outline";
+import { useRouter } from "next/navigation";
 
 interface AIMessage {
   id: string;
@@ -32,6 +34,7 @@ const SUGGESTED_PROMPTS = [
 ];
 
 export default function BotChatArea({ currentUser }: { currentUser: any }) {
+  const router = useRouter();
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -128,8 +131,15 @@ export default function BotChatArea({ currentUser }: { currentUser: any }) {
   return (
     <>
       <div className="flex-1 flex flex-col min-w-0 h-full bg-white relative">
-        <div className="h-19 px-6 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md z-10">
-          <div className="flex items-center gap-3">
+        <div className="h-19 px-4 md:px-6 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md z-10">
+          <div className="flex items-center gap-2 md:gap-3">
+            {/* Back Button (Mobile only) */}
+            <button
+              onClick={() => router.push("/chat")}
+              className="md:hidden p-2 -ml-2 text-gray-500 hover:text-black hover:bg-gray-100 transition-colors rounded-full"
+            >
+              <ChevronLeftIcon className="w-6 h-6" />
+            </button>
             <div className="relative shrink-0">
               <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center border border-gray-100 shadow-sm overflow-hidden">
                 <img 

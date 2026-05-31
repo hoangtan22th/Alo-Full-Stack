@@ -172,7 +172,7 @@ export default function NotificationMenu({ onClose }: NotificationMenuProps) {
   };
 
   return (
-    <div className="h-full w-80 bg-white border-r border-gray-200 shadow-2xl z-50 flex flex-col animate-in slide-in-from-left duration-200 notification-menu-container">
+    <div className="fixed bottom-16 left-0 right-0 h-[calc(100vh-4rem)] w-full md:relative md:bottom-auto md:left-auto md:right-auto md:h-full md:w-80 bg-white border-t md:border-t-0 md:border-r border-gray-200 shadow-2xl z-50 flex flex-col animate-in slide-in-from-bottom md:slide-in-from-left duration-200 notification-menu-container">
       {/* Header */}
       <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
         <div className="flex items-center gap-2">

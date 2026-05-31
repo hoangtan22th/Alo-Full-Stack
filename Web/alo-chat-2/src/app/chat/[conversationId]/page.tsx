@@ -13,6 +13,7 @@ import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import FriendProfileModal from "@/components/ui/FriendProfileModal";
 import ChatSummaryButton from "@/components/ui/chatbot/ChatSummaryButton";
 import { CallSystemMessage } from "@/components/ui/call/CallSystemMessage";
+import { stripHtml, formatMessageContent, parseMessageContent } from "@/utils/html";
 import { useCall } from "@/components/layout/CallProvider";
 import GroupCallSelector from "@/components/ui/call/GroupCallSelector";
 import { AlertTriangle } from "lucide-react";
@@ -251,13 +252,19 @@ export default function ChatPage() {
     if (!messages || messages.length === 0) return null;
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
-      if (m.type === "text" && !m.isRevoked && parseReminderFromText(m.content) !== null) {
+      if (m.type === "text" && !m.isRevoked && parseReminderFromText(parseMessageContent(m.content).plainText) !== null) {
         return m._id;
       }
     }
     return null;
   }, [messages]);
   const [previewingTxtFile, setPreviewingTxtFile] = useState<{ fileName: string; content: string } | null>(null);
+
+  // Rich Text Editor states
+  const [isFormatMode, setIsFormatMode] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [textColor, setTextColor] = useState("#000000");
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
   // Group Link Info Cache
   const [groupLinkCache, setGroupLinkCache] = useState<Record<string, any>>({});
@@ -390,7 +397,12 @@ export default function ChatPage() {
     }
   }, [messageText, conversationId, conversationInfo?.isGroup]);
   const [sending, setSending] = useState(false);
-  const [showInfoPanel, setShowInfoPanel] = useState(true);
+  const { showInfoPanel, setShowInfoPanel } = useChatStore(
+    useShallow((s) => ({
+      showInfoPanel: s.showInfoPanel,
+      setShowInfoPanel: s.setShowInfoPanel,
+    }))
+  );
   const [infoPanelTab, setInfoPanelTab] = useState<"info" | "search">("info");
   // Hover tooltip & context menu & reactions
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -583,6 +595,46 @@ export default function ChatPage() {
   }, [conversationInfo, mentionSearch, userCache, myId]);
 
   const handleSelectMention = (item: { id: string; name: string }) => {
+    if (isFormatMode) {
+      if (editorRef.current) {
+        editorRef.current.focus();
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+
+          // Clear current typed @ search
+          const node = range.startContainer;
+          if (node.nodeType === Node.TEXT_NODE && node.nodeValue) {
+            const val = node.nodeValue;
+            const lastAt = val.lastIndexOf("@");
+            if (lastAt !== -1) {
+              node.nodeValue = val.substring(0, lastAt);
+            }
+          }
+
+          // Insert formatted mention element
+          const span = document.createElement("span");
+          span.className = "text-blue-800 font-black px-0.5";
+          span.setAttribute("contenteditable", "false");
+          span.innerText = `@${item.name}`;
+
+          range.insertNode(span);
+
+          // Insert trailing space
+          const space = document.createTextNode("\u00A0");
+          span.parentNode?.insertBefore(space, span.nextSibling);
+
+          // Position cursor after space
+          const newRange = document.createRange();
+          newRange.setStartAfter(space);
+          newRange.setEndAfter(space);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+        }
+      }
+      setMentionSearch(null);
+      return;
+    }
     const textBefore = messageText.substring(0, mentionPosition);
     const textAfter = messageText.substring(mentionPosition + (mentionSearch?.length || 0) + 1);
     const newText = `${textBefore}@${item.name} ${textAfter}`;
@@ -637,15 +689,15 @@ export default function ChatPage() {
     if (!messages || messages.length === 0) return;
     const latestMsg = messages[messages.length - 1];
     if (!latestMsg || !latestMsg.content || latestMsg.isRevoked) return;
-    
+
     // Check if the latest message was added within the last 5 seconds (avoid history load triggers)
     const msgTime = latestMsg.createdAt ? new Date(latestMsg.createdAt).getTime() : Date.now();
     const diff = Math.abs(Date.now() - msgTime);
     if (diff > 5000) return;
-    
+
     const text = latestMsg.content.toLowerCase();
     let effect: "RAIN" | "CAKE" | "SNOW" | null = null;
-    
+
     if (/mưa|rain|mưa rơi|trời mưa/i.test(text)) {
       effect = "RAIN";
     } else if (/sinh nhật|birthday|chúc mừng sinh nhật|sn vui vẻ/i.test(text)) {
@@ -653,7 +705,7 @@ export default function ChatPage() {
     } else if (/tuyết|snow|tuyết rơi|lạnh quá/i.test(text)) {
       effect = "SNOW";
     }
-    
+
     if (effect) {
       setActiveEffect(effect);
       const timer = setTimeout(() => {
@@ -1274,10 +1326,10 @@ export default function ChatPage() {
           // Cập nhật state cục bộ để UI hiện banner "đã giải tán" ngay lập tức
           setConversationInfo((prev: any) => prev ? { ...prev, status: 'DISBANDED' } : null);
           toast.error(data.message || "Nhóm này đã bị giải tán do vi phạm.");
-          
+
           // Đợi 2 giây để người dùng kịp thấy banner rồi mới redirect
           setTimeout(() => {
-             router.replace("/chat");
+            router.replace("/chat");
           }, 2000);
         }
       }),
@@ -1433,7 +1485,7 @@ export default function ChatPage() {
           const lastMsg = messages[messages.length - 1];
           const isMyMsg = lastMsg?.senderId === myId;
           const isNearBottom = scrollHeight - scrollTop - clientHeight < 500;
-          
+
           if (isNearBottom || isMyMsg) {
             messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
           }
@@ -1787,7 +1839,16 @@ export default function ChatPage() {
 
   /* ─── Send message ─── */
   const handleSend = async () => {
-    const text = messageText.trim();
+    let text = "";
+    if (isFormatMode) {
+      if (editorRef.current) {
+        text = editorRef.current.innerHTML.trim();
+        const plainText = editorRef.current.innerText.trim();
+        if (!plainText) return;
+      }
+    } else {
+      text = messageText.trim();
+    }
     if (!text || !conversationId || sending) return;
 
     const myId =
@@ -1800,19 +1861,33 @@ export default function ChatPage() {
       return;
     }
 
+    if (isFormatMode && editorRef.current) {
+      editorRef.current.innerHTML = "";
+    }
     setMessageText("");
     const currentReply = replyingTo;
     setReplyingTo(null);
 
+    const jsonContent = formatMessageContent(text, isFormatMode);
+
     // Optimistic UI — thêm tin tạm thời ngay lập tức
     const tempId = `temp_${Date.now()}`;
+    const replyText = currentReply
+      ? (currentReply.type === "text"
+        ? parseMessageContent(currentReply.content).plainText
+        : currentReply.type === "file"
+          ? currentReply.metadata?.fileName || currentReply.content
+          : currentReply.content)
+      : "";
+
     const tempMsg: MessageDTO = {
       _id: tempId,
       conversationId: activeConvoId,
       senderId: myId,
       senderName: currentUser?.fullName || "Tôi",
       type: "text",
-      content: text,
+      content: jsonContent,
+      metadata: isFormatMode ? { isRichText: true } : undefined,
       isRead: false,
       replyTo: currentReply
         ? {
@@ -1822,10 +1897,7 @@ export default function ChatPage() {
             currentReply.senderId,
             currentReply,
           ),
-          content:
-            currentReply.type === "file"
-              ? currentReply.metadata?.fileName || currentReply.content
-              : currentReply.content,
+          content: replyText,
           type: currentReply.type,
         }
         : undefined,
@@ -1836,9 +1908,10 @@ export default function ChatPage() {
     try {
       await messageService.sendMessage({
         conversationId: activeConvoId,
-        content: text,
+        content: jsonContent,
         type: "text",
         senderName: currentUser?.fullName || "Tôi",
+        metadata: isFormatMode ? { isRichText: true } : undefined,
         replyTo: currentReply
           ? {
             messageId: currentReply._id,
@@ -1847,10 +1920,7 @@ export default function ChatPage() {
               currentReply.senderId,
               currentReply,
             ),
-            content:
-              currentReply.type === "file"
-                ? currentReply.metadata?.fileName || currentReply.content
-                : currentReply.content,
+            content: replyText,
             type: currentReply.type,
           }
           : undefined,
@@ -1952,7 +2022,7 @@ export default function ChatPage() {
         actionText: "Đã hiểu",
         type: "warning",
         hideCancel: true,
-        onConfirm: () => {},
+        onConfirm: () => { },
       });
       return;
     }
@@ -1967,7 +2037,7 @@ export default function ChatPage() {
           actionText: "Đã hiểu",
           type: "warning",
           hideCancel: true,
-          onConfirm: () => {},
+          onConfirm: () => { },
         });
         return;
       }
@@ -2186,7 +2256,7 @@ export default function ChatPage() {
       setUploadingFile(false);
       return;
     }
-        
+
     setUploadingFile(true);
     try {
       const tempId = `temp-${Date.now()}`;
@@ -2222,7 +2292,7 @@ export default function ChatPage() {
       };
       setMessages((prev) => [...prev, tempMsg]);
       setReplyingTo(null);
-      
+
       try {
         await messageService.uploadFile(
           activeConvoId,
@@ -2311,6 +2381,72 @@ export default function ChatPage() {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleEditorInput = (e: React.FormEvent<HTMLDivElement>) => {
+    if (!editorRef.current) return;
+    const text = editorRef.current.innerText;
+    setMessageText(text);
+
+    if (!conversationInfo?.isGroup) return;
+
+    // Find closest @ before selection cursor
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      const node = range.startContainer;
+      const offset = range.startOffset;
+      if (node.nodeType === Node.TEXT_NODE && node.nodeValue) {
+        const val = node.nodeValue;
+        const lastAtPos = val.lastIndexOf("@", offset - 1);
+        if (lastAtPos !== -1) {
+          const textAfterAt = val.substring(lastAtPos + 1, offset);
+          if (!textAfterAt.includes(" ")) {
+            setMentionSearch(textAfterAt);
+            setMentionPosition(lastAtPos);
+            setMentionIndex(0);
+            return;
+          }
+        }
+      }
+    }
+    setMentionSearch(null);
+  };
+
+  const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (mentionSearch !== null && filteredMentions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((prev) => (prev + 1) % filteredMentions.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex((prev) => (prev - 1 + filteredMentions.length) % filteredMentions.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        handleSelectMention(filteredMentions[mentionIndex]);
+        return;
+      }
+      if (e.key === "Escape") {
+        setMentionSearch(null);
+        return;
+      }
+    }
+
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const execEditorCommand = (command: string, value: string = "") => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    document.execCommand(command, false, value);
+    setMessageText(editorRef.current.innerText);
   };
 
   /* ─── Send sticker ─── */
@@ -2520,6 +2656,40 @@ export default function ChatPage() {
 
   return (
     <>
+      <style dangerouslySetInnerHTML={{
+        __html: `
+        .rich-text-content ul, .editor-input ul {
+          list-style-type: disc !important;
+          padding-left: 20px !important;
+          margin-top: 4px !important;
+          margin-bottom: 4px !important;
+        }
+        .rich-text-content ol, .editor-input ol {
+          list-style-type: decimal !important;
+          padding-left: 20px !important;
+          margin-top: 4px !important;
+          margin-bottom: 4px !important;
+        }
+        .rich-text-content li, .editor-input li {
+          display: list-item !important;
+        }
+        .rich-text-content u, .editor-input u {
+          text-decoration: underline !important;
+        }
+        .rich-text-content s, .editor-input s {
+          text-decoration: line-through !important;
+        }
+        .rich-text-content blockquote, .editor-input blockquote {
+          border-left: 3px solid #cbd5e1 !important;
+          padding-left: 8px !important;
+          color: #64748b !important;
+        }
+        .editor-input:empty:before {
+          content: attr(placeholder);
+          color: #9ca3af;
+          cursor: text;
+        }
+      `}} />
       {conversationId === BOT_ID ? (
         <BotChatArea currentUser={currentUser} />
       ) : (
@@ -2527,14 +2697,22 @@ export default function ChatPage() {
           {/* ═══ CỘT GIỮA: NỘI DUNG CHAT ═══ */}
           <div className="flex-1 flex flex-col min-w-0 h-full bg-white relative">
             {/* Chat Header */}
-            <div className="h-19 px-6 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md z-10">
-              <div
-                className={`flex items-center gap-3 ${!conversationInfo?.isGroup ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
-                onClick={() => {
-                  if (!conversationInfo?.isGroup) setShowProfileModal(true);
-                }}
-              >
-                {/* Avatar */}
+            <div className="h-19 px-4 md:px-6 border-b border-gray-100 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md z-10">
+              <div className="flex items-center gap-2 md:gap-3">
+                {/* Back Button (Mobile only) */}
+                <button
+                  onClick={() => router.push("/chat")}
+                  className="md:hidden p-2 -ml-2 text-gray-500 hover:text-black hover:bg-gray-100 transition-colors rounded-full"
+                >
+                  <ChevronLeftIcon className="w-6 h-6" />
+                </button>
+                <div
+                  className={`flex items-center gap-3 ${!conversationInfo?.isGroup ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+                  onClick={() => {
+                    if (!conversationInfo?.isGroup) setShowProfileModal(true);
+                  }}
+                >
+                  {/* Avatar */}
                 <div className="relative shrink-0">
                   {conversationInfo?.displayAvatar ? (
                     <img
@@ -2592,6 +2770,7 @@ export default function ChatPage() {
                   </p>
                 </div>
               </div>
+              </div>
 
               <div className="flex items-center gap-4 text-gray-400">
                 <button
@@ -2607,7 +2786,7 @@ export default function ChatPage() {
                   <VideoCameraIcon className="w-5 h-5" />
                 </button>
 
-                <button 
+                <button
                   onClick={() => {
                     setShowInfoPanel(true);
                     setInfoPanelTab("search");
@@ -2667,7 +2846,7 @@ export default function ChatPage() {
                   <button className="px-3 py-1.5 bg-white text-gray-700 text-[11px] font-black rounded-lg border border-gray-100 hover:bg-gray-50 transition active:scale-95 shadow-sm">
                     Chặn
                   </button>
-                  <button 
+                  <button
                     onClick={handleReportUser}
                     className="px-3 py-1.5 bg-white text-gray-700 text-[11px] font-black rounded-lg border border-gray-100 hover:bg-red-50 hover:text-red-600 transition active:scale-95 shadow-sm"
                   >
@@ -2680,7 +2859,7 @@ export default function ChatPage() {
             {/* Pinned Messages (nếu có) */}
             {pinnedMessages.length === 1 && (
               <div className="px-6 pt-3 pb-1">
-                <div 
+                <div
                   className="flex items-center gap-2 bg-yellow-50 hover:bg-yellow-100/80 transition cursor-pointer border border-yellow-200 rounded-xl px-4 py-2 shadow-sm"
                   onClick={() => {
                     const targetMsg = document.getElementById(`msg-${pinnedMessages[0]._id}`);
@@ -2697,7 +2876,7 @@ export default function ChatPage() {
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] font-bold text-yellow-800 truncate">
                       {pinnedMessages[0].type === "text"
-                        ? pinnedMessages[0].content
+                        ? parseMessageContent(pinnedMessages[0].content).plainText
                         : pinnedMessages[0].type === "file"
                           ? pinnedMessages[0].metadata?.fileName || "Tệp đính kèm"
                           : pinnedMessages[0].type === "image"
@@ -2739,7 +2918,7 @@ export default function ChatPage() {
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] font-bold text-yellow-800 truncate">
                       {pinnedMessages[0].type === "text"
-                        ? pinnedMessages[0].content
+                        ? parseMessageContent(pinnedMessages[0].content).plainText
                         : pinnedMessages[0].type === "file"
                           ? pinnedMessages[0].metadata?.fileName ||
                           "Tệp đính kèm"
@@ -2803,7 +2982,7 @@ export default function ChatPage() {
                         <div className="flex-1 min-w-0">
                           <div className="text-[13px] font-bold text-yellow-800 truncate">
                             {msg.type === "text"
-                              ? msg.content
+                              ? parseMessageContent(msg.content).plainText
                               : msg.type === "file"
                                 ? msg.metadata?.fileName || "Tệp đính kèm"
                                 : msg.type === "image"
@@ -3017,28 +3196,29 @@ export default function ChatPage() {
                               }}
                             >
                               {/* Avatar placeholder */}
-                              <div className="w-8 shrink-0">
-                                {!isMine &&
-                                  isLast &&
-                                  (senderAvatar ? (
-                                    <img
-                                      src={senderAvatar}
-                                      alt={senderName}
-                                      title={senderName}
-                                      className="w-8 h-8 rounded-full object-cover"
-                                    />
-                                  ) : (
-                                    <div
-                                      className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px]"
-                                      title={senderName}
-                                    >
-                                      {senderName.charAt(0).toUpperCase()}
-                                    </div>
-                                  ))}
-                              </div>
+                              {!isMine && (
+                                <div className="w-8 shrink-0">
+                                  {isLast &&
+                                    (senderAvatar ? (
+                                      <img
+                                        src={senderAvatar}
+                                        alt={senderName}
+                                        title={senderName}
+                                        className="w-8 h-8 rounded-full object-cover"
+                                      />
+                                    ) : (
+                                      <div
+                                        className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[12px]"
+                                        title={senderName}
+                                      >
+                                        {senderName.charAt(0).toUpperCase()}
+                                      </div>
+                                    ))}
+                                </div>
+                              )}
 
                               {/* Bubble */}
-                              <div className={`relative max-w-[75%] flex flex-col ${isMine ? "items-end" : "items-start"} transition-all duration-300 ${isMultiSelectMode ? "p-1 rounded-2xl" : ""
+                              <div className={`relative max-w-[65%] flex flex-col ${isMine ? "items-end" : "items-start"} transition-all duration-300 ${isMultiSelectMode ? "p-1 rounded-2xl" : ""
                                 } ${selectedMessageIds.has(msg._id) ? "bg-black/10 shadow-inner" : isMultiSelectMode ? "hover:bg-black/5" : ""
                                 }`}>
                                 {/* System messages (General & Call) */}
@@ -3071,20 +3251,21 @@ export default function ChatPage() {
                                   )
                                 ) : (
                                   <div
-                                    className={`relative max-w-full flex flex-col p-1.5 px-2 border shadow-sm ${
-                                      msg.type === "file" && !isRevoked
-                                        ? "w-[65%] min-w-[320px] max-w-[480px]"
-                                        : ""
-                                    } ${isMine
-                                      ? "bg-blue-50/80 shadow-blue-900/5 items-end"
-                                      : "bg-white shadow-gray-900/5 items-start"
+                                    className={`relative transition-all duration-200 ${(msg.type === "text" || !msg.type || isRevoked)
+                                        ? `p-1.5 px-2 border shadow-sm ${isMine
+                                          ? "bg-[#18181B] text-white border-zinc-800 shadow-zinc-950/5"
+                                          : "bg-[#F4F4F5] text-zinc-900 border-gray-100 shadow-gray-900/5"
+                                        }`
+                                        : "p-0 border-transparent bg-transparent shadow-none"
+                                      } ${msg.type === "file" && !isRevoked
+                                        ? "w-[320px] max-w-[480px]"
+                                        : "w-fit max-w-full"
                                       } ${conversationInfo?.isHighlightEnabled &&
-                                        adminIds.has(String(msg.senderId))
+                                        adminIds.has(String(msg.senderId)) &&
+                                        (msg.type === "text" || !msg.type || isRevoked)
                                         ? "border-amber-300 ring-2 ring-amber-200/50"
-                                        : isMine
-                                          ? "border-blue-100"
-                                          : "border-gray-100"
-                                      } ${bubbleRadius}`}
+                                        : ""
+                                      } ${bubbleRadius} text-left`}
                                   >
                                     {/* Sender Name for Group Chats */}
                                     {isFirst && !isMine && conversationInfo?.isGroup && (
@@ -3098,9 +3279,9 @@ export default function ChatPage() {
                                       !isRevoked && (
                                         <div
                                           className={`mb-2 px-3 py-2 border-l-[3px] border-blue-600 ${isMine
-                                            ? "bg-white/50"
+                                            ? "bg-white/10"
                                             : "bg-blue-50/50"
-                                            } rounded-r-lg text-left cursor-pointer hover:bg-white/80 transition-colors w-full min-w-[150px] max-w-full overflow-hidden`}
+                                            } rounded-r-lg text-left cursor-pointer hover:opacity-90 transition-opacity w-full min-w-[150px] max-w-full overflow-hidden`}
                                           onClick={() => {
                                             const targetMsg =
                                               document.getElementById(
@@ -3131,12 +3312,12 @@ export default function ChatPage() {
                                               />
                                             )}
                                             <div className="flex-1 min-w-0">
-                                              <p className="text-[13px] font-bold text-gray-800 truncate">
+                                              <p className={`text-[13px] font-bold truncate ${isMine ? "text-blue-200" : "text-gray-800"}`}>
                                                 {getSenderDisplayName(
                                                   msg.replyTo.senderId,
                                                 )}
                                               </p>
-                                              <p className="text-[13px] text-gray-500 line-clamp-1 leading-tight mt-0.5 whitespace-normal">
+                                              <p className={`text-[13px] line-clamp-1 leading-tight mt-0.5 whitespace-normal ${isMine ? "text-gray-300" : "text-gray-500"}`}>
                                                 {msg.replyTo.type === "image"
                                                   ? "[Hình ảnh]"
                                                   : msg.replyTo.type === "file"
@@ -3144,8 +3325,8 @@ export default function ChatPage() {
                                                       "http",
                                                     )
                                                       ? "[Tệp tin]"
-                                                      : msg.replyTo.content
-                                                    : msg.replyTo.content}
+                                                      : parseMessageContent(msg.replyTo.content).plainText
+                                                    : parseMessageContent(msg.replyTo.content).plainText}
                                               </p>
                                             </div>
                                           </div>
@@ -3245,7 +3426,7 @@ export default function ChatPage() {
                                               count > 1
                                                 ? cellHeight
                                                 : cellHeight *
-                                                  (baseImgW / baseImgH);
+                                                (baseImgW / baseImgH);
                                             const gap = 4;
                                             let computedGridWidth =
                                               cellWidth * numCols +
@@ -3601,18 +3782,17 @@ export default function ChatPage() {
                                           );
                                         }
 
-                                        const parsedReminder = parseReminderFromText(msg.content);
-                                        const parsedPoll = conversationInfo?.isGroup ? parsePollFromText(msg.content) : null;
+                                        const parsed = conversationInfo?.isGroup ? parseReminderFromText(msg.content) : null;
 
                                         return (
                                           <div className="flex flex-col">
                                             <div
-                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]"
+                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap text-justify"
                                             >
                                               {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
                                             </div>
                                             {parsedReminder && msg._id === latestReminderMessageId && (
-                                              <div 
+                                              <div
                                                 className={`mt-2 pt-2 border-t-2 w-full flex justify-center
                                                   ${isMine ? "border-blue-200" : "border-gray-300"}
                                                 `}
@@ -3628,8 +3808,8 @@ export default function ChatPage() {
                                                     setShowQuickReminderModal(true);
                                                   }}
                                                   className={`text-[12px] font-black tracking-wide hover:underline transition-all select-none active:opacity-80 py-0.5
-                                                    ${isMine 
-                                                      ? "text-blue-800 hover:text-blue-950" 
+                                                    ${isMine
+                                                      ? "text-blue-800 hover:text-blue-950"
                                                       : "text-blue-800 hover:text-blue-950"
                                                     }
                                                   `}
@@ -3639,7 +3819,7 @@ export default function ChatPage() {
                                               </div>
                                             )}
                                             {parsedPoll && (
-                                              <div 
+                                              <div
                                                 className={`mt-2 pt-2 border-t-2 w-full flex justify-center
                                                   ${isMine ? "border-blue-200" : "border-gray-300"}
                                                 `}
@@ -3653,8 +3833,8 @@ export default function ChatPage() {
                                                     setShowQuickPollModal(true);
                                                   }}
                                                   className={`text-[12px] font-black tracking-wide hover:underline transition-all select-none active:opacity-80 py-0.5
-                                                    ${isMine 
-                                                      ? "text-blue-800 hover:text-blue-950" 
+                                                    ${isMine
+                                                      ? "text-blue-800 hover:text-blue-950"
                                                       : "text-blue-800 hover:text-blue-950"
                                                     }
                                                   `}
@@ -3704,7 +3884,7 @@ export default function ChatPage() {
 
                                           {activeReactionMenu === msg._id && (
                                             <div
-                                              className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 right-0 ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"} before:absolute before:left-0 before:right-0 before:h-4 before:content-[''] ${menuPosition === "bottom" ? "before:-top-3.5" : "before:-bottom-3.5"}`}
+                                              className={`absolute z-50 flex gap-1 items-center p-1.5 bg-white rounded-full shadow-2xl border border-gray-100 ${isMine ? "right-0" : "left-0"} ${menuPosition === "bottom" ? "top-full mt-1.5" : "bottom-full mb-1.5"} before:absolute before:left-0 before:right-0 before:h-4 before:content-[''] ${menuPosition === "bottom" ? "before:-top-3.5" : "before:-bottom-3.5"}`}
                                               onMouseLeave={() =>
                                                 setActiveReactionMenu(null)
                                               }
@@ -3897,28 +4077,28 @@ export default function ChatPage() {
                                                   Thu hồi tin nhắn
                                                 </button>
                                               )}
+                                            <button
+                                              onClick={() =>
+                                                handleDeleteForMe(msg._id)
+                                              }
+                                              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition text-left"
+                                            >
+                                              <TrashIcon className="w-4 h-4 shrink-0" />
+                                              Xóa chỉ ở phía tôi
+                                            </button>
+                                            {!isMine && (
                                               <button
-                                                onClick={() =>
-                                                  handleDeleteForMe(msg._id)
-                                                }
-                                                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition text-left"
+                                                onClick={() => {
+                                                  setActiveMenu(null);
+                                                  openReportModal(String(msg.senderId), getSenderDisplayName(String(msg.senderId), msg), msg._id, conversationInfo?.isGroup ? "GROUP" : "ONE_TO_ONE");
+                                                }}
+                                                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-600 hover:bg-red-50 transition text-left"
                                               >
-                                                <TrashIcon className="w-4 h-4 shrink-0" />
-                                                Xóa chỉ ở phía tôi
+                                                <ExclamationCircleIcon className="w-4 h-4 shrink-0" />
+                                                Báo cáo tin nhắn
                                               </button>
-                                              {!isMine && (
-                                                <button
-                                                  onClick={() => {
-                                                    setActiveMenu(null);
-                                                    openReportModal(String(msg.senderId), getSenderDisplayName(String(msg.senderId), msg), msg._id, conversationInfo?.isGroup ? "GROUP" : "ONE_TO_ONE");
-                                                  }}
-                                                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-red-600 hover:bg-red-50 transition text-left"
-                                                >
-                                                  <ExclamationCircleIcon className="w-4 h-4 shrink-0" />
-                                                  Báo cáo tin nhắn
-                                                </button>
-                                              )}
-                                            </div>
+                                            )}
+                                          </div>
                                         )}
                                       </div>
 
@@ -3934,7 +4114,18 @@ export default function ChatPage() {
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setMessageText(msg.content);
+                                              const parsed = parseMessageContent(msg.content);
+                                              if (parsed.isRichText) {
+                                                setIsFormatMode(true);
+                                                setTimeout(() => {
+                                                  if (editorRef.current) {
+                                                    editorRef.current.innerHTML = parsed.text;
+                                                  }
+                                                }, 100);
+                                              } else {
+                                                setIsFormatMode(false);
+                                                setMessageText(parsed.text);
+                                              }
                                             }}
                                             className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-blue-500 hover:bg-blue-50 transition"
                                             title="Sửa nhanh (Hoàn tác)"
@@ -4211,14 +4402,7 @@ export default function ChatPage() {
                   accept="image/*"
                 />
                 {/* Toolbar Section */}
-                <div className="flex items-center gap-1 px-4 py-2">
-                  {/* 1. Sticker placeholder — giữ icon cũ, chưa có sự kiện */}
-                  {/* <button
-                    className="p-2 text-gray-500 rounded-md transition cursor-default"
-                    title="Sticker (sắp ra mắt)"
-                  >
-                    <FaceSmileIcon className="w-5 h-5" />
-                  </button> */}
+                <div className="flex items-center gap-1 px-4 py-2 border-b border-gray-100">
                   {/* 2. Sticker picker — gửi sticker thật */}
                   <StickerPicker onStickerSelect={handleSendSticker} />
                   {/* 3. Đính kèm ảnh */}
@@ -4244,6 +4428,36 @@ export default function ChatPage() {
                     title="Gửi danh thiếp"
                   >
                     <IdentificationIcon className="w-5 h-5" />
+                  </button>
+                  {/* 6. Định dạng chữ */}
+                  <button
+                    className={`p-2 rounded-md transition ${isFormatMode
+                        ? "bg-blue-50 text-blue-600 font-bold"
+                        : "text-gray-600 hover:bg-gray-100"
+                      }`}
+                    onClick={() => {
+                      setIsFormatMode(!isFormatMode);
+                      setMessageText("");
+                    }}
+                    title="Định dạng tin nhắn"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="w-5 h-5"
+                    >
+                      <path d="M4 20l7-16h2l7 16" />
+                      <path d="M7 14h10" />
+                      <path
+                        d="M12 20h9"
+                        strokeWidth="3"
+                        className={isFormatMode ? "stroke-blue-600" : "stroke-gray-600"}
+                      />
+                    </svg>
                   </button>
                 </div>
 
@@ -4273,10 +4487,7 @@ export default function ChatPage() {
                         <span className="text-[14px] text-gray-500 font-medium">
                           Trả lời{" "}
                           <span className="font-bold text-gray-800">
-                            {getSenderDisplayName(
-                              replyingTo.senderId,
-                              replyingTo,
-                            )}
+                            {getSenderDisplayName(replyingTo.senderId, replyingTo)}
                           </span>
                         </span>
                       </div>
@@ -4285,7 +4496,7 @@ export default function ChatPage() {
                           ? "[Hình ảnh]"
                           : replyingTo.type === "file"
                             ? replyingTo.metadata?.fileName || "[Tệp tin]"
-                            : replyingTo.content}
+                            : parseMessageContent(replyingTo.content).plainText}
                       </p>
                     </div>
                     <button
@@ -4303,7 +4514,9 @@ export default function ChatPage() {
                   {mentionSearch !== null && filteredMentions.length > 0 && (
                     <div className="absolute bottom-full left-4 mb-2 w-64 max-h-60 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-y-auto z-[2000] animate-in slide-in-from-bottom-2 duration-200">
                       <div className="p-2 border-b border-gray-50 flex items-center justify-between bg-gray-50/50">
-                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Nhắc tên thành viên</span>
+                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                          Nhắc tên thành viên
+                        </span>
                       </div>
                       {filteredMentions.map((item: any, idx: number) => (
                         <div
@@ -4328,7 +4541,10 @@ export default function ChatPage() {
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className={`text-[13px] font-bold truncate ${item.id === "all" ? "text-blue-600" : "text-gray-800"}`}>
+                            <p
+                              className={`text-[13px] font-bold truncate ${item.id === "all" ? "text-blue-600" : "text-gray-800"
+                                }`}
+                            >
                               {item.id === "all" ? item.name : item.name}
                             </p>
                             {item.id === "all" && (
@@ -4344,45 +4560,21 @@ export default function ChatPage() {
                   )}
 
                   <div className="flex items-center gap-2">
-                    {isRecording ? (
-                      <div className="flex-1 flex items-center justify-between bg-red-50 text-red-600 rounded-xl px-4 py-2 border border-red-100">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-                          <span className="text-[14px] font-bold">Đang ghi âm... {formatDuration(recordingTime)}</span>
-                        </div>
-                        <button 
-                          onClick={cancelRecording}
-                          className="text-[12px] font-bold text-red-400 hover:text-red-600 transition"
-                        >
-                          Hủy
-                        </button>
-                      </div>
-                    ) : (
-                      <input
-                        ref={inputRef}
-                        type="text"
-                        placeholder={
-                          replyingTo
-                            ? `Nhập @, tin nhắn tới ${userCache[replyingTo.senderId]?.name || "người dùng"}`
-                            : "Nhập tin nhắn..."
-                        }
-                        value={messageText}
-                        onChange={handleInputChange}
-                        onKeyDown={handleKeyDown}
-                        onPaste={handlePaste}
-                        className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
-                      />
-                    )}
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      placeholder={
+                        replyingTo
+                          ? `Nhập @, tin nhắn tới ${userCache[replyingTo.senderId]?.name || "người dùng"}`
+                          : "Nhập tin nhắn..."
+                      }
+                      value={messageText}
+                      onChange={handleInputChange}
+                      onKeyDown={handleKeyDown}
+                      className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
+                    />
                     <div className="flex items-center gap-1">
-                      {isRecording ? (
-                        <button
-                          onClick={stopRecording}
-                          disabled={sending || uploadingFile}
-                          className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition active:scale-95 shadow-sm"
-                        >
-                          <PaperAirplaneIcon className="w-5 h-5" />
-                        </button>
-                      ) : messageText.trim() ? (
+                      {messageText.trim() ? (
                         <button
                           onClick={handleSend}
                           disabled={sending}
@@ -4391,32 +4583,24 @@ export default function ChatPage() {
                           <PaperAirplaneIcon className="w-6 h-6" />
                         </button>
                       ) : (
-                        <>
-                          <button
-                            onClick={startRecording}
-                            className="p-2 text-gray-400 hover:text-red-500 transition active:scale-90"
-                          >
-                            <MicrophoneIcon className="w-6 h-6" />
-                          </button>
-                          <button 
-                            onClick={() => setIsDefaultEmojiModalOpen(true)}
-                            onContextMenu={(e) => {
-                              e.preventDefault();
-                              setIsDefaultEmojiModalOpen(true);
+                        <button
+                          onClick={() => setIsDefaultEmojiModalOpen(true)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            setIsDefaultEmojiModalOpen(true);
+                          }}
+                          className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90 cursor-pointer"
+                        >
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSendDefaultEmoji();
                             }}
-                            className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90 cursor-pointer"
+                            className="text-2xl cursor-pointer select-none"
                           >
-                            <span 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSendDefaultEmoji();
-                              }}
-                              className="text-2xl cursor-pointer select-none"
-                            >
-                              {defaultEmoji}
-                            </span>
-                          </button>
-                        </>
+                            {defaultEmoji}
+                          </span>
+                        </button>
                       )}
                     </div>
                   </div>
@@ -5171,23 +5355,22 @@ export default function ChatPage() {
 
       {/* Confirmation Modal */}
       {confirmModalOpen && confirmModalConfig && (
-        <div 
-          className="fixed inset-0 z-[10000] flex items-center justify-center p-4" 
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
           onClick={() => setConfirmModalOpen(false)}
         >
           <div
             className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
           />
-          <div 
+          <div
             className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden relative z-10 animate-in fade-in zoom-in duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 text-center">
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-                confirmModalConfig.type === "warning"
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${confirmModalConfig.type === "warning"
                   ? "bg-yellow-50 text-yellow-600"
                   : "bg-red-50 text-red-600"
-              }`}>
+                }`}>
                 <AlertTriangle size={32} />
               </div>
               <h3 className="text-xl font-bold text-slate-800 mb-2">
@@ -5208,11 +5391,10 @@ export default function ChatPage() {
               )}
               <button
                 onClick={confirmModalConfig.onConfirm}
-                className={`flex-1 px-4 py-2.5 text-white font-bold rounded-xl transition-colors shadow-lg text-sm cursor-pointer ${
-                  confirmModalConfig.type === "warning"
+                className={`flex-1 px-4 py-2.5 text-white font-bold rounded-xl transition-colors shadow-lg text-sm cursor-pointer ${confirmModalConfig.type === "warning"
                     ? "bg-yellow-500 hover:bg-yellow-600 shadow-yellow-200"
                     : "bg-red-600 hover:bg-red-700 shadow-red-200"
-                }`}
+                  }`}
               >
                 {confirmModalConfig.actionText}
               </button>
@@ -5252,7 +5434,7 @@ export default function ChatPage() {
 function StoreReportModal({ messages, userCache }: { messages: MessageDTO[], userCache: Record<string, any> }) {
   const params = useParams();
   const conversationId = params?.conversationId as string;
-  
+
   const {
     isReportModalOpen,
     reportTargetId,
@@ -5298,8 +5480,8 @@ function ChatEffects({ type }: { type: "RAIN" | "CAKE" | "SNOW" | null }) {
   const emojis = type === "RAIN"
     ? ["🌧️", "💧", "🌧️", "💧", "🌧️"]
     : type === "SNOW"
-    ? ["❄️", "⛄", "❄️", "❄️", "☃️"]
-    : ["🎂", "🎉", "🎈", "🎁", "🎉"];
+      ? ["❄️", "⛄", "❄️", "❄️", "☃️"]
+      : ["🎂", "🎉", "🎈", "🎁", "🎉"];
 
   const particles = Array.from({ length: 30 });
 
