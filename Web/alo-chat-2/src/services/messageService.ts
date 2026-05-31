@@ -108,7 +108,7 @@ export const messageService = {
       const res = await api.post(`/messages/global-search?query=${encodeURIComponent(query)}&filterType=${filterType}`, {
         conversationIds
       });
-      return extractData(res) || [];
+      return res.data?.data || res.data || res || [];
     } catch (error) {
       console.error("Lỗi search toàn cục:", error);
       return [];

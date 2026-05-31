@@ -323,35 +323,7 @@ export default function ConversationSidebar() {
     }
   }, []);
 
-  // Handle Global Search Side Effect
-  useEffect(() => {
-    if (!showGlobalSearch || !searchQuery.trim()) {
-      setGlobalSearchMessages([]);
-      setGlobalSearchFiles([]);
-      return;
-    }
-    
-    const timeoutId = setTimeout(async () => {
-      setIsSearchingGlobal(true);
-      const conversationIds = conversationsWithTemp.map((c) => c.id || c._id).filter(Boolean);
-      try {
-        if (globalSearchTab === "all" || globalSearchTab === "message") {
-          const msgs = await messageService.globalSearch(conversationIds, searchQuery, "all");
-          setGlobalSearchMessages(msgs);
-        }
-        if (globalSearchTab === "all" || globalSearchTab === "file") {
-          const files = await messageService.globalSearch(conversationIds, searchQuery, "file");
-          setGlobalSearchFiles(files);
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsSearchingGlobal(false);
-      }
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery, showGlobalSearch, globalSearchTab, conversationsWithTemp]);
+  // (Global Search Side Effect moved below conversationsWithTemp)
 
   const fetchGroups = useCallback(async () => {
     try {
@@ -754,6 +726,36 @@ export default function ConversationSidebar() {
     }
     return conversations;
   }, [conversationId, conversations, friendIds, tempUserCache, fetchGroups]);
+
+  // Handle Global Search Side Effect
+  useEffect(() => {
+    if (!showGlobalSearch || !searchQuery.trim()) {
+      setGlobalSearchMessages([]);
+      setGlobalSearchFiles([]);
+      return;
+    }
+    
+    const timeoutId = setTimeout(async () => {
+      setIsSearchingGlobal(true);
+      const conversationIds = conversationsWithTemp.map((c) => c.id || c._id).filter(Boolean);
+      try {
+        if (globalSearchTab === "all" || globalSearchTab === "message") {
+          const msgs = await messageService.globalSearch(conversationIds, searchQuery, "all");
+          setGlobalSearchMessages(msgs);
+        }
+        if (globalSearchTab === "all" || globalSearchTab === "file") {
+          const files = await messageService.globalSearch(conversationIds, searchQuery, "file");
+          setGlobalSearchFiles(files);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsSearchingGlobal(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, showGlobalSearch, globalSearchTab, conversationsWithTemp]);
 
   // Auto-switch tab to match active conversation
   useEffect(() => {

@@ -2181,10 +2181,11 @@ export default function ChatPage() {
   }, [isRecording]);
 
   const handleSendAudio = async (file: File) => {
-    const activeConvoId =
-      conversationId.startsWith("new-") && newConversationId
-        ? newConversationId
-        : conversationId;
+    const activeConvoId = await getOrCreateRealConversationId();
+    if (!activeConvoId) {
+      setUploadingFile(false);
+      return;
+    }
         
     setUploadingFile(true);
     try {
@@ -2196,10 +2197,15 @@ export default function ChatPage() {
         content: URL.createObjectURL(file), // Local preview
         type: "file",
         isRevoked: false,
+        isRead: true,
         replyTo: replyingTo
           ? {
-            _id: replyingTo._id,
+            messageId: replyingTo._id,
             senderId: replyingTo.senderId,
+            senderName: getSenderDisplayName(
+              replyingTo.senderId,
+              replyingTo,
+            ),
             content:
               replyingTo.type === "file"
                 ? replyingTo.metadata?.fileName || replyingTo.content
