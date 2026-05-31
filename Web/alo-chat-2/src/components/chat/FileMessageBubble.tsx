@@ -58,7 +58,13 @@ const getFileTypeConfig = (fileName: string): FileTypeConfig => {
     case "webm":
     case "avi":
     case "mkv":
+      // webm could be audio too, but we will handle audio separately below
       return { bgClass: "bg-purple-500", text: "▶" };
+    case "mp3":
+    case "wav":
+    case "ogg":
+    case "m4a":
+      return { bgClass: "bg-pink-500", text: "🎵" };
     default:
       return { bgClass: "bg-gray-400", text: ext.toUpperCase().slice(0, 3) || "FILE" };
   }
@@ -82,7 +88,8 @@ export default function FileMessageBubble({
   const fileUrl = getMediaUrl(msg.content);
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
   const isTxt = ext === "txt";
-  const isVideo = ["mp4", "mov", "webm", "avi", "mkv"].includes(ext);
+  const isAudio = msg.metadata?.fileType?.startsWith("audio/") || ["mp3", "wav", "ogg", "m4a", "webm"].includes(ext) && msg.metadata?.fileType?.startsWith("audio/");
+  const isVideo = ["mp4", "mov", "webm", "avi", "mkv"].includes(ext) && !isAudio;
   const config = getFileTypeConfig(fileName);
 
   // Format file size
@@ -179,8 +186,21 @@ export default function FileMessageBubble({
         </div>
       )}
 
-      {/* 2. File Card */}
-      <div className="flex items-center gap-3 w-full py-1 px-1">
+      {/* 1.8. Inline content preview for audio files */}
+      {isAudio && (
+        <div className="w-[280px] bg-gray-50 rounded-2xl p-3 border border-gray-100 shadow-sm">
+          <audio
+            src={fileUrl}
+            controls
+            className="w-full h-10 custom-audio-player"
+            preload="metadata"
+          />
+        </div>
+      )}
+
+      {/* 2. File Card (Only if not audio) */}
+      {!isAudio && (
+        <div className="flex items-center gap-3 w-full py-1 px-1">
 
         {/* Customized File Icon with characteristic color and label */}
         <div className={`relative w-11 h-13 ${config.bgClass} rounded-xl flex flex-col justify-end p-1 shrink-0 shadow-sm overflow-hidden`}>
@@ -241,6 +261,7 @@ export default function FileMessageBubble({
         </div>
 
       </div>
+      )}
 
       {/* 3. Video Preview Modal */}
       {isPreviewingVideo && (
