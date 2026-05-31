@@ -89,9 +89,7 @@ export const MessageItem = ({
         }}
         activeOpacity={0.8}
         onLongPress={() => {
-          if (!msg.isRevoked) {
-            onLongPress();
-          }
+          onLongPress();
         }}
         onPress={() => {
           if (onPress) {
@@ -117,7 +115,6 @@ export const MessageItem = ({
           } ${isAdminHighlighted ? "border-amber-200" : isSelected ? "border-blue-500" : "border-transparent"}`}
           style={[
             msg.type === "poll" ? { width: "100%", alignItems: "center" } : {},
-            isSelected ? { backgroundColor: "rgba(59, 130, 246, 0.1)" } : {},
           ]}
         >
           {msg.replyTo && msg.replyTo.messageId && (
@@ -372,9 +369,7 @@ export const MessageItem = ({
                     }
                   }}
                   onLongPress={() => {
-                    if (!msg.isRevoked) {
-                      onLongPress();
-                    }
+                    onLongPress();
                   }}
                   className={`overflow-hidden rounded-2xl bg-white`}
                   style={{ width: 260 }}
@@ -487,7 +482,7 @@ export const MessageItem = ({
       </TouchableOpacity>
 
       {/* Hiển thị phân loại đếm Emoji dính dưới đáy bong bóng thoại */}
-      {(msg.reactions?.length ?? 0) > 0 && (
+      {!msg.isRevoked && (msg.reactions?.length ?? 0) > 0 && (
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={openReactionDetails}

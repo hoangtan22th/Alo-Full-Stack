@@ -18,6 +18,7 @@ import {
   ShieldExclamationIcon,
   ArrowUturnRightIcon,
   QueueListIcon,
+  PencilIcon,
 } from "react-native-heroicons/outline";
 import { MessageDTO } from "../../services/messageService";
 import { EMOJI_MAP } from "../../constants/Chat";
@@ -42,6 +43,7 @@ interface MessageContextMenuProps {
   isPinned: boolean;
   canPin?: boolean;
   currentUserId: string;
+  onEdit?: (msg: MessageDTO) => void;
 }
 
 export const MessageContextMenu = ({
@@ -64,6 +66,7 @@ export const MessageContextMenu = ({
   isPinned,
   canPin = true,
   currentUserId,
+  onEdit,
 }: MessageContextMenuProps) => {
   if (!visible || !selectedMsg || !layout) return null;
 
@@ -94,6 +97,9 @@ export const MessageContextMenu = ({
   const hasMyReaction = selectedMsg.reactions?.some(
     (r: any) => r.userId === currentUserId,
   );
+
+  const isWithin60Seconds = (new Date().getTime() - new Date(selectedMsg.createdAt).getTime()) <= 60000;
+  const showEdit = selectedMsg.isRevoked && selectedMsg.type === "text" && isSender && isWithin60Seconds;
 
   return (
     <Modal
@@ -128,7 +134,7 @@ export const MessageContextMenu = ({
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ flexGrow: 1 }}
               >
-                {selectedMsg.replyTo && (
+                {selectedMsg.replyTo && selectedMsg.replyTo.messageId && (
                   <View
                     className={`mb-2 p-2 rounded-lg border-l-4 border-blue-400 ${
                       isSender ? "bg-gray-800" : "bg-gray-100"
@@ -249,14 +255,15 @@ export const MessageContextMenu = ({
               position: "absolute",
               left: 20,
               right: 20,
-              top: isTopHalf
-                ? msgTop + msgHeight + 15
-                : Math.max(20, msgTop - 360),
+              ...(isTopHalf
+                ? { top: msgTop + msgHeight + 15 }
+                : { bottom: screenHeight - msgTop + 15 }),
               alignItems: isSender ? "flex-end" : "flex-start",
             }}
           >
             {/* Emoji Tray */}
-            <View
+            {!selectedMsg.isRevoked && (
+              <View
               //@ts-ignore - onStartShouldSetResponder is valid in RN but TS might complain
               onStartShouldSetResponder={() => true}
               className="bg-white rounded-full p-2 flex-row gap-2 items-center shadow-2xl border border-gray-100 mb-3"
@@ -280,6 +287,7 @@ export const MessageContextMenu = ({
                 </TouchableOpacity>
               )}
             </View>
+            )}
 
             {/* Context Menu */}
             <View
@@ -287,15 +295,17 @@ export const MessageContextMenu = ({
               onStartShouldSetResponder={() => true}
               className="bg-white rounded-2xl w-48 shadow-2xl border border-gray-100 overflow-hidden"
             >
-              <TouchableOpacity
-                onPress={() => onReply(selectedMsg)}
-                className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
-              >
-                <ArrowUturnLeftIcon size={18} color="#4b5563" />
-                <Text className="text-[14px] font-medium text-gray-700">
-                  Trả lời
-                </Text>
-              </TouchableOpacity>
+              {!selectedMsg.isRevoked && (
+                <TouchableOpacity
+                  onPress={() => onReply(selectedMsg)}
+                  className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-gray-50"
+                >
+                  <ArrowUturnLeftIcon size={18} color="#4b5563" />
+                  <Text className="text-[14px] font-medium text-gray-700">
+                    Trả lời
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               {!selectedMsg.isRevoked && onForward && (
                 <TouchableOpacity
@@ -333,7 +343,7 @@ export const MessageContextMenu = ({
                 </TouchableOpacity>
               )}
 
-              {canPin &&
+              {!selectedMsg.isRevoked && canPin &&
                 (isPinned ? (
                   <TouchableOpacity
                     onPress={onUnpin}
@@ -378,7 +388,7 @@ export const MessageContextMenu = ({
                 </Text>
               </TouchableOpacity>
 
-              {!isSender && onReport && (
+              {!isSender && !selectedMsg.isRevoked && onReport && (
                 <TouchableOpacity
                   onPress={() => onReport(selectedMsg)}
                   className="flex-row items-center gap-3 px-4 py-3 active:bg-red-50"
@@ -386,6 +396,18 @@ export const MessageContextMenu = ({
                   <ShieldExclamationIcon size={18} color="#ef4444" />
                   <Text className="text-[14px] font-medium text-red-500">
                     Báo cáo tin nhắn
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {showEdit && onEdit && (
+                <TouchableOpacity
+                  onPress={() => onEdit(selectedMsg)}
+                  className="flex-row items-center gap-3 px-4 py-3 border-b border-gray-50 active:bg-blue-50"
+                >
+                  <PencilIcon size={18} color="#3b82f6" />
+                  <Text className="text-[14px] font-medium text-blue-500">
+                    Chỉnh sửa
                   </Text>
                 </TouchableOpacity>
               )}
