@@ -117,7 +117,8 @@ export default function AddMemberModal({
           const user = friends.find(f => f.displayId === userId);
           if (user?.isStranger) {
             // Gửi link qua tin nhắn 1-1 cho người lạ
-            const link = `https://alo.chat/g/${groupId}`;
+            const origin = typeof window !== "undefined" ? window.location.origin : "https://alo.chat";
+            const link = `${origin}/g/${groupId}`;
             const messageContent = `Tôi muốn mời bạn tham gia nhóm: ${link}`;
             try {
               const res: any = await axiosClient.post("/groups/direct", { targetUserId: userId });

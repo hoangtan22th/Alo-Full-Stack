@@ -347,7 +347,7 @@ export default function GroupSettingsModal({
     }
   }, [showBlockedUsersModal]);
 
-  const shareUrl = `https://alo.chat/g/${groupId}`;
+  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/g/${groupId}` : `https://alo.chat/g/${groupId}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(shareUrl);
