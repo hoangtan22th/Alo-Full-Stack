@@ -3932,7 +3932,7 @@ export default function ChatPage() {
                           <img
                             key={id}
                             src={userProfile?.avatar || "https://i.pinimg.com/736x/c6/e5/65/c6e56503cfdd87da299f72dc416023d4.jpg"}
-                            alt={userProfile?.fullName || "Ai đó"}
+                            alt={userProfile?.fullName || userProfile?.name || "Ai đó"}
                             className="w-5 h-5 rounded-full border-2 border-white object-cover shadow-sm"
                             style={{ zIndex: 3 - index }}
                           />
@@ -3946,7 +3946,7 @@ export default function ChatPage() {
                             .slice(0, 2)
                             .map((id) => {
                                const userProfile = userCache[id] || conversationInfo?.members?.find((m: any) => m.userId === id);
-                               return userProfile?.fullName?.split(' ').pop() || 'Ai đó';
+                               return userProfile?.fullName?.split(' ').pop() || userProfile?.name?.split(' ').pop() || 'Ai đó';
                             });
                           const extraCount = typingForThisConvo.length - names.length;
                           let nameStr = names.join(', ');
