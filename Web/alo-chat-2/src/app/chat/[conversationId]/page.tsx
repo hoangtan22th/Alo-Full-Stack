@@ -3181,7 +3181,7 @@ export default function ChatPage() {
                                   toggleMessageSelection(msg);
                                 }
                               }}
-                              className={`flex items-center gap-1.5 transition-colors duration-500 ${isMine ? "flex-row-reverse" : "flex-row"
+                              className={`flex w-full items-center gap-1.5 transition-colors duration-500 ${isMine ? "flex-row-reverse" : "flex-row"
                                 } ${isMultiSelectMode ? "cursor-pointer" : ""}`}
                               onMouseEnter={(e) => {
                                 setHoveredMsgId(msg._id);
@@ -3218,7 +3218,7 @@ export default function ChatPage() {
                               )}
 
                               {/* Bubble */}
-                              <div className={`relative max-w-[65%] flex flex-col ${isMine ? "items-end" : "items-start"} transition-all duration-300 ${isMultiSelectMode ? "p-1 rounded-2xl" : ""
+                              <div className={`relative max-w-[65%] shrink-0 flex flex-col ${isMine ? "items-end" : "items-start"} transition-all duration-300 ${isMultiSelectMode ? "p-1 rounded-2xl" : ""
                                 } ${selectedMessageIds.has(msg._id) ? "bg-black/10 shadow-inner" : isMultiSelectMode ? "hover:bg-black/5" : ""
                                 }`}>
                                 {/* System messages (General & Call) */}
@@ -3781,15 +3781,20 @@ export default function ChatPage() {
                                             </div>
                                           );
                                         }
-
-                                        const parsed = conversationInfo?.isGroup ? parseReminderFromText(msg.content) : null;
+                                        const parsedMsgContent = parseMessageContent(msg.content);
+                                        const parsedReminder = conversationInfo?.isGroup ? parseReminderFromText(parsedMsgContent.plainText) : null;
+                                        const parsedPoll = conversationInfo?.isGroup ? parsePollFromText(parsedMsgContent.plainText) : null;
 
                                         return (
-                                          <div className="flex flex-col">
+                                          <div className="w-full">
                                             <div
-                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap text-justify"
+                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap"
                                             >
-                                              {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
+                                              {parsedMsgContent.isRichText ? (
+                                                <div dangerouslySetInnerHTML={{ __html: parsedMsgContent.text }} className="rich-text-content" />
+                                              ) : (
+                                                renderContentWithMentions(parsedMsgContent.text, conversationInfo?.members || [], userCache)
+                                              )}
                                             </div>
                                             {parsedReminder && msg._id === latestReminderMessageId && (
                                               <div

@@ -699,8 +699,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           </div>
         </div>
       </div>
+    </div>
 
-      {/* Modals */}
+    {/* Modals */}
       {showAddMemberModal && (
         <AddMemberModal
           groupId={conversationId}
@@ -852,7 +853,6 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
           }
         />
       )}
-    </div>
     </>
   );
 };

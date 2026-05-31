@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   UserIcon,
   LockClosedIcon,
@@ -37,6 +37,8 @@ const LoginPage = () => {
     "PENDING" | "SCANNED" | "CONFIRMED" | "EXPIRED"
   >("PENDING");
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get("redirect") || "/chat";
 
   //  STATE NÀY ĐỂ QUẢN LÝ ẨN/HIỆN MẬT KHẨU
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -88,7 +90,7 @@ const LoginPage = () => {
                 refreshToken,
               });
               toast.success("Đăng nhập bằng mã QR thành công!");
-              router.replace("/chat");
+              router.replace(redirectUrl);
             } else {
               console.error("Không tìm thấy token trong response", data);
             }
@@ -169,7 +171,7 @@ const LoginPage = () => {
           refreshToken,
         });
         toast.success("Đăng nhập thành công!");
-        router.replace("/chat");
+        router.replace(redirectUrl);
       } else {
         console.error("Không tìm thấy token trong response", data);
         setError("Phản hồi không hợp lệ từ máy chủ");
@@ -204,7 +206,7 @@ const LoginPage = () => {
           refreshToken,
         });
         toast.success("Xác thực OTP thành công! Đăng nhập thành công!");
-        router.replace("/chat");
+        router.replace(redirectUrl);
       } else {
         setError("Phản hồi không hợp lệ từ máy chủ");
       }
@@ -253,7 +255,7 @@ const LoginPage = () => {
           refreshToken,
         });
         toast.success("Đăng nhập bằng Google thành công!");
-        router.replace("/chat");
+        router.replace(redirectUrl);
       } else {
         console.error("Không tìm thấy token trong response", data);
         setError("Phản hồi không hợp lệ từ máy chủ");
@@ -701,4 +703,10 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage;
+const LoginPageWrapper = () => (
+  <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#F3F3F4] text-gray-500 font-medium">Đang tải...</div>}>
+    <LoginPage />
+  </Suspense>
+);
+
+export default LoginPageWrapper;

@@ -41,7 +41,7 @@ export default function JoinLinkModal({
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
-  const shareUrl = `https://alo.chat/g/${groupId}`;
+  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/g/${groupId}` : `https://alo.chat/g/${groupId}`;
 
   const sendSystemMsg = async (content: string) => {
     try {
