@@ -13,6 +13,7 @@ import NewDirectChatModal from "@/components/ui/NewDirectChatModal";
 import FriendProfileModal from "@/components/ui/FriendProfileModal";
 import ChatSummaryButton from "@/components/ui/chatbot/ChatSummaryButton";
 import { CallSystemMessage } from "@/components/ui/call/CallSystemMessage";
+import { stripHtml, formatMessageContent, parseMessageContent } from "@/utils/html";
 import { useCall } from "@/components/layout/CallProvider";
 import GroupCallSelector from "@/components/ui/call/GroupCallSelector";
 import { AlertTriangle } from "lucide-react";
@@ -224,13 +225,19 @@ export default function ChatPage() {
     if (!messages || messages.length === 0 || !conversationInfo?.isGroup) return null;
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
-      if (m.type === "text" && !m.isRevoked && parseReminderFromText(m.content) !== null) {
+      if (m.type === "text" && !m.isRevoked && parseReminderFromText(parseMessageContent(m.content).plainText) !== null) {
         return m._id;
       }
     }
     return null;
   }, [messages, conversationInfo?.isGroup]);
   const [previewingTxtFile, setPreviewingTxtFile] = useState<{ fileName: string; content: string } | null>(null);
+
+  // Rich Text Editor states
+  const [isFormatMode, setIsFormatMode] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [textColor, setTextColor] = useState("#000000");
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
   // Group Link Info Cache
   const [groupLinkCache, setGroupLinkCache] = useState<Record<string, any>>({});
@@ -555,6 +562,46 @@ export default function ChatPage() {
   }, [conversationInfo, mentionSearch, userCache, myId]);
 
   const handleSelectMention = (item: { id: string; name: string }) => {
+    if (isFormatMode) {
+      if (editorRef.current) {
+        editorRef.current.focus();
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          
+          // Clear current typed @ search
+          const node = range.startContainer;
+          if (node.nodeType === Node.TEXT_NODE && node.nodeValue) {
+            const val = node.nodeValue;
+            const lastAt = val.lastIndexOf("@");
+            if (lastAt !== -1) {
+              node.nodeValue = val.substring(0, lastAt);
+            }
+          }
+          
+          // Insert formatted mention element
+          const span = document.createElement("span");
+          span.className = "text-blue-800 font-black px-0.5";
+          span.setAttribute("contenteditable", "false");
+          span.innerText = `@${item.name}`;
+          
+          range.insertNode(span);
+          
+          // Insert trailing space
+          const space = document.createTextNode("\u00A0");
+          span.parentNode?.insertBefore(space, span.nextSibling);
+          
+          // Position cursor after space
+          const newRange = document.createRange();
+          newRange.setStartAfter(space);
+          newRange.setEndAfter(space);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+        }
+      }
+      setMentionSearch(null);
+      return;
+    }
     const textBefore = messageText.substring(0, mentionPosition);
     const textAfter = messageText.substring(mentionPosition + (mentionSearch?.length || 0) + 1);
     const newText = `${textBefore}@${item.name} ${textAfter}`;
@@ -1750,7 +1797,16 @@ export default function ChatPage() {
 
   /* ─── Send message ─── */
   const handleSend = async () => {
-    const text = messageText.trim();
+    let text = "";
+    if (isFormatMode) {
+      if (editorRef.current) {
+        text = editorRef.current.innerHTML.trim();
+        const plainText = editorRef.current.innerText.trim();
+        if (!plainText) return;
+      }
+    } else {
+      text = messageText.trim();
+    }
     if (!text || !conversationId || sending) return;
 
     const myId =
@@ -1763,19 +1819,33 @@ export default function ChatPage() {
       return;
     }
 
+    if (isFormatMode && editorRef.current) {
+      editorRef.current.innerHTML = "";
+    }
     setMessageText("");
     const currentReply = replyingTo;
     setReplyingTo(null);
 
+    const jsonContent = formatMessageContent(text, isFormatMode);
+
     // Optimistic UI — thêm tin tạm thời ngay lập tức
     const tempId = `temp_${Date.now()}`;
+    const replyText = currentReply
+      ? (currentReply.type === "text"
+        ? parseMessageContent(currentReply.content).plainText
+        : currentReply.type === "file"
+          ? currentReply.metadata?.fileName || currentReply.content
+          : currentReply.content)
+      : "";
+
     const tempMsg: MessageDTO = {
       _id: tempId,
       conversationId: activeConvoId,
       senderId: myId,
       senderName: currentUser?.fullName || "Tôi",
       type: "text",
-      content: text,
+      content: jsonContent,
+      metadata: isFormatMode ? { isRichText: true } : undefined,
       isRead: false,
       replyTo: currentReply
         ? {
@@ -1785,10 +1855,7 @@ export default function ChatPage() {
             currentReply.senderId,
             currentReply,
           ),
-          content:
-            currentReply.type === "file"
-              ? currentReply.metadata?.fileName || currentReply.content
-              : currentReply.content,
+          content: replyText,
           type: currentReply.type,
         }
         : undefined,
@@ -1799,9 +1866,10 @@ export default function ChatPage() {
     try {
       await messageService.sendMessage({
         conversationId: activeConvoId,
-        content: text,
+        content: jsonContent,
         type: "text",
         senderName: currentUser?.fullName || "Tôi",
+        metadata: isFormatMode ? { isRichText: true } : undefined,
         replyTo: currentReply
           ? {
             messageId: currentReply._id,
@@ -1810,10 +1878,7 @@ export default function ChatPage() {
               currentReply.senderId,
               currentReply,
             ),
-            content:
-              currentReply.type === "file"
-                ? currentReply.metadata?.fileName || currentReply.content
-                : currentReply.content,
+            content: replyText,
             type: currentReply.type,
           }
           : undefined,
@@ -2131,6 +2196,72 @@ export default function ChatPage() {
     }
   };
 
+  const handleEditorInput = (e: React.FormEvent<HTMLDivElement>) => {
+    if (!editorRef.current) return;
+    const text = editorRef.current.innerText;
+    setMessageText(text);
+
+    if (!conversationInfo?.isGroup) return;
+
+    // Find closest @ before selection cursor
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      const node = range.startContainer;
+      const offset = range.startOffset;
+      if (node.nodeType === Node.TEXT_NODE && node.nodeValue) {
+        const val = node.nodeValue;
+        const lastAtPos = val.lastIndexOf("@", offset - 1);
+        if (lastAtPos !== -1) {
+          const textAfterAt = val.substring(lastAtPos + 1, offset);
+          if (!textAfterAt.includes(" ")) {
+            setMentionSearch(textAfterAt);
+            setMentionPosition(lastAtPos);
+            setMentionIndex(0);
+            return;
+          }
+        }
+      }
+    }
+    setMentionSearch(null);
+  };
+
+  const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (mentionSearch !== null && filteredMentions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((prev) => (prev + 1) % filteredMentions.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex((prev) => (prev - 1 + filteredMentions.length) % filteredMentions.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        handleSelectMention(filteredMentions[mentionIndex]);
+        return;
+      }
+      if (e.key === "Escape") {
+        setMentionSearch(null);
+        return;
+      }
+    }
+
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const execEditorCommand = (command: string, value: string = "") => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    document.execCommand(command, false, value);
+    setMessageText(editorRef.current.innerText);
+  };
+
   /* ─── Send sticker ─── */
   const handleSendSticker = async (stickerUrl: string) => {
     if (!stickerUrl || !conversationId || sending) return;
@@ -2338,6 +2469,39 @@ export default function ChatPage() {
 
   return (
     <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        .rich-text-content ul, .editor-input ul {
+          list-style-type: disc !important;
+          padding-left: 20px !important;
+          margin-top: 4px !important;
+          margin-bottom: 4px !important;
+        }
+        .rich-text-content ol, .editor-input ol {
+          list-style-type: decimal !important;
+          padding-left: 20px !important;
+          margin-top: 4px !important;
+          margin-bottom: 4px !important;
+        }
+        .rich-text-content li, .editor-input li {
+          display: list-item !important;
+        }
+        .rich-text-content u, .editor-input u {
+          text-decoration: underline !important;
+        }
+        .rich-text-content s, .editor-input s {
+          text-decoration: line-through !important;
+        }
+        .rich-text-content blockquote, .editor-input blockquote {
+          border-left: 3px solid #cbd5e1 !important;
+          padding-left: 8px !important;
+          color: #64748b !important;
+        }
+        .editor-input:empty:before {
+          content: attr(placeholder);
+          color: #9ca3af;
+          cursor: text;
+        }
+      `}} />
       {conversationId === BOT_ID ? (
         <BotChatArea currentUser={currentUser} />
       ) : (
@@ -2490,7 +2654,7 @@ export default function ChatPage() {
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] font-bold text-yellow-800 truncate">
                       {pinnedMessages[0].type === "text"
-                        ? pinnedMessages[0].content
+                        ? parseMessageContent(pinnedMessages[0].content).plainText
                         : pinnedMessages[0].type === "file"
                           ? pinnedMessages[0].metadata?.fileName ||
                           "Tệp đính kèm"
@@ -2520,7 +2684,7 @@ export default function ChatPage() {
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] font-bold text-yellow-800 truncate">
                       {pinnedMessages[0].type === "text"
-                        ? pinnedMessages[0].content
+                        ? parseMessageContent(pinnedMessages[0].content).plainText
                         : pinnedMessages[0].type === "file"
                           ? pinnedMessages[0].metadata?.fileName ||
                           "Tệp đính kèm"
@@ -2573,7 +2737,7 @@ export default function ChatPage() {
                         <div className="flex-1 min-w-0">
                           <div className="text-[13px] font-bold text-yellow-800 truncate">
                             {msg.type === "text"
-                              ? msg.content
+                              ? parseMessageContent(msg.content).plainText
                               : msg.type === "file"
                                 ? msg.metadata?.fileName || "Tệp đính kèm"
                                 : msg.type === "image"
@@ -2794,7 +2958,7 @@ export default function ChatPage() {
                               </div>
 
                               {/* Bubble */}
-                              <div className={`relative max-w-[75%] flex flex-col ${isMine ? "items-end" : "items-start"} transition-all duration-300 ${isMultiSelectMode ? "p-1 rounded-2xl" : ""
+                              <div className={`relative max-w-[65%] flex flex-col ${isMine ? "items-end" : "items-start"} transition-all duration-300 ${isMultiSelectMode ? "p-1 rounded-2xl" : ""
                                 } ${selectedMessageIds.has(msg._id) ? "bg-black/10 shadow-inner" : isMultiSelectMode ? "hover:bg-black/5" : ""
                                 }`}>
                                 {/* System messages (General & Call) */}
@@ -2827,13 +2991,12 @@ export default function ChatPage() {
                                   )
                                 ) : (
                                   <div
-                                    className={`relative max-w-full flex flex-col p-1.5 px-2 border shadow-sm ${
-                                      msg.type === "file" && !isRevoked
-                                        ? "w-[65%] min-w-[320px] max-w-[480px]"
-                                        : ""
-                                    } ${isMine
-                                      ? "bg-blue-50/80 shadow-blue-900/5 items-end"
-                                      : "bg-white shadow-gray-900/5 items-start"
+                                    className={`relative p-1.5 px-2 border shadow-sm ${msg.type === "file" && !isRevoked
+                                        ? "w-[320px] max-w-[480px]"
+                                        : "w-fit max-w-full"
+                                      } ${isMine
+                                        ? "bg-blue-50/80 shadow-blue-900/5"
+                                        : "bg-white shadow-gray-900/5"
                                       } ${conversationInfo?.isHighlightEnabled &&
                                         adminIds.has(String(msg.senderId))
                                         ? "border-amber-300 ring-2 ring-amber-200/50"
@@ -2894,8 +3057,8 @@ export default function ChatPage() {
                                                       "http",
                                                     )
                                                       ? "[Tệp tin]"
-                                                      : msg.replyTo.content
-                                                    : msg.replyTo.content}
+                                                      : parseMessageContent(msg.replyTo.content).plainText
+                                                    : parseMessageContent(msg.replyTo.content).plainText}
                                               </p>
                                             </div>
                                           </div>
@@ -3351,14 +3514,23 @@ export default function ChatPage() {
                                           );
                                         }
 
-                                        const parsed = conversationInfo?.isGroup ? parseReminderFromText(msg.content) : null;
+                                        const parsedMsg = parseMessageContent(msg.content);
+                                        const parsed = conversationInfo?.isGroup ? parseReminderFromText(parsedMsg.plainText) : null;
 
                                         return (
                                           <div className="flex flex-col">
                                             <div
-                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap text-justify"
+                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap text-left select-text"
                                             >
-                                              {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
+                                              {parsedMsg.isRichText ? (
+                                                <div 
+                                                  className="rich-text-content select-text"
+                                                  style={{ wordBreak: "break-word", overflowWrap: "break-word" }}
+                                                  dangerouslySetInnerHTML={{ __html: parsedMsg.text }} 
+                                                />
+                                              ) : (
+                                                renderContentWithMentions(parsedMsg.text, conversationInfo?.members || [], userCache)
+                                              )}
                                             </div>
                                             {parsed && msg._id === latestReminderMessageId && (
                                               <div 
@@ -3658,7 +3830,18 @@ export default function ChatPage() {
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              setMessageText(msg.content);
+                                              const parsed = parseMessageContent(msg.content);
+                                               if (parsed.isRichText) {
+                                                 setIsFormatMode(true);
+                                                 setTimeout(() => {
+                                                   if (editorRef.current) {
+                                                     editorRef.current.innerHTML = parsed.text;
+                                                   }
+                                                 }, 100);
+                                               } else {
+                                                 setIsFormatMode(false);
+                                                 setMessageText(parsed.text);
+                                               }
                                             }}
                                             className="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center text-blue-500 hover:bg-blue-50 transition"
                                             title="Sửa nhanh (Hoàn tác)"
@@ -3908,14 +4091,7 @@ export default function ChatPage() {
                   accept="image/*"
                 />
                 {/* Toolbar Section */}
-                <div className="flex items-center gap-1 px-4 py-2">
-                  {/* 1. Sticker placeholder — giữ icon cũ, chưa có sự kiện */}
-                  {/* <button
-                    className="p-2 text-gray-500 rounded-md transition cursor-default"
-                    title="Sticker (sắp ra mắt)"
-                  >
-                    <FaceSmileIcon className="w-5 h-5" />
-                  </button> */}
+                <div className="flex items-center gap-1 px-4 py-2 border-b border-gray-100">
                   {/* 2. Sticker picker — gửi sticker thật */}
                   <StickerPicker onStickerSelect={handleSendSticker} />
                   {/* 3. Đính kèm ảnh */}
@@ -3941,6 +4117,37 @@ export default function ChatPage() {
                     title="Gửi danh thiếp"
                   >
                     <IdentificationIcon className="w-5 h-5" />
+                  </button>
+                  {/* 6. Định dạng chữ */}
+                  <button
+                    className={`p-2 rounded-md transition ${
+                      isFormatMode
+                        ? "bg-blue-50 text-blue-600 font-bold"
+                        : "text-gray-600 hover:bg-gray-100"
+                    }`}
+                    onClick={() => {
+                      setIsFormatMode(!isFormatMode);
+                      setMessageText("");
+                    }}
+                    title="Định dạng tin nhắn"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="w-5 h-5"
+                    >
+                      <path d="M4 20l7-16h2l7 16" />
+                      <path d="M7 14h10" />
+                      <path
+                        d="M12 20h9"
+                        strokeWidth="3"
+                        className={isFormatMode ? "stroke-blue-600" : "stroke-gray-600"}
+                      />
+                    </svg>
                   </button>
                 </div>
 
@@ -3970,10 +4177,7 @@ export default function ChatPage() {
                         <span className="text-[14px] text-gray-500 font-medium">
                           Trả lời{" "}
                           <span className="font-bold text-gray-800">
-                            {getSenderDisplayName(
-                              replyingTo.senderId,
-                              replyingTo,
-                            )}
+                            {getSenderDisplayName(replyingTo.senderId, replyingTo)}
                           </span>
                         </span>
                       </div>
@@ -3981,8 +4185,8 @@ export default function ChatPage() {
                         {replyingTo.type === "image"
                           ? "[Hình ảnh]"
                           : replyingTo.type === "file"
-                            ? replyingTo.metadata?.fileName || "[Tệp tin]"
-                            : replyingTo.content}
+                          ? replyingTo.metadata?.fileName || "[Tệp tin]"
+                          : parseMessageContent(replyingTo.content).plainText}
                       </p>
                     </div>
                     <button
@@ -4000,13 +4204,16 @@ export default function ChatPage() {
                   {mentionSearch !== null && filteredMentions.length > 0 && (
                     <div className="absolute bottom-full left-4 mb-2 w-64 max-h-60 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-y-auto z-[2000] animate-in slide-in-from-bottom-2 duration-200">
                       <div className="p-2 border-b border-gray-50 flex items-center justify-between bg-gray-50/50">
-                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Nhắc tên thành viên</span>
+                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                          Nhắc tên thành viên
+                        </span>
                       </div>
                       {filteredMentions.map((item: any, idx: number) => (
                         <div
                           key={item.id}
-                          className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${idx === mentionIndex ? "bg-blue-50" : "hover:bg-gray-50"
-                            }`}
+                          className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
+                            idx === mentionIndex ? "bg-blue-50" : "hover:bg-gray-50"
+                          }`}
                           onMouseEnter={() => setMentionIndex(idx)}
                           onClick={() => handleSelectMention(item)}
                         >
@@ -4025,7 +4232,11 @@ export default function ChatPage() {
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className={`text-[13px] font-bold truncate ${item.id === "all" ? "text-blue-600" : "text-gray-800"}`}>
+                            <p
+                              className={`text-[13px] font-bold truncate ${
+                                item.id === "all" ? "text-blue-600" : "text-gray-800"
+                              }`}
+                            >
                               {item.id === "all" ? item.name : item.name}
                             </p>
                             {item.id === "all" && (
@@ -4040,51 +4251,242 @@ export default function ChatPage() {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2">
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      placeholder={
-                        replyingTo
-                          ? `Nhập @, tin nhắn tới ${userCache[replyingTo.senderId]?.name || "người dùng"}`
-                          : "Nhập tin nhắn..."
-                      }
-                      value={messageText}
-                      onChange={handleInputChange}
-                      onKeyDown={handleKeyDown}
-                      className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
-                    />
-                    <div className="flex items-center gap-1">
-                      {messageText.trim() ? (
-                        <button
-                          onClick={handleSend}
-                          disabled={sending}
-                          className="p-2 text-blue-600 hover:text-blue-700 transition active:scale-95 disabled:opacity-40"
-                        >
-                          <PaperAirplaneIcon className="w-6 h-6" />
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={() => setIsDefaultEmojiModalOpen(true)}
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            setIsDefaultEmojiModalOpen(true);
-                          }}
-                          className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90 cursor-pointer"
-                        >
-                          <span 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSendDefaultEmoji();
-                            }}
-                            className="text-2xl cursor-pointer select-none"
+                  {isFormatMode ? (
+                    <div className="flex-1 flex flex-col border border-gray-200 rounded-xl bg-gray-50/30 overflow-hidden focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400/50 transition-all duration-200">
+                      {/* ContentEditable Editor */}
+                      <div
+                        ref={editorRef}
+                        contentEditable
+                        placeholder={
+                          replyingTo
+                            ? `Nhập @, tin nhắn tới ${
+                                userCache[replyingTo.senderId]?.name || "người dùng"
+                              }`
+                            : "Nhập tin nhắn (định dạng Rich Text)..."
+                        }
+                        onInput={handleEditorInput}
+                        onKeyDown={handleEditorKeyDown}
+                        className="editor-input min-h-[80px] max-h-[200px] overflow-y-auto w-full bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 px-4 py-3 select-text"
+                        style={{ wordBreak: "break-word", overflowWrap: "break-word" }}
+                      />
+
+                      {/* Rich Text Toolbar */}
+                      <div className="flex flex-wrap items-center justify-between gap-1 px-3 py-2 bg-gray-50 border-t border-gray-150 select-none">
+                        <div className="flex items-center gap-0.5">
+                          {/* B - Bold */}
+                          <button
+                            onClick={() => execEditorCommand("bold")}
+                            className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-black rounded-md transition font-black text-[13px] w-8 h-8 flex items-center justify-center"
+                            title="In đậm (Ctrl+B)"
                           >
-                            {defaultEmoji}
-                          </span>
-                        </button>
-                      )}
+                            B
+                          </button>
+                          {/* I - Italic */}
+                          <button
+                            onClick={() => execEditorCommand("italic")}
+                            className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-black rounded-md transition italic text-[13px] w-8 h-8 flex items-center justify-center font-serif font-bold"
+                            title="In nghiêng (Ctrl+I)"
+                          >
+                            I
+                          </button>
+                          {/* U - Underline */}
+                          <button
+                            onClick={() => execEditorCommand("underline")}
+                            className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-black rounded-md transition underline text-[13px] w-8 h-8 flex items-center justify-center font-bold"
+                            title="Gạch chân (Ctrl+U)"
+                          >
+                            U
+                          </button>
+                          {/* S - Strikethrough */}
+                          <button
+                            onClick={() => execEditorCommand("strikeThrough")}
+                            className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-black rounded-md transition line-through text-[13px] w-8 h-8 flex items-center justify-center font-bold"
+                            title="Gạch ngang"
+                          >
+                            S
+                          </button>
+
+                          <div className="h-4 w-[1px] bg-gray-300 mx-1" />
+
+                          {/* Text Color Picker Trigger */}
+                          <div className="relative">
+                            <button
+                              onClick={() => setShowColorPicker(!showColorPicker)}
+                              className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-black rounded-md transition text-[13px] w-8 h-8 flex flex-col items-center justify-center font-bold relative"
+                              title="Màu chữ"
+                            >
+                              <span>A</span>
+                              <div
+                                className="w-4 h-1 rounded-full mt-0.5"
+                                style={{ backgroundColor: textColor }}
+                              />
+                            </button>
+
+                            {showColorPicker && (
+                              <div className="absolute bottom-full left-0 mb-2 p-2 bg-white border border-gray-200 rounded-xl shadow-xl flex gap-1.5 z-[2100]">
+                                {["#000000", "#EF4444", "#F97316", "#10B981", "#3B82F6", "#8B5CF6", "#EC4899"].map(
+                                  (color) => (
+                                    <button
+                                      key={color}
+                                      onClick={() => {
+                                        execEditorCommand("foreColor", color);
+                                        setTextColor(color);
+                                        setShowColorPicker(false);
+                                      }}
+                                      className="w-5 h-5 rounded-full border border-gray-300/50 transition transform hover:scale-110 active:scale-95"
+                                      style={{ backgroundColor: color }}
+                                    />
+                                  )
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Clear formatting */}
+                          <button
+                            onClick={() => execEditorCommand("removeFormat")}
+                            className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-black rounded-md transition text-[13px] w-8 h-8 flex items-center justify-center"
+                            title="Xóa định dạng"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="w-4 h-4"
+                            >
+                              <path d="M19 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11.5a2 2 0 0 1 1.5.5L22 8v10a2 2 0 0 1-2 2Z" />
+                              <path d="M22 8H17a2 2 0 0 1-2-2V1" />
+                              <path d="m14 10-6 6" />
+                              <path d="m8 10 6 6" />
+                            </svg>
+                          </button>
+
+                          <div className="h-4 w-[1px] bg-gray-300 mx-1" />
+
+                          {/* Bullet list */}
+                          <button
+                            onClick={() => execEditorCommand("insertUnorderedList")}
+                            className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-black rounded-md transition text-[13px] w-8 h-8 flex items-center justify-center"
+                            title="Danh sách dấu tròn"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="w-4 h-4"
+                            >
+                              <line x1="9" y1="6" x2="20" y2="6" />
+                              <line x1="9" y1="12" x2="20" y2="12" />
+                              <line x1="9" y1="18" x2="20" y2="18" />
+                              <circle cx="4" cy="6" r="1" fill="currentColor" />
+                              <circle cx="4" cy="12" r="1" fill="currentColor" />
+                              <circle cx="4" cy="18" r="1" fill="currentColor" />
+                            </svg>
+                          </button>
+
+                          {/* Numbered list */}
+                          <button
+                            onClick={() => execEditorCommand("insertOrderedList")}
+                            className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-black rounded-md transition text-[13px] w-8 h-8 flex items-center justify-center font-bold"
+                            title="Danh sách số"
+                          >
+                            1.
+                          </button>
+
+                          {/* Undo */}
+                          <button
+                            onClick={() => execEditorCommand("undo")}
+                            className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-black rounded-md transition text-[13px] w-8 h-8 flex items-center justify-center"
+                            title="Hoàn tác"
+                          >
+                            ⟲
+                          </button>
+
+                          {/* Redo */}
+                          <button
+                            onClick={() => execEditorCommand("redo")}
+                            className="p-1.5 text-gray-600 hover:bg-gray-200 hover:text-black rounded-md transition text-[13px] w-8 h-8 flex items-center justify-center"
+                            title="Làm lại"
+                          >
+                            ⟳
+                          </button>
+                        </div>
+
+                        {/* Gửi tin nhắn trong toolbar */}
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => setIsDefaultEmojiModalOpen(true)}
+                            className="p-1 text-gray-500 hover:text-gray-700 transition"
+                            title="Emoji"
+                          >
+                            <span className="text-xl select-none">{defaultEmoji}</span>
+                          </button>
+                          <button
+                            onClick={handleSend}
+                            disabled={sending || !messageText.trim()}
+                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-1.5 text-[12px] font-black transition active:scale-95 disabled:opacity-40 flex items-center gap-1"
+                          >
+                            <span>Gửi</span>
+                            <PaperAirplaneIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        placeholder={
+                          replyingTo
+                            ? `Nhập @, tin nhắn tới ${
+                                userCache[replyingTo.senderId]?.name || "người dùng"
+                              }`
+                            : "Nhập tin nhắn..."
+                        }
+                        value={messageText}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyDown}
+                        className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
+                      />
+                      <div className="flex items-center gap-1">
+                        {messageText.trim() ? (
+                          <button
+                            onClick={handleSend}
+                            disabled={sending}
+                            className="p-2 text-blue-600 hover:text-blue-700 transition active:scale-95 disabled:opacity-40"
+                          >
+                            <PaperAirplaneIcon className="w-6 h-6" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setIsDefaultEmojiModalOpen(true)}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              setIsDefaultEmojiModalOpen(true);
+                            }}
+                            className="p-2 text-yellow-500 hover:text-yellow-600 transition active:scale-90 cursor-pointer"
+                          >
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSendDefaultEmoji();
+                              }}
+                              className="text-2xl cursor-pointer select-none"
+                            >
+                              {defaultEmoji}
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

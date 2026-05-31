@@ -9,6 +9,7 @@ import { groupService } from "@/services/groupService";
 import { postService } from "@/services/postService";
 import { userService, UserProfileDTO } from "@/services/userService";
 import { useRouter, usePathname } from "next/navigation";
+import { parseMessageContent } from "@/utils/html";
 
 const userCache: Record<string, UserProfileDTO> = {};
 
@@ -149,7 +150,7 @@ export default function GlobalNotificationHandler() {
           });
         } else {
           toast.info(`Tin nhắn từ ${msg.senderName || "Người dùng"}`, {
-            description: msg.content || (msg.type === "image" ? "[Hình ảnh]" : "Đã gửi một tệp tin"),
+            description: msg.type === "text" ? parseMessageContent(msg.content).plainText : (msg.content || (msg.type === "image" ? "[Hình ảnh]" : "Đã gửi một tệp tin")),
             duration: 4000,
             action: {
               label: "Xem ngay",
