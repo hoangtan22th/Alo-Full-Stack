@@ -14,10 +14,12 @@ public class FriendshipResponseDTO {
 
     private String requesterName;
     private String requesterAvatar;
+    private String requesterPhone;
 
     // THÊM 2 TRƯỜNG NÀY VÀO ĐÂY NHÉ
     private String recipientName;
     private String recipientAvatar;
+    private String recipientPhone;
 
     private String createdAt;
 }
