@@ -154,6 +154,13 @@ function RootLayoutNav() {
                 pathname: `/chat/${notification.data.groupId}` as any,
               });
             }
+          } else if (notification.type === "NEW_NOTIFICATION") {
+            if (notification.data?.postId) {
+              router.push({
+                pathname: "/posts/[id]",
+                params: { id: notification.data.postId }
+              });
+            }
           }
         }}
       />

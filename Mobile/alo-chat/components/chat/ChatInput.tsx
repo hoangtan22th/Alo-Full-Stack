@@ -13,6 +13,7 @@ import {
   PlusIcon,
   ChartBarIcon,
   XMarkIcon,
+  IdentificationIcon,
 } from "react-native-heroicons/outline";
 import { PaperAirplaneIcon } from "react-native-heroicons/solid";
 import Animated, {
@@ -34,6 +35,8 @@ interface ChatInputProps {
   onSendImage: () => void;
   onSendFile: () => void;
   onCreatePoll?: () => void;
+  onSendContact?: () => void;
+  onOpenSticker?: () => void;
   isKeyboardVisible: boolean;
   replyingTo?: MessageDTO | null;
   onCancelReply?: () => void;
@@ -50,6 +53,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       onSendImage,
       onSendFile,
       onCreatePoll,
+      onSendContact,
+      onOpenSticker,
       isKeyboardVisible,
       replyingTo,
       onCancelReply,
@@ -128,6 +133,17 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
             <ChartBarIcon size={22} color={!isBanned ? "#8b5cf6" : "#9ca3af"} />
             <Text className="ml-3 font-medium text-gray-700">Tạo bình chọn</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            className={`flex-row items-center px-4 py-3 border-t border-gray-50 ${isBanned ? "opacity-40" : ""}`}
+            disabled={isBanned}
+            onPress={() => {
+              setShowExtensionMenu(false);
+              if (onSendContact) onSendContact();
+            }}
+          >
+            <IdentificationIcon size={22} color={!isBanned ? "#ef4444" : "#9ca3af"} />
+            <Text className="ml-3 font-medium text-gray-700">Gửi danh thiếp</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -194,9 +210,16 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
             editable={canSendMessage && !isBanned}
           />
           <TouchableOpacity
+            onPress={() => (onOpenSticker && onOpenSticker())}
+            disabled={isBanned}
+            className={`w-[36px] h-[36px] rounded-full items-center justify-center mr-1 ${isBanned ? "opacity-40" : ""}`}
+          >
+            <FaceSmileIcon size={24} color={!isBanned ? "#9ca3af" : "#d1d5db"} />
+          </TouchableOpacity>
+          <TouchableOpacity
             onPress={() => (inputText.trim() && canSendMessage && !isBanned ? onSendMessage() : null)}
             disabled={(!canSendMessage && !inputText.trim()) || isBanned}
-            className={`w-[36px] h-[36px] rounded-full items-center justify-center ml-2 ${
+            className={`w-[36px] h-[36px] rounded-full items-center justify-center ${
               inputText.trim() && canSendMessage && !isBanned ? "bg-black" : "bg-gray-100"
             }`}
           >

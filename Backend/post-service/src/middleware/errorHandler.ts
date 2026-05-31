@@ -22,6 +22,7 @@ export function errorHandler(err: any, req: Request, res: Response, next: NextFu
  * 404 Not Found handler
  */
 export function notFoundHandler(req: Request, res: Response): void {
+  console.warn(`[DEBUG] 404 Not Found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     error: 'Not Found',
     path: req.path,

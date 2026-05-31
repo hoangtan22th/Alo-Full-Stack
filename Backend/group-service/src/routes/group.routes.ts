@@ -49,6 +49,10 @@ router.post(
   "/api/v1/groups/direct",
   groupController.getOrCreateDirectConversation,
 );
+router.get(
+  "/api/v1/groups/direct/find",
+  groupController.findDirectConversation,
+);
 router.post("/api/v1/groups/assign-leader", groupController.assignNewLeader);
 
 // --- Admin APIs ---

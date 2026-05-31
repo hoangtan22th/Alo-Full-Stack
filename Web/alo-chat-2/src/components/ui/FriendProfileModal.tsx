@@ -373,6 +373,11 @@ export default function FriendProfileModal({
             <h1 className="text-[17px] font-black text-gray-900">
               {userData?.fullName || "Đang tải..."}
             </h1>
+            {userData?.bio && (
+              <p className="text-[13px] text-gray-600 mt-1.5 leading-snug">
+                {userData.bio}
+              </p>
+            )}
             <p className={`text-[11px] font-bold mt-0.5 ${isOnline ? "text-green-500" : "text-gray-400"}`}>
               {isOnline ? "Đang hoạt động" : getOfflineText(userStatus?.lastActive)}
             </p>
@@ -521,7 +526,7 @@ export default function FriendProfileModal({
                   )[userData?.gender] || "Bảo mật"
                 }
               />
-              <InfoRow label="Ngày sinh" value="••/••/••••" />
+              <InfoRow label="Ngày sinh" value={userData?.dateOfBirth ? new Date(userData.dateOfBirth).toLocaleDateString("vi-VN") : "Bảo mật"} />
               <InfoRow
                 label="Điện thoại"
                 value={userData?.phoneNumber || "Bảo mật"}

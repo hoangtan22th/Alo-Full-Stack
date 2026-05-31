@@ -1368,7 +1368,7 @@ export const getOrCreateDirectConversation = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { targetUserId } = req.body;
+    const { targetUserId, checkOnly } = req.body;
     const currentUserId = (req.headers["x-user-id"] || "").toString();
 
     const existingConversation = await Conversation.findOne({
@@ -1381,6 +1381,11 @@ export const getOrCreateDirectConversation = async (
 
     if (existingConversation) {
       res.status(200).json(existingConversation);
+      return;
+    }
+
+    if (checkOnly) {
+      res.status(204).send();
       return;
     }
 
@@ -1401,6 +1406,37 @@ export const getOrCreateDirectConversation = async (
       .catch(console.error);
 
     res.status(201).json(newConversation);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const findDirectConversation = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { targetUserId } = req.query;
+    const currentUserId = (req.headers["x-user-id"] || "").toString();
+
+    if (!targetUserId) {
+      res.status(400).json({ error: "targetUserId is required" });
+      return;
+    }
+
+    const existingConversation = await Conversation.findOne({
+      isGroup: false,
+      $and: [
+        { "members.userId": currentUserId },
+        { "members.userId": String(targetUserId) },
+      ],
+    });
+
+    if (existingConversation) {
+      res.status(200).json({ exists: true, conversation: existingConversation });
+    } else {
+      res.status(200).json({ exists: false });
+    }
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
