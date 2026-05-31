@@ -115,7 +115,7 @@ public class AuthService {
     }
 
     @Transactional
-    public Map<String, String> login(LoginRequest request, HttpServletRequest httpRequest,
+    public Map<String, Object> login(LoginRequest request, HttpServletRequest httpRequest,
             HttpServletResponse response) {
         Account user = accountRepository.findByEmailOrPhoneNumber(request.email(), request.email())
                 .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
@@ -164,7 +164,40 @@ public class AuthService {
         user.setLockoutEnd(null);
         accountRepository.save(user);
 
-        String deviceId = (request.deviceId() == null) ? "unknown" : request.deviceId();
+        sendLoginOtp(user.getEmail());
+
+        return Map.of("requiresOtp", true, "email", user.getEmail(), "message", "Mã OTP đã được gửi đến email của bạn.");
+    }
+
+    public void sendLoginOtp(String email) {
+        String otp = String.format("%06d", new java.security.SecureRandom().nextInt(1000000));
+        String redisKey = "OTP_LOGIN:" + email;
+        stringRedisTemplate.opsForValue().set(redisKey, otp, 5, TimeUnit.MINUTES);
+
+        String text = "Xin chào,\n\nMã OTP xác nhận đăng nhập của bạn là: " + otp
+                + "\nMã này có hiệu lực trong 5 phút. Vui lòng không chia sẻ mã này cho bất kỳ ai.";
+        emailService.sendTextEmail(email, "Xác nhận đăng nhập", text);
+    }
+
+    @Transactional
+    public Map<String, String> verifyLoginOtp(String email, String otp, String deviceId, HttpServletRequest httpRequest, HttpServletResponse response) {
+        String redisKey = "OTP_LOGIN:" + email;
+        String savedOtp = stringRedisTemplate.opsForValue().get(redisKey);
+
+        if (savedOtp == null) {
+            throw new RuntimeException("Mã OTP đã hết hạn hoặc chưa được yêu cầu");
+        }
+
+        if (!savedOtp.equals(otp)) {
+            throw new RuntimeException("Mã OTP không chính xác");
+        }
+
+        Account user = accountRepository.findByEmailOrPhoneNumber(email, email)
+                .orElseThrow(() -> new ResourceNotFoundException("Tài khoản không tồn tại"));
+
+        stringRedisTemplate.delete(redisKey);
+
+        deviceId = (deviceId == null) ? "unknown" : deviceId;
         String sessionId = UUID.randomUUID().toString();
 
         String accessToken = tokenService.generateAccessToken(user, sessionId);
@@ -518,6 +551,8 @@ public class AuthService {
             sessionRepository.deleteAll(sessionsToKill);
             rabbitMQPublisher.publishForceLogoutEvent(accountId, killedSessionIds,
                     "Tài khoản của bạn đã được đăng nhập ở một thiết bị khác");
+            rabbitMQPublisher.publishSecurityAlert(accountId, 
+                    "⚠️ CẢNH BÁO: Tài khoản của bạn vừa được đăng nhập thành công trên một thiết bị/trình duyệt khác. Nếu không phải bạn thực hiện, vui lòng đổi mật khẩu ngay lập tức!");
         }
     }
 

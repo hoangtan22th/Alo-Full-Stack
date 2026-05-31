@@ -16,6 +16,7 @@ import { groupService } from "@/services/groupService";
 import { getMediaUrl } from "@/utils/media";
 import { useAuthStore } from "@/store/useAuthStore";
 import { socketService } from "@/services/socketService";
+import { useNotificationStore } from "@/store/useNotificationStore";
 
 export default function GroupInvitePage() {
   const [receivedInvites, setReceivedInvites] = useState<any[]>([]);
@@ -84,6 +85,7 @@ export default function GroupInvitePage() {
     try {
       await groupService.acceptInvitation(groupId);
       toast.success("Đã tham gia nhóm thành công!");
+      useNotificationStore.getState().decrementGroupInviteCount();
       fetchAllData();
     } catch (err) {
       toast.error("Thao tác thất bại");
@@ -94,6 +96,7 @@ export default function GroupInvitePage() {
     try {
       await groupService.declineInvitation(groupId);
       toast.success("Đã từ chối lời mời");
+      useNotificationStore.getState().decrementGroupInviteCount();
       fetchAllData();
     } catch (err) {
       toast.error("Thao tác thất bại");

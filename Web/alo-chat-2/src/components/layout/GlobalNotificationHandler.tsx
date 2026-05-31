@@ -130,15 +130,15 @@ export default function GlobalNotificationHandler() {
       console.log(`🔍 [GlobalNotification] Comparing: ActiveRoom=${currentConvoId}, IncomingMsgRoom=${msgConvoId}`);
 
       if (currentConvoId !== msgConvoId) {
-        // If it's a group, it's NOT a stranger conversation
-        const isStranger = !msg.isGroup && !friendIds.has(String(msg.senderId)) && String(msg.senderId) !== "alo-bot";
+        // Define system bots that should never be considered strangers
+        const BOT_IDS = ["alo-bot", "00000000-0000-0000-0000-000000000000", "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"];
+        
+        // If it's a group or from a bot, it's NOT a stranger conversation
+        const isStranger = !msg.isGroup && !friendIds.has(String(msg.senderId)) && !BOT_IDS.includes(String(msg.senderId));
         
         console.log("🔔 [GlobalNotification] Conditions met. Showing toast...", { isStranger });
         
         if (isStranger) {
-          // Auto-categorize as stranger to hide from main list
-          groupService.updateConversationFolder(msgConvoId, "stranger").catch(console.error);
-          
           toast.warning(`Có người lạ gửi cho bạn 1 tin nhắn`, {
             description: `Từ ${msg.senderName || "Người dùng"}`,
             duration: 5000,

@@ -65,7 +65,9 @@ import PollDetailsModal from "@/components/ui/group/PollDetailsModal";
 import FileMessageBubble from "@/components/chat/FileMessageBubble";
 import TxtFileViewerModal from "@/components/chat/TxtFileViewerModal";
 import { parseReminderFromText } from "@/utils/reminderParser";
+import { parsePollFromText } from "@/utils/voteParser";
 import ReminderModal from "@/components/ui/group/ReminderModal";
+import PollModal from "@/components/ui/group/PollModal";
 import { UpdateDefaultEmojiModal } from "@/components/ui/UpdateDefaultEmojiModal";
 import SendContactCardModal from "@/components/ui/SendContactCardModal";
 import ContactCardBubble from "@/components/chat/ContactCardBubble";
@@ -180,6 +182,17 @@ export default function ChatPage() {
 
   // Audio state for ringtone
   const ringtoneRef = useRef<HTMLAudioElement>(null);
+  const [showQuickReminderModal, setShowQuickReminderModal] = useState(false);
+  const [quickReminderPreset, setQuickReminderPreset] = useState<{
+    title: string;
+    date: string;
+    time: string;
+  } | null>(null);
+
+  const [showQuickPollModal, setShowQuickPollModal] = useState(false);
+  const [quickPollPreset, setQuickPollPreset] = useState<{
+    question: string;
+  } | null>(null);
 
   /* ---------- chat area state ---------- */
   const { user: currentUser } = useAuthStore();
@@ -188,12 +201,6 @@ export default function ChatPage() {
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
   const [showPinnedModal, setShowPinnedModal] = useState(false);
   const [activePollId, setActivePollId] = useState<string | null>(null);
-  const [quickReminderPreset, setQuickReminderPreset] = useState<{
-    title: string;
-    date: string;
-    time: string;
-  } | null>(null);
-  const [showQuickReminderModal, setShowQuickReminderModal] = useState(false);
   const [showContactCardModal, setShowContactCardModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
@@ -221,7 +228,7 @@ export default function ChatPage() {
   const [messageText, setMessageText] = useState("");
   const [conversationInfo, setConversationInfo] = useState<any>(null);
   const latestReminderMessageId = useMemo(() => {
-    if (!messages || messages.length === 0 || !conversationInfo?.isGroup) return null;
+    if (!messages || messages.length === 0) return null;
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
       if (m.type === "text" && !m.isRevoked && parseReminderFromText(m.content) !== null) {
@@ -229,7 +236,7 @@ export default function ChatPage() {
       }
     }
     return null;
-  }, [messages, conversationInfo?.isGroup]);
+  }, [messages]);
   const [previewingTxtFile, setPreviewingTxtFile] = useState<{ fileName: string; content: string } | null>(null);
 
   // Group Link Info Cache
@@ -1044,13 +1051,18 @@ export default function ChatPage() {
                 String(f.recipientId) === String(otherId),
             );
 
+            const BOT_IDS = ["alo-bot", "00000000-0000-0000-0000-000000000000", "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"];
+            const isBot = BOT_IDS.includes(otherId);
+
             console.log("[DEBUG] Relationship check:", {
               otherId,
               isFriend,
               currentStatus,
+              isBot
             });
             setIsStranger(
               !isFriend &&
+              !isBot &&
               currentStatus !== "I_SENT_REQUEST" &&
               currentStatus !== "YOU_SENT_REQUEST" &&
               currentStatus !== "THEY_SENT_REQUEST",
@@ -3351,7 +3363,8 @@ export default function ChatPage() {
                                           );
                                         }
 
-                                        const parsed = conversationInfo?.isGroup ? parseReminderFromText(msg.content) : null;
+                                        const parsedReminder = parseReminderFromText(msg.content);
+                                        const parsedPoll = conversationInfo?.isGroup ? parsePollFromText(msg.content) : null;
 
                                         return (
                                           <div className="flex flex-col">
@@ -3360,7 +3373,7 @@ export default function ChatPage() {
                                             >
                                               {renderContentWithMentions(msg.content, conversationInfo?.members || [], userCache)}
                                             </div>
-                                            {parsed && msg._id === latestReminderMessageId && (
+                                            {parsedReminder && msg._id === latestReminderMessageId && (
                                               <div 
                                                 className={`mt-2 pt-2 border-t-2 w-full flex justify-center
                                                   ${isMine ? "border-blue-200" : "border-gray-300"}
@@ -3370,9 +3383,9 @@ export default function ChatPage() {
                                                   onClick={(e) => {
                                                     e.stopPropagation();
                                                     setQuickReminderPreset({
-                                                      title: parsed.title,
-                                                      date: parsed.date,
-                                                      time: parsed.time
+                                                      title: parsedReminder.title,
+                                                      date: parsedReminder.date,
+                                                      time: parsedReminder.time
                                                     });
                                                     setShowQuickReminderModal(true);
                                                   }}
@@ -3384,6 +3397,31 @@ export default function ChatPage() {
                                                   `}
                                                 >
                                                   Tạo nhắc hẹn
+                                                </button>
+                                              </div>
+                                            )}
+                                            {parsedPoll && (
+                                              <div 
+                                                className={`mt-2 pt-2 border-t-2 w-full flex justify-center
+                                                  ${isMine ? "border-blue-200" : "border-gray-300"}
+                                                `}
+                                              >
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setQuickPollPreset({
+                                                      question: parsedPoll.question,
+                                                    });
+                                                    setShowQuickPollModal(true);
+                                                  }}
+                                                  className={`text-[12px] font-black tracking-wide hover:underline transition-all select-none active:opacity-80 py-0.5
+                                                    ${isMine 
+                                                      ? "text-blue-800 hover:text-blue-950" 
+                                                      : "text-blue-800 hover:text-blue-950"
+                                                    }
+                                                  `}
+                                                >
+                                                  Tạo bình chọn
                                                 </button>
                                               </div>
                                             )}
@@ -3886,6 +3924,12 @@ export default function ChatPage() {
                     Nhóm này đã bị chuyển sang chế độ chỉ đọc do có dấu hiệu vi phạm. Bạn không thể gửi tin nhắn mới lúc này.
                   </p>
                 </div>
+              </div>
+            ) : (!conversationInfo?.isGroup && otherUserId && ["alo-bot", "00000000-0000-0000-0000-000000000000", "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"].includes(otherUserId)) ? (
+              <div className="bg-white border-t border-gray-200 shrink-0 flex items-center justify-center p-6">
+                <p className="text-gray-500 font-medium italic text-[13px] text-center">
+                  Bạn không thể gửi tin nhắn cho tài khoản Bot của hệ thống.
+                </p>
               </div>
             ) : (
               <div className="bg-white border-t border-gray-200 shrink-0">
@@ -4812,6 +4856,21 @@ export default function ChatPage() {
           onClose={() => {
             setShowQuickReminderModal(false);
             setQuickReminderPreset(null);
+          }}
+        />
+      )}
+      {showQuickPollModal && quickPollPreset && (
+        <PollModal
+          conversationId={conversationId}
+          initialQuestion={quickPollPreset.question}
+          canCreate={(() => {
+            const role = conversationInfo?.members?.find((m: any) => m.userId === (currentUser?.id || currentUser?._id))?.role?.toLowerCase();
+            const isManager = role === "leader" || role === "deputy";
+            return isManager || conversationInfo?.permissions?.createPolls === "EVERYONE";
+          })()}
+          onClose={() => {
+            setShowQuickPollModal(false);
+            setQuickPollPreset(null);
           }}
         />
       )}

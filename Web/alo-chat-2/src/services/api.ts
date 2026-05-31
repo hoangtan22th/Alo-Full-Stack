@@ -43,10 +43,10 @@ const processQueue = (error: any, token: string | null = null) => {
 // Request interceptor
 api.interceptors.request.use(
   (config: CustomAxiosRequestConfig) => {
-    // Luôn lấy token mới nhất từ localStorage hoặc store
+    // Luôn lấy token mới nhất từ localStorage (đề phòng tab khác đã refresh)
     const storeToken = useAuthStore.getState().accessToken;
     const localToken = localStorage.getItem("accessToken");
-    const accessToken = storeToken || localToken;
+    const accessToken = localToken || storeToken;
 
     if (accessToken) {
       config.headers.set("Authorization", `Bearer ${accessToken}`);
@@ -106,8 +106,9 @@ api.interceptors.response.use(
 
       try {
         const storeRefreshToken = useAuthStore.getState().refreshToken;
+        const localRefreshToken = localStorage.getItem("refreshToken");
         const refreshToken =
-          storeRefreshToken || localStorage.getItem("refreshToken");
+          localRefreshToken || storeRefreshToken;
 
         if (!refreshToken) {
           throw new Error("No refresh token available");
