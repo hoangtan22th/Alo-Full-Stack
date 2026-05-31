@@ -249,7 +249,8 @@ export default function CreateGroupModal({
 
       // Gửi link cho người lạ
       if (strangersToInvite.length > 0 && convoId) {
-        const link = `https://alo.chat/g/${convoId}`;
+        const origin = typeof window !== "undefined" ? window.location.origin : "https://alo.chat";
+        const link = `${origin}/g/${convoId}`;
         const messageContent = `Tôi muốn mời bạn tham gia nhóm "${name}": ${link}`;
         
         for (const strangerId of strangersToInvite) {
