@@ -11,6 +11,7 @@ export interface UserProfileDTO {
   dateOfBirth: string;
   isOnline: boolean;
   isBanned: boolean;
+  bio?: string;
 }
 
 export const userService = {
