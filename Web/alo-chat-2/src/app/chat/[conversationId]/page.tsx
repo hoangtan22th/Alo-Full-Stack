@@ -2091,6 +2091,28 @@ export default function ChatPage() {
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const items = e.clipboardData.items;
+    let hasFile = false;
+    const dt = new DataTransfer();
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === "file") {
+        const file = items[i].getAsFile();
+        if (file) {
+          dt.items.add(file);
+          hasFile = true;
+        }
+      }
+    }
+    if (hasFile) {
+      e.preventDefault();
+      const mockEvent = {
+        target: { files: dt.files },
+      } as unknown as React.ChangeEvent<HTMLInputElement>;
+      handleFileChange(mockEvent);
+    }
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     const pos = e.target.selectionStart || 0;
@@ -4172,6 +4194,7 @@ export default function ChatPage() {
                       value={messageText}
                       onChange={handleInputChange}
                       onKeyDown={handleKeyDown}
+                      onPaste={handlePaste}
                       className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
                     />
                     <div className="flex items-center gap-1">
