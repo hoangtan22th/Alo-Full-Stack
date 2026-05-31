@@ -1411,6 +1411,37 @@ export const getOrCreateDirectConversation = async (
   }
 };
 
+export const findDirectConversation = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { targetUserId } = req.query;
+    const currentUserId = (req.headers["x-user-id"] || "").toString();
+
+    if (!targetUserId) {
+      res.status(400).json({ error: "targetUserId is required" });
+      return;
+    }
+
+    const existingConversation = await Conversation.findOne({
+      isGroup: false,
+      $and: [
+        { "members.userId": currentUserId },
+        { "members.userId": String(targetUserId) },
+      ],
+    });
+
+    if (existingConversation) {
+      res.status(200).json({ exists: true, conversation: existingConversation });
+    } else {
+      res.status(200).json({ exists: false });
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // 18. Cập nhật cài đặt xem lịch sử tin nhắn (Chỉ LEADER/DEPUTY)
 export const updateHistorySetting = async (
   req: Request,
