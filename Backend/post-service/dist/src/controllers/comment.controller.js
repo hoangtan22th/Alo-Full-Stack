@@ -1,4 +1,7 @@
-import { commentService } from '../services/comment.service';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.commentController = exports.CommentController = void 0;
+const comment_service_1 = require("../services/comment.service");
 /**
  * Trích xuất userId từ header x-user-id
  */
@@ -6,7 +9,7 @@ function getUserIdFromHeader(req) {
     const userId = req.headers['x-user-id'];
     return typeof userId === 'string' ? userId : null;
 }
-export class CommentController {
+class CommentController {
     /**
      * Tạo bình luận mới (hoặc phản hồi)
      */
@@ -33,7 +36,7 @@ export class CommentController {
                     // Bỏ qua lỗi parse
                 }
             }
-            const comment = await commentService.createComment(postId, userId, content, parentId, file, parsedMentionedUserIds);
+            const comment = await comment_service_1.commentService.createComment(postId, userId, content, parentId, file, parsedMentionedUserIds);
             res.status(201).json({ status: 201, data: comment });
         }
         catch (error) {
@@ -58,7 +61,7 @@ export class CommentController {
             const authHeader = req.headers.authorization;
             const limit = parseInt(req.query.limit) || 20;
             const skip = parseInt(req.query.skip) || 0;
-            const comments = await commentService.getCommentsByPost(postId, limit, skip, currentUserId, authHeader);
+            const comments = await comment_service_1.commentService.getCommentsByPost(postId, limit, skip, currentUserId, authHeader);
             res.status(200).json({ status: 200, data: comments });
         }
         catch (error) {
@@ -82,7 +85,7 @@ export class CommentController {
                 res.status(400).json({ status: 400, message: 'Thiếu commentId' });
                 return;
             }
-            const result = await commentService.deleteComment(commentId, userId);
+            const result = await comment_service_1.commentService.deleteComment(commentId, userId);
             res.status(200).json({
                 status: 200,
                 message: 'Xóa bình luận thành công',
@@ -120,7 +123,7 @@ export class CommentController {
                 res.status(400).json({ status: 400, message: `type phải là một trong: ${validTypes.join(', ')}` });
                 return;
             }
-            const comment = await commentService.reactToComment(commentId, userId, type);
+            const comment = await comment_service_1.commentService.reactToComment(commentId, userId, type);
             res.status(200).json({ status: 200, data: comment });
         }
         catch (error) {
@@ -132,5 +135,6 @@ export class CommentController {
         }
     }
 }
-export const commentController = new CommentController();
+exports.CommentController = CommentController;
+exports.commentController = new CommentController();
 //# sourceMappingURL=comment.controller.js.map

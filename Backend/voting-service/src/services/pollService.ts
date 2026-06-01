@@ -13,6 +13,13 @@ export class PollService {
       throw new Error('A poll must have at least 2 options');
     }
 
+    // Trim and check for duplicates
+    const trimmedOptions = options.map((opt: string) => opt.trim());
+    const uniqueOptions = new Set(trimmedOptions);
+    if (uniqueOptions.size !== trimmedOptions.length) {
+      throw new Error('Duplicate poll options are not allowed');
+    }
+
     const pollOptions: IPollOption[] = options.map((opt: string) => ({
       text: opt,
       addedBy: creatorId,
@@ -115,7 +122,13 @@ export class PollService {
       throw new Error('Only the creator can add options to this poll');
     }
 
-    poll.options.push({ text, addedBy: userId });
+    const trimmedText = text.trim();
+    const isDuplicate = poll.options.some((opt: any) => opt.text.trim() === trimmedText);
+    if (isDuplicate) {
+      throw new Error('This option already exists in the poll');
+    }
+
+    poll.options.push({ text: trimmedText, addedBy: userId });
     await poll.save();
 
     await rabbitMQService.publishToQueue('realtime_events', {

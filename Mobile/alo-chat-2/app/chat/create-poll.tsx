@@ -83,6 +83,13 @@ export default function CreatePollScreen() {
       return;
     }
 
+    const trimmedOptions = validOptions.map(opt => opt.trim());
+    const uniqueOptions = new Set(trimmedOptions);
+    if (uniqueOptions.size !== trimmedOptions.length) {
+      Alert.alert("Lỗi", "Các phương án không được trùng nhau.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const data = {

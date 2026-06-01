@@ -40,6 +40,10 @@ export declare class StoryController {
      * Xóa vĩnh viễn Story (xóa khỏi DB + S3, không thể khôi phục)
      */
     permanentDeleteStory(req: Request, res: Response, next: NextFunction): Promise<void>;
+    /**
+     * Lấy chi tiết một story cụ thể
+     */
+    getStoryDetails(req: Request, res: Response, next: NextFunction): Promise<void>;
 }
 export declare const storyController: StoryController;
 //# sourceMappingURL=story.controller.d.ts.map

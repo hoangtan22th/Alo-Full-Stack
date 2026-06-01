@@ -164,6 +164,13 @@ export default function PollDetailsScreen() {
 
   const handleAddOption = async () => {
     if (!newOptionText.trim()) return;
+
+    const trimmedNewOption = newOptionText.trim();
+    if (poll && poll.options.some(opt => opt.text.trim() === trimmedNewOption)) {
+      Alert.alert("Lỗi", "Phương án này đã tồn tại trong cuộc bình chọn.");
+      return;
+    }
+
     setIsAddingOption(true);
     try {
       const res = await pollService.addPollOption(pollId as string, newOptionText.trim());

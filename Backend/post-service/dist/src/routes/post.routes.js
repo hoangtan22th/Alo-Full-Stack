@@ -1,8 +1,13 @@
-import { Router } from 'express';
-import { postController } from '../controllers/post.controller';
-import { commentController } from '../controllers/comment.controller';
-import multer from 'multer';
-const router = Router();
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const post_controller_1 = require("../controllers/post.controller");
+const comment_controller_1 = require("../controllers/comment.controller");
+const multer_1 = __importDefault(require("multer"));
+const router = (0, express_1.Router)();
 // Danh sách MIME type được phép upload
 const ALLOWED_IMAGE_TYPES = [
     'image/jpeg',
@@ -31,8 +36,8 @@ const fileFilter = (req, file, cb) => {
     }
 };
 // Cấu hình multer để lưu file tạm trong bộ nhớ (memoryStorage) trước khi đẩy lên S3
-const storage = multer.memoryStorage();
-const upload = multer({
+const storage = multer_1.default.memoryStorage();
+const upload = (0, multer_1.default)({
     storage: storage,
     fileFilter: fileFilter,
     limits: {
@@ -41,23 +46,23 @@ const upload = multer({
     },
 });
 // ============ Spotify Token ============
-router.get('/spotify/token', postController.getSpotifyToken);
+router.get('/spotify/token', post_controller_1.postController.getSpotifyToken);
 // ============ Post Management ============
-router.post('/', upload.array('files', 10), postController.createPost);
-router.put('/:postId', upload.array('files', 10), postController.editPost);
-router.delete('/:postId', postController.deletePost);
+router.post('/', upload.array('files', 10), post_controller_1.postController.createPost);
+router.put('/:postId', upload.array('files', 10), post_controller_1.postController.editPost);
+router.delete('/:postId', post_controller_1.postController.deletePost);
 // ============ Feed & Dòng thời gian ============
-router.get('/feed', postController.getHomeFeed);
-router.get('/user/:userId', postController.getUserTimeline);
-router.get('/:postId', postController.getPostDetails);
+router.get('/feed', post_controller_1.postController.getHomeFeed);
+router.get('/user/:userId', post_controller_1.postController.getUserTimeline);
+router.get('/:postId', post_controller_1.postController.getPostDetails);
 // ============ Reactions (Mới) ============
-router.post('/:postId/react', postController.reactToPost);
+router.post('/:postId/react', post_controller_1.postController.reactToPost);
 // ============ Likes (Backward compatible) ============
-router.post('/:postId/like', postController.toggleLikePost);
+router.post('/:postId/like', post_controller_1.postController.toggleLikePost);
 // ============ Comment Management ============
-router.post('/:postId/comments', upload.single('file'), commentController.createComment);
-router.get('/:postId/comments', commentController.getCommentsByPost);
-router.delete('/comments/:commentId', commentController.deleteComment);
-router.post('/comments/:commentId/react', commentController.reactToComment);
-export default router;
+router.post('/:postId/comments', upload.single('file'), comment_controller_1.commentController.createComment);
+router.get('/:postId/comments', comment_controller_1.commentController.getCommentsByPost);
+router.delete('/comments/:commentId', comment_controller_1.commentController.deleteComment);
+router.post('/comments/:commentId/react', comment_controller_1.commentController.reactToComment);
+exports.default = router;
 //# sourceMappingURL=post.routes.js.map
