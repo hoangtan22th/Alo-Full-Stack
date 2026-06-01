@@ -6,9 +6,10 @@ import { getMessageTextContent } from "../../utils/messageUtils";
 
 interface PinnedMessageBarProps {
   pinnedMessages: MessageDTO[];
+  onPressMessage?: (msgId: string) => void;
 }
 
-export const PinnedMessageBar = ({ pinnedMessages }: PinnedMessageBarProps) => {
+export const PinnedMessageBar = ({ pinnedMessages, onPressMessage }: PinnedMessageBarProps) => {
   const [showAllPinned, setShowAllPinned] = useState(false);
 
   if (pinnedMessages.length === 0) return null;
@@ -18,7 +19,11 @@ export const PinnedMessageBar = ({ pinnedMessages }: PinnedMessageBarProps) => {
   return (
     <>
       <View className="absolute top-2 left-4 right-4 z-20 bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
-        <View className="flex-row items-center px-4 py-3 bg-yellow-50">
+        <TouchableOpacity 
+          className="flex-row items-center px-4 py-3 bg-yellow-50"
+          activeOpacity={0.8}
+          onPress={() => onPressMessage?.(latestPinned._id)}
+        >
           <MapPinIcon size={20} color="#eab308" />
           <View className="flex-1 ml-3 mr-2">
             <Text
@@ -47,7 +52,7 @@ export const PinnedMessageBar = ({ pinnedMessages }: PinnedMessageBarProps) => {
               </Text>
             </TouchableOpacity>
           )}
-        </View>
+        </TouchableOpacity>
       </View>
 
       <Modal
@@ -74,9 +79,14 @@ export const PinnedMessageBar = ({ pinnedMessages }: PinnedMessageBarProps) => {
               contentContainerStyle={{ paddingBottom: 20 }}
             >
               {pinnedMessages.map((msg) => (
-                <View
+                <TouchableOpacity
                   key={msg._id}
                   className="bg-yellow-50 rounded-xl p-3 mb-3 border border-yellow-200"
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    setShowAllPinned(false);
+                    onPressMessage?.(msg._id);
+                  }}
                 >
                   <Text className="text-[14px] font-medium text-yellow-900 mb-1">
                     {msg.type === "text"
@@ -88,7 +98,7 @@ export const PinnedMessageBar = ({ pinnedMessages }: PinnedMessageBarProps) => {
                   <Text className="text-[11px] text-yellow-700">
                     Ghim lúc {new Date(msg.createdAt).toLocaleDateString()}
                   </Text>
-                </View>
+                </TouchableOpacity>
               ))}
             </ScrollView>
           </View>

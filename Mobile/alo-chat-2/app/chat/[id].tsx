@@ -129,6 +129,7 @@ export default function GlobalChatScreen() {
   const [expandedTimeMsgId, setExpandedTimeMsgId] = useState<string | null>(
     null,
   );
+  const [targetScrollMsgId, setTargetScrollMsgId] = useState<string | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [hasNewUnseenMessages, setHasNewUnseenMessages] = useState(false);
   const [userCache, setUserCache] = useState<Record<string, UserProfileDTO>>(
@@ -1183,7 +1184,7 @@ export default function GlobalChatScreen() {
     setTimeout(() => chatInputRef.current?.focus(), 100);
   };
 
-  const scrollToMessage = (msgId: string) => {
+  const scrollToMessage = async (msgId: string) => {
     const group = messageGroups.find((g) =>
       g.messages.some((m) => m._id === msgId),
     );
@@ -1196,18 +1197,57 @@ export default function GlobalChatScreen() {
           animated: true,
           viewPosition: 0.5,
         });
-        // Highlight tin nhắn
         setHighlightedMsgId(msgId);
-        // Highlight tin nhắn bằng cách mở rộng hiển thị thời gian
         setExpandedTimeMsgId(msgId);
       }
     } else {
-      // Nếu không tìm thấy trong history hiện tại, có thể cần load thêm
-      // Nhưng hiện tại ta chỉ báo cáo là không tìm thấy
-      Alert.alert(
-        "Thông báo",
-        "Tin nhắn này nằm ở quá khứ xa, vui lòng cuộn lên để tải thêm lịch sử",
-      );
+      if (!hasMore || !resolvedConversationId) {
+        Alert.alert("Thông báo", "Không tìm thấy tin nhắn.");
+        return;
+      }
+      
+      let currentSkip = skip;
+      let found = false;
+      let fetchedMessages: MessageDTO[] = [];
+      let stillHasMore: boolean = hasMore;
+      let attempts = 0;
+      
+      while (!found && stillHasMore && attempts < 5) {
+        try {
+          const res = await messageService.getMessageHistory(resolvedConversationId, 50, currentSkip);
+          if (res && res.messages && res.messages.length > 0) {
+            fetchedMessages.push(...res.messages);
+            currentSkip += res.messages.length;
+            stillHasMore = res.hasMore ?? res.messages.length >= 50;
+            if (res.messages.some(m => m._id === msgId)) {
+              found = true;
+            }
+          } else {
+            stillHasMore = false;
+          }
+        } catch (e) {
+          break;
+        }
+        attempts++;
+      }
+
+      if (fetchedMessages.length > 0) {
+        setMessages(prev => {
+           const existingIds = new Set(prev.map(m => m._id));
+           const filtered = fetchedMessages.filter(m => !existingIds.has(m._id));
+           return [...filtered, ...prev];
+        });
+        setSkip(currentSkip);
+        setHasMore(stillHasMore);
+        
+        if (found) {
+          setTargetScrollMsgId(msgId);
+        } else {
+          Alert.alert("Thông báo", "Tin nhắn ở quá khứ quá xa, không thể tự động cuộn tới.");
+        }
+      } else {
+         Alert.alert("Thông báo", "Không tìm thấy tin nhắn.");
+      }
     }
   };
 
@@ -1601,6 +1641,30 @@ export default function GlobalChatScreen() {
     return [...messageGroups].reverse();
   }, [messageGroups]);
 
+  useEffect(() => {
+    if (targetScrollMsgId && messageGroups.length > 0) {
+      const group = messageGroups.find((g) =>
+        g.messages.some((m) => m._id === targetScrollMsgId),
+      );
+      if (group) {
+        const reversedGroups = [...messageGroups].reverse();
+        const index = reversedGroups.findIndex((g) => g === group);
+        if (index !== -1) {
+          setTimeout(() => {
+            flatListRef.current?.scrollToIndex({
+              index,
+              animated: true,
+              viewPosition: 0.5,
+            });
+            setHighlightedMsgId(targetScrollMsgId);
+            setExpandedTimeMsgId(targetScrollMsgId);
+            setTargetScrollMsgId(null);
+          }, 200);
+        }
+      }
+    }
+  }, [messageGroups, targetScrollMsgId]);
+
   const canSendMessage = useMemo(() => {
     if (!isGroupChat) return true;
     if (!groupDetails) return true;
@@ -1750,7 +1814,10 @@ export default function GlobalChatScreen() {
       )}
 
       <View className="flex-1 relative">
-        <PinnedMessageBar pinnedMessages={pinnedMessages} />
+        <PinnedMessageBar 
+          pinnedMessages={pinnedMessages} 
+          onPressMessage={scrollToMessage}
+        />
         <View
           className="absolute top-0 left-0 right-0 bottom-0"
           style={{ paddingTop: pinnedMessages.length > 0 ? 64 : 0 }}
