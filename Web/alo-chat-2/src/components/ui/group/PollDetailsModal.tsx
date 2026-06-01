@@ -12,6 +12,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { socketService } from "@/services/socketService";
 import api from "@/services/api";
 import CreateGroupFromPollModal from "./CreateGroupFromPollModal";
+import { toast } from "sonner";
 
 interface PollDetailsModalProps {
   pollId: string;
@@ -157,6 +158,12 @@ export default function PollDetailsModal({ pollId, onClose }: PollDetailsModalPr
 
   const handleAddOption = async () => {
     if (!newOptionText.trim()) return;
+    
+    const trimmedNewOption = newOptionText.trim();
+    if (poll && poll.options.some(opt => opt.text.trim() === trimmedNewOption)) {
+      return toast.error("Lựa chọn này đã tồn tại");
+    }
+
     setIsAddingOption(true);
     try {
       const res = await pollService.addPollOption(pollId, newOptionText.trim());

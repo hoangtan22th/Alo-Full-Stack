@@ -1,1 +1,1 @@
-{"version":3,"file":"eureka-client.d.ts","sourceRoot":"","sources":["../../../src/config/eureka-client.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,MAAM,EAAE,MAAM,kBAAkB,CAAC;AAQ1C,QAAA,MAAM,YAAY,QAyBhB,CAAC;AAEH,eAAe,YAAY,CAAC"}
+{"version":3,"file":"eureka-client.d.ts","sourceRoot":"","sources":["../../../src/config/eureka-client.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,MAAM,EAAE,MAAM,kBAAkB,CAAC;AAS1C,QAAA,MAAM,YAAY,QAyBhB,CAAC;AAEH,eAAe,YAAY,CAAC"}

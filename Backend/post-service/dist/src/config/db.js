@@ -1,17 +1,24 @@
-import mongoose from 'mongoose';
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.connectDB = connectDB;
+exports.disconnectDB = disconnectDB;
+const mongoose_1 = __importDefault(require("mongoose"));
 /**
  * Connect to MongoDB
  */
-export async function connectDB() {
+async function connectDB() {
     try {
-        const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/alo_post_db';
-        await mongoose.connect(mongoUri);
+        const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/alo_post_db';
+        await mongoose_1.default.connect(mongoUri);
         console.log('[MongoDB] Connected successfully');
         // Handle connection events
-        mongoose.connection.on('error', (err) => {
+        mongoose_1.default.connection.on('error', (err) => {
             console.error('[MongoDB] Connection error:', err);
         });
-        mongoose.connection.on('disconnected', () => {
+        mongoose_1.default.connection.on('disconnected', () => {
             console.warn('[MongoDB] Disconnected');
         });
     }
@@ -23,14 +30,14 @@ export async function connectDB() {
 /**
  * Disconnect from MongoDB
  */
-export async function disconnectDB() {
+async function disconnectDB() {
     try {
-        await mongoose.disconnect();
+        await mongoose_1.default.disconnect();
         console.log('[MongoDB] Disconnected gracefully');
     }
     catch (error) {
         console.error('[MongoDB] Error disconnecting:', error);
     }
 }
-export default mongoose;
+exports.default = mongoose_1.default;
 //# sourceMappingURL=db.js.map

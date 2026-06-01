@@ -74,6 +74,12 @@ export default function PollModal({ conversationId, canCreate = true, onClose, o
     const validOptions = options.filter(o => o.trim() !== "");
     if (validOptions.length < 2) return toast.error("Cần ít nhất 2 lựa chọn");
 
+    const trimmedOptions = validOptions.map(o => o.trim());
+    const uniqueOptions = new Set(trimmedOptions);
+    if (uniqueOptions.size !== trimmedOptions.length) {
+      return toast.error("Các lựa chọn không được trùng nhau");
+    }
+
     try {
       const payload = {
         conversationId,

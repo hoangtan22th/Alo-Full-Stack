@@ -1,11 +1,17 @@
-import Story from '../models/Story';
-import { uploadFileToS3, deleteFileFromS3 } from './s3.service';
-import { postService } from './post.service';
-import { publishToRealtime } from '../config/rabbitmq';
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.storyService = exports.StoryService = void 0;
+const Story_1 = __importDefault(require("../models/Story"));
+const s3_service_1 = require("./s3.service");
+const post_service_1 = require("./post.service");
+const rabbitmq_1 = require("../config/rabbitmq");
 /**
  * Story Service — Quản lý Khoảnh khắc (Story 24h)
  */
-export class StoryService {
+class StoryService {
     /**
      * Tạo Story mới
      */
@@ -14,8 +20,8 @@ export class StoryService {
             throw new Error('Story phải có ảnh hoặc video');
         }
         const mediaType = file.mimetype.startsWith('video/') ? 'VIDEO' : 'IMAGE';
-        const mediaUrl = await uploadFileToS3(file.buffer, file.mimetype, file.originalname, 'stories');
-        const story = new Story({
+        const mediaUrl = await (0, s3_service_1.uploadFileToS3)(file.buffer, file.mimetype, file.originalname, 'stories');
+        const story = new Story_1.default({
             userId,
             mediaUrl,
             mediaType,
@@ -30,10 +36,10 @@ export class StoryService {
         const savedStory = await story.save();
         // Publish NEW_STORY_RECEIVED to friends via RabbitMQ
         try {
-            const friendIds = await postService.getFriendIds(userId, authHeader);
+            const friendIds = await post_service_1.postService.getFriendIds(userId, authHeader);
             console.log(`[RabbitMQ] Publishing NEW_STORY_RECEIVED for story ${savedStory._id} to ${friendIds.length} friends`);
             for (const friendId of friendIds) {
-                await publishToRealtime('NEW_STORY_RECEIVED', {
+                await (0, rabbitmq_1.publishToRealtime)('NEW_STORY_RECEIVED', {
                     target: friendId,
                     data: savedStory,
                 });
@@ -49,11 +55,11 @@ export class StoryService {
      * Trả về theo nhóm user, mỗi nhóm chứa danh sách stories
      */
     async getStoryFeed(userId, authHeader) {
-        const friendIds = await postService.getFriendIds(userId, authHeader);
+        const friendIds = await post_service_1.postService.getFriendIds(userId, authHeader);
         const now = new Date();
         // Lấy stories chưa hết hạn của bản thân và bạn bè
         const allUserIds = [userId, ...friendIds];
-        const stories = await Story.find({
+        const stories = await Story_1.default.find({
             userId: { $in: allUserIds },
             expiresAt: { $gt: now },
             isArchived: { $ne: true },
@@ -106,7 +112,7 @@ export class StoryService {
      * Lấy danh sách stories của một user cụ thể
      */
     async getUserStories(userId) {
-        return await Story.find({
+        return await Story_1.default.find({
             userId,
             expiresAt: { $gt: new Date() },
         }).sort({ createdAt: -1 });
@@ -115,7 +121,7 @@ export class StoryService {
      * Đánh dấu đã xem story
      */
     async viewStory(storyId, viewerId) {
-        const story = await Story.findById(storyId);
+        const story = await Story_1.default.findById(storyId);
         if (!story) {
             throw new Error('Story không tồn tại hoặc đã hết hạn');
         }
@@ -148,7 +154,7 @@ export class StoryService {
             try {
                 const targets = Array.from(new Set([story.userId, viewerId]));
                 for (const targetId of targets) {
-                    await publishToRealtime('STORY_VIEWED', {
+                    await (0, rabbitmq_1.publishToRealtime)('STORY_VIEWED', {
                         target: targetId,
                         data: {
                             storyId,
@@ -169,7 +175,7 @@ export class StoryService {
      * Thả cảm xúc Story
      */
     async reactToStory(storyId, userId, type) {
-        const story = await Story.findById(storyId);
+        const story = await Story_1.default.findById(storyId);
         if (!story) {
             throw new Error('Story không tồn tại hoặc đã hết hạn');
         }
@@ -180,10 +186,10 @@ export class StoryService {
         const savedStory = await story.save();
         // Publish STORY_REACTED to owner + friends via RabbitMQ
         try {
-            const friendIds = await postService.getFriendIds(story.userId);
+            const friendIds = await post_service_1.postService.getFriendIds(story.userId);
             const targets = Array.from(new Set([story.userId, ...friendIds]));
             for (const targetId of targets) {
-                await publishToRealtime('STORY_REACTED', {
+                await (0, rabbitmq_1.publishToRealtime)('STORY_REACTED', {
                     target: targetId,
                     data: {
                         storyId,
@@ -202,7 +208,7 @@ export class StoryService {
      * Lấy danh sách người xem story (chỉ chủ story mới được phép)
      */
     async getStoryViewers(storyId, requesterId) {
-        const story = await Story.findById(storyId);
+        const story = await Story_1.default.findById(storyId);
         if (!story) {
             throw new Error('Story không tồn tại hoặc đã hết hạn');
         }
@@ -215,7 +221,7 @@ export class StoryService {
      * Xóa story (chỉ chủ sở hữu)
      */
     async deleteStory(storyId, userId, authHeader) {
-        const story = await Story.findById(storyId);
+        const story = await Story_1.default.findById(storyId);
         if (!story) {
             throw new Error('Story không tồn tại');
         }
@@ -227,11 +233,11 @@ export class StoryService {
         await story.save();
         // Publish STORY_DELETED_RECEIVED to owner and friends via RabbitMQ so it disappears from feed immediately
         try {
-            const friendIds = await postService.getFriendIds(userId, authHeader);
+            const friendIds = await post_service_1.postService.getFriendIds(userId, authHeader);
             const targets = Array.from(new Set([userId, ...friendIds]));
             console.log(`[RabbitMQ] Publishing STORY_DELETED_RECEIVED for story ${storyId} to owner and ${friendIds.length} friends`);
             for (const targetId of targets) {
-                await publishToRealtime('STORY_DELETED_RECEIVED', {
+                await (0, rabbitmq_1.publishToRealtime)('STORY_DELETED_RECEIVED', {
                     target: targetId,
                     data: { storyId },
                 });
@@ -245,7 +251,7 @@ export class StoryService {
      * Lấy danh sách story đã lưu trữ của bản thân
      */
     async getArchivedStories(userId) {
-        return await Story.find({
+        return await Story_1.default.find({
             userId,
             isArchived: true,
         }).sort({ updatedAt: -1 });
@@ -254,7 +260,7 @@ export class StoryService {
      * Xóa vĩnh viễn story khỏi database + S3 (không thể khôi phục)
      */
     async permanentDeleteStory(storyId, userId) {
-        const story = await Story.findById(storyId);
+        const story = await Story_1.default.findById(storyId);
         if (!story) {
             throw new Error('Story không tồn tại');
         }
@@ -263,19 +269,19 @@ export class StoryService {
         }
         // Xóa file media trên S3
         try {
-            await deleteFileFromS3(story.mediaUrl);
+            await (0, s3_service_1.deleteFileFromS3)(story.mediaUrl);
         }
         catch (err) {
             console.error('[S3] Error deleting story media:', err);
         }
         // Xóa document khỏi MongoDB
-        await Story.findByIdAndDelete(storyId);
+        await Story_1.default.findByIdAndDelete(storyId);
     }
     /**
      * Đăng lại một story từ kho lưu trữ
      */
     async repostStory(storyId, userId, authHeader) {
-        const story = await Story.findById(storyId);
+        const story = await Story_1.default.findById(storyId);
         if (!story) {
             throw new Error('Story không tồn tại');
         }
@@ -288,10 +294,10 @@ export class StoryService {
         const savedStory = await story.save();
         // Publish NEW_STORY_RECEIVED to friends via RabbitMQ
         try {
-            const friendIds = await postService.getFriendIds(userId, authHeader);
+            const friendIds = await post_service_1.postService.getFriendIds(userId, authHeader);
             console.log(`[RabbitMQ] Publishing NEW_STORY_RECEIVED for reposted story ${savedStory._id} to ${friendIds.length} friends`);
             for (const friendId of friendIds) {
-                await publishToRealtime('NEW_STORY_RECEIVED', {
+                await (0, rabbitmq_1.publishToRealtime)('NEW_STORY_RECEIVED', {
                     target: friendId,
                     data: savedStory,
                 });
@@ -302,6 +308,17 @@ export class StoryService {
         }
         return savedStory;
     }
+    /**
+     * Lấy chi tiết một story cụ thể
+     */
+    async getStoryDetails(storyId) {
+        const story = await Story_1.default.findById(storyId);
+        if (!story) {
+            throw new Error('Story không tồn tại hoặc đã hết hạn');
+        }
+        return story;
+    }
 }
-export const storyService = new StoryService();
+exports.StoryService = StoryService;
+exports.storyService = new StoryService();
 //# sourceMappingURL=story.service.js.map

@@ -163,7 +163,7 @@ export default function PostDetailsScreen() {
       leavePost(postId);
       subscription.remove();
     };
-  }, [postId]);
+  }, [postId, joinPost, leavePost]);
 
   const handleSendComment = async () => {
     if ((!commentContent.trim() && !commentImage) || submitting || !post) return;

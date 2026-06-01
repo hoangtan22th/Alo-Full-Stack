@@ -161,7 +161,7 @@ export default function PostCard({
       leavePost(post._id);
       subscription.remove();
     };
-  }, [post._id, showComments]);
+  }, [post._id, showComments, joinPost, leavePost]);
 
   // ============ Fetch Author ============
   useEffect(() => {

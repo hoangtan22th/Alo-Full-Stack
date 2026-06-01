@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DeviceEventEmitter, Alert } from "react-native";
 import { io, Socket } from "socket.io-client";
@@ -62,6 +62,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [onlineUsers, setOnlineUsers] = useState<Record<string, OnlineUser>>(
     {},
   );
+  const activePostRoomsRef = useRef<Set<string>>(new Set());
 
   const fetchBulkPresence = async (userIds: string[]) => {
     if (!userIds || userIds.length === 0) return;
@@ -99,6 +100,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           newSocket.on("connect", () => {
             console.log("🟢 Socket Connected: ", newSocket?.id);
             setIsConnected(true);
+            // Auto re-join active post rooms
+            activePostRoomsRef.current.forEach((postId) => {
+              console.log(`[Socket] Auto re-joining post room: post_${postId}`);
+              newSocket?.emit("joinPost", postId);
+            });
           });
 
           newSocket.on("disconnect", () => {
@@ -527,13 +533,17 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated]);
 
   const joinPost = (postId: string) => {
+    activePostRoomsRef.current.add(postId);
     if (socket && isConnected) {
+      console.log(`[Socket] Joining post room: post_${postId}`);
       socket.emit("joinPost", postId);
     }
   };
 
   const leavePost = (postId: string) => {
+    activePostRoomsRef.current.delete(postId);
     if (socket && isConnected) {
+      console.log(`[Socket] Leaving post room: post_${postId}`);
       socket.emit("leavePost", postId);
     }
   };
