@@ -1373,6 +1373,45 @@ export async function searchMessages(
   }
 }
 
+export async function globalSearchMessages(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { query, filterType } = req.query;
+    const conversationIds = req.body.conversationIds; // Array of ids passed in POST body
+    const userId = getUserIdFromHeader(req);
+
+    if (!conversationIds || !Array.isArray(conversationIds) || conversationIds.length === 0) {
+      res.status(400).json({ error: "Missing or invalid conversationIds array" });
+      return;
+    }
+
+    if (!query || typeof query !== "string") {
+      res.status(400).json({ error: "Missing or invalid search query" });
+      return;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const messages = await messageDataService.globalSearchMessages(
+      conversationIds,
+      query,
+      userId,
+      filterType === 'file' ? 'file' : 'all'
+    );
+
+    res.status(200).json({ data: messages });
+  } catch (error) {
+    console.error("[MessageController] globalSearchMessages error:", error);
+    next(error);
+  }
+}
+
 /**
  * Bulk fetch messages by IDs — for Admin evidence log in report-service.
  * POST /api/v1/messages/bulk

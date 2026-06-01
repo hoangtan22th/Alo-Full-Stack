@@ -2,6 +2,7 @@
 // Popup khi nhấn vào avatar
 import { UserIcon as UserOutline, SparklesIcon } from "@heroicons/react/24/outline";
 import Swal from "sweetalert2";
+import Link from "next/link";
 import { useAuthStore } from "../../store/useAuthStore";
 
 interface UserMenuProps {
@@ -17,7 +18,9 @@ export default function UserMenu({
   onLogout,
   onClose,
 }: UserMenuProps) {
-      const handleLogout = async (e: React.MouseEvent) => {
+  const { user } = useAuthStore();
+  
+  const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const isConfirmed = window.confirm("Xác nhận đăng xuất? Bạn sẽ cần đăng nhập lại.");
@@ -45,22 +48,20 @@ export default function UserMenu({
   };
 
   return (
-    <div className="absolute bottom-0 left-full ml-4 w-56 bg-white border border-gray-200 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-left-2">
+    <div className="absolute bottom-16 right-0 md:bottom-0 md:left-full md:ml-4 md:right-auto w-56 bg-white border border-gray-200 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-bottom-2 md:slide-in-from-left-2">
       <div className="px-4 py-3 border-b border-gray-100">
         <p className="text-xs text-gray-500 font-medium">Tài khoản</p>
       </div>
 
       <div className="p-1">
-        <button
-          onClick={() => {
-            onClose();
-            onOpenProfile();
-          }}
-          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-md transition-colors flex items-center gap-3"
+        <Link
+          href={`/profile/timeline?userId=${user?.id || user?._id}`}
+          onClick={onClose}
+          className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-md transition-colors flex items-center gap-3 block"
         >
           <UserOutline className="w-5 h-5" />
           Hồ sơ của bạn
-        </button>
+        </Link>
 
         <button
           onClick={() => {

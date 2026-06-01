@@ -1,17 +1,23 @@
-import Post from '../models/Post';
-import Comment from '../models/Comment';
-import { uploadFileToS3, deleteFileFromS3 } from './s3.service';
-import axios from 'axios';
-import { Types } from 'mongoose';
-import { publishToRealtime } from '../config/rabbitmq';
-import { notificationService } from './notification.service';
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.postService = exports.PostService = void 0;
+const Post_1 = __importDefault(require("../models/Post"));
+const Comment_1 = __importDefault(require("../models/Comment"));
+const s3_service_1 = require("./s3.service");
+const axios_1 = __importDefault(require("axios"));
+const mongoose_1 = require("mongoose");
+const rabbitmq_1 = require("../config/rabbitmq");
+const notification_service_1 = require("./notification.service");
 /**
  * Kiểm tra xem một chuỗi có phải ObjectId hợp lệ không
  */
 function isValidObjectId(id) {
-    return Types.ObjectId.isValid(id) && new Types.ObjectId(id).toString() === id;
+    return mongoose_1.Types.ObjectId.isValid(id) && new mongoose_1.Types.ObjectId(id).toString() === id;
 }
-export class PostService {
+class PostService {
     /**
      * Lấy danh sách ID bạn bè từ contact-service
      */
@@ -24,7 +30,7 @@ export class PostService {
             if (authHeader) {
                 headers['Authorization'] = authHeader;
             }
-            const response = await axios.get(`${contactServiceUrl}/friends`, {
+            const response = await axios_1.default.get(`${contactServiceUrl}/friends`, {
                 headers,
                 timeout: 10000, // 10s timeout cho inter-service call
             });
@@ -61,7 +67,7 @@ export class PostService {
         if (files && files.length > 0) {
             for (const file of files) {
                 const type = file.mimetype.startsWith('video/') ? 'VIDEO' : 'IMAGE';
-                const url = await uploadFileToS3(file.buffer, file.mimetype, file.originalname, 'posts');
+                const url = await (0, s3_service_1.uploadFileToS3)(file.buffer, file.mimetype, file.originalname, 'posts');
                 mediaList.push({
                     url,
                     type,
@@ -69,7 +75,7 @@ export class PostService {
                 });
             }
         }
-        const post = new Post({
+        const post = new Post_1.default({
             userId,
             content: content?.trim(),
             media: mediaList,
@@ -80,25 +86,27 @@ export class PostService {
             backgroundTemplate: backgroundTemplate || undefined,
         });
         const savedPost = await post.save();
-        // Publish NEW_POST_RECEIVED to all friends via RabbitMQ
+        // Publish NEW_POST_RECEIVED to all friends via RabbitMQ if NOT PRIVATE
         try {
-            const friendIds = await this.getFriendIds(userId, authHeader);
-            const taggedIds = new Set(savedPost.tags || []);
-            console.log(`[RabbitMQ] Publishing NEW_POST_RECEIVED for new post ${savedPost._id} to ${friendIds.length} friends`);
-            for (const friendId of friendIds) {
-                await publishToRealtime('NEW_POST_RECEIVED', {
-                    target: friendId,
-                    data: savedPost,
-                });
-                if (!taggedIds.has(friendId)) {
-                    // Tạo thông báo NEW_POST lưu vào DB và gửi real-time
-                    await notificationService.createNotification(friendId, userId, 'NEW_POST', `đã đăng một bài viết mới`, savedPost._id.toString());
+            if (privacy !== 'PRIVATE') {
+                const friendIds = await this.getFriendIds(userId, authHeader);
+                const taggedIds = new Set(savedPost.tags || []);
+                console.log(`[RabbitMQ] Publishing NEW_POST_RECEIVED for new post ${savedPost._id} to ${friendIds.length} friends`);
+                for (const friendId of friendIds) {
+                    await (0, rabbitmq_1.publishToRealtime)('NEW_POST_RECEIVED', {
+                        target: friendId,
+                        data: savedPost,
+                    });
+                    if (!taggedIds.has(friendId)) {
+                        // Tạo thông báo NEW_POST lưu vào DB và gửi real-time
+                        await notification_service_1.notificationService.createNotification(friendId, userId, 'NEW_POST', `đã đăng một bài viết mới`, savedPost._id.toString());
+                    }
                 }
-            }
-            // Gửi thông báo TAG_POST cho những người được gắn thẻ
-            if (savedPost.tags && savedPost.tags.length > 0) {
-                for (const taggedId of savedPost.tags) {
-                    await notificationService.createNotification(taggedId, userId, 'TAG_POST', `đã gắn thẻ bạn trong một bài viết`, savedPost._id.toString());
+                // Gửi thông báo TAG_POST cho những người được gắn thẻ
+                if (savedPost.tags && savedPost.tags.length > 0) {
+                    for (const taggedId of savedPost.tags) {
+                        await notification_service_1.notificationService.createNotification(taggedId, userId, 'TAG_POST', `đã gắn thẻ bạn trong một bài viết`, savedPost._id.toString());
+                    }
                 }
             }
         }
@@ -115,7 +123,7 @@ export class PostService {
         if (!isValidObjectId(postId)) {
             throw new Error('postId không hợp lệ');
         }
-        const post = await Post.findById(postId);
+        const post = await Post_1.default.findById(postId);
         if (!post) {
             throw new Error('Bài viết không tồn tại');
         }
@@ -137,14 +145,14 @@ export class PostService {
         const urlsToKeep = keepMediaUrls || [];
         const mediaToDelete = post.media.filter((m) => !urlsToKeep.includes(m.url));
         // Xóa các file cũ không muốn giữ khỏi S3 (song song để tăng tốc)
-        await Promise.allSettled(mediaToDelete.map((m) => deleteFileFromS3(m.url)));
+        await Promise.allSettled(mediaToDelete.map((m) => (0, s3_service_1.deleteFileFromS3)(m.url)));
         // Giữ lại các media được chỉ định
         let updatedMedia = post.media.filter((m) => urlsToKeep.includes(m.url));
         // Upload các file mới lên S3
         if (files && files.length > 0) {
             for (const file of files) {
                 const type = file.mimetype.startsWith('video/') ? 'VIDEO' : 'IMAGE';
-                const url = await uploadFileToS3(file.buffer, file.mimetype, file.originalname, 'posts');
+                const url = await (0, s3_service_1.uploadFileToS3)(file.buffer, file.mimetype, file.originalname, 'posts');
                 updatedMedia.push({
                     url,
                     type,
@@ -162,7 +170,7 @@ export class PostService {
         if (!isValidObjectId(postId)) {
             throw new Error('postId không hợp lệ');
         }
-        const post = await Post.findById(postId);
+        const post = await Post_1.default.findById(postId);
         if (!post) {
             throw new Error('Bài viết không tồn tại');
         }
@@ -170,17 +178,17 @@ export class PostService {
             throw new Error('Bạn không có quyền xóa bài viết này');
         }
         // Xóa tất cả các file media trên S3 (song song)
-        await Promise.allSettled(post.media.map((m) => deleteFileFromS3(m.url)));
+        await Promise.allSettled(post.media.map((m) => (0, s3_service_1.deleteFileFromS3)(m.url)));
         // Xóa các bình luận liên quan
-        await Comment.deleteMany({ postId: new Types.ObjectId(postId) });
+        await Comment_1.default.deleteMany({ postId: new mongoose_1.Types.ObjectId(postId) });
         // Xóa bài đăng
-        await Post.findByIdAndDelete(postId);
+        await Post_1.default.findByIdAndDelete(postId);
         // Publish POST_DELETED_RECEIVED to all friends via RabbitMQ
         try {
             const friendIds = await this.getFriendIds(userId, authHeader);
             console.log(`[RabbitMQ] Publishing POST_DELETED_RECEIVED for deleted post ${postId} to ${friendIds.length} friends`);
             for (const friendId of friendIds) {
-                await publishToRealtime('POST_DELETED_RECEIVED', {
+                await (0, rabbitmq_1.publishToRealtime)('POST_DELETED_RECEIVED', {
                     target: friendId,
                     data: { postId },
                 });
@@ -197,7 +205,7 @@ export class PostService {
         if (!isValidObjectId(postId)) {
             throw new Error('postId không hợp lệ');
         }
-        const post = await Post.findById(postId);
+        const post = await Post_1.default.findById(postId);
         if (!post) {
             throw new Error('Bài viết không tồn tại');
         }
@@ -234,7 +242,7 @@ export class PostService {
         if (!isValidObjectId(postId)) {
             throw new Error('postId không hợp lệ');
         }
-        const post = await Post.findById(postId);
+        const post = await Post_1.default.findById(postId);
         if (!post) {
             throw new Error('Bài viết không tồn tại');
         }
@@ -263,7 +271,7 @@ export class PostService {
         // Publish POST_REACTED to the post room via RabbitMQ
         try {
             console.log(`[RabbitMQ] Publishing POST_REACTED interaction for post ${postId}`);
-            await publishToRealtime('POST_INTERACTION', {
+            await (0, rabbitmq_1.publishToRealtime)('POST_INTERACTION', {
                 room: `post_${postId}`,
                 data: {
                     actorId: userId,
@@ -279,7 +287,7 @@ export class PostService {
         // Save notification for reaction
         try {
             if (savedPost.userId !== userId) {
-                await notificationService.createNotification(savedPost.userId, userId, 'REACT_POST', `đã bày tỏ cảm xúc về bài viết của bạn`, postId);
+                await notification_service_1.notificationService.createNotification(savedPost.userId, userId, 'REACT_POST', `đã bày tỏ cảm xúc về bài viết của bạn`, postId);
             }
         }
         catch (notifErr) {
@@ -316,7 +324,7 @@ export class PostService {
                 },
             ]
         };
-        return await Post.find(query)
+        return await Post_1.default.find(query)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
@@ -327,7 +335,7 @@ export class PostService {
     async getUserTimeline(targetUserId, currentUserId, limit = 10, skip = 0, authHeader) {
         if (currentUserId === targetUserId) {
             // Xem trang cá nhân của chính mình -> Lấy hết
-            return await Post.find({ userId: targetUserId })
+            return await Post_1.default.find({ userId: targetUserId })
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit);
@@ -345,11 +353,12 @@ export class PostService {
                 },
             ],
         };
-        return await Post.find(query)
+        return await Post_1.default.find(query)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
     }
 }
-export const postService = new PostService();
+exports.PostService = PostService;
+exports.postService = new PostService();
 //# sourceMappingURL=post.service.js.map

@@ -22,8 +22,21 @@ public class RouteValidator {
             "/eureka"
     );
 
+    // Danh sách các API endpoint suffix được truy cập công khai (không cần token)
+    public static final List<String> openApiSuffixes = List.of(
+            "/link-info"  // cho phép GET /api/v1/groups/{groupId}/link-info không cần auth
+    );
+
     public Predicate<ServerHttpRequest> isSecured =
-            request -> openApiEndpoints
-                    .stream()
-                    .noneMatch(uri -> request.getURI().getPath().startsWith(uri));
+            request -> {
+                String path = request.getURI().getPath();
+                // Kiểm tra exact match với openApiEndpoints
+                boolean isOpenEndpoint = openApiEndpoints.stream()
+                        .anyMatch(path::startsWith);
+                if (isOpenEndpoint) return false;
+                // Kiểm tra suffix match (cho path variable routes như /groups/{id}/link-info)
+                boolean isOpenSuffix = openApiSuffixes.stream()
+                        .anyMatch(path::endsWith);
+                return !isOpenSuffix;
+            };
 }

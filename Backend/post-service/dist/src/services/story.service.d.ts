@@ -56,6 +56,10 @@ export declare class StoryService {
      * Đăng lại một story từ kho lưu trữ
      */
     repostStory(storyId: string, userId: string, authHeader?: string): Promise<IStory>;
+    /**
+     * Lấy chi tiết một story cụ thể
+     */
+    getStoryDetails(storyId: string): Promise<IStory>;
 }
 export declare const storyService: StoryService;
 //# sourceMappingURL=story.service.d.ts.map

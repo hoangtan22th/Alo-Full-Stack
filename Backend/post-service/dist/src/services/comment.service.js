@@ -1,17 +1,23 @@
-import Comment from '../models/Comment';
-import Post from '../models/Post';
-import { Types } from 'mongoose';
-import { publishToRealtime } from '../config/rabbitmq';
-import { uploadFileToS3 } from './s3.service';
-import { notificationService } from './notification.service';
-import { postService } from './post.service';
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.commentService = exports.CommentService = void 0;
+const Comment_1 = __importDefault(require("../models/Comment"));
+const Post_1 = __importDefault(require("../models/Post"));
+const mongoose_1 = require("mongoose");
+const rabbitmq_1 = require("../config/rabbitmq");
+const s3_service_1 = require("./s3.service");
+const notification_service_1 = require("./notification.service");
+const post_service_1 = require("./post.service");
 /**
  * Kiểm tra xem một chuỗi có phải ObjectId hợp lệ không
  */
 function isValidObjectId(id) {
-    return Types.ObjectId.isValid(id) && new Types.ObjectId(id).toString() === id;
+    return mongoose_1.Types.ObjectId.isValid(id) && new mongoose_1.Types.ObjectId(id).toString() === id;
 }
-export class CommentService {
+class CommentService {
     /**
      * Tạo bình luận mới
      */
@@ -19,7 +25,7 @@ export class CommentService {
         if (!isValidObjectId(postId)) {
             throw new Error('postId không hợp lệ');
         }
-        const post = await Post.findById(postId);
+        const post = await Post_1.default.findById(postId);
         if (!post) {
             throw new Error('Bài viết không tồn tại');
         }
@@ -29,7 +35,7 @@ export class CommentService {
             if (!isValidObjectId(parentId)) {
                 throw new Error('parentId không hợp lệ');
             }
-            parentComment = await Comment.findById(parentId);
+            parentComment = await Comment_1.default.findById(parentId);
             if (!parentComment) {
                 throw new Error('Bình luận cha không tồn tại');
             }
@@ -42,10 +48,10 @@ export class CommentService {
         }
         let mediaUrl = undefined;
         if (file) {
-            mediaUrl = await uploadFileToS3(file.buffer, file.mimetype, file.originalname, 'comments');
+            mediaUrl = await (0, s3_service_1.uploadFileToS3)(file.buffer, file.mimetype, file.originalname, 'comments');
         }
-        const comment = new Comment({
-            postId: new Types.ObjectId(postId),
+        const comment = new Comment_1.default({
+            postId: new mongoose_1.Types.ObjectId(postId),
             userId,
             content: content?.trim(),
             mediaUrl,
@@ -53,11 +59,11 @@ export class CommentService {
         });
         const savedComment = await comment.save();
         // Tăng commentCount bằng atomic operation để tránh race condition
-        await Post.findByIdAndUpdate(postId, { $inc: { commentCount: 1 } });
+        await Post_1.default.findByIdAndUpdate(postId, { $inc: { commentCount: 1 } });
         // Publish COMMENT_ADDED to post room via RabbitMQ
         try {
             console.log(`[RabbitMQ] Publishing COMMENT_ADDED interaction for post ${postId}`);
-            await publishToRealtime('POST_INTERACTION', {
+            await (0, rabbitmq_1.publishToRealtime)('POST_INTERACTION', {
                 room: `post_${postId}`,
                 data: {
                     actorId: userId,
@@ -76,12 +82,12 @@ export class CommentService {
             if (parentId) {
                 // Find parent comment to get parent comment owner ID
                 if (parentComment && parentComment.userId !== userId) {
-                    await notificationService.createNotification(parentComment.userId, userId, 'REPLY_COMMENT', `đã phản hồi bình luận của bạn`, postId, savedComment._id.toString());
+                    await notification_service_1.notificationService.createNotification(parentComment.userId, userId, 'REPLY_COMMENT', `đã phản hồi bình luận của bạn`, postId, savedComment._id.toString());
                 }
             }
             else {
                 if (postOwnerId !== userId) {
-                    await notificationService.createNotification(postOwnerId, userId, 'COMMENT_POST', `đã bình luận bài viết của bạn`, postId, savedComment._id.toString());
+                    await notification_service_1.notificationService.createNotification(postOwnerId, userId, 'COMMENT_POST', `đã bình luận bài viết của bạn`, postId, savedComment._id.toString());
                 }
             }
             // Gửi thông báo nhắc tên cho những người được nhắc tên (mentions) trong bình luận
@@ -90,7 +96,7 @@ export class CommentService {
                     const isPostOwner = tId === postOwnerId && !parentId;
                     const isParentCommentOwner = parentId && parentComment && tId === parentComment.userId;
                     if (!isPostOwner && !isParentCommentOwner) {
-                        await notificationService.createNotification(tId, userId, 'TAG_POST', `đã nhắc đến bạn trong một bình luận`, postId, savedComment._id.toString());
+                        await notification_service_1.notificationService.createNotification(tId, userId, 'TAG_POST', `đã nhắc đến bạn trong một bình luận`, postId, savedComment._id.toString());
                     }
                 }
             }
@@ -107,9 +113,9 @@ export class CommentService {
         if (!isValidObjectId(postId)) {
             throw new Error('postId không hợp lệ');
         }
-        const postObjectId = new Types.ObjectId(postId);
+        const postObjectId = new mongoose_1.Types.ObjectId(postId);
         // 1. Lấy danh sách bình luận gốc (parentId = null)
-        const topLevelComments = await Comment.find({
+        const topLevelComments = await Comment_1.default.find({
             postId: postObjectId,
             parentId: null,
         })
@@ -121,7 +127,7 @@ export class CommentService {
         // 2. Lấy danh sách ID của các bình luận gốc để query sub-comments
         const topLevelIds = topLevelComments.map((c) => c._id);
         // 3. Lấy tất cả sub-comments (replies) có parentId nằm trong danh sách trên
-        const replies = await Comment.find({
+        const replies = await Comment_1.default.find({
             postId: postObjectId,
             parentId: { $in: topLevelIds },
         }).sort({ createdAt: 1 });
@@ -136,9 +142,9 @@ export class CommentService {
         // Zalo Privacy: Chỉ bạn bè chung mới nhìn thấy bình luận của nhau
         if (currentUserId) {
             try {
-                const post = await Post.findById(postId);
+                const post = await Post_1.default.findById(postId);
                 const postOwnerId = post?.userId;
-                const myFriendIds = await postService.getFriendIds(currentUserId, authHeader);
+                const myFriendIds = await post_service_1.postService.getFriendIds(currentUserId, authHeader);
                 return commentsWithReplies.filter((c) => {
                     const isVisible = c.userId === currentUserId ||
                         c.userId === postOwnerId ||
@@ -170,11 +176,11 @@ export class CommentService {
         if (!isValidObjectId(commentId)) {
             throw new Error('commentId không hợp lệ');
         }
-        const comment = await Comment.findById(commentId);
+        const comment = await Comment_1.default.findById(commentId);
         if (!comment) {
             throw new Error('Bình luận không tồn tại');
         }
-        const post = await Post.findById(comment.postId);
+        const post = await Post_1.default.findById(comment.postId);
         if (!post) {
             throw new Error('Bài viết không tồn tại');
         }
@@ -187,22 +193,22 @@ export class CommentService {
         let deletedCount = 0;
         if (comment.parentId === null) {
             // Nếu xóa bình luận gốc -> xóa cả các bình luận con
-            const deleteRepliesResult = await Comment.deleteMany({ parentId: comment._id });
+            const deleteRepliesResult = await Comment_1.default.deleteMany({ parentId: comment._id });
             deletedCount += deleteRepliesResult.deletedCount || 0;
         }
         // Xóa chính bình luận đó
-        await Comment.findByIdAndDelete(commentId);
+        await Comment_1.default.findByIdAndDelete(commentId);
         deletedCount += 1;
         // Giảm commentCount bằng atomic operation, đảm bảo không âm
-        const updatedPost = await Post.findByIdAndUpdate(comment.postId, { $inc: { commentCount: -deletedCount } }, { new: true });
+        const updatedPost = await Post_1.default.findByIdAndUpdate(comment.postId, { $inc: { commentCount: -deletedCount } }, { new: true });
         // Đảm bảo commentCount không bị âm
         if (updatedPost && updatedPost.commentCount < 0) {
-            await Post.findByIdAndUpdate(comment.postId, { $set: { commentCount: 0 } });
+            await Post_1.default.findByIdAndUpdate(comment.postId, { $set: { commentCount: 0 } });
         }
         // Publish COMMENT_DELETED to post room via RabbitMQ
         try {
             console.log(`[RabbitMQ] Publishing COMMENT_DELETED interaction for post ${comment.postId}`);
-            await publishToRealtime('POST_INTERACTION', {
+            await (0, rabbitmq_1.publishToRealtime)('POST_INTERACTION', {
                 room: `post_${comment.postId}`,
                 data: {
                     actorId: userId,
@@ -224,7 +230,7 @@ export class CommentService {
         if (!isValidObjectId(commentId)) {
             throw new Error('commentId không hợp lệ');
         }
-        const comment = await Comment.findById(commentId);
+        const comment = await Comment_1.default.findById(commentId);
         if (!comment) {
             throw new Error('Bình luận không tồn tại');
         }
@@ -250,7 +256,7 @@ export class CommentService {
         // Publish COMMENT_REACTED to post room via RabbitMQ
         try {
             console.log(`[RabbitMQ] Publishing COMMENT_REACTED interaction for post ${comment.postId}`);
-            await publishToRealtime('POST_INTERACTION', {
+            await (0, rabbitmq_1.publishToRealtime)('POST_INTERACTION', {
                 room: `post_${comment.postId}`,
                 data: {
                     actorId: userId,
@@ -266,5 +272,6 @@ export class CommentService {
         return savedComment;
     }
 }
-export const commentService = new CommentService();
+exports.CommentService = CommentService;
+exports.commentService = new CommentService();
 //# sourceMappingURL=comment.service.js.map

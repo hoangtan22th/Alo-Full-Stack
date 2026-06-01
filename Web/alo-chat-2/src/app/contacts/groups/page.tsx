@@ -379,8 +379,7 @@ export default function GroupListPage() {
 
   useEffect(() => {
     if (selectedGroup) {
-      // Sử dụng định dạng https://alo.chat/g/{id} để app mobile có thể quét được
-      setJoinLink(`https://alo.chat/g/${selectedGroup._id}`);
+      setJoinLink(typeof window !== "undefined" ? `${window.location.origin}/g/${selectedGroup._id}` : `https://alo.chat/g/${selectedGroup._id}`);
     }
   }, [selectedGroup]);
 
