@@ -1,24 +1,26 @@
-version: '3.8'
+# Đã xóa dòng version: '3.8' vì Docker Compose bản mới đã loại bỏ thuộc tính này
 
 services:
   # ============================================================================
-  # 1. INFRASTRUCTURE & DATABASES
+  # 1. INFRASTRUCTURE & DATABASES (ĐÃ KHÓA PORT BẢO MẬT)
   # ============================================================================
 
   mariadb:
     image: mariadb:10.11
     container_name: alo-mariadb
-    ports:
-      - "3307:3306"
+    # BẢO MẬT: Đóng port ra ngoài host, các service vẫn gọi được qua 'alo-network'
+    # ports:
+    #   - "3307:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+      # BẢO MẬT: Bỏ giá trị mặc định 'root', ép buộc phải cài mật khẩu mạnh trong file .env
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
     volumes:
       - mariadb_data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - alo-network
     healthcheck:
-      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-root}"]
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-u", "${DB_USERNAME:-root}", "-p${DB_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,8 +28,8 @@ services:
   mongodb:
     image: mongo:6.0
     container_name: alo-mongodb
-    ports:
-      - "27018:27017"
+    # ports:
+    #   - "27018:27017"
     volumes:
       - mongodb_data:/data/db
     networks:
@@ -41,8 +43,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: alo-redis
-    ports:
-      - "6379:6379"
+    # ports:
+    #   - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -57,8 +59,9 @@ services:
     image: rabbitmq:3-management-alpine
     container_name: alo-rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      # - "5672:5672" # Đóng port giao tiếp data
+      # Chỉ cho phép truy cập giao diện quản lý (Web UI) từ localhost (Hoặc qua SSH / Tailscale)
+      - "127.0.0.1:15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -72,9 +75,9 @@ services:
   qdrant:
     image: qdrant/qdrant:latest
     container_name: alo-qdrant
-    ports:
-      - "6333:6333"
-      - "6334:6334"
+    # ports:
+    #   - "6333:6333"
+    #   - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     networks:
@@ -133,7 +136,7 @@ services:
       - DB_PORT=3306
       - DB_NAME=alo_auth_db
       - DB_USERNAME=${DB_USERNAME:-root}
-      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - DB_PASSWORD=${DB_PASSWORD}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - RABBITMQ_HOST=rabbitmq
@@ -174,7 +177,7 @@ services:
       - DB_PORT=3306
       - DB_NAME=alo_user_db
       - DB_USERNAME=${DB_USERNAME:-root}
-      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - DB_PASSWORD=${DB_PASSWORD}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - RABBITMQ_HOST=rabbitmq
@@ -205,7 +208,7 @@ services:
       - DB_PORT=3306
       - DB_NAME=alo_contact_db
       - DB_USERNAME=${DB_USERNAME:-root}
-      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - DB_PASSWORD=${DB_PASSWORD}
       - EUREKA_DEFAULT_ZONE=http://discovery-service:8761/eureka/
     depends_on:
       auth-service:
@@ -250,7 +253,7 @@ services:
       - DB_PORT=3306
       - DB_NAME=chatbot_memory
       - DB_USERNAME=${DB_USERNAME:-root}
-      - DB_PASSWORD=${DB_PASSWORD:-root}
+      - DB_PASSWORD=${DB_PASSWORD}
       - EUREKA_DEFAULT_ZONE=http://discovery-service:8761/eureka/
       - SPRING_AI_OPENAI_API_KEY=${GEMINI_API_KEY:-dummy}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
@@ -498,8 +501,6 @@ services:
       - api-gateway
     networks:
       - alo-network
-
-
 
 # ==============================================================================
 # NETWORKS & VOLUMES CONFIGURATION
