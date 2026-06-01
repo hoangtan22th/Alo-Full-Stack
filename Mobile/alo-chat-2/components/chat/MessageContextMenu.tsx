@@ -9,6 +9,8 @@ import {
   View,
   ScrollView,
 } from "react-native";
+import { useRouter } from "expo-router";
+import { BlurView } from "expo-blur";
 import {
   ArrowUturnLeftIcon,
   ClipboardDocumentIcon,
@@ -19,9 +21,20 @@ import {
   ArrowUturnRightIcon,
   QueueListIcon,
   PencilIcon,
+  FaceSmileIcon,
+  InformationCircleIcon,
 } from "react-native-heroicons/outline";
+import { PlayIcon } from "react-native-heroicons/solid";
+import { openRemoteFile } from "../../utils/fileUtils";
+import {
+  FilePdfPreview,
+  FileTextPreview,
+  OfficeFilePreview,
+} from "./MessageItem";
 import { MessageDTO } from "../../services/messageService";
+import { getMessageTextContent } from "../../utils/messageUtils";
 import { EMOJI_MAP } from "../../constants/Chat";
+import { GroupLinkBubble } from "./GroupLinkBubble";
 
 interface MessageContextMenuProps {
   visible: boolean;
@@ -68,6 +81,7 @@ export const MessageContextMenu = ({
   currentUserId,
   onEdit,
 }: MessageContextMenuProps) => {
+  const router = useRouter();
   if (!visible || !selectedMsg || !layout) return null;
 
   const screenHeight = Dimensions.get("window").height;
@@ -98,8 +112,24 @@ export const MessageContextMenu = ({
     (r: any) => r.userId === currentUserId,
   );
 
-  const isWithin60Seconds = (new Date().getTime() - new Date(selectedMsg.createdAt).getTime()) <= 60000;
-  const showEdit = selectedMsg.isRevoked && selectedMsg.type === "text" && isSender && isWithin60Seconds;
+  const isWithin60Seconds =
+    new Date().getTime() - new Date(selectedMsg.createdAt).getTime() <= 60000;
+  const showEdit =
+    selectedMsg.isRevoked &&
+    selectedMsg.type === "text" &&
+    isSender &&
+    isWithin60Seconds;
+
+  const textContent =
+    selectedMsg.type === "text"
+      ? getMessageTextContent(selectedMsg.content)
+      : "";
+  const GROUP_LINK_REGEX = /(?:https?:\/\/)?alo\.chat\/g\/([a-f\d]{24})/i;
+  const groupMatch =
+    selectedMsg.type === "text" ? textContent?.match(GROUP_LINK_REGEX) : null;
+  const isTextOnlyGroupLink = groupMatch
+    ? textContent.trim() === groupMatch[0].trim()
+    : false;
 
   return (
     <Modal
@@ -108,10 +138,11 @@ export const MessageContextMenu = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <Pressable className="flex-1 bg-black/60" onPress={onClose}>
-        <View className="flex-1">
-          {/* Highlighted Message */}
-          <View
+      <BlurView intensity={30} tint="dark" style={{ flex: 1 }}>
+        <Pressable className="flex-1" onPress={onClose}>
+          <View className="flex-1">
+            {/* Highlighted Message */}
+            <View
             style={{
               position: "absolute",
               top: msgTop,
@@ -122,7 +153,11 @@ export const MessageContextMenu = ({
           >
             <View
               className={`shadow-2xl overflow-hidden ${
-                selectedMsg.type === "image" && !selectedMsg.isRevoked
+                (selectedMsg.type === "image" && !selectedMsg.isRevoked) ||
+                (selectedMsg.type === "file" && !selectedMsg.isRevoked) ||
+                selectedMsg.type === "poll" ||
+                selectedMsg.type === "contact" ||
+                isTextOnlyGroupLink
                   ? "p-0 bg-transparent flex-1"
                   : "px-5 py-3 " +
                     (isSender
@@ -154,7 +189,7 @@ export const MessageContextMenu = ({
                       numberOfLines={1}
                     >
                       {selectedMsg.replyTo.type === "text"
-                        ? selectedMsg.replyTo.content
+                        ? getMessageTextContent(selectedMsg.replyTo.content)
                         : selectedMsg.replyTo.type === "image" ||
                             (selectedMsg.replyTo.type === "file" &&
                               [
@@ -214,35 +249,241 @@ export const MessageContextMenu = ({
                     );
                   })()
                 ) : selectedMsg.type === "file" ? (
-                  <View className="flex-row items-center gap-3">
-                    <View className="w-12 h-12 bg-black/10 rounded-xl items-center justify-center border border-black/5">
-                      <Text
-                        className={`font-bold uppercase text-[10px] ${isSender ? "text-gray-200" : "text-gray-500"}`}
+                  (() => {
+                    const fileName =
+                      selectedMsg.metadata?.fileName ||
+                      selectedMsg.content.split("/").pop() ||
+                      "";
+                    const ext = fileName.split(".").pop()?.toLowerCase();
+                    const isVideo = [
+                      "mp4",
+                      "mov",
+                      "m4v",
+                      "avi",
+                      "3gp",
+                      "mkv",
+                    ].includes(ext || "");
+
+                    if (isVideo) {
+                      return (
+                        <View
+                          className="w-[260px] h-[160px] bg-black rounded-2xl justify-center items-center relative overflow-hidden"
+                          style={{ alignSelf: "center" }}
+                        >
+                          <View className="absolute inset-0 bg-black/40 justify-center items-center z-10">
+                            <View className="w-14 h-14 bg-white/30 rounded-full justify-center items-center border border-white/50">
+                              <PlayIcon size={30} color="white" />
+                            </View>
+                          </View>
+                          <Text
+                            className="absolute bottom-2 left-2 right-2 text-white text-[10px] font-bold z-20"
+                            numberOfLines={1}
+                          >
+                            {fileName}
+                          </Text>
+                        </View>
+                      );
+                    }
+
+                    return (
+                      <View
+                        className={`overflow-hidden rounded-2xl bg-white border-gray-200 border`}
+                        style={{ width: 260, alignSelf: "center" }}
                       >
-                        FILE
-                      </Text>
-                    </View>
-                    <Text
-                      className={`text-base font-medium flex-1 ${isSender ? "text-white" : "text-gray-900"}`}
-                      numberOfLines={2}
-                    >
-                      {selectedMsg.metadata?.fileName ||
-                        selectedMsg.content.split("/").pop()}
-                    </Text>
-                  </View>
+                        {/* Top Section: Preview */}
+                        <View className="h-36 bg-gray-100/50 justify-center overflow-hidden border-b border-gray-100">
+                          {(() => {
+                            const isText = [
+                              "txt",
+                              "js",
+                              "ts",
+                              "json",
+                              "html",
+                              "css",
+                              "py",
+                              "java",
+                              "cpp",
+                              "md",
+                              "sql",
+                              "sh",
+                            ].includes(ext || "");
+                            const isPdf = ext === "pdf";
+                            const isOffice = [
+                              "doc",
+                              "docx",
+                              "xls",
+                              "xlsx",
+                              "ppt",
+                              "pptx",
+                            ].includes(ext || "");
+
+                            if (isText) {
+                              return (
+                                <FileTextPreview url={selectedMsg.content} />
+                              );
+                            } else if (isPdf) {
+                              return (
+                                <FilePdfPreview url={selectedMsg.content} />
+                              );
+                            } else if (isOffice) {
+                              return (
+                                <OfficeFilePreview url={selectedMsg.content} />
+                              );
+                            } else {
+                              return (
+                                <View className="flex-1 items-center justify-center bg-gray-50">
+                                  <InformationCircleIcon
+                                    size={64}
+                                    color="#CBD5E1"
+                                  />
+                                  <Text className="text-[10px] text-gray-400 mt-2 font-medium">
+                                    Bản xem trước không khả dụng
+                                  </Text>
+                                </View>
+                              );
+                            }
+                          })()}
+                        </View>
+
+                        {/* Bottom Section: Info Bar */}
+                        <View className="flex-row items-center p-3 bg-sky-50">
+                          <View
+                            className="w-12 h-12 items-center justify-center rounded-xl mr-3"
+                            style={{
+                              backgroundColor: (() => {
+                                if (ext === "pdf") return "#ef4444";
+                                if (["doc", "docx"].includes(ext || ""))
+                                  return "#3b82f6";
+                                if (["xls", "xlsx"].includes(ext || ""))
+                                  return "#22c55e";
+                                if (["ppt", "pptx"].includes(ext || ""))
+                                  return "#f97316";
+                                if (
+                                  ["zip", "rar", "tar", "7z"].includes(
+                                    ext || "",
+                                  )
+                                )
+                                  return "#7c3aed";
+                                return "#6b7280";
+                              })(),
+                            }}
+                          >
+                            <Text className="text-white text-[10px] font-black uppercase">
+                              {ext || "FILE"}
+                            </Text>
+                          </View>
+                          <View className="flex-1">
+                            <Text
+                              className="text-[14px] font-black text-gray-900 leading-tight"
+                              numberOfLines={1}
+                            >
+                              {fileName}
+                            </Text>
+                            <Text
+                              className="text-[11px] text-gray-500 font-medium mt-0.5"
+                              numberOfLines={1}
+                            >
+                              {selectedMsg.metadata?.fileSize
+                                ? selectedMsg.metadata.fileSize < 1024 * 1024
+                                  ? (
+                                      selectedMsg.metadata.fileSize / 1024
+                                    ).toFixed(0) + " KB"
+                                  : (
+                                      selectedMsg.metadata.fileSize /
+                                      (1024 * 1024)
+                                    ).toFixed(1) + " MB"
+                                : "0 KB"}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })()
                 ) : selectedMsg.type === "poll" ? (
                   <Text
                     className={`text-base leading-6 font-medium ${isSender ? "text-white" : "text-gray-900"}`}
                   >
                     📊 [Bình chọn] {selectedMsg.content}
                   </Text>
+                ) : selectedMsg.type === "contact" ? (
+                  <View
+                    className="w-[260px] bg-white rounded-2xl p-4 border-gray-200 border"
+                    style={{ alignSelf: "center" }}
+                  >
+                    <View className="flex-row items-center mb-2.5">
+                      <View className="bg-blue-50 px-2 py-0.5 rounded-md">
+                        <Text className="text-[10px] text-blue-600 font-black uppercase tracking-wider">
+                          Danh thiếp
+                        </Text>
+                      </View>
+                    </View>
+                    <View className="flex-row items-center">
+                      {selectedMsg.metadata?.contactAvatar ? (
+                        <Image
+                          source={{ uri: selectedMsg.metadata.contactAvatar }}
+                          className="w-12 h-12 rounded-full mr-3"
+                        />
+                      ) : (
+                        <View className="w-12 h-12 rounded-full bg-blue-100 items-center justify-center mr-3">
+                          <Text className="text-blue-600 font-bold text-[16px]">
+                            {(selectedMsg.metadata?.contactName || "?")
+                              .charAt(0)
+                              .toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <View className="flex-1">
+                        <Text
+                          className="text-[14px] font-black text-gray-900"
+                          numberOfLines={1}
+                        >
+                          {selectedMsg.metadata?.contactName}
+                        </Text>
+                        <Text
+                          className="text-[11px] text-gray-500 font-medium mt-0.5"
+                          numberOfLines={1}
+                        >
+                          {selectedMsg.metadata?.contactPhone
+                            ? `SĐT: ${selectedMsg.metadata.contactPhone}`
+                            : "Số điện thoại bảo mật"}
+                        </Text>
+                      </View>
+                    </View>
+                    <View className="h-[1px] bg-gray-100 mb-3 mt-4" />
+                    <TouchableOpacity
+                      onPress={() => {
+                        onClose();
+                        if (selectedMsg.metadata?.contactId) {
+                          router.push({
+                            pathname: "/chat/[id]",
+                            params: {
+                              id: selectedMsg.metadata.contactId,
+                              name: selectedMsg.metadata.contactName,
+                              avatar: selectedMsg.metadata.contactAvatar || "",
+                            },
+                          });
+                        }
+                      }}
+                      className="w-full py-2 bg-blue-50 rounded-xl items-center justify-center flex-row"
+                    >
+                      <Text className="text-blue-600 font-black text-[13px]">
+                        Nhắn tin
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : isTextOnlyGroupLink && groupMatch ? (
+                  <GroupLinkBubble
+                    msg={selectedMsg}
+                    linkGroupId={groupMatch[1]}
+                    isTextOnly={true}
+                  />
                 ) : (
                   <Text
                     className={`text-base leading-6 ${
                       isSender ? "text-white" : "text-gray-900"
                     }`}
                   >
-                    {selectedMsg.content}
+                    {getMessageTextContent(selectedMsg.content)}
                   </Text>
                 )}
               </ScrollView>
@@ -264,29 +505,29 @@ export const MessageContextMenu = ({
             {/* Emoji Tray */}
             {!selectedMsg.isRevoked && (
               <View
-              //@ts-ignore - onStartShouldSetResponder is valid in RN but TS might complain
-              onStartShouldSetResponder={() => true}
-              className="bg-white rounded-full p-2 flex-row gap-2 items-center shadow-2xl border border-gray-100 mb-3"
-            >
-              {Object.entries(EMOJI_MAP).map(([key, emoji]) => (
-                <TouchableOpacity
-                  key={key}
-                  onPress={() => onReact(key)}
-                  className="w-10 h-10 bg-gray-50 rounded-full items-center justify-center active:scale-90"
-                >
-                  <Text className="text-xl">{emoji}</Text>
-                </TouchableOpacity>
-              ))}
+                //@ts-ignore - onStartShouldSetResponder is valid in RN but TS might complain
+                onStartShouldSetResponder={() => true}
+                className="bg-white rounded-full p-2 flex-row gap-2 items-center shadow-2xl border border-gray-100 mb-3"
+              >
+                {Object.entries(EMOJI_MAP).map(([key, emoji]) => (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() => onReact(key)}
+                    className="w-10 h-10 bg-gray-50 rounded-full items-center justify-center active:scale-90"
+                  >
+                    <Text className="text-xl">{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
 
-              {hasMyReaction && (
-                <TouchableOpacity
-                  onPress={onClearReactions}
-                  className="w-10 h-10 bg-red-50 rounded-full items-center justify-center border border-red-100 active:scale-90"
-                >
-                  <XMarkIcon size={20} color="#ef4444" />
-                </TouchableOpacity>
-              )}
-            </View>
+                {hasMyReaction && (
+                  <TouchableOpacity
+                    onPress={onClearReactions}
+                    className="w-10 h-10 bg-red-50 rounded-full items-center justify-center border border-red-100 active:scale-90"
+                  >
+                    <XMarkIcon size={20} color="#ef4444" />
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
 
             {/* Context Menu */}
@@ -343,7 +584,8 @@ export const MessageContextMenu = ({
                 </TouchableOpacity>
               )}
 
-              {!selectedMsg.isRevoked && canPin &&
+              {!selectedMsg.isRevoked &&
+                canPin &&
                 (isPinned ? (
                   <TouchableOpacity
                     onPress={onUnpin}
@@ -413,8 +655,9 @@ export const MessageContextMenu = ({
               )}
             </View>
           </View>
-        </View>
-      </Pressable>
+          </View>
+        </Pressable>
+      </BlurView>
     </Modal>
   );
 };

@@ -67,6 +67,9 @@ import { ReportTargetModal } from "../../components/ReportTargetModal";
 import { SendContactCardModal } from "../../components/chat/SendContactCardModal";
 import { StickerPickerModal } from "../../components/chat/StickerPickerModal";
 import { TargetType } from "../../services/reportService";
+import { CallMemberSelectorModal } from "../../components/call/CallMemberSelectorModal";
+import { useCall } from "../../contexts/CallContext";
+import { getMessageTextContent } from "../../utils/messageUtils";
 
 export default function GlobalChatScreen() {
   const {
@@ -96,6 +99,9 @@ export default function GlobalChatScreen() {
 
   const messageRefs = useRef<Record<string, View>>({});
   const flatListRef = useRef<FlatList>(null);
+
+  const [showCallMemberSelector, setShowCallMemberSelector] = useState<{ isVideo: boolean } | null>(null);
+  const { startCall } = useCall();
 
   const [messages, setMessages] = useState<MessageDTO[]>([]);
   const [inputText, setInputText] = useState("");
@@ -146,6 +152,86 @@ export default function GlobalChatScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [groupDetails, setGroupDetails] = useState<any>(null);
   const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
+
+  // Mention State
+  const [cursorPosition, setCursorPosition] = useState(0);
+  const [mentionSearch, setMentionSearch] = useState<string | null>(null);
+  const [mentionPosition, setMentionPosition] = useState(0);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [mentionToScrollId, setMentionToScrollId] = useState<string | null>(null);
+  const [showMentionIndicator, setShowMentionIndicator] = useState(false);
+
+  const filteredMentions = useMemo(() => {
+    if (!isGroupChat || mentionSearch === null) return [];
+    
+    const allOption = { id: "all", name: "Tất cả", avatar: "" };
+    const members = (groupDetails?.members || [])
+      .map((m: any) => ({
+        id: String(m.userId || m._id),
+        name: userCache[String(m.userId || m._id)]?.fullName || m.fullName || m.displayName || (m as any).name || "Thành viên",
+        avatar: userCache[String(m.userId || m._id)]?.avatar || m.avatar || "",
+      }))
+      .filter((m: any) => m.id !== String(currentUserId));
+
+    const combined = [allOption, ...members];
+    
+    // Find already mentioned names using the exact matching logic
+    const mentionedSet = new Set<string>();
+    if (inputText) {
+      const sortedNames = [...combined.map(m => m.name)].sort((a, b) => b.length - a.length);
+      const regexStr = sortedNames.map(n => n.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')).join("|");
+      const regex = new RegExp(`@(${regexStr})`, "g");
+      let match;
+      while ((match = regex.exec(inputText)) !== null) {
+        mentionedSet.add(match[1]);
+      }
+    }
+    
+    const notMentionedYet = combined.filter(m => !mentionedSet.has(m.name));
+
+    if (mentionSearch === "") return notMentionedYet;
+    return notMentionedYet.filter((m) =>
+      m.name.toLowerCase().includes(mentionSearch.toLowerCase())
+    );
+  }, [isGroupChat, mentionSearch, groupDetails, userCache, currentUserId, inputText]);
+
+  const handleSelectMention = (item: { id: string; name: string }) => {
+    const textBefore = inputText.substring(0, mentionPosition);
+    const textAfter = inputText.substring(mentionPosition + (mentionSearch?.length || 0) + 1);
+    const newText = `${textBefore}@${item.name} ${textAfter}`;
+    
+    // Programmatic text changes may not trigger onSelectionChange immediately.
+    // Update cursor position manually to stay in sync.
+    setCursorPosition(textBefore.length + item.name.length + 2);
+    
+    setInputText(newText);
+    setMentionSearch(null);
+    setTimeout(() => {
+      chatInputRef.current?.focus();
+    }, 100);
+  };
+
+  const handleSelectionChange = (e: any) => {
+    setCursorPosition(e.nativeEvent.selection.start);
+  };
+
+  useEffect(() => {
+    if (!isGroupChat) return;
+    
+    // React Native's onSelectionChange can be stale by 1 character when typing fast.
+    // If the cursor is at or very close to the end, trust the full text.
+    const isCursorNearEnd = inputText.length - cursorPosition <= 1;
+    const textBefore = isCursorNearEnd ? inputText : inputText.substring(0, cursorPosition);
+    
+    const match = textBefore.match(/(?:^|\s)@([^\s]*)$/);
+    if (match) {
+      setMentionSearch(match[1]);
+      setMentionPosition(textBefore.lastIndexOf("@"));
+      setMentionIndex(0);
+    } else {
+      setMentionSearch(null);
+    }
+  }, [inputText, cursorPosition, isGroupChat]);
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
   const [isSendContactModalVisible, setIsSendContactModalVisible] = useState(false);
   const [isStickerModalVisible, setIsStickerModalVisible] = useState(false);
@@ -214,6 +300,40 @@ export default function GlobalChatScreen() {
   );
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
 
+  const handleStartGroupCall = useCallback((isVideo: boolean, forcedInviteeIds?: string[]) => {
+    if (isGroupChat && !forcedInviteeIds) {
+      setShowCallMemberSelector({ isVideo });
+      return;
+    }
+    
+    const mappedMembers = (groupDetails?.members || []).map((m: any) => {
+      const uId = String(m.userId || m._id);
+      const cached = userCache[uId];
+      return {
+        ...m,
+        userId: uId,
+        fullName: cached?.fullName || m.fullName,
+        avatar: cached?.avatar || m.avatar
+      };
+    });
+
+    startCall(
+      String(id),
+      isVideo,
+      isGroupChat,
+      realtimeGroupName || `Nhóm ${id}`,
+      realtimeAvatar,
+      forcedInviteeIds,
+      mappedMembers
+    );
+  }, [id, isGroupChat, realtimeGroupName, realtimeAvatar, groupDetails, userCache, startCall]);
+
+  const confirmGroupCall = (selectedIds: string[]) => {
+    const isVideo = showCallMemberSelector?.isVideo || false;
+    setShowCallMemberSelector(null);
+    handleStartGroupCall(isVideo, selectedIds);
+  };
+
   const chatImages = useMemo(() => {
     return messages.filter((m) => m.type === "image" && !m.isRevoked);
   }, [messages]);
@@ -233,6 +353,22 @@ export default function GlobalChatScreen() {
       return Array.from(new Set([...first20, ...last20]));
     }
   }, [messages, isGroupChat]);
+
+  // Detect unread mentions
+  useEffect(() => {
+    if (!messages || messages.length === 0 || !user) return;
+    const myName = user.fullName || "";
+    
+    const mentionMsg = [...messages].reverse().find((m) => {
+      if (m.type !== "text" || !m.content || m.isRead || String(m.senderId) === String(currentUserId)) return false;
+      return m.content.includes(`@${myName}`) || m.content.includes("@Tất cả");
+    });
+
+    if (mentionMsg) {
+      setMentionToScrollId(mentionMsg._id);
+      setShowMentionIndicator(true);
+    }
+  }, [messages, user, currentUserId]);
 
   useEffect(() => {
     if (name && name !== "undefined" && name !== "null")
@@ -477,9 +613,10 @@ export default function GlobalChatScreen() {
         messages
           .find((m: MessageDTO) => m._id === reactionDetailMsgId)
           ?.reactions?.map((r: any) => r.userId) || [];
+      const groupMemberIds = groupDetails?.members?.map((m: any) => String(m.userId || m._id)) || [];
 
       const allIds = Array.from(
-        new Set([...messageSenderIds, ...reactionUserIds]),
+        new Set([...messageSenderIds, ...reactionUserIds, ...groupMemberIds]),
       );
       const missingIds = allIds.filter((id) => id && !userCache[id]);
 
@@ -502,10 +639,10 @@ export default function GlobalChatScreen() {
       }
     };
 
-    if (messages.length > 0 || reactionDetailMsgId) {
+    if (messages.length > 0 || reactionDetailMsgId || groupDetails) {
       fetchMissingUsers();
     }
-  }, [messages, reactionDetailMsgId]);
+  }, [messages, reactionDetailMsgId, groupDetails]);
 
   const selectedMsg = useMemo(() => {
     if (!selectedMessageId) return null;
@@ -1021,6 +1158,7 @@ export default function GlobalChatScreen() {
   }, [socket, targetUserId, isGroupChat]);
 
   const handleInputChange = (text: string) => {
+    setCursorPosition(prev => prev + (text.length - inputText.length));
     setInputText(text);
     if (!socket || !resolvedConversationId || resolvedConversationId.startsWith("temp-")) return;
     if (!typingTimeoutRef.current) {
@@ -1557,6 +1695,8 @@ export default function GlobalChatScreen() {
               router.canGoBack() ? router.back() : router.replace("/(tabs)")
             }
             onSearchToggle={() => setIsSearchMode(true)}
+            onVoiceCall={() => handleStartGroupCall(false)}
+            onVideoCall={() => handleStartGroupCall(true)}
             onInfo={() => {
               const autoIds = isGroupChat ? [] : getAutoSelectedMessageIds();
               router.replace({
@@ -1697,6 +1837,9 @@ export default function GlobalChatScreen() {
                         groupDetails?.isHighlightEnabled &&
                         adminIds.has(String(group.messages[0].senderId))
                       }
+                      members={groupDetails?.members || []}
+                      userCache={userCache}
+                      currentUserId={currentUserId}
                     />
                   </View>
                 );
@@ -1763,6 +1906,9 @@ export default function GlobalChatScreen() {
                             groupDetails?.isHighlightEnabled &&
                             adminIds.has(String(msg.senderId))
                           }
+                          members={groupDetails?.members || []}
+                          userCache={userCache}
+                          currentUserId={currentUserId}
                         />
                       </View>
                     ))}
@@ -1825,7 +1971,7 @@ export default function GlobalChatScreen() {
                         </Text>
                       </View>
                       <Text className="text-gray-600 text-sm" numberOfLines={2}>
-                        {item.content}
+                        {getMessageTextContent(item.content)}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -1883,8 +2029,57 @@ export default function GlobalChatScreen() {
           </View>
         )}
 
+        {/* Mention Indicator Badge */}
+        {showMentionIndicator && mentionToScrollId && (
+          <View className="absolute top-4 right-4 z-50">
+            <TouchableOpacity
+              onPress={() => {
+                const idx = messages.findIndex((m) => m._id === mentionToScrollId);
+                if (idx !== -1) {
+                  flatListRef.current?.scrollToIndex({ index: idx, animated: true });
+                }
+                setShowMentionIndicator(false);
+              }}
+              className="bg-blue-600 px-4 py-2 rounded-full shadow-lg flex-row items-center"
+            >
+              <Text className="text-white font-bold text-sm">@ Có người nhắc bạn</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={() => setShowMentionIndicator(false)}
+              className="absolute -top-2 -right-2 bg-gray-200 rounded-full p-1"
+            >
+              <XMarkIcon size={12} color="black" />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {!isSelectionMode ? (
           <View className="flex-1 justify-end" pointerEvents="box-none">
+            {/* Mention Suggestions List */}
+            {mentionSearch !== null && filteredMentions.length > 0 && (
+              <View className="bg-white border-t border-gray-200 shadow-md max-h-48 rounded-t-xl overflow-hidden">
+                <FlatList
+                  data={filteredMentions}
+                  keyExtractor={(item) => item.id}
+                  keyboardShouldPersistTaps="always"
+                  renderItem={({ item, index }) => (
+                    <TouchableOpacity
+                      onPress={() => handleSelectMention(item)}
+                      className={`flex-row items-center px-4 py-3 border-b border-gray-50 ${index === mentionIndex ? "bg-blue-50" : ""}`}
+                    >
+                      {item.avatar ? (
+                        <Image source={{ uri: item.avatar }} className="w-8 h-8 rounded-full mr-3 bg-gray-200" />
+                      ) : (
+                        <View className="w-8 h-8 rounded-full bg-blue-100 items-center justify-center mr-3">
+                          <Text className="text-blue-600 font-bold">{item.name.charAt(0).toUpperCase()}</Text>
+                        </View>
+                      )}
+                      <Text className="text-gray-900 font-medium text-[15px]">{item.name}</Text>
+                    </TouchableOpacity>
+                  )}
+                />
+              </View>
+            )}
             <ChatInput
               ref={chatInputRef}
               inputText={inputText}
@@ -1910,6 +2105,7 @@ export default function GlobalChatScreen() {
               isBanned={
                 groupDetails?.isBanned || groupDetails?.status === "READ_ONLY"
               }
+              onSelectionChange={handleSelectionChange}
             />
           </View>
         ) : (
@@ -2164,6 +2360,25 @@ export default function GlobalChatScreen() {
         onClose={() => setIsStickerModalVisible(false)}
         onSelectSticker={handleSendSticker}
       />
+      {showCallMemberSelector !== null && (
+        <CallMemberSelectorModal
+          visible={true}
+          isVideo={showCallMemberSelector.isVideo}
+          members={(groupDetails?.members || []).map((m: any) => {
+            const uId = String(m.userId || m._id);
+            const cached = userCache[uId];
+            return {
+              ...m,
+              userId: uId,
+              fullName: cached?.fullName || m.fullName,
+              avatar: cached?.avatar || m.avatar
+            };
+          })}
+          currentUserId={String(currentUserId)}
+          onClose={() => setShowCallMemberSelector(null)}
+          onStartCall={confirmGroupCall}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }

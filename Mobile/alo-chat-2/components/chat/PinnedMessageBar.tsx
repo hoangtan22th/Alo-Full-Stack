@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { MapPinIcon, XMarkIcon } from "react-native-heroicons/outline";
 import { MessageDTO } from "../../services/messageService";
+import { getMessageTextContent } from "../../utils/messageUtils";
 
 interface PinnedMessageBarProps {
   pinnedMessages: MessageDTO[];
@@ -25,7 +26,7 @@ export const PinnedMessageBar = ({ pinnedMessages }: PinnedMessageBarProps) => {
               numberOfLines={1}
             >
               {latestPinned.type === "text"
-                ? latestPinned.content
+                ? getMessageTextContent(latestPinned.content)
                 : latestPinned.type === "image"
                   ? "[Ảnh]"
                   : latestPinned.type === "file"
@@ -79,7 +80,7 @@ export const PinnedMessageBar = ({ pinnedMessages }: PinnedMessageBarProps) => {
                 >
                   <Text className="text-[14px] font-medium text-yellow-900 mb-1">
                     {msg.type === "text"
-                      ? msg.content
+                      ? getMessageTextContent(msg.content)
                       : msg.type === "image"
                         ? "[Ảnh]"
                         : msg.metadata?.fileName || "[Tệp đính kèm]"}
