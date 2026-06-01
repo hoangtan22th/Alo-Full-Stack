@@ -110,6 +110,7 @@ public class FriendshipServiceImpl implements FriendshipService {
                 .ifPresent(u -> {
                     responseDTO.setRequesterName(u.getFullName());
                     responseDTO.setRequesterAvatar(u.getAvatar());
+                    responseDTO.setRequesterPhone(u.getPhoneNumber());
                 });
 
         return responseDTO;
@@ -135,6 +136,7 @@ public class FriendshipServiceImpl implements FriendshipService {
                     .ifPresent(u -> {
                         dto.setRequesterName(u.getFullName());
                         dto.setRequesterAvatar(u.getAvatar());
+                        dto.setRequesterPhone(u.getPhoneNumber());
                     });
             return dto;
         }).collect(Collectors.toList());
@@ -160,6 +162,7 @@ public class FriendshipServiceImpl implements FriendshipService {
                     .ifPresent(u -> {
                         dto.setRecipientName(u.getFullName());
                         dto.setRecipientAvatar(u.getAvatar());
+                        dto.setRecipientPhone(u.getPhoneNumber());
                     });
             return dto;
         }).collect(Collectors.toList());
@@ -192,10 +195,12 @@ public class FriendshipServiceImpl implements FriendshipService {
                             // Nếu bạn bè là người gửi
                             dto.setRequesterName(u.getFullName());
                             dto.setRequesterAvatar(u.getAvatar());
+                            dto.setRequesterPhone(u.getPhoneNumber());
                         } else {
                             // Nếu bạn bè là người nhận
                             dto.setRecipientName(u.getFullName());
                             dto.setRecipientAvatar(u.getAvatar());
+                            dto.setRecipientPhone(u.getPhoneNumber());
                         }
                     });
             return dto;

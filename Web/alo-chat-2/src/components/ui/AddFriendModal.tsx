@@ -312,7 +312,7 @@ const AddFriendModal = ({ onClose }: { onClose: () => void }) => {
         onClose={() => setShowProfile(false)}
         userId={foundUser?.userId}
         relationStatus={foundUser?.relationStatus}
-        onActionSuccess={handleSearch}
+        onActionSuccess={() => handleSearch()}
       />
     </>
   );

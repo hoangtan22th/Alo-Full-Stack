@@ -6,12 +6,20 @@ import CallProvider from "../components/layout/CallProvider";
 import { Toaster } from "sonner";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import GlobalNotificationHandler from "../components/layout/GlobalNotificationHandler";
+import SingleTabGuard from "../components/layout/SingleTabGuard";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
     title: "Alo Chat Web",
     description: "Chat Application",
+};
+
+export const viewport = {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
 };
 
 export default function RootLayout({
@@ -31,11 +39,13 @@ export default function RootLayout({
                     }
                 >
                     <AuthProvider>
-                        <CallProvider>
-                            <GlobalNotificationHandler />
-                            <Toaster position="bottom-right" expand={true} richColors />
-                            {children}
-                        </CallProvider>
+                        <SingleTabGuard>
+                            <CallProvider>
+                                <GlobalNotificationHandler />
+                                <Toaster position="bottom-right" expand={true} richColors />
+                                {children}
+                            </CallProvider>
+                        </SingleTabGuard>
                     </AuthProvider>
                 </GoogleOAuthProvider>
             </body>

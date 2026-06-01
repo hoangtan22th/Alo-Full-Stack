@@ -41,7 +41,7 @@ export default function JoinLinkModal({
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
-  const shareUrl = `https://alo.chat/g/${groupId}`;
+  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/g/${groupId}` : `https://alo.chat/g/${groupId}`;
 
   const sendSystemMsg = async (content: string) => {
     try {
@@ -261,6 +261,20 @@ export default function JoinLinkModal({
                    {/* Admin Privacy Settings */}
                    {isManager && (
                       <div className="w-full space-y-4 pt-6 border-t border-gray-100 shrink-0 mb-4">
+                         <div className="flex items-center justify-between bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+                            <div className="flex-1 pr-4">
+                               <p className="text-[14px] font-black text-gray-800 tracking-tight">Trạng thái link</p>
+                               <p className="text-[11px] text-gray-400 font-medium leading-tight">Cho phép tham gia qua link và mã QR</p>
+                            </div>
+                            <button
+                              onClick={handleToggleLink}
+                              disabled={updating}
+                              className={`w-11 h-6 rounded-full transition-all relative shrink-0 ${isLinkEnabled ? 'bg-black' : 'bg-gray-200'} ${updating ? 'opacity-50' : ''}`}
+                            >
+                              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm ${isLinkEnabled ? 'left-6' : 'left-1'}`} />
+                            </button>
+                         </div>
+
                          <div className="flex items-center justify-between bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
                             <div className="flex-1 pr-4">
                                <p className="text-[14px] font-black text-gray-800 tracking-tight">Xem lại tin nhắn cũ</p>

@@ -438,7 +438,7 @@ function TimelineContent() {
       </div>
 
       {/* 2. PROFILE HERO & HEADER SECTION */}
-      <div className="bg-white border-b border-gray-100 px-8 pb-6 shrink-0 shadow-sm relative">
+      <div className="bg-white border-b border-gray-100 px-4 md:px-8 pb-6 shrink-0 shadow-sm relative">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center md:items-start gap-6 relative z-10">
           {/* Avatar frame (Pulled up) */}
           <div className="relative -mt-16 md:-mt-20 shrink-0">
@@ -641,7 +641,7 @@ function TimelineContent() {
       </div>
 
       {/* 3. TIMELINE POSTS & DETAILS TAB SECTION */}
-      <div className="max-w-6xl mx-auto w-full px-8 py-6 flex flex-col lg:flex-row gap-6 items-start">
+      <div className="max-w-6xl mx-auto w-full px-3 sm:px-6 md:px-8 py-6 flex flex-col lg:flex-row gap-6 items-start">
         {/* Left Widget Pane: Details information card */}
         <div className="w-full lg:w-[350px] bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col gap-5 shrink-0">
           <h2 className="text-xs font-black text-gray-900 uppercase tracking-widest border-b border-gray-50 pb-3 flex items-center gap-2">

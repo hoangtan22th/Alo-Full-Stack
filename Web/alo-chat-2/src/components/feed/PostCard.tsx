@@ -80,7 +80,7 @@ const renderCommentContent = (content: string, availableUsers: UserProfileDTO[] 
       parts.push(
         <Link
           key={keyIndex++}
-          href={`/profile/timeline?userId=${matchedUser._id || matchedUser.id}`}
+          href={`/profile/timeline?userId=${matchedUser.id}`}
           className="font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
         >
           @{afterAt.substring(0, matchedUser.fullName.length)}
@@ -276,7 +276,7 @@ export default function PostCard({ post, onDeleteSuccess, onLikeUpdate, onEditSu
           const validProfiles = resolved.filter((p): p is UserProfileDTO => p !== null);
           const uniqueProfilesMap = new Map<string, UserProfileDTO>();
           validProfiles.forEach((p) => {
-            const id = p.id || p._id;
+            const id = p.id;
             if (id) {
               uniqueProfilesMap.set(id, p);
             }
@@ -1005,7 +1005,7 @@ export default function PostCard({ post, onDeleteSuccess, onLikeUpdate, onEditSu
   const availableUsers = [author, ...Object.values(commentAuthors)].filter(Boolean) as UserProfileDTO[];
 
   return (
-    <div id={`post-${post._id}`} className="bg-white rounded-3xl p-6 mb-5 border border-gray-100 shadow-sm transition-all duration-300 hover:shadow-md flex flex-col">
+    <div id={`post-${post._id}`} className="bg-white rounded-3xl p-4 md:p-6 mb-5 border border-gray-100 shadow-sm transition-all duration-300 hover:shadow-md flex flex-col">
       {/* Header Profile Section */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">

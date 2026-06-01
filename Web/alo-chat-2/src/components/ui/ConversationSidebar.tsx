@@ -11,6 +11,7 @@ import { useChatStore } from "@/store/useChatStore";
 import { contactService } from "@/services/contactService";
 import { userService } from "@/services/userService";
 import { presenceService } from "@/services/presenceService";
+import { messageService } from "@/services/messageService";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -32,6 +33,7 @@ import {
 import CreateGroupModal from "@/components/ui/group/CreateGroupModal";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
+import { stripHtml, parseMessageContent } from "@/utils/html";
 
 // --- Sub-component: ManageLabelsModal ---
 function ManageLabelsModal({
@@ -241,6 +243,13 @@ export default function ConversationSidebar() {
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const { user: currentUser } = useAuthStore();
 
+  // Global Search states
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [globalSearchTab, setGlobalSearchTab] = useState<"all" | "contact" | "message" | "file">("all");
+  const [globalSearchMessages, setGlobalSearchMessages] = useState<any[]>([]);
+  const [globalSearchFiles, setGlobalSearchFiles] = useState<any[]>([]);
+  const [isSearchingGlobal, setIsSearchingGlobal] = useState(false);
+
   // Labels & Pin states
   const [labels, setLabels] = useState<any[]>([]);
   const [labelAssignments, setLabelAssignments] = useState<Record<string, any>>(
@@ -314,6 +323,8 @@ export default function ConversationSidebar() {
       console.error("Lỗi tải thông tin nhãn:", err);
     }
   }, []);
+
+  // (Global Search Side Effect moved below conversationsWithTemp)
 
   const fetchGroups = useCallback(async () => {
     try {
@@ -717,6 +728,36 @@ export default function ConversationSidebar() {
     return conversations;
   }, [conversationId, conversations, friendIds, tempUserCache, fetchGroups]);
 
+  // Handle Global Search Side Effect
+  useEffect(() => {
+    if (!showGlobalSearch || !searchQuery.trim()) {
+      setGlobalSearchMessages([]);
+      setGlobalSearchFiles([]);
+      return;
+    }
+    
+    const timeoutId = setTimeout(async () => {
+      setIsSearchingGlobal(true);
+      const conversationIds = conversationsWithTemp.map((c) => c.id || c._id).filter(Boolean);
+      try {
+        if (globalSearchTab === "all" || globalSearchTab === "message") {
+          const msgs = await messageService.globalSearch(conversationIds, searchQuery, "all");
+          setGlobalSearchMessages(msgs);
+        }
+        if (globalSearchTab === "all" || globalSearchTab === "file") {
+          const files = await messageService.globalSearch(conversationIds, searchQuery, "file");
+          setGlobalSearchFiles(files);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsSearchingGlobal(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, showGlobalSearch, globalSearchTab, conversationsWithTemp]);
+
   // Auto-switch tab to match active conversation
   useEffect(() => {
     if (!conversationId || conversationsWithTemp.length === 0) return;
@@ -750,15 +791,16 @@ export default function ConversationSidebar() {
     if (aPinned && !bPinned) return -1;
     if (!aPinned && bPinned) return 1;
 
+    const BOT_IDS = ["alo-bot", "00000000-0000-0000-0000-000000000000", "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"];
     if (activeTab === "Khác") {
       const aIsStranger =
         !a.isGroup &&
-        a.id !== BOT_ID &&
+        !BOT_IDS.includes(a.id) &&
         a.otherMemberUserId &&
         !friendIds.has(a.otherMemberUserId);
       const bIsStranger =
         !b.isGroup &&
-        b.id !== BOT_ID &&
+        !BOT_IDS.includes(b.id) &&
         b.otherMemberUserId &&
         !friendIds.has(b.otherMemberUserId);
       if (aIsStranger && !bIsStranger) return -1;
@@ -774,22 +816,23 @@ export default function ConversationSidebar() {
       .includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
 
+    const BOT_IDS = ["alo-bot", "00000000-0000-0000-0000-000000000000", "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"];
     const folder = chat.folder;
     const isStrangerConvo =
       chat.isGroup === false &&
-      chat.id !== BOT_ID &&
+      !BOT_IDS.includes(chat.id) &&
       chat.otherMemberUserId &&
       !friendIds.has(chat.otherMemberUserId);
 
     let tabMatch = false;
     if (activeTab === "Ưu tiên") {
       // Ưu tiên: Nhóm, Bot, hoặc Bạn bè (không phải folder Other)
-      tabMatch = folder === "priority" || (!folder && !isStrangerConvo) || chat.isGroup === true || chat.id === BOT_ID;
+      tabMatch = folder === "priority" || (!folder && !isStrangerConvo) || chat.isGroup === true || BOT_IDS.includes(chat.id);
     } else if (activeTab === "Khác") {
       // Khác: Folder Other, hoặc Người lạ (không phải folder Priority)
       tabMatch =
         (folder === "other" || folder === "stranger" || (!folder && isStrangerConvo)) &&
-        chat.isGroup !== true && chat.id !== BOT_ID;
+        chat.isGroup !== true && !BOT_IDS.includes(chat.id);
     } else {
       return false;
     }
@@ -818,9 +861,10 @@ export default function ConversationSidebar() {
     conversationsWithTemp.forEach((chat) => {
       if (chat.unreadCount > 0) {
         const folder = chat.folder;
+        const BOT_IDS = ["alo-bot", "00000000-0000-0000-0000-000000000000", "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"];
         const isStrangerConvo =
           !chat.isGroup &&
-          chat.id !== BOT_ID &&
+          !BOT_IDS.includes(chat.id) &&
           chat.otherMemberUserId &&
           !friendIds.has(chat.otherMemberUserId);
 
@@ -828,13 +872,13 @@ export default function ConversationSidebar() {
           folder === "priority" ||
           (!folder && !isStrangerConvo) ||
           chat.isGroup === true ||
-          chat.id === BOT_ID;
+          BOT_IDS.includes(chat.id);
         const isOther =
           (folder === "other" ||
             folder === "stranger" ||
             (!folder && isStrangerConvo)) &&
           chat.isGroup !== true &&
-          chat.id !== BOT_ID;
+          !BOT_IDS.includes(chat.id);
 
         if (isPriority) pCount++;
         else if (isOther) oCount++;
@@ -846,7 +890,7 @@ export default function ConversationSidebar() {
 
   return (
     <>
-      <div className="w-full md:w-[320px] lg:w-85 flex flex-col border-r border-gray-100 shrink-0 h-full">
+      <div className="w-full md:w-[280px] lg:w-[280px] flex flex-col border-r border-gray-100 shrink-0 h-full relative overflow-hidden">
         <div className="p-5 flex flex-col gap-5">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-black tracking-tight text-black">
@@ -930,6 +974,7 @@ export default function ConversationSidebar() {
               placeholder="Search conversations"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setShowGlobalSearch(true)}
               className="w-full bg-[#F5F5F5] border-transparent rounded-xl pl-10 pr-4 py-2.5 text-[13px] font-medium outline-none focus:bg-white focus:border-black border transition-all"
             />
           </div>
@@ -1112,7 +1157,7 @@ export default function ConversationSidebar() {
                     >
                       {typingUsers[chat.id]?.length > 0
                         ? "Đang soạn tin..."
-                        : chat.message}
+                        : parseMessageContent(chat.message).plainText}
                     </p>
                     <button
                       onClick={(e) => toggleMenu(e, chat.id)}
@@ -1239,6 +1284,209 @@ export default function ConversationSidebar() {
             );
           })}
         </div>
+
+        {/* GLOBAL SEARCH OVERLAY */}
+        {showGlobalSearch && (
+          <div className="absolute inset-0 bg-white z-[100] flex flex-col animate-in slide-in-from-right-4 duration-200">
+            <div className="p-4 flex flex-col gap-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 flex items-center bg-[#F5F5F5] rounded-xl">
+                  <MagnifyingGlassIcon className="absolute left-3 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Tìm kiếm..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-transparent border-transparent pl-9 pr-8 py-2.5 text-[13px] font-medium outline-none"
+                  />
+                  {searchQuery && (
+                    <button 
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2.5 p-1 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition"
+                    >
+                      <XMarkIcon className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    setShowGlobalSearch(false);
+                    setSearchQuery("");
+                  }}
+                  className="px-2 text-[14px] font-bold text-gray-800 hover:text-black transition"
+                >
+                  Đóng
+                </button>
+              </div>
+
+              {/* Global Search Tabs */}
+              <div className="flex gap-4">
+                {[
+                  { id: "all", label: "Tất cả" },
+                  { id: "contact", label: "Liên hệ" },
+                  { id: "message", label: "Tin nhắn" },
+                  { id: "file", label: "File" },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setGlobalSearchTab(t.id as any)}
+                    className={`relative pb-2 text-[13px] font-bold transition-colors ${globalSearchTab === t.id ? "text-blue-600" : "text-gray-500 hover:text-gray-800"}`}
+                  >
+                    {t.label}
+                    {globalSearchTab === t.id && (
+                      <motion.div
+                        layoutId="globalSearchTabIndicator"
+                        className="absolute bottom-0 left-0 right-0 h-[3px] bg-blue-600 rounded-t-full"
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto scrollbar-hide p-3 bg-gray-50/30">
+              {isSearchingGlobal ? (
+                <div className="flex justify-center items-center py-10">
+                  <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : !searchQuery.trim() ? (
+                <div className="flex flex-col items-center justify-center pt-20 pb-6 text-center opacity-70">
+                  <div className="w-24 h-24 bg-blue-50/50 rounded-full flex items-center justify-center mb-4">
+                    <MagnifyingGlassIcon className="w-12 h-12 text-blue-300" />
+                  </div>
+                  <p className="text-[13px] text-gray-500">Nhập từ khóa để tìm kiếm</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-6 pb-10">
+                  {/* LIÊN HỆ */}
+                  {(globalSearchTab === "all" || globalSearchTab === "contact") && filteredConversations.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <h3 className="text-[13px] font-bold text-gray-800 px-1">Liên hệ ({filteredConversations.length})</h3>
+                      <div className="flex flex-col gap-1 bg-white rounded-2xl p-1 shadow-sm border border-gray-100">
+                        {filteredConversations.slice(0, globalSearchTab === "all" ? 3 : undefined).map(chat => (
+                          <div 
+                            key={chat.id} 
+                            onClick={() => {
+                              router.push(`/chat/${chat.id}`);
+                              setShowGlobalSearch(false);
+                            }}
+                            className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl cursor-pointer transition"
+                          >
+                            <img src={chat.avatar || 'https://via.placeholder.com/40'} alt={chat.name} className="w-10 h-10 rounded-full object-cover border border-gray-100" />
+                            <div className="flex flex-col overflow-hidden">
+                              <span className="text-[14px] font-bold text-gray-800 truncate">{chat.name}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {globalSearchTab === "all" && filteredConversations.length > 3 && (
+                          <button 
+                            onClick={() => setGlobalSearchTab("contact")}
+                            className="py-2.5 mx-1 mt-1 mb-1 text-[13px] font-bold text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-xl transition"
+                          >
+                            Xem tất cả liên hệ
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TIN NHẮN */}
+                  {(globalSearchTab === "all" || globalSearchTab === "message") && globalSearchMessages.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <h3 className="text-[13px] font-bold text-gray-800 px-1">Tin nhắn ({globalSearchMessages.length > 99 ? '99+' : globalSearchMessages.length})</h3>
+                      <div className="flex flex-col gap-1 bg-white rounded-2xl p-1 shadow-sm border border-gray-100">
+                        {globalSearchMessages.slice(0, globalSearchTab === "all" ? 3 : undefined).map((msg: any) => {
+                          const chat = conversationsWithTemp.find(c => (c.id || c._id) === msg.conversationId);
+                          return (
+                            <div 
+                              key={msg._id} 
+                              onClick={() => {
+                                router.push(`/chat/${msg.conversationId}?msgId=${msg._id}`);
+                                setShowGlobalSearch(false);
+                              }}
+                              className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl cursor-pointer transition"
+                            >
+                              <img src={chat?.avatar || 'https://via.placeholder.com/40'} alt={chat?.name} className="w-10 h-10 rounded-full object-cover border border-gray-100" />
+                              <div className="flex flex-col flex-1 overflow-hidden">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[12px] font-medium text-gray-500 truncate">{chat?.name || "Tin nhắn"}</span>
+                                  <span className="text-[10px] text-gray-400">
+                                    {new Date(msg.createdAt).toLocaleDateString("vi-VN", { day: '2-digit', month: '2-digit' })}
+                                  </span>
+                                </div>
+                                <span className="text-[14px] font-bold text-gray-800 truncate">
+                                  {msg.senderId === currentUser?.id ? "Bạn: " : ""}<span className="text-blue-600">{msg.content}</span>
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {globalSearchTab === "all" && globalSearchMessages.length > 3 && (
+                          <button 
+                            onClick={() => setGlobalSearchTab("message")}
+                            className="py-2.5 mx-1 mt-1 mb-1 text-[13px] font-bold text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-xl transition"
+                          >
+                            Xem tất cả tin nhắn
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* FILE */}
+                  {(globalSearchTab === "all" || globalSearchTab === "file") && globalSearchFiles.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <h3 className="text-[13px] font-bold text-gray-800 px-1">File ({globalSearchFiles.length})</h3>
+                      <div className="flex flex-col gap-1 bg-white rounded-2xl p-1 shadow-sm border border-gray-100">
+                        {globalSearchFiles.slice(0, globalSearchTab === "all" ? 3 : undefined).map((msg: any) => {
+                          const chat = conversationsWithTemp.find(c => (c.id || c._id) === msg.conversationId);
+                          return (
+                            <div 
+                              key={msg._id} 
+                              onClick={() => {
+                                window.open(msg.content, '_blank');
+                              }}
+                              className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl cursor-pointer transition"
+                            >
+                              <div className="w-10 h-10 bg-blue-100 text-blue-500 rounded-xl flex items-center justify-center font-bold text-[12px]">
+                                FILE
+                              </div>
+                              <div className="flex flex-col flex-1 overflow-hidden">
+                                <span className="text-[13px] font-bold text-blue-600 truncate">{msg.metadata?.fileName || "Tệp tin đính kèm"}</span>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[11px] text-gray-500 truncate">{chat?.name}</span>
+                                  <span className="text-[10px] text-gray-400">
+                                    {new Date(msg.createdAt).toLocaleDateString("vi-VN", { day: '2-digit', month: '2-digit' })}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {globalSearchTab === "all" && globalSearchFiles.length > 3 && (
+                          <button 
+                            onClick={() => setGlobalSearchTab("file")}
+                            className="py-2.5 mx-1 mt-1 mb-1 text-[13px] font-bold text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-xl transition"
+                          >
+                            Xem tất cả file
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TRỐNG */}
+                  {filteredConversations.length === 0 && globalSearchMessages.length === 0 && globalSearchFiles.length === 0 && (
+                    <div className="py-10 text-center text-[13px] text-gray-500">
+                      Không tìm thấy kết quả nào
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <ManageLabelsModal

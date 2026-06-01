@@ -14,7 +14,7 @@ import notificationRouter from './src/routes/notification.routes';
 // Import middleware
 import { errorHandler, notFoundHandler } from './src/middleware/errorHandler';
 
-const PORT = parseInt(process.env.PORT || '8087', 10);
+const PORT = parseInt(process.env.PORT || '8089', 10);
 
 /**
  * Main application startup

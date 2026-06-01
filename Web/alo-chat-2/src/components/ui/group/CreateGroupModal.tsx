@@ -12,6 +12,7 @@ import axiosClient from "@/services/api";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useRouter } from "next/navigation";
 import { getMediaUrl } from "@/utils/media";
+import { contactService } from "@/services/contactService";
 
 // ===========================
 // INTERFACES & HELPERS
@@ -107,6 +108,11 @@ export default function CreateGroupModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [strangerIds, setStrangerIds] = useState<string[]>([]);
+
+  // Phone search state
+  const [searchedUser, setSearchedUser] = useState<any>(null);
+  const [searchingPhone, setSearchingPhone] = useState(false);
 
   // Load current user và friends
   useEffect(() => {
@@ -156,10 +162,46 @@ export default function CreateGroupModal({
     loadData();
   }, []);
 
-  const toggleFriend = (id: string) => {
+  const toggleFriend = (id: string, userObj?: any) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
+    if (userObj && !friends.find((f) => f.id === id)) {
+      setFriends((prev) => [
+        ...prev,
+        {
+          id: userObj.userId,
+          fullName: userObj.fullName,
+          avatar: userObj.avatarUrl,
+          phone: userObj.phone,
+        },
+      ]);
+      if (userObj.relationStatus === "NOT_FRIEND") {
+        setStrangerIds((prev) => [...prev, id]);
+      }
+    }
+  };
+
+  const handlePhoneSearch = async (phone: string) => {
+    if (!phone) return;
+    setSearchingPhone(true);
+    setSearchedUser(null);
+    try {
+      const user = await contactService.searchUserByPhone(phone);
+      if (user) {
+        if (selectedIds.includes(user.userId) || currentUserId === user.userId) {
+          toast.info("Người dùng này đã được chọn hoặc là chính bạn");
+        } else {
+          setSearchedUser(user);
+        }
+      } else {
+        toast.error("Không tìm thấy người dùng với số điện thoại này");
+      }
+    } catch (error) {
+      toast.error("Lỗi khi tìm kiếm");
+    } finally {
+      setSearchingPhone(false);
+    }
   };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,17 +221,20 @@ export default function CreateGroupModal({
       return;
     }
     if (selectedIds.length < 2) {
-      setError("Chọn ít nhất 2 bạn bè");
+      setError("Chọn ít nhất 2 người");
       return;
     }
 
     setLoading(true);
     setError("");
 
+    const friendsToCreate = selectedIds.filter(id => !strangerIds.includes(id));
+    const strangersToInvite = selectedIds.filter(id => strangerIds.includes(id));
+
     try {
       const result = await createGroup({
         name: name.trim(),
-        userIds: selectedIds,
+        userIds: friendsToCreate,
         avatarFile: avatarFile || undefined,
         groupAvatar: !avatarFile ? initialAvatarUrl : undefined,
       });
@@ -200,8 +245,33 @@ export default function CreateGroupModal({
         return;
       }
 
-      toast.success(`Đã tạo nhóm "${name}" thành công!`);
       const convoId = result.data?._id || result.data?.id;
+
+      // Gửi link cho người lạ
+      if (strangersToInvite.length > 0 && convoId) {
+        const origin = typeof window !== "undefined" ? window.location.origin : "https://alo.chat";
+        const link = `${origin}/g/${convoId}`;
+        const messageContent = `Tôi muốn mời bạn tham gia nhóm "${name}": ${link}`;
+        
+        for (const strangerId of strangersToInvite) {
+          try {
+            const res: any = await axiosClient.post("/groups/direct", { targetUserId: strangerId });
+            const directConvoId = res?.data?._id || res?._id || res?.data?.data?._id;
+            
+            if (directConvoId) {
+              await axiosClient.post("/messages", {
+                conversationId: directConvoId,
+                content: messageContent,
+                type: "text"
+              });
+            }
+          } catch (e) {
+            console.error("Lỗi gửi link cho người lạ:", e);
+          }
+        }
+      }
+
+      toast.success(`Đã tạo nhóm "${name}" thành công!`);
       onSuccess();
       onClose();
       if (convoId) {
@@ -297,25 +367,76 @@ export default function CreateGroupModal({
 
             <div
               className={`flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 mb-3 focus-within:ring-2 focus-within:ring-black transition-all mt-1 relative z-10 shrink-0 ${
-                selectedIds.length > 0 ? "w-[calc(50%-16px)]" : "w-full"
+                selectedIds.length > 0 ? "md:w-[calc(50%-16px)] w-full" : "w-full"
               }`}
             >
               <MagnifyingGlassIcon className="w-4 h-4 text-gray-400 shrink-0" />
               <input
                 className="bg-transparent flex-1 text-sm font-medium focus:outline-none"
-                placeholder="Tìm tên..."
+                placeholder="Tìm tên hoặc nhập SĐT..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && /^\d{10,11}$/.test(search.trim())) {
+                    handlePhoneSearch(search.trim());
+                  }
+                }}
               />
+              {/^\d{10,11}$/.test(search.trim()) && (
+                <button 
+                  onClick={() => handlePhoneSearch(search.trim())}
+                  disabled={searchingPhone}
+                  className="px-3 py-1.5 bg-black text-white rounded-[10px] font-bold text-xs hover:bg-gray-800 transition disabled:opacity-50"
+                >
+                  {searchingPhone ? "..." : "Tìm"}
+                </button>
+              )}
             </div>
 
             <div className="space-y-1 flex-1 min-h-90 overflow-y-auto pr-1 scrollbar-hide">
+              {/* Searched User Result */}
+              {searchedUser && (
+                <div className={`mb-4 p-3 bg-gray-50 rounded-2xl border border-gray-200 animate-in slide-in-from-top-2 ${
+                  selectedIds.length > 0 ? "md:w-[calc(50%-16px)] w-full" : "w-full"
+                }`}>
+                  <p className="text-[10px] font-black text-black uppercase tracking-widest mb-2">Kết quả tìm kiếm</p>
+                  <div
+                    onClick={() => toggleFriend(searchedUser.userId, searchedUser)}
+                    className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition ${
+                      selectedIds.includes(searchedUser.userId) 
+                        ? "bg-black text-white shadow-lg" 
+                        : "bg-white hover:bg-gray-100 text-gray-700 shadow-sm"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <img
+                          src={searchedUser.avatarUrl || "/avt-mac-dinh.jpg"}
+                          className="w-9 h-9 rounded-full object-cover"
+                        />
+                        {selectedIds.includes(searchedUser.userId) && (
+                          <div className="absolute -bottom-1 -right-1 bg-white rounded-full">
+                            <CheckIcon className="w-3.5 h-3.5 text-black font-bold" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm truncate">{searchedUser.fullName}</p>
+                        <p className="text-[10px] opacity-70 truncate">{searchedUser.phone}</p>
+                      </div>
+                    </div>
+                    {searchedUser.relationStatus === "NOT_FRIEND" && (
+                      <span className="text-[9px] font-black uppercase bg-yellow-400 text-black px-1.5 py-0.5 rounded-md shrink-0">Người lạ</span>
+                    )}
+                  </div>
+                </div>
+              )}
               {friendsLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <div
                     key={i}
                     className={`flex items-center gap-3 p-3 rounded-xl animate-pulse transition-all ${
-                      selectedIds.length > 0 ? "w-[calc(50%-16px)]" : "w-full"
+                      selectedIds.length > 0 ? "md:w-[calc(50%-16px)] w-full" : "w-full"
                     }`}
                   >
                     <div className="w-5 h-5 rounded-full bg-gray-200 shrink-0" />
@@ -326,7 +447,7 @@ export default function CreateGroupModal({
               ) : filteredFriends.length === 0 ? (
                 <p
                   className={`text-center text-gray-400 text-sm py-8 font-medium italic transition-all ${
-                    selectedIds.length > 0 ? "w-[calc(50%-16px)]" : "w-full"
+                    selectedIds.length > 0 ? "md:w-[calc(50%-16px)] w-full" : "w-full"
                   }`}
                 >
                   {friends.length === 0
@@ -341,7 +462,7 @@ export default function CreateGroupModal({
                       key={f.id}
                       onClick={() => toggleFriend(f.id)}
                       className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all select-none hover:bg-gray-50 text-gray-800 ${
-                        selectedIds.length > 0 ? "w-[calc(50%-16px)]" : "w-full"
+                        selectedIds.length > 0 ? "md:w-[calc(50%-16px)] w-full" : "w-full"
                       }`}
                     >
                       <div
@@ -384,7 +505,7 @@ export default function CreateGroupModal({
 
             {/* === SLIDING PANEL FOR SELECTED FRIENDS === */}
             <div
-              className={`absolute top-0 bottom-0 bg-white shadow-[-10px_0_20px_-5px_rgba(0,0,0,0.05)] border-l border-gray-100 flex flex-col transition-all duration-300 rounded-l-2xl ${
+              className={`hidden md:flex absolute top-0 bottom-0 bg-white shadow-[-10px_0_20px_-5px_rgba(0,0,0,0.05)] border-l border-gray-100 flex-col transition-all duration-300 rounded-l-2xl ${
                 selectedIds.length > 0
                   ? "w-[calc(50%-16px)] opacity-100 translate-x-0 right-0"
                   : "w-[calc(50%-16px)] opacity-0 translate-x-[110%] absolute pointer-events-none -right-10"

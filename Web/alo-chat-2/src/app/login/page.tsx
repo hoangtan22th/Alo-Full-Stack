@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   UserIcon,
   LockClosedIcon,
@@ -15,13 +15,14 @@ import { toast } from "sonner";
 import { GoogleLogin } from "@react-oauth/google";
 
 // Định nghĩa các bước hiển thị cho Form bên trái
-type ViewState = "LOGIN" | "FORGOT_EMAIL" | "FORGOT_RESET";
+type ViewState = "LOGIN" | "LOGIN_OTP" | "FORGOT_EMAIL" | "FORGOT_RESET";
 
 const LoginPage = () => {
   // --- STATE CHO LOGIN ---
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [countdown, setCountdown] = useState(0);
 
   // --- STATE CHO QUÊN MẬT KHẨU ---
   const [view, setView] = useState<ViewState>("LOGIN");
@@ -36,6 +37,8 @@ const LoginPage = () => {
     "PENDING" | "SCANNED" | "CONFIRMED" | "EXPIRED"
   >("PENDING");
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get("redirect") || "/chat";
 
   //  STATE NÀY ĐỂ QUẢN LÝ ẨN/HIỆN MẬT KHẨU
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -87,7 +90,7 @@ const LoginPage = () => {
                 refreshToken,
               });
               toast.success("Đăng nhập bằng mã QR thành công!");
-              router.replace("/chat");
+              router.replace(redirectUrl);
             } else {
               console.error("Không tìm thấy token trong response", data);
             }
@@ -102,10 +105,46 @@ const LoginPage = () => {
 
     return () => clearInterval(interval);
   }, [qrToken, qrStatus, router, fetchProfile]);
+
+  // --- QUẢN LÝ COOLDOWN OTP 60 GIÂY ---
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (view === "LOGIN_OTP" && email) {
+      const storedTime = localStorage.getItem(`otpCooldown_${email}`);
+      if (storedTime) {
+        const timePassed = Math.floor((Date.now() - parseInt(storedTime)) / 1000);
+        if (timePassed < 60) {
+          setCountdown(60 - timePassed);
+        } else {
+          setCountdown(0);
+        }
+      }
+      
+      timer = setInterval(() => {
+        setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [view, email]);
+
   // --- HANDLERS CHO LOGIN ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    // Check cooldown before calling API
+    if (email) {
+      const storedTime = localStorage.getItem(`otpCooldown_${email}`);
+      if (storedTime) {
+        const timePassed = Math.floor((Date.now() - parseInt(storedTime)) / 1000);
+        if (timePassed < 60) {
+          setView("LOGIN_OTP");
+          toast.info(`Mã OTP đã được gửi. Vui lòng chờ ${60 - timePassed}s để gửi mã mới.`);
+          return;
+        }
+      }
+    }
+
     try {
       // Login endpoint expects deviceId for tracking
       const response: any = await api.post("/auth/login", {
@@ -116,7 +155,12 @@ const LoginPage = () => {
       const data = response.data || response;
       const { accessToken, refreshToken, user } = data;
 
-      if (accessToken) {
+      if (data.requiresOtp) {
+        toast.success(data.message || "Đã gửi mã OTP. Vui lòng kiểm tra email.");
+        setView("LOGIN_OTP");
+        localStorage.setItem(`otpCooldown_${email}`, Date.now().toString());
+        setCountdown(60);
+      } else if (accessToken) {
         localStorage.setItem("accessToken", accessToken);
         localStorage.setItem("refreshToken", refreshToken || "");
         // Đợi fetchProfile cập nhật user vào store trước khi redirect
@@ -127,13 +171,68 @@ const LoginPage = () => {
           refreshToken,
         });
         toast.success("Đăng nhập thành công!");
-        router.replace("/chat");
+        router.replace(redirectUrl);
       } else {
         console.error("Không tìm thấy token trong response", data);
         setError("Phản hồi không hợp lệ từ máy chủ");
       }
     } catch (err: any) {
       setError(err.response?.data?.message || "Đăng nhập thất bại");
+    }
+  };
+
+  const handleVerifyLoginOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otp) return setError("Vui lòng nhập mã OTP");
+
+    setIsSubmitting(true);
+    setError("");
+    try {
+      const response: any = await api.post("/auth/login/verify-otp", {
+        email,
+        otp,
+        deviceId: "Trình duyệt Web",
+      });
+      const data = response.data || response;
+      const { accessToken, refreshToken, user } = data;
+
+      if (accessToken) {
+        localStorage.setItem("accessToken", accessToken);
+        localStorage.setItem("refreshToken", refreshToken || "");
+        await fetchProfile();
+        useAuthStore.setState({
+          isAuthenticated: true,
+          accessToken,
+          refreshToken,
+        });
+        toast.success("Xác thực OTP thành công! Đăng nhập thành công!");
+        router.replace(redirectUrl);
+      } else {
+        setError("Phản hồi không hợp lệ từ máy chủ");
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Mã OTP không hợp lệ");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (countdown > 0) return;
+    try {
+      const response: any = await api.post("/auth/login", {
+        email,
+        password,
+        deviceId: "Trình duyệt Web",
+      });
+      const data = response.data || response;
+      if (data.requiresOtp) {
+        toast.success(data.message || "Đã gửi lại mã OTP. Vui lòng kiểm tra email.");
+        localStorage.setItem(`otpCooldown_${email}`, Date.now().toString());
+        setCountdown(60);
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Lỗi khi gửi lại mã OTP");
     }
   };
 
@@ -156,7 +255,7 @@ const LoginPage = () => {
           refreshToken,
         });
         toast.success("Đăng nhập bằng Google thành công!");
-        router.replace("/chat");
+        router.replace(redirectUrl);
       } else {
         console.error("Không tìm thấy token trong response", data);
         setError("Phản hồi không hợp lệ từ máy chủ");
@@ -333,6 +432,68 @@ const LoginPage = () => {
                   text="continue_with"
                 />
               </div>
+            </div>
+          )}
+
+          {/* ----- VIEW: NHẬP OTP ĐĂNG NHẬP ----- */}
+          {view === "LOGIN_OTP" && (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300 w-full max-w-sm mx-auto">
+              <div className="flex items-center justify-between mb-8 border-b border-gray-100 pb-4">
+                <h2 className="text-2xl font-extrabold text-gray-900">
+                  Xác thực đăng nhập
+                </h2>
+                <button
+                  onClick={handleBackToLogin}
+                  className="text-[#EF4444] font-bold text-sm hover:opacity-80 transition-opacity"
+                >
+                  Thoát
+                </button>
+              </div>
+
+              <form onSubmit={handleVerifyLoginOtp} className="space-y-5">
+                {error && (
+                  <div className="bg-red-50 text-red-500 text-sm p-3 rounded-lg border border-red-100 animate-shake">
+                    {error}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 uppercase mb-2 ml-1 tracking-widest">
+                    Mã OTP (Đã gửi tới {email})
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    className="w-full px-4 py-4 bg-gray-50/50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#0f172a] transition-all text-center tracking-[0.5em] text-lg font-bold text-gray-900"
+                    placeholder="••••••"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className={`w-full py-4 mt-2 rounded-3xl font-bold transition-all shadow-md active:scale-[0.98] text-white ${isSubmitting ? "bg-gray-400" : "bg-[#0f172a] hover:bg-gray-800"}`}
+                >
+                  {isSubmitting ? "Đang xử lý..." : "Xác nhận OTP"}
+                </button>
+
+                <div className="text-center mt-6">
+                  <p className="text-sm font-medium text-gray-500">
+                    Chưa nhận được mã?{" "}
+                    <button
+                      type="button"
+                      disabled={countdown > 0}
+                      onClick={handleResendOtp}
+                      className={`font-bold transition-colors ${countdown > 0 ? "text-gray-400 cursor-not-allowed" : "text-black hover:underline underline-offset-4"}`}
+                    >
+                      {countdown > 0 ? `Gửi lại sau ${countdown}s` : "Gửi lại mã OTP"}
+                    </button>
+                  </p>
+                </div>
+              </form>
             </div>
           )}
 
@@ -542,4 +703,10 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage;
+const LoginPageWrapper = () => (
+  <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#F3F3F4] text-gray-500 font-medium">Đang tải...</div>}>
+    <LoginPage />
+  </Suspense>
+);
+
+export default LoginPageWrapper;

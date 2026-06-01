@@ -318,19 +318,19 @@ export default function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
                   loading={loading}
                 />
                 <FormInput
-                  label="Số điện thoại"
+                  label="Số điện thoại (Không thể đổi)"
                   value={phone}
                   onChange={setPhone}
                   type="tel"
-                  isEditing={isEditing}
+                  isEditing={false}
                   loading={loading}
                 />
                 <FormInput
-                  label="Email liên hệ"
+                  label="Email liên hệ (Không thể đổi)"
                   value={email}
                   onChange={setEmail}
                   type="email"
-                  isEditing={isEditing}
+                  isEditing={false}
                   loading={loading}
                 />
                 <div className="w-full text-left">
