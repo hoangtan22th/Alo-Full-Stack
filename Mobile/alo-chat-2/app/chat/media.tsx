@@ -56,6 +56,7 @@ export default function MediaScreen() {
     const list: any[] = [];
     msgs.forEach((m) => {
       if (m.isRevoked) return;
+      if (m.metadata?.isSticker) return;
       if (m.metadata?.imageGroup) {
         m.metadata.imageGroup.forEach((img: any, idx: number) => {
           if (img.isRevoked) return;
