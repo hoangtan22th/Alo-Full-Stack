@@ -1763,7 +1763,7 @@ export default function GlobalChatScreen() {
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.5}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-            className="flex-1 px-4"
+            className="flex-1 px-3"
             contentContainerStyle={{
               flexGrow: 1,
               paddingTop: 80,
@@ -1866,7 +1866,7 @@ export default function GlobalChatScreen() {
                     </View>
                   )}
                   <View
-                    className={`max-w-[80%] ${group.isSender ? "items-end" : "items-start"}`}
+                    className={`max-w-[90%] ${group.isSender ? "items-end" : "items-start"}`}
                   >
                     {!group.isSender && isGroupChat && (
                       <Text className="text-[11px] font-bold text-gray-500 mb-1 ml-1">

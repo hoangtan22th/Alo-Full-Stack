@@ -141,7 +141,6 @@ export const MessageItem = ({
           msg.type === "poll" ? "center" : isSender ? "flex-end" : "flex-start",
         justifyContent: "center",
         marginVertical: msg.type === "poll" ? 12 : 0,
-        paddingHorizontal: 10,
       }}
     >
       {isHighlighted && (
