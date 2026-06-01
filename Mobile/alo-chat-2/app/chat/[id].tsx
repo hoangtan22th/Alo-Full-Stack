@@ -1661,6 +1661,7 @@ export default function GlobalChatScreen() {
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: "#f9fafb" }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? -(Math.max(insets.bottom, 12) - 12) : 0}
     >
       <View
         style={{ paddingTop: insets.top, backgroundColor: "white", zIndex: 10 }}

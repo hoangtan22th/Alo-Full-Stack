@@ -186,9 +186,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       <View
         className="w-full flex-row items-end px-4 py-3 bg-transparent"
         style={{
-          paddingBottom: isKeyboardVisible
-            ? 12
-            : Math.max(insets.bottom, 12),
+          paddingBottom: Math.max(insets.bottom, 12),
         }}
       >
         <TouchableOpacity
