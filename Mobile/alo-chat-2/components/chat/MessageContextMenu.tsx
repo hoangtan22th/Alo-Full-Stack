@@ -89,6 +89,17 @@ export const MessageContextMenu = ({
   let msgTop = layout.y;
   let msgHeight = layout.height;
 
+  const textContent =
+    selectedMsg.type === "text"
+      ? getMessageTextContent(selectedMsg.content)
+      : "";
+  const GROUP_LINK_REGEX = /(?:https?:\/\/)?(?:alo\.chat|54\.255\.57\.50:3001)\/g\/([a-f\d]{24})/i;
+  const groupMatch =
+    selectedMsg.type === "text" ? textContent?.match(GROUP_LINK_REGEX) : null;
+  const isTextOnlyGroupLink = groupMatch
+    ? textContent.trim() === groupMatch[0].trim()
+    : false;
+
   // Nếu là ảnh (không thu hồi), chiều cao hiển thị trong popup luôn bị cố định là 200
   if (selectedMsg.type === "image" && !selectedMsg.isRevoked) {
     msgHeight = 200;
@@ -105,6 +116,9 @@ export const MessageContextMenu = ({
   if (msgTop + msgHeight + 350 > screenHeight) {
     msgTop = Math.max(60, screenHeight - msgHeight - 350);
   }
+  if (isTextOnlyGroupLink) {
+    msgTop = msgTop - 40; // Trừ đi bao nhiêu tuỳ ý để nó nhích lên
+  }
 
   const isTopHalf = msgTop < screenHeight / 2;
   const isSender = selectedMsg.senderId === currentUserId;
@@ -119,17 +133,6 @@ export const MessageContextMenu = ({
     selectedMsg.type === "text" &&
     isSender &&
     isWithin60Seconds;
-
-  const textContent =
-    selectedMsg.type === "text"
-      ? getMessageTextContent(selectedMsg.content)
-      : "";
-  const GROUP_LINK_REGEX = /(?:https?:\/\/)?alo\.chat\/g\/([a-f\d]{24})/i;
-  const groupMatch =
-    selectedMsg.type === "text" ? textContent?.match(GROUP_LINK_REGEX) : null;
-  const isTextOnlyGroupLink = groupMatch
-    ? textContent.trim() === groupMatch[0].trim()
-    : false;
 
   return (
     <Modal
@@ -152,13 +155,13 @@ export const MessageContextMenu = ({
               }}
             >
               <View
-                className={`shadow-2xl overflow-hidden ${
+                className={`overflow-hidden ${
                   (selectedMsg.type === "image" && !selectedMsg.isRevoked) ||
                   (selectedMsg.type === "file" && !selectedMsg.isRevoked) ||
                   selectedMsg.type === "poll" ||
                   selectedMsg.type === "contact" ||
                   isTextOnlyGroupLink
-                    ? "p-0 bg-transparent flex-1"
+                    ? `p-0 bg-transparent flex-1 ${selectedMsg.type === "image" ? "rounded-[22px]" : "rounded-2xl"}`
                     : "px-5 py-3 " +
                       (isSender
                         ? "bg-black rounded-3xl rounded-br-lg flex-1"

@@ -110,7 +110,7 @@ export const MessageItem = ({
   };
 
   const textContent = msg.type === "text" ? getMessageTextContent(msg.content) : "";
-  const GROUP_LINK_REGEX = /(?:https?:\/\/)?alo\.chat\/g\/([a-f\d]{24})/i;
+  const GROUP_LINK_REGEX = /(?:https?:\/\/)?(?:alo\.chat|54\.255\.57\.50:3001)\/g\/([a-f\d]{24})/i;
   const groupMatch = msg.type === "text" ? textContent?.match(GROUP_LINK_REGEX) : null;
   const isTextOnlyGroupLink = groupMatch ? textContent.trim() === groupMatch[0].trim() : false;
 
@@ -287,7 +287,7 @@ export const MessageItem = ({
                         <TouchableOpacity
                           key={idx}
                           style={{ width: itemWidth, height: itemHeight }}
-                          className="rounded-lg overflow-hidden bg-gray-200 relative justify-center items-center"
+                          className="rounded-lg overflow-hidden bg-gray-200 relative justify-center items-center border border-gray-200"
                           activeOpacity={0.9}
                           onPress={() => {
                             if (onPress) {
@@ -385,7 +385,7 @@ export const MessageItem = ({
               >
                 <Image
                   source={{ uri: msg.content }}
-                  className="w-[260px] h-[200px] rounded-[22px] border border-gray-100/50 self-center"
+                  className="w-[260px] h-[200px] rounded-[22px] border border-gray-200 self-center"
                   resizeMode="cover"
                 />
               </TouchableOpacity>
@@ -646,7 +646,7 @@ export const MessageItem = ({
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={openReactionDetails}
-          className={`bg-white border border-gray-100 rounded-[14px] px-1.5 py-0.5 flex-row flex-wrap items-center shadow-sm z-10 -mt-3.5 mb-2 max-w-[85%] ${isSender ? "mr-4" : "ml-4"}`}
+          className={`bg-white border border-gray-100 rounded-[14px] px-1.5 py-0.5 flex-row flex-wrap items-center z-10 -mt-3.5 mb-2 max-w-[85%] ${isSender ? "mr-4" : "ml-4"}`}
         >
           <View className="flex-row flex-wrap items-center gap-1.5">
             {Array.from(
