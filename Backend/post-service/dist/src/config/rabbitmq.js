@@ -1,11 +1,20 @@
-import amqp from 'amqplib';
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.connectRabbitMQ = connectRabbitMQ;
+exports.getChannel = getChannel;
+exports.publishToRealtime = publishToRealtime;
+exports.closeRabbitMQ = closeRabbitMQ;
+const amqplib_1 = __importDefault(require("amqplib"));
 let connection = null;
 let channel = null;
 const RABBITMQ_URL = process.env.RABBITMQ_URL || `amqp://${process.env.RABBITMQ_USER || 'guest'}:${process.env.RABBITMQ_PASSWORD || 'guest'}@${process.env.RABBITMQ_HOST || 'localhost'}:${process.env.RABBITMQ_PORT || '5672'}${process.env.RABBITMQ_VHOST || '/'}`;
-export async function connectRabbitMQ() {
+async function connectRabbitMQ() {
     try {
         console.log('[RabbitMQ] Connecting to RabbitMQ...');
-        connection = await amqp.connect(RABBITMQ_URL);
+        connection = await amqplib_1.default.connect(RABBITMQ_URL);
         channel = await connection.createChannel();
         await channel.assertQueue('realtime_events', { durable: true });
         console.log('[RabbitMQ] Connected successfully and asserted realtime_events queue.');
@@ -26,12 +35,12 @@ export async function connectRabbitMQ() {
         throw error;
     }
 }
-export function getChannel() {
+function getChannel() {
     if (!channel)
         throw new Error('RabbitMQ channel not initialized.');
     return channel;
 }
-export async function publishToRealtime(event, payload) {
+async function publishToRealtime(event, payload) {
     try {
         const ch = getChannel();
         const messageBuffer = Buffer.from(JSON.stringify({
@@ -49,7 +58,7 @@ export async function publishToRealtime(event, payload) {
         console.error(`[RabbitMQ] Failed to publish event '${event}':`, error);
     }
 }
-export async function closeRabbitMQ() {
+async function closeRabbitMQ() {
     try {
         if (channel) {
             await channel.close();

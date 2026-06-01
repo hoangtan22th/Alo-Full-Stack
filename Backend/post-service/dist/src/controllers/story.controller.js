@@ -1,4 +1,7 @@
-import { storyService } from '../services/story.service';
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.storyController = exports.StoryController = void 0;
+const story_service_1 = require("../services/story.service");
 /**
  * Trích xuất userId từ header x-user-id
  */
@@ -6,7 +9,7 @@ function getUserIdFromHeader(req) {
     const userId = req.headers['x-user-id'];
     return typeof userId === 'string' ? userId : null;
 }
-export class StoryController {
+class StoryController {
     /**
      * Đăng Story mới
      */
@@ -51,7 +54,7 @@ export class StoryController {
             }
             const parsedDuration = duration ? Number(duration) : 5000;
             const authHeader = req.headers.authorization;
-            const story = await storyService.createStory(userId, file, caption, privacy, parsedMusic, parsedAllowedUsers, parsedBlockedUsers, authHeader, parsedDuration);
+            const story = await story_service_1.storyService.createStory(userId, file, caption, privacy, parsedMusic, parsedAllowedUsers, parsedBlockedUsers, authHeader, parsedDuration);
             res.status(201).json({ status: 201, data: story });
         }
         catch (error) {
@@ -70,7 +73,7 @@ export class StoryController {
                 return;
             }
             const authHeader = req.headers.authorization;
-            const feed = await storyService.getStoryFeed(userId, authHeader);
+            const feed = await story_service_1.storyService.getStoryFeed(userId, authHeader);
             res.status(200).json({ status: 200, data: feed });
         }
         catch (error) {
@@ -93,7 +96,7 @@ export class StoryController {
                 res.status(400).json({ status: 400, message: 'Thiếu targetUserId' });
                 return;
             }
-            const stories = await storyService.getUserStories(targetUserId);
+            const stories = await story_service_1.storyService.getUserStories(targetUserId);
             res.status(200).json({ status: 200, data: stories });
         }
         catch (error) {
@@ -116,7 +119,7 @@ export class StoryController {
                 res.status(400).json({ status: 400, message: 'Thiếu storyId' });
                 return;
             }
-            const story = await storyService.viewStory(storyId, userId);
+            const story = await story_service_1.storyService.viewStory(storyId, userId);
             res.status(200).json({ status: 200, data: story });
         }
         catch (error) {
@@ -139,7 +142,7 @@ export class StoryController {
                 res.status(400).json({ status: 400, message: 'Thiếu storyId' });
                 return;
             }
-            const viewers = await storyService.getStoryViewers(storyId, userId);
+            const viewers = await story_service_1.storyService.getStoryViewers(storyId, userId);
             res.status(200).json({ status: 200, data: viewers });
         }
         catch (error) {
@@ -164,7 +167,7 @@ export class StoryController {
                 return;
             }
             const authHeader = req.headers.authorization;
-            await storyService.deleteStory(storyId, userId, authHeader);
+            await story_service_1.storyService.deleteStory(storyId, userId, authHeader);
             res.status(200).json({ status: 200, message: 'Xóa story thành công' });
         }
         catch (error) {
@@ -196,7 +199,7 @@ export class StoryController {
                 res.status(400).json({ status: 400, message: `type phải là một trong: ${validTypes.join(', ')}` });
                 return;
             }
-            const story = await storyService.reactToStory(storyId, userId, type);
+            const story = await story_service_1.storyService.reactToStory(storyId, userId, type);
             res.status(200).json({ status: 200, data: story });
         }
         catch (error) {
@@ -214,7 +217,7 @@ export class StoryController {
                 res.status(401).json({ status: 401, message: 'Unauthorized - missing x-user-id' });
                 return;
             }
-            const stories = await storyService.getArchivedStories(userId);
+            const stories = await story_service_1.storyService.getArchivedStories(userId);
             res.status(200).json({ status: 200, data: stories });
         }
         catch (error) {
@@ -238,7 +241,7 @@ export class StoryController {
                 return;
             }
             const authHeader = req.headers.authorization;
-            const story = await storyService.repostStory(storyId, userId, authHeader);
+            const story = await story_service_1.storyService.repostStory(storyId, userId, authHeader);
             res.status(200).json({ status: 200, data: story, message: 'Đăng lại story thành công' });
         }
         catch (error) {
@@ -261,7 +264,7 @@ export class StoryController {
                 res.status(400).json({ status: 400, message: 'Thiếu storyId' });
                 return;
             }
-            await storyService.permanentDeleteStory(storyId, userId);
+            await story_service_1.storyService.permanentDeleteStory(storyId, userId);
             res.status(200).json({ status: 200, message: 'Đã xóa vĩnh viễn story' });
         }
         catch (error) {
@@ -272,6 +275,30 @@ export class StoryController {
             res.status(statusCode).json({ status: statusCode, message: error.message });
         }
     }
+    /**
+     * Lấy chi tiết một story cụ thể
+     */
+    async getStoryDetails(req, res, next) {
+        try {
+            const userId = getUserIdFromHeader(req);
+            if (!userId) {
+                res.status(401).json({ status: 401, message: 'Unauthorized - missing x-user-id' });
+                return;
+            }
+            const { storyId } = req.params;
+            if (!storyId) {
+                res.status(400).json({ status: 400, message: 'Thiếu storyId' });
+                return;
+            }
+            const story = await story_service_1.storyService.getStoryDetails(storyId);
+            res.status(200).json({ status: 200, data: story });
+        }
+        catch (error) {
+            console.error('[StoryController] Error getting story details:', error);
+            res.status(400).json({ status: 400, message: error.message });
+        }
+    }
 }
-export const storyController = new StoryController();
+exports.StoryController = StoryController;
+exports.storyController = new StoryController();
 //# sourceMappingURL=story.controller.js.map

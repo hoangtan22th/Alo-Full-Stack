@@ -1,5 +1,11 @@
-import { postService } from '../services/post.service';
-import axios from 'axios';
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.postController = exports.PostController = void 0;
+const post_service_1 = require("../services/post.service");
+const axios_1 = __importDefault(require("axios"));
 /**
  * Trích xuất userId từ header x-user-id (do API Gateway đính kèm)
  */
@@ -7,7 +13,7 @@ function getUserIdFromHeader(req) {
     const userId = req.headers['x-user-id'];
     return typeof userId === 'string' ? userId : null;
 }
-export class PostController {
+class PostController {
     /**
      * Tạo bài viết mới
      */
@@ -56,7 +62,7 @@ export class PostController {
                 catch (e) { /* bỏ qua */ }
             }
             const authHeader = req.headers.authorization;
-            const post = await postService.createPost(userId, content, files, privacy, parsedTags, parsedAllowedUsers, parsedBlockedUsers, authHeader, backgroundTemplate);
+            const post = await post_service_1.postService.createPost(userId, content, files, privacy, parsedTags, parsedAllowedUsers, parsedBlockedUsers, authHeader, backgroundTemplate);
             res.status(201).json({ status: 201, data: post });
         }
         catch (error) {
@@ -133,7 +139,7 @@ export class PostController {
                     }
                 });
             }
-            const updatedPost = await postService.editPost(postId, userId, content, privacy, files, parsedKeepMediaUrls, parsedTags, parsedAllowedUsers, parsedBlockedUsers);
+            const updatedPost = await post_service_1.postService.editPost(postId, userId, content, privacy, files, parsedKeepMediaUrls, parsedTags, parsedAllowedUsers, parsedBlockedUsers);
             res.status(200).json({ status: 200, data: updatedPost });
         }
         catch (error) {
@@ -161,7 +167,7 @@ export class PostController {
                 return;
             }
             const authHeader = req.headers.authorization;
-            await postService.deletePost(postId, userId, authHeader);
+            await post_service_1.postService.deletePost(postId, userId, authHeader);
             res.status(200).json({ status: 200, message: 'Xóa bài viết thành công' });
         }
         catch (error) {
@@ -189,7 +195,7 @@ export class PostController {
                 return;
             }
             const authHeader = req.headers.authorization;
-            const post = await postService.getPostDetails(postId, userId, authHeader);
+            const post = await post_service_1.postService.getPostDetails(postId, userId, authHeader);
             res.status(200).json({ status: 200, data: post });
         }
         catch (error) {
@@ -223,7 +229,7 @@ export class PostController {
                 res.status(400).json({ status: 400, message: `type phải là một trong: ${validTypes.join(', ')}` });
                 return;
             }
-            const post = await postService.reactToPost(postId, userId, type);
+            const post = await post_service_1.postService.reactToPost(postId, userId, type);
             res.status(200).json({ status: 200, data: post });
         }
         catch (error) {
@@ -249,7 +255,7 @@ export class PostController {
                 res.status(400).json({ status: 400, message: 'Thiếu postId' });
                 return;
             }
-            const post = await postService.toggleLikePost(postId, userId);
+            const post = await post_service_1.postService.toggleLikePost(postId, userId);
             res.status(200).json({ status: 200, data: post });
         }
         catch (error) {
@@ -273,7 +279,7 @@ export class PostController {
             const limit = parseInt(req.query.limit) || 10;
             const skip = parseInt(req.query.skip) || 0;
             const authHeader = req.headers.authorization;
-            const posts = await postService.getHomeFeed(userId, limit, skip, authHeader);
+            const posts = await post_service_1.postService.getHomeFeed(userId, limit, skip, authHeader);
             res.status(200).json({ status: 200, data: posts });
         }
         catch (error) {
@@ -299,7 +305,7 @@ export class PostController {
             const limit = parseInt(req.query.limit) || 10;
             const skip = parseInt(req.query.skip) || 0;
             const authHeader = req.headers.authorization;
-            const posts = await postService.getUserTimeline(targetUserId, currentUserId, limit, skip, authHeader);
+            const posts = await post_service_1.postService.getUserTimeline(targetUserId, currentUserId, limit, skip, authHeader);
             res.status(200).json({ status: 200, data: posts });
         }
         catch (error) {
@@ -315,7 +321,7 @@ export class PostController {
         const clientSecret = process.env.SPOTIFY_CLIENT_SECRET || '87a935be066d48bda91f25164ad0b2ca';
         try {
             const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-            const response = await axios.post('https://accounts.spotify.com/api/token', 'grant_type=client_credentials', {
+            const response = await axios_1.default.post('https://accounts.spotify.com/api/token', 'grant_type=client_credentials', {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                     'Authorization': `Basic ${auth}`
@@ -329,5 +335,6 @@ export class PostController {
         }
     }
 }
-export const postController = new PostController();
+exports.PostController = PostController;
+exports.postController = new PostController();
 //# sourceMappingURL=post.controller.js.map
