@@ -10,6 +10,7 @@ import {
   ScrollView,
   ActivityIndicator,
   TouchableWithoutFeedback,
+  Animated,
 } from "react-native";
 import {
   InformationCircleIcon,
@@ -18,11 +19,13 @@ import {
 import { PlayIcon } from "react-native-heroicons/solid";
 import { MessageDTO } from "../../services/messageService";
 import { EMOJI_MAP } from "../../constants/Chat";
+import { getMessageTextContent } from "../../utils/messageUtils";
 import { openRemoteFile } from "../../utils/fileUtils";
 import { WebView } from "react-native-webview";
 import { PollMessagePreview } from "./PollMessagePreview";
 import { useAuth } from "../../contexts/AuthContext";
 import Pdf from "react-native-pdf";
+import { Audio } from "expo-av";
 
 interface MessageItemProps {
   msg: MessageDTO;
@@ -41,6 +44,9 @@ interface MessageItemProps {
   onPress?: () => void;
   isSelected?: boolean;
   onOpenGallery?: (imagesList: any[], idx: number) => void;
+  members?: any[];
+  userCache?: Record<string, any>;
+  currentUserId?: string | null;
 }
 
 import { GroupLinkBubble } from "./GroupLinkBubble";
@@ -62,14 +68,70 @@ export const MessageItem = ({
   onPress,
   isSelected,
   onOpenGallery,
+  members = [],
+  userCache = {},
+  currentUserId,
 }: MessageItemProps) => {
   const router = useRouter();
-  const { user } = useAuth();
-  const currentUserId = user?.id || user?._id || user?.userId || null;
   const timeString = new Date(msg.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
+
+  const renderContentWithMentions = (rawContent: string) => {
+    const content = getMessageTextContent(rawContent);
+    if (!content) return content;
+    const mentionNames = ["Tất cả"];
+    members.forEach((m: any) => {
+      const name = userCache[String(m.userId || m._id)]?.fullName || m.fullName || m.displayName || m.name;
+      if (name) mentionNames.push(name);
+    });
+    
+    if (mentionNames.length === 0) return content;
+    
+    const sortedNames = [...mentionNames].sort((a, b) => b.length - a.length);
+    const regex = new RegExp(`@(${sortedNames.map(n => n.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')).join("|")})`, "g");
+    
+    const parts = content.split(regex);
+    if (parts.length === 1) return content;
+    
+    const result: React.ReactNode[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      if (i % 2 === 1) {
+        result.push(
+          <Text key={i} className={`font-bold ${isSender ? "text-blue-100" : "text-blue-700"}`}>
+            @{parts[i]}
+          </Text>
+        );
+      } else if (parts[i]) {
+        result.push(parts[i]);
+      }
+    }
+    return <>{result}</>;
+  };
+
+  const textContent = msg.type === "text" ? getMessageTextContent(msg.content) : "";
+  const GROUP_LINK_REGEX = /(?:https?:\/\/)?(?:alo\.chat|54\.255\.57\.50:3001)\/g\/([a-f\d]{24})/i;
+  const groupMatch = msg.type === "text" ? textContent?.match(GROUP_LINK_REGEX) : null;
+  const isTextOnlyGroupLink = groupMatch ? textContent.trim() === groupMatch[0].trim() : false;
+
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      speed: 20,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 20,
+    }).start();
+  };
 
   return (
     <View
@@ -80,7 +142,6 @@ export const MessageItem = ({
           msg.type === "poll" ? "center" : isSender ? "flex-end" : "flex-start",
         justifyContent: "center",
         marginVertical: msg.type === "poll" ? 12 : 0,
-        paddingHorizontal: 10,
       }}
     >
       {isHighlighted && (
@@ -93,7 +154,9 @@ export const MessageItem = ({
         ref={(r) => {
           if (r) messageRefs.current[msg._id] = r as any;
         }}
-        activeOpacity={0.8}
+        activeOpacity={0.9}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
         onLongPress={() => {
           onLongPress();
         }}
@@ -109,18 +172,19 @@ export const MessageItem = ({
         }}
         className="relative"
       >
-        <View
-          className={`shadow-sm border-[1px] ${
+        <Animated.View
+          className={`border-[1px] ${
             ((msg.type === "image" || msg.type === "file") && !msg.isRevoked) ||
-            msg.type === "poll"
-              ? `p-0 bg-transparent ${msg.type === "image" ? "rounded-[22px]" : "rounded-2xl"}`
+            msg.type === "poll" || msg.type === "contact" || isTextOnlyGroupLink
+              ? `p-0 bg-transparent ${msg.type === "image" ? "rounded-[22px] border-0" : "rounded-2xl border-0"}`
               : "px-5 py-3 " +
                 (isSender
                   ? "bg-black rounded-3xl rounded-br-lg"
                   : "bg-white rounded-3xl rounded-bl-lg")
-          } ${isAdminHighlighted ? "border-amber-200" : isSelected ? "border-blue-500" : "border-transparent"}`}
+          } ${isAdminHighlighted ? "border-amber-200" : isSelected ? "border-blue-500" : isSender ? "border-transparent" : "border-gray-200"}`}
           style={[
             msg.type === "poll" ? { width: "100%", alignItems: "center" } : {},
+            { transform: [{ scale: scaleAnim }] }
           ]}
         >
           {msg.replyTo && msg.replyTo.messageId && (
@@ -145,7 +209,7 @@ export const MessageItem = ({
                 numberOfLines={1}
               >
                 {msg.replyTo.type === "text"
-                  ? msg.replyTo.content
+                  ? getMessageTextContent(msg.replyTo.content)
                   : msg.replyTo.type === "image" ||
                       (msg.replyTo.type === "file" &&
                         [
@@ -223,7 +287,7 @@ export const MessageItem = ({
                         <TouchableOpacity
                           key={idx}
                           style={{ width: itemWidth, height: itemHeight }}
-                          className="rounded-lg overflow-hidden bg-gray-200 relative justify-center items-center"
+                          className="rounded-lg overflow-hidden bg-gray-200 relative justify-center items-center border border-gray-200"
                           activeOpacity={0.9}
                           onPress={() => {
                             if (onPress) {
@@ -321,7 +385,7 @@ export const MessageItem = ({
               >
                 <Image
                   source={{ uri: msg.content }}
-                  className="w-[260px] h-[200px] rounded-[22px] border border-gray-100/50 self-center"
+                  className="w-[260px] h-[200px] rounded-[22px] border border-gray-200 self-center"
                   resizeMode="cover"
                 />
               </TouchableOpacity>
@@ -339,6 +403,22 @@ export const MessageItem = ({
                 "3gp",
                 "mkv",
               ].includes(ext || "");
+              const isAudio = [
+                "m4a",
+                "mp3",
+                "wav",
+                "webm",
+                "aac",
+                "ogg"
+              ].includes(ext || "");
+
+              if (isAudio) {
+                return (
+                  <TouchableOpacity onLongPress={() => onLongPress()}>
+                    <AudioMessagePreview url={msg.content} isSender={isSender} />
+                  </TouchableOpacity>
+                );
+              }
 
               if (isVideo) {
                 return (
@@ -385,7 +465,7 @@ export const MessageItem = ({
                   onLongPress={() => {
                     onLongPress();
                   }}
-                  className={`overflow-hidden rounded-2xl bg-white`}
+                  className={`overflow-hidden rounded-2xl bg-white border-gray-200 border`}
                   style={{ width: 260 }}
                 >
                   {/* Top Section: Preview */}
@@ -482,23 +562,19 @@ export const MessageItem = ({
             })()
           ) : msg.type === "text" ? (
             (() => {
-              const GROUP_LINK_REGEX = /(?:https?:\/\/)?alo\.chat\/g\/([a-f\d]{24})/i;
-              const groupMatch = msg.content?.match(GROUP_LINK_REGEX);
-              
               if (groupMatch) {
                 const linkGroupId = groupMatch[1];
-                const textOnlyLink = msg.content.trim() === groupMatch[0].trim();
                 
                 return (
                   <View className="flex-col">
-                    {/* {!textOnlyLink && (
+                    {!isTextOnlyGroupLink && (
                       <Text
                         className={`text-base leading-6 ${isSender ? "text-white" : "text-gray-900"}`}
                       >
-                        {msg.content}
+                        {renderContentWithMentions(msg.content)}
                       </Text>
-                    )} */}
-                    <GroupLinkBubble msg={msg} linkGroupId={linkGroupId} />
+                    )}
+                    <GroupLinkBubble msg={msg} linkGroupId={linkGroupId} isTextOnly={isTextOnlyGroupLink} onLongPress={() => onLongPress()} />
                   </View>
                 );
               }
@@ -507,7 +583,7 @@ export const MessageItem = ({
                 <Text
                   className={`text-base leading-6 ${isSender ? "text-white" : "text-gray-900"}`}
                 >
-                  {msg.content}
+                  {renderContentWithMentions(msg.content)}
                 </Text>
               );
             })()
@@ -517,7 +593,7 @@ export const MessageItem = ({
               isSender={isSender}
             />
           ) : msg.type === "contact" ? (
-            <View className="w-[260px] bg-white rounded-2xl p-4 shadow-sm" style={{ alignSelf: "center" }}>
+            <View className="w-[260px] bg-white rounded-2xl p-4 border-gray-200 border" style={{ alignSelf: "center" }}>
               <View className="flex-row items-center mb-2.5">
                 <View className="bg-blue-50 px-2 py-0.5 rounded-md">
                   <Text className="text-[10px] text-blue-600 font-black uppercase tracking-wider">Danh thiếp</Text>
@@ -525,6 +601,7 @@ export const MessageItem = ({
               </View>
               <TouchableOpacity
                 activeOpacity={0.7}
+                onLongPress={() => onLongPress()}
                 onPress={() => {
                   if (msg.metadata?.contactId) {
                     router.push({
@@ -558,6 +635,7 @@ export const MessageItem = ({
               </TouchableOpacity>
               <View className="h-[1px] bg-gray-100 mb-3" />
               <TouchableOpacity
+                onLongPress={() => onLongPress()}
                 onPress={() => {
                   if (msg.metadata?.contactId) {
                     router.push({
@@ -576,7 +654,7 @@ export const MessageItem = ({
               </TouchableOpacity>
             </View>
           ) : null}
-        </View>
+        </Animated.View>
       </TouchableOpacity>
 
       {/* Hiển thị phân loại đếm Emoji dính dưới đáy bong bóng thoại */}
@@ -584,7 +662,7 @@ export const MessageItem = ({
         <TouchableOpacity
           activeOpacity={0.7}
           onPress={openReactionDetails}
-          className={`bg-white border border-gray-100 rounded-[14px] px-1.5 py-0.5 flex-row flex-wrap items-center shadow-sm z-10 -mt-3.5 mb-2 max-w-[85%] ${isSender ? "mr-4" : "ml-4"}`}
+          className={`bg-white border border-gray-100 rounded-[14px] px-1.5 py-0.5 flex-row flex-wrap items-center z-10 -mt-3.5 mb-2 max-w-[85%] ${isSender ? "mr-4" : "ml-4"}`}
         >
           <View className="flex-row flex-wrap items-center gap-1.5">
             {Array.from(
@@ -629,7 +707,7 @@ export const MessageItem = ({
   );
 };
 
-const FileTextPreview = ({ url }: { url: string }) => {
+export const FileTextPreview = ({ url }: { url: string }) => {
   const [content, setContent] = React.useState<string>("Đang tải nội dung...");
   const [wrap, setWrap] = React.useState<boolean>(false);
 
@@ -681,55 +759,55 @@ const FileTextPreview = ({ url }: { url: string }) => {
   );
 };
 
-// const FilePdfPreview = ({ url }: { url: string }) => {
-//   return (
-//     <View className="flex-1 overflow-hidden bg-white" pointerEvents="none">
-//       <Pdf
-//         source={{ uri: url, cache: true }}
-//         singlePage={true} // Rất quan trọng: Chỉ render trang 1 làm thumbnail để tối ưu RAM cho FlatList
-//         fitPolicy={0} // Fit theo chiều rộng
-//         style={{
-//           flex: 1,
-//           backgroundColor: "white",
-//           width: "100%",
-//           height: "100%",
-//           marginTop: -2,
-//         }}
-//         onError={(error) => {
-//           console.warn("[FilePdfPreview] Lỗi render PDF:", error);
-//         }}
-//       />
-//     </View>
-//   );
-// };
-
-const FilePdfPreview = ({ url }: { url: string }) => {
-  // iOS đọc trực tiếp URL, Android dùng Google Docs
-  const previewUrl =
-    Platform.OS === "android"
-      ? `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`
-      : url;
-
+export const FilePdfPreview = ({ url }: { url: string }) => {
   return (
-    <View className="flex-1 overflow-hidden bg-white">
-      <WebView
-        source={{ uri: previewUrl }}
-        scrollEnabled={false}
-        pointerEvents="none"
-        javaScriptEnabled={true} // Cần thiết cho Google Docs trên Android
-        domStorageEnabled={true} // Cần thiết cho Google Docs trên Android
-        startInLoadingState={true}
-        style={{ flex: 1, backgroundColor: "white" }}
-        onHttpError={(syntheticEvent) => {
-          const { nativeEvent } = syntheticEvent;
-          console.warn("WebView HTTP error: ", nativeEvent);
+    <View className="flex-1 overflow-hidden bg-white" pointerEvents="none">
+      <Pdf
+        source={{ uri: url, cache: true }}
+        singlePage={true} // Rất quan trọng: Chỉ render trang 1 làm thumbnail để tối ưu RAM cho FlatList
+        fitPolicy={0} // Fit theo chiều rộng
+        style={{
+          flex: 1,
+          backgroundColor: "white",
+          width: "100%",
+          height: "100%",
+          marginTop: -2,
+        }}
+        onError={(error) => {
+          console.warn("[FilePdfPreview] Lỗi render PDF:", error);
         }}
       />
     </View>
   );
 };
 
-const OfficeFilePreview = ({ url }: { url: string }) => {
+// const FilePdfPreview = ({ url }: { url: string }) => {
+//   // iOS đọc trực tiếp URL, Android dùng Google Docs
+//   const previewUrl =
+//     Platform.OS === "android"
+//       ? `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`
+//       : url;
+
+//   return (
+//     <View className="flex-1 overflow-hidden bg-white">
+//       <WebView
+//         source={{ uri: previewUrl }}
+//         scrollEnabled={false}
+//         pointerEvents="none"
+//         javaScriptEnabled={true} // Cần thiết cho Google Docs trên Android
+//         domStorageEnabled={true} // Cần thiết cho Google Docs trên Android
+//         startInLoadingState={true}
+//         style={{ flex: 1, backgroundColor: "white" }}
+//         onHttpError={(syntheticEvent) => {
+//           const { nativeEvent } = syntheticEvent;
+//           console.warn("WebView HTTP error: ", nativeEvent);
+//         }}
+//       />
+//     </View>
+//   );
+// };
+
+export const OfficeFilePreview = ({ url }: { url: string }) => {
   const previewUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`;
 
   return (
@@ -753,5 +831,206 @@ const OfficeFilePreview = ({ url }: { url: string }) => {
         }}
       />
     </View>
+  );
+};
+
+export const AudioMessagePreview = ({ url, isSender }: { url: string; isSender?: boolean }) => {
+  const isWebmOnIos = Platform.OS === 'ios' && url.toLowerCase().includes('.webm');
+  
+  const [isPlaying, setIsPlaying] = React.useState(false);
+  const [duration, setDuration] = React.useState(0);
+  const [position, setPosition] = React.useState(0);
+
+  const soundRef = React.useRef<Audio.Sound | null>(null);
+  const webviewRef = React.useRef<WebView>(null);
+
+  let finalUrl = url;
+  if (url.startsWith("/")) {
+    finalUrl = `http://${process.env.EXPO_PUBLIC_IP_ADDRESS || "localhost"}:8888${url}`;
+  }
+  const encodedUrl = encodeURI(finalUrl);
+
+  React.useEffect(() => {
+    if (isWebmOnIos) return; // handled by webview
+
+    let isMounted = true;
+    const initSound = async () => {
+      try {
+        const { sound: newSound, status } = await Audio.Sound.createAsync(
+          { uri: encodedUrl },
+          { shouldPlay: false, positionMillis: 0 },
+          (statusUpdate) => {
+            if (statusUpdate.isLoaded) {
+              setPosition(statusUpdate.positionMillis || 0);
+              setIsPlaying(statusUpdate.isPlaying);
+              if (statusUpdate.didJustFinish) {
+                setIsPlaying(false);
+                setPosition(statusUpdate.durationMillis || 0);
+              }
+            }
+          }
+        );
+
+        if (isMounted) {
+          soundRef.current = newSound;
+          if (status.isLoaded) {
+            setDuration(status.durationMillis || 0);
+          }
+        } else {
+          newSound.unloadAsync();
+        }
+      } catch (e) {
+        console.error("Lỗi init audio:", e);
+      }
+    };
+
+    initSound();
+
+    return () => {
+      isMounted = false;
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+      }
+    };
+  }, [encodedUrl, isWebmOnIos]);
+
+  const loadAndPlay = async () => {
+    if (isWebmOnIos) {
+      if (isPlaying) {
+        webviewRef.current?.injectJavaScript(`window.postMessage(JSON.stringify({action: 'pause'}), '*'); true;`);
+      } else {
+        if (position >= duration && duration > 0) {
+          webviewRef.current?.injectJavaScript(`window.postMessage(JSON.stringify({action: 'seek', value: 0}), '*'); true;`);
+        }
+        webviewRef.current?.injectJavaScript(`window.postMessage(JSON.stringify({action: 'play'}), '*'); true;`);
+      }
+    } else {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          playThroughEarpieceAndroid: false,
+        });
+
+        if (soundRef.current) {
+          if (isPlaying) {
+            await soundRef.current.pauseAsync();
+          } else {
+            if (position >= duration && duration > 0) {
+              await soundRef.current.setPositionAsync(0);
+            }
+            await soundRef.current.playAsync();
+          }
+        }
+      } catch (e) {
+        console.error("Lỗi phát audio:", e);
+      }
+    }
+  };
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+      <body>
+        <audio id="player" src="${finalUrl}" preload="metadata" playsinline></audio>
+        <script>
+          const player = document.getElementById('player');
+          player.addEventListener('loadedmetadata', () => {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'duration', value: player.duration * 1000 }));
+          });
+          player.addEventListener('timeupdate', () => {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'position', value: player.currentTime * 1000 }));
+          });
+          player.addEventListener('ended', () => {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ended' }));
+          });
+          player.addEventListener('play', () => {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'play' }));
+          });
+          player.addEventListener('pause', () => {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'pause' }));
+          });
+          window.addEventListener('message', (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.action === 'play') player.play();
+              if (data.action === 'pause') player.pause();
+              if (data.action === 'seek') player.currentTime = data.value / 1000;
+            } catch(e) {}
+          });
+        </script>
+      </body>
+    </html>
+  `;
+
+  const handleWebViewMessage = (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'duration') setDuration(data.value);
+      if (data.type === 'position') setPosition(data.value);
+      if (data.type === 'ended') {
+        setIsPlaying(false);
+        setPosition(duration);
+      }
+      if (data.type === 'play') setIsPlaying(true);
+      if (data.type === 'pause') setIsPlaying(false);
+    } catch(e) {}
+  };
+
+  const formatTime = (ms: number) => {
+    if (!ms || isNaN(ms)) return "0:00";
+    const totalSeconds = Math.floor(ms / 1000);
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${s < 10 ? "0" : ""}${s}`;
+  };
+
+  const progress = duration > 0 ? (position / duration) * 100 : 0;
+
+  return (
+    <>
+      <View className={`w-[240px] flex-row items-center p-3 rounded-2xl ${isSender ? "bg-black" : "bg-white border border-gray-200"}`}>
+        <TouchableOpacity 
+          onPress={loadAndPlay}
+          className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${isSender ? "bg-white" : "bg-black"}`}
+        >
+          {isPlaying ? (
+            <View className={`w-3 h-3 rounded-sm ${isSender ? "bg-black" : "bg-white"}`} />
+          ) : (
+            <PlayIcon size={20} color={isSender ? "black" : "white"} style={{ transform: [{ translateX: 2 }] }} />
+          )}
+        </TouchableOpacity>
+        
+        <View className="flex-1">
+          <View className={`h-1.5 rounded-full w-full overflow-hidden mb-2 ${isSender ? "bg-gray-700" : "bg-gray-200"}`}>
+             <View className={`h-full rounded-full ${isSender ? "bg-white" : "bg-black"}`} style={{ width: `${progress}%` }} />
+          </View>
+          <View className="flex-row justify-between">
+             <Text className={`text-[11px] font-medium ${isSender ? "text-gray-300" : "text-gray-500"}`}>
+               {formatTime(position)}
+             </Text>
+             <Text className={`text-[11px] font-medium ${isSender ? "text-gray-300" : "text-gray-500"}`}>
+               {formatTime(duration)}
+             </Text>
+          </View>
+        </View>
+      </View>
+      
+      {isWebmOnIos && (
+        <View style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }} pointerEvents="none">
+          <WebView
+            ref={webviewRef}
+            source={{ html: htmlContent }}
+            onMessage={handleWebViewMessage}
+            originWhitelist={['*']}
+            allowsInlineMediaPlayback={true}
+            mediaPlaybackRequiresUserAction={false}
+            style={{ width: 0, height: 0, opacity: 0 }}
+          />
+        </View>
+      )}
+    </>
   );
 };

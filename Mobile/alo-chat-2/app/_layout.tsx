@@ -63,14 +63,11 @@ function RootLayoutNav() {
     const showSub = DeviceEventEmitter.addListener(
       "show_in_app_notification",
       (data) => {
+        const currentPathId = (segments as string[])[1];
+
         // Kiểm tra nếu là thông báo bị mời ra khỏi nhóm
         if (data.type === "REMOVED") {
           const groupId = data.data?.groupId;
-          const currentPathId = (segments as string[])[1];
-          const queryId = searchParams.id;
-
-          // Nếu đang ở màn hình chat của nhóm đó hoặc màn hình info của nhóm đó
-          // ['chat', 'id'] hoặc ['chat', 'info']
           const isAtChat = segments[0] === "chat" && currentPathId === groupId;
           const isAtInfo = segments[0] === "chat" && currentPathId === "info";
 
@@ -79,6 +76,17 @@ function RootLayoutNav() {
               "User is currently on the group screen, letting local Alert handle it.",
             );
             return;
+          }
+        }
+
+        // Kiểm tra nếu là thông báo tin nhắn mới
+        if (data.type === "NEW_MESSAGE") {
+          const conversationId = data.data?.conversationId;
+          const isAtChat = segments[0] === "chat" && currentPathId === conversationId;
+          
+          if (isAtChat) {
+             // Đang ở màn hình chat đó thì không hiện notify
+             return;
           }
         }
 
@@ -95,7 +103,7 @@ function RootLayoutNav() {
     return () => {
       showSub.remove();
     };
-  }, []);
+  }, [segments, searchParams]);
 
   if (!isReady) {
     return (
@@ -165,6 +173,16 @@ function RootLayoutNav() {
                 params: { id: notification.data.postId }
               });
             }
+          } else if (notification.type === "NEW_MESSAGE") {
+            if (notification.data?.conversationId) {
+              router.push({
+                pathname: `/chat/${notification.data.conversationId}` as any,
+              });
+            }
+          } else if (notification.type === "NEW_FRIEND_REQUEST") {
+            router.push("/(tabs)/contacts/received-requests");
+          } else if (notification.type === "FRIEND_ACCEPTED") {
+            router.push("/(tabs)/contacts");
           }
         }}
       />

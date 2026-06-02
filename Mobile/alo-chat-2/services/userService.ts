@@ -10,6 +10,7 @@ export interface UserProfileDTO {
   coverImage: string;
   gender: number;
   dateOfBirth: string;
+  bio?: string;
   isOnline: boolean;
   isBanned: boolean;
 }

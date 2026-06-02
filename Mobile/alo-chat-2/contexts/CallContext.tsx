@@ -273,6 +273,8 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
           myAvatar={user?.avatar}
           targetName={callState.targetName || incomingCall?.caller?.name}
           targetAvatar={callState.targetAvatar || incomingCall?.caller?.avatar}
+          isGroup={callState.isGroup || false}
+          members={callState.members}
         />
       )}
     </CallContext.Provider>

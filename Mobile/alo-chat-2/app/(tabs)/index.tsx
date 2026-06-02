@@ -35,6 +35,7 @@ import { groupService } from "../../services/groupService";
 import { useSocket } from "../../contexts/SocketContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { userService } from "../../services/userService";
+import { getMessageTextContent } from "../../utils/messageUtils";
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get("window");
 
@@ -400,7 +401,7 @@ export default function MessagesScreen() {
               avatar: chatAvatar,
               isGroup: g.isGroup,
               membersCount: g.members?.length,
-              message: g.lastMessageContent || "Chưa có tin nhắn",
+              message: getMessageTextContent(g.lastMessageContent) || "Chưa có tin nhắn",
               time: timeString,
               unreadCount: g.unreadCount?.[currentUserId as string] || 0,
               unread: (g.unreadCount?.[currentUserId as string] || 0) > 0,

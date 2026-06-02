@@ -111,7 +111,7 @@ export default function SentRequestsScreen() {
                 const displayAvatar =
                   request.recipientAvatar || request.requesterAvatar || "";
                 router.push({
-                  pathname: "/(tabs)/contacts/send-request",
+                  pathname: "/profile/timeline",
                   params: {
                     userId: request.recipientId,
                     fullName: displayName,
