@@ -3,17 +3,15 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_ENV=production
 
-# Nhận biến từ docker-compose lúc build
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
-# Copy package files and install all dependencies
 COPY Web/alo-chat-admin/package*.json ./
-RUN npm install
 
-# Copy configuration and source files
+# Build stage cần devDependencies
+RUN npm install --include=dev
+
 COPY Web/alo-chat-admin/tsconfig.json ./
 COPY Web/alo-chat-admin/next.config.ts ./
 COPY Web/alo-chat-admin/postcss.config.mjs ./
@@ -22,9 +20,9 @@ COPY Web/alo-chat-admin/components.json ./
 COPY Web/alo-chat-admin/public ./public
 COPY Web/alo-chat-admin/src ./src
 
-# Build the NextJS application
-RUN npm run build
+ENV NODE_ENV=production
 
+RUN npm run build
 
 # Stage 2: Runtime
 FROM node:20-alpine
