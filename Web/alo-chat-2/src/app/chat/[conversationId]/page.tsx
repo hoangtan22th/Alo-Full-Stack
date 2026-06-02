@@ -4376,7 +4376,7 @@ export default function ChatPage() {
                     <div className="flex items-center gap-1.5">
                       {typingForThisConvo.length === 1 && (
                         <span className="text-[11px] font-bold text-gray-700">
-                          {getSenderDisplayName(typingForThisConvo[0]).split(' ').pop()}
+                          {getSenderDisplayName(typingForThisConvo[0])}
                         </span>
                       )}
                       <span className="text-[11px] text-gray-400 italic">đang soạn tin</span>
@@ -4443,8 +4443,11 @@ export default function ChatPage() {
                     onClick={() => {
                       setIsFormatMode(!isFormatMode);
                       setMessageText("");
+                      if (!isFormatMode && editorRef.current) {
+                        setTimeout(() => editorRef.current?.focus(), 50);
+                      }
                     }}
-                    title="Định dạng tin nhắn"
+                    title="Định dạng tin nhắn (Chữ A lớn)"
                   >
                     <svg
                       viewBox="0 0 24 24"
@@ -4464,6 +4467,37 @@ export default function ChatPage() {
                       />
                     </svg>
                   </button>
+                  {/* 7. Voice message */}
+                  {isRecording ? (
+                    <div className="flex items-center gap-2 flex-1">
+                      <button
+                        onClick={cancelRecording}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-md transition"
+                        title="Hủy ghi âm"
+                      >
+                        <XMarkIcon className="w-5 h-5" />
+                      </button>
+                      <div className="flex items-center gap-2 flex-1 bg-red-50 rounded-lg px-3 py-1.5">
+                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        <span className="text-red-600 text-[12px] font-bold">{formatDuration(recordingTime)}</span>
+                      </div>
+                      <button
+                        onClick={stopRecording}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-md transition"
+                        title="Gửi tin nhắn thoại"
+                      >
+                        <PaperAirplaneIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="p-2 text-gray-600 hover:bg-gray-100 rounded-md transition"
+                      onClick={startRecording}
+                      title="Gửi tin nhắn thoại"
+                    >
+                      <MicrophoneIcon className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Reply Preview Section */}
@@ -4565,21 +4599,34 @@ export default function ChatPage() {
                   )}
 
                   <div className="flex items-center gap-2">
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      placeholder={
-                        replyingTo
-                          ? `Nhập @, tin nhắn tới ${userCache[replyingTo.senderId]?.name || "người dùng"}`
-                          : "Nhập tin nhắn..."
-                      }
-                      value={messageText}
-                      onChange={handleInputChange}
-                      onKeyDown={handleKeyDown}
-                      className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
-                    />
+                    {isFormatMode ? (
+                      <div
+                        ref={editorRef}
+                        contentEditable
+                        onInput={handleEditorInput}
+                        onKeyDown={handleEditorKeyDown}
+                        data-placeholder="Nhập tin nhắn có định dạng..."
+                        className="editor-input flex-1 bg-transparent border-none outline-none text-[15px] font-medium min-h-[36px] max-h-[200px] overflow-y-auto py-2"
+                        suppressContentEditableWarning
+                      />
+                    ) : (
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        placeholder={
+                          replyingTo
+                            ? `Nhập tin nhắn tới ${getSenderDisplayName(replyingTo.senderId, replyingTo)}...`
+                            : "Nhập tin nhắn..."
+                        }
+                        value={messageText}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyDown}
+                        onPaste={handlePaste as any}
+                        className="flex-1 bg-transparent border-none outline-none text-[15px] font-medium placeholder:text-gray-400 py-2"
+                      />
+                    )}
                     <div className="flex items-center gap-1">
-                      {messageText.trim() ? (
+                      {(isFormatMode ? messageText.trim() : messageText.trim()) ? (
                         <button
                           onClick={handleSend}
                           disabled={sending}
