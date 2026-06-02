@@ -467,7 +467,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
             </p>
 
             {/* Quick Actions */}
-            <div className="flex items-center gap-4 mt-7">
+            <div className="flex items-start justify-center gap-3 mt-7 w-full px-4">
               <ActionButton icon={<BellSlashIcon />} label="Tắt báo" />
               <ActionButton icon={<MapPinIcon />} label="Ghim" />
               <ActionButton icon={<MagnifyingGlassIcon />} label="Tìm kiếm" onClick={() => onTabChange?.("search")} />
@@ -878,7 +878,7 @@ const ActionButton: React.FC<{
   onClick?: () => void;
 }> = ({ icon, label, onClick }) => (
   <div
-    className={`flex flex-col items-center gap-1.5 transition-all ${onClick ? "cursor-pointer group active:scale-95" : "cursor-not-allowed opacity-40"}`}
+    className={`flex w-12 shrink-0 flex-col items-center gap-1.5 transition-all ${onClick ? "cursor-pointer group active:scale-95" : "cursor-not-allowed opacity-40"}`}
     onClick={onClick}
   >
     <div className={`w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 transition shadow-sm ring-1 ring-gray-100 ${onClick ? "group-hover:bg-blue-50 group-hover:text-blue-600" : ""}`}>
@@ -888,7 +888,7 @@ const ActionButton: React.FC<{
         })
         : icon}
     </div>
-    <span className={`text-[10px] font-bold ${onClick ? "text-gray-400 group-hover:text-gray-600" : "text-gray-300"}`}>
+    <span className={`min-h-8 text-center text-[10px] font-bold leading-4 ${onClick ? "text-gray-400 group-hover:text-gray-600" : "text-gray-300"}`}>
       {label}
     </span>
   </div>
