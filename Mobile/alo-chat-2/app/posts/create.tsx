@@ -211,8 +211,6 @@ export default function CreatePostScreen() {
 
   const getPrivacyLabel = (val: string) => {
     switch (val) {
-      case "PUBLIC":
-        return { text: "Công khai", icon: "earth" as const };
       case "FRIENDS_ONLY":
         return { text: "Bạn bè", icon: "people" as const };
       case "PRIVATE":
