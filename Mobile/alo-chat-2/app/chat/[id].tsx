@@ -1792,7 +1792,7 @@ export default function GlobalChatScreen() {
                 });
               } else {
                 router.push({
-                  pathname: "/(tabs)/contacts/send-request",
+                  pathname: "/profile/timeline",
                   params: {
                     userId: targetUserId,
                     from: "chat",

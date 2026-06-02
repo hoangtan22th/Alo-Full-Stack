@@ -89,32 +89,6 @@ export default function PostDetailsScreen() {
       ]);
       setPost(postData);
       setComments(commentList);
-
-      // Fetch comment authors
-      const userIds = new Set<string>();
-      commentList.forEach((c) => {
-        if (c.userId) userIds.add(c.userId);
-        if (c.replies && Array.isArray(c.replies)) {
-          c.replies.forEach((r) => {
-            if (r.userId) userIds.add(r.userId);
-          });
-        }
-      });
-      const profilesMap: Record<string, UserProfileDTO> = {};
-      for (const uid of Array.from(userIds)) {
-        if (commentUserCache[uid]) {
-          profilesMap[uid] = commentUserCache[uid]!;
-        } else {
-          try {
-            const prof = await userService.getUserById(uid);
-            if (prof) {
-              commentUserCache[uid] = prof;
-              profilesMap[uid] = prof;
-            }
-          } catch {}
-        }
-      }
-      setCommentAuthors(profilesMap);
     } catch (error) {
       console.error("Lỗi khi tải chi tiết bài viết:", error);
       Alert.alert("Lỗi", "Không thể tải chi tiết bài viết.");
@@ -126,6 +100,47 @@ export default function PostDetailsScreen() {
   useEffect(() => {
     loadData();
   }, [postId]);
+
+  useEffect(() => {
+    if (comments.length === 0) return;
+
+    const resolveAuthors = async () => {
+      const userIds = new Set<string>();
+      comments.forEach((c) => {
+        if (c.userId) userIds.add(c.userId);
+        if (c.replies && Array.isArray(c.replies)) {
+          c.replies.forEach((r) => {
+            if (r.userId) userIds.add(r.userId);
+          });
+        }
+      });
+
+      const missingIds = Array.from(userIds).filter(uid => !commentUserCache[uid]);
+      
+      for (const uid of missingIds) {
+        try {
+          const prof = await userService.getUserById(uid);
+          if (prof) {
+            commentUserCache[uid] = prof;
+          }
+        } catch {}
+      }
+
+      setCommentAuthors(prev => {
+        const newMap = { ...prev };
+        let changed = false;
+        Array.from(userIds).forEach(uid => {
+          if (commentUserCache[uid] && !newMap[uid]) {
+            newMap[uid] = commentUserCache[uid]!;
+            changed = true;
+          }
+        });
+        return changed ? newMap : prev;
+      });
+    };
+
+    resolveAuthors();
+  }, [comments]);
 
   useEffect(() => {
     if (focus === "true" && !loading) {
@@ -463,7 +478,7 @@ export default function PostDetailsScreen() {
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: "white" }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+      keyboardVerticalOffset={Platform.OS === "ios" ? -(Math.max(insets.bottom, 12) - 12) : 0}
     >
       <View style={{ flex: 1, paddingTop: insets.top }}>
         <View className="flex-row justify-between items-center px-4 py-3 border-b border-gray-100 bg-white">
