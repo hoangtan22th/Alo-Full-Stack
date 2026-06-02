@@ -43,6 +43,7 @@ import {
   ArrowUturnRightIcon,
   ArrowUturnLeftIcon,
   TrashIcon,
+  ExclamationTriangleIcon,
 } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
@@ -50,6 +51,7 @@ import { useSocket } from "../../contexts/SocketContext";
 import { groupService } from "../../services/groupService";
 import { MessageDTO, messageService } from "../../services/messageService";
 import { UserProfileDTO, userService } from "../../services/userService";
+import { contactService } from "../../services/contactService";
 
 // Import custom components and constants
 import { EMOJI_MAP } from "../../constants/Chat";
@@ -62,6 +64,8 @@ import { ReactionDetailsSheet } from "../../components/chat/ReactionDetailsSheet
 import { MessageContextMenu } from "../../components/chat/MessageContextMenu";
 import { ReportModal } from "../../components/ReportModal";
 import { ReportTargetModal } from "../../components/ReportTargetModal";
+import { SendContactCardModal } from "../../components/chat/SendContactCardModal";
+import { StickerPickerModal } from "../../components/chat/StickerPickerModal";
 import { TargetType } from "../../services/reportService";
 
 export default function GlobalChatScreen() {
@@ -143,6 +147,8 @@ export default function GlobalChatScreen() {
   const [groupDetails, setGroupDetails] = useState<any>(null);
   const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
+  const [isSendContactModalVisible, setIsSendContactModalVisible] = useState(false);
+  const [isStickerModalVisible, setIsStickerModalVisible] = useState(false);
   const [reportTarget, setReportTarget] = useState<{
     type: TargetType;
     id: string;
@@ -283,9 +289,19 @@ export default function GlobalChatScreen() {
       const ok = await messageService.deleteMessage(msgId);
       if (ok) {
         setMessages((prev) =>
-          prev.map((m) =>
-            m._id === msgId ? { ...m, isRevoked: true, content: "" } : m,
-          ),
+          prev.map((m) => {
+            let updated = m;
+            if (m._id === msgId) {
+              updated = { ...m, isRevoked: true };
+            }
+            if (m.replyTo && m.replyTo.messageId === msgId) {
+              updated = {
+                ...updated,
+                replyTo: { ...m.replyTo, content: "[Tin nhắn đã thu hồi]" },
+              };
+            }
+            return updated;
+          }),
         );
       }
     }
@@ -326,7 +342,10 @@ export default function GlobalChatScreen() {
         );
       }
     } else {
-      setMessages((prev) => prev.filter((m) => m._id !== msgId));
+      const ok = await messageService.deleteMessageForMe(msgId);
+      if (ok) {
+        setMessages((prev) => prev.filter((m) => m._id !== msgId));
+      }
     }
   };
 
@@ -403,7 +422,7 @@ export default function GlobalChatScreen() {
               prev.map((m) =>
                 selectedReportIds.includes(m._id) &&
                 m.senderId === currentUserId
-                  ? { ...m, isRevoked: true, content: "" }
+                  ? { ...m, isRevoked: true }
                   : m,
               ),
             );
@@ -424,12 +443,15 @@ export default function GlobalChatScreen() {
         { text: "Hủy", style: "cancel" },
         {
           text: "Xóa",
-          onPress: () => {
-            setMessages((prev) =>
-              prev.filter((m) => !selectedReportIds.includes(m._id)),
-            );
-            setIsSelectionMode(false);
-            setSelectedReportIds([]);
+          onPress: async () => {
+            const ok = await messageService.bulkDeleteMessagesForMe(selectedReportIds);
+            if (ok) {
+              setMessages((prev) =>
+                prev.filter((m) => !selectedReportIds.includes(m._id)),
+              );
+              setIsSelectionMode(false);
+              setSelectedReportIds([]);
+            }
           },
         },
       ],
@@ -523,10 +545,18 @@ export default function GlobalChatScreen() {
     !isGroupChat && targetUserId ? onlineUsers[targetUserId] : null;
   const isOnline = userStatus?.status === "online";
 
+  const [isStranger, setIsStranger] = useState(false);
+
   useEffect(() => {
     const resolve = async () => {
       const initialId = Array.isArray(id) ? id[0] : id;
       if (!initialId) return;
+
+      if (initialId.startsWith("temp-")) {
+        setResolvedConversationId(initialId);
+        return;
+      }
+
       const isGroupVal =
         isGroup !== undefined
           ? isGroup === "true"
@@ -543,14 +573,14 @@ export default function GlobalChatScreen() {
       if (needsResolution) {
         try {
           const conversation =
-            await groupService.createDirectConversation(initialId);
+            await groupService.createDirectConversation(initialId, true);
           if (conversation && (conversation._id || conversation.id)) {
             setResolvedConversationId(conversation._id || conversation.id);
           } else {
-            setResolvedConversationId(initialId);
+            setResolvedConversationId(`temp-${initialId}`);
           }
         } catch (err) {
-          setResolvedConversationId(initialId);
+          setResolvedConversationId(`temp-${initialId}`);
         }
       } else {
         setResolvedConversationId(initialId);
@@ -559,8 +589,33 @@ export default function GlobalChatScreen() {
     resolve();
   }, [id, isGroup, paramsTargetUserId]);
 
+  useEffect(() => {
+    if (!isGroupChat && targetUserId && !targetUserId.startsWith("temp-")) {
+      const checkStranger = async () => {
+        try {
+          const [friends, pending, sent] = await Promise.all([
+            contactService.getFriendsList(),
+            contactService.getPendingRequests(),
+            contactService.getSentRequests(),
+          ]);
+          
+          const isFriend = friends.some((f: any) => String(f.requesterId) === String(targetUserId) || String(f.recipientId) === String(targetUserId));
+          const hasPending = pending.some((f: any) => String(f.requesterId) === String(targetUserId) || String(f.recipientId) === String(targetUserId));
+          const hasSent = sent.some((f: any) => String(f.requesterId) === String(targetUserId) || String(f.recipientId) === String(targetUserId));
+          
+          setIsStranger(!isFriend && !hasPending && !hasSent);
+        } catch (e) {
+          setIsStranger(false);
+        }
+      };
+      checkStranger();
+    } else {
+      setIsStranger(false);
+    }
+  }, [isGroupChat, targetUserId]);
+
   const fetchMsgs = async (reset = false) => {
-    if (!resolvedConversationId || fetchingRef.current) return;
+    if (!resolvedConversationId || resolvedConversationId.startsWith("temp-") || fetchingRef.current) return;
     fetchingRef.current = true; // Block further calls immediately
 
     if (reset) {
@@ -613,7 +668,7 @@ export default function GlobalChatScreen() {
   };
 
   const fetchPinnedMessages = async () => {
-    if (!resolvedConversationId) return;
+    if (!resolvedConversationId || resolvedConversationId.startsWith("temp-")) return;
     try {
       const pins = await messageService.getPinnedMessages(
         resolvedConversationId,
@@ -625,7 +680,7 @@ export default function GlobalChatScreen() {
   };
 
   const fetchGroupDetails = async () => {
-    if (!resolvedConversationId || !isGroupChat) return;
+    if (!resolvedConversationId || resolvedConversationId.startsWith("temp-") || !isGroupChat) return;
     try {
       const res = await groupService.getGroupById(resolvedConversationId);
       const data = res?.data?.data || res?.data || res;
@@ -646,7 +701,7 @@ export default function GlobalChatScreen() {
   };
 
   useEffect(() => {
-    if (resolvedConversationId) {
+    if (resolvedConversationId && !resolvedConversationId.startsWith("temp-")) {
       fetchMsgs(true);
       fetchPinnedMessages();
       if (isGroupChat) {
@@ -696,7 +751,7 @@ export default function GlobalChatScreen() {
   }, [isGroupChat, groupDetails, adminIds, currentUserId]);
 
   useEffect(() => {
-    if (!socket || !resolvedConversationId) return;
+    if (!socket || !resolvedConversationId || resolvedConversationId.startsWith("temp-")) return;
 
     const expectedRoomId = isGroupChat ? resolvedConversationId : targetUserId;
 
@@ -794,9 +849,19 @@ export default function GlobalChatScreen() {
 
     const handleMessageRevoked = (data: any) => {
       setMessages((prev: MessageDTO[]) =>
-        prev.map((m: MessageDTO) =>
-          m._id === data.messageId ? { ...m, isRevoked: true, content: "" } : m,
-        ),
+        prev.map((m: MessageDTO) => {
+          let updated = m;
+          if (m._id === data.messageId) {
+            updated = { ...m, isRevoked: true };
+          }
+          if (m.replyTo && m.replyTo.messageId === data.messageId) {
+            updated = {
+              ...updated,
+              replyTo: { ...m.replyTo, content: "[Tin nhắn đã thu hồi]" },
+            };
+          }
+          return updated;
+        })
       );
       setPinnedMessages((prev: MessageDTO[]) =>
         prev.filter((m: MessageDTO) => m._id !== data.messageId),
@@ -957,7 +1022,7 @@ export default function GlobalChatScreen() {
 
   const handleInputChange = (text: string) => {
     setInputText(text);
-    if (!socket || !resolvedConversationId) return;
+    if (!socket || !resolvedConversationId || resolvedConversationId.startsWith("temp-")) return;
     if (!typingTimeoutRef.current) {
       socket.emit("TYPING", {
         roomId: resolvedConversationId,
@@ -1029,6 +1094,21 @@ export default function GlobalChatScreen() {
     };
   };
 
+  const ensureConversationId = async (): Promise<string | null> => {
+    if (!resolvedConversationId) return null;
+    if (!resolvedConversationId.startsWith("temp-")) return resolvedConversationId;
+    
+    try {
+      const convo = await groupService.createDirectConversation(targetUserId as string, false);
+      const newId = convo._id || convo.id;
+      setResolvedConversationId(newId);
+      return newId;
+    } catch (e) {
+      console.error("Failed to create direct conversation", e);
+      return null;
+    }
+  };
+
   const sendMessage = async () => {
     if (!inputText.trim() || !resolvedConversationId) return;
     const textToSend = inputText.trim();
@@ -1036,14 +1116,18 @@ export default function GlobalChatScreen() {
     const replyData = getReplyData(replyingToRef.current);
     setReplyingToWithRef(null);
     Keyboard.dismiss();
+
+    const actualConversationId = await ensureConversationId();
+    if (!actualConversationId) return;
+
     if (socket)
       socket.emit("STOP_TYPING", {
-        roomId: resolvedConversationId,
+        roomId: actualConversationId,
         actorId: currentUserId,
       });
     try {
       const sentMessage = await messageService.sendMessage({
-        conversationId: resolvedConversationId,
+        conversationId: actualConversationId,
         type: "text",
         content: textToSend,
         senderName: currentUserName,
@@ -1075,12 +1159,15 @@ export default function GlobalChatScreen() {
 
       if (fileRes.canceled || !fileRes.assets?.length) return;
 
+      const actualConversationId = await ensureConversationId();
+      if (!actualConversationId) return;
+
       const replyData = getReplyData(replyingToRef.current);
       setReplyingTo(null);
       const sentMessages: MessageDTO[] = [];
       for (const asset of fileRes.assets) {
         const sentMessage = await messageService.sendFileMessage({
-          conversationId: resolvedConversationId,
+          conversationId: actualConversationId,
           file: asset,
           senderName: currentUserName,
           replyTo: replyData,
@@ -1110,6 +1197,10 @@ export default function GlobalChatScreen() {
 
   const handleSendImage = async () => {
     if (!resolvedConversationId) return;
+
+    const actualConversationId = await ensureConversationId();
+    if (!actualConversationId) return;
+
     const replyData = getReplyData(replyingToRef.current);
     try {
       const imgRes = await ImagePicker.launchImageLibraryAsync({
@@ -1131,7 +1222,7 @@ export default function GlobalChatScreen() {
 
       if (images.length > 1) {
         const sentMessage = await messageService.sendImagesMessage({
-          conversationId: resolvedConversationId,
+          conversationId: actualConversationId,
           files: images,
           senderName: currentUserName,
           replyTo: replyData,
@@ -1141,7 +1232,7 @@ export default function GlobalChatScreen() {
         }
       } else if (images.length === 1) {
         const sentMessage = await messageService.sendFileMessage({
-          conversationId: resolvedConversationId,
+          conversationId: actualConversationId,
           file: images[0],
           isImage: true,
           senderName: currentUserName,
@@ -1154,7 +1245,7 @@ export default function GlobalChatScreen() {
 
       for (const videoAsset of videos) {
         const sentMessage = await messageService.sendFileMessage({
-          conversationId: resolvedConversationId,
+          conversationId: actualConversationId,
           file: videoAsset,
           isImage: false,
           senderName: currentUserName,
@@ -1193,7 +1284,7 @@ export default function GlobalChatScreen() {
             const sentMessages: MessageDTO[] = [];
             for (const asset of fileRes.assets) {
               const sentMessage = await messageService.sendFileMessage({
-                conversationId: resolvedConversationId,
+                conversationId: actualConversationId,
                 file: asset,
                 isImage: false,
                 senderName: currentUserName,
@@ -1229,6 +1320,106 @@ export default function GlobalChatScreen() {
         Alert.alert("Lỗi", "Không thể chọn hoặc gửi tệp tin này.");
       }
     }
+  };
+
+  const handleSendContactCard = async (selectedFriends: any[], includePhone: boolean) => {
+    if (!resolvedConversationId) return;
+    const actualConversationId = await ensureConversationId();
+    if (!actualConversationId) return;
+
+    for (const friend of selectedFriends) {
+      const tempId = `temp_contact_${Date.now()}_${friend.id}`;
+      const tempMsg: MessageDTO = {
+        _id: tempId,
+        conversationId: actualConversationId,
+        senderId: currentUserId as string,
+        senderName: currentUserName,
+        type: "contact",
+        content: friend.id,
+        metadata: {
+          contactId: friend.id,
+          contactName: friend.name,
+          contactAvatar: friend.avatar,
+          contactPhone: includePhone ? friend.phone : undefined,
+        },
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, tempMsg]);
+
+      try {
+        const sentMessage = await messageService.sendMessage({
+          conversationId: actualConversationId,
+          content: friend.id,
+          type: "contact",
+          senderName: currentUserName,
+          metadata: {
+            contactId: friend.id,
+            contactName: friend.name,
+            contactAvatar: friend.avatar,
+            contactPhone: includePhone ? friend.phone : undefined,
+          },
+        });
+        
+        if (sentMessage) {
+          setMessages((prev) => prev.map(m => m._id === tempId ? sentMessage : m));
+        }
+      } catch (err) {
+        console.error("Lỗi gửi danh thiếp:", err);
+        setMessages((prev) => prev.filter((m) => m._id !== tempId));
+      }
+    }
+    
+    setTimeout(
+      () =>
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
+      100,
+    );
+  };
+
+  const handleSendSticker = async (stickerUrl: string) => {
+    if (!resolvedConversationId) return;
+    const actualConversationId = await ensureConversationId();
+    if (!actualConversationId) return;
+
+    const tempId = `temp_sticker_${Date.now()}`;
+    const tempMsg: MessageDTO = {
+      _id: tempId,
+      conversationId: actualConversationId,
+      senderId: currentUserId as string,
+      senderName: currentUserName,
+      type: "image",
+      content: stickerUrl,
+      metadata: { isSticker: true },
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, tempMsg]);
+
+    try {
+      const sentMessage = await messageService.sendMessage({
+        conversationId: actualConversationId,
+        content: stickerUrl,
+        type: "image",
+        senderName: currentUserName,
+        metadata: { isSticker: true },
+      });
+
+      if (sentMessage) {
+        setMessages((prev) => prev.map(m => m._id === tempId ? sentMessage : m));
+      }
+    } catch (err) {
+      console.error("Lỗi gửi sticker:", err);
+      setMessages((prev) => prev.filter((m) => m._id !== tempId));
+    }
+
+    setTimeout(
+      () =>
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
+      100,
+    );
   };
 
   interface MsgGroup {
@@ -1407,6 +1598,15 @@ export default function GlobalChatScreen() {
           />
         )}
       </View>
+
+      {isStranger && !isSearchMode && (
+        <View className="bg-red-50 px-4 py-3 border-b border-red-100 flex-row items-center">
+          <ExclamationTriangleIcon size={20} color="#dc2626" />
+          <Text className="text-red-600 text-[12px] font-bold uppercase flex-1 ml-2 tracking-wide">
+            Hãy cẩn thận khi nhắn tin với người lạ.
+          </Text>
+        </View>
+      )}
 
       <View className="flex-1 relative">
         <PinnedMessageBar pinnedMessages={pinnedMessages} />
@@ -1692,11 +1892,14 @@ export default function GlobalChatScreen() {
               onSendMessage={sendMessage}
               onSendImage={handleSendImage}
               onSendFile={handleSendFile}
-              onCreatePoll={() => {
-                if (resolvedConversationId) {
+              onSendContact={() => setIsSendContactModalVisible(true)}
+              onOpenSticker={() => setIsStickerModalVisible(true)}
+              onCreatePoll={async () => {
+                const actualId = await ensureConversationId();
+                if (actualId) {
                   router.push({
                     pathname: "/chat/create-poll",
-                    params: { conversationId: resolvedConversationId },
+                    params: { conversationId: actualId },
                   });
                 }
               }}
@@ -1916,6 +2119,10 @@ export default function GlobalChatScreen() {
           setReportMessageIds([msg._id]);
           setIsReportModalVisible(true);
         }}
+        onEdit={(msg) => {
+          closeModal();
+          setInputText(msg.content);
+        }}
         isPinned={
           !!selectedMessageId &&
           pinnedMessages.some((m: MessageDTO) => m._id === selectedMessageId)
@@ -1944,6 +2151,18 @@ export default function GlobalChatScreen() {
           setReportTarget(null);
           setReportMessageIds([]);
         }}
+      />
+      
+      <SendContactCardModal
+        visible={isSendContactModalVisible}
+        onClose={() => setIsSendContactModalVisible(false)}
+        onSend={handleSendContactCard}
+      />
+
+      <StickerPickerModal
+        visible={isStickerModalVisible}
+        onClose={() => setIsStickerModalVisible(false)}
+        onSelectSticker={handleSendSticker}
       />
     </KeyboardAvoidingView>
   );

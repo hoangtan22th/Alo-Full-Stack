@@ -124,6 +124,7 @@ function RootLayoutNav() {
         <Stack.Screen name="chat/media" />
         <Stack.Screen name="chat/forward" />
         <Stack.Screen name="groups/create-group" />
+        <Stack.Screen name="chat/group-link-preview" options={{ presentation: "modal" }} />
       </Stack>
 
       <InAppNotification
@@ -155,6 +156,13 @@ function RootLayoutNav() {
             if (notification.data?.groupId) {
               router.push({
                 pathname: `/chat/${notification.data.groupId}` as any,
+              });
+            }
+          } else if (notification.type === "NEW_NOTIFICATION") {
+            if (notification.data?.postId) {
+              router.push({
+                pathname: "/posts/[id]",
+                params: { id: notification.data.postId }
               });
             }
           }

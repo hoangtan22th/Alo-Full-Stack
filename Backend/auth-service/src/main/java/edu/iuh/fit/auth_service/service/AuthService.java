@@ -64,9 +64,12 @@ public class AuthService {
         stringRedisTemplate.opsForValue().set(redisKey, otp, 5, TimeUnit.MINUTES);
 
         String subject = "Mã xác nhận đăng ký tài khoản ALO";
-        String text = "Xin chào,\n\nMã OTP xác nhận đăng ký tài khoản của bạn là: " + otp
-                + "\nMã này sẽ hết hạn trong vòng 5 phút.\n\nTrân trọng,\nĐội ngũ ALO";
-        emailService.sendTextEmail(email, subject, text);
+        String htmlContent = buildOtpHtmlTemplate(
+                "Đăng Ký Tài Khoản",
+                "Cảm ơn bạn đã lựa chọn ALO. Mã OTP xác nhận đăng ký tài khoản của bạn là:",
+                otp
+        );
+        emailService.sendHtmlEmail(email, subject, htmlContent);
     }
 
     @Transactional
@@ -174,9 +177,13 @@ public class AuthService {
         String redisKey = "OTP_LOGIN:" + email;
         stringRedisTemplate.opsForValue().set(redisKey, otp, 5, TimeUnit.MINUTES);
 
-        String text = "Xin chào,\n\nMã OTP xác nhận đăng nhập của bạn là: " + otp
-                + "\nMã này có hiệu lực trong 5 phút. Vui lòng không chia sẻ mã này cho bất kỳ ai.";
-        emailService.sendTextEmail(email, "Xác nhận đăng nhập", text);
+        String subject = "Xác nhận đăng nhập ALO";
+        String htmlContent = buildOtpHtmlTemplate(
+                "Xác Nhận Đăng Nhập",
+                "Bạn đang thực hiện đăng nhập vào tài khoản ALO. Mã OTP xác nhận đăng nhập của bạn là:",
+                otp
+        );
+        emailService.sendHtmlEmail(email, subject, htmlContent);
     }
 
     @Transactional
@@ -394,12 +401,12 @@ public class AuthService {
         stringRedisTemplate.opsForValue().set(redisKey, otp, 5, TimeUnit.MINUTES);
 
         String subject = "Mã xác thực Khôi phục mật khẩu ALO";
-        String text = "Xin chào,\n\n"
-                + "Bạn đã yêu cầu đặt lại mật khẩu. Mã OTP của bạn là: " + otp + "\n"
-                + "Mã này sẽ hết hạn trong vòng 5 phút.\n\n"
-                + "Nếu bạn không thực hiện yêu cầu này, vui lòng đổi mật khẩu càng sớm càng tốt để bảo vệ tài khoản.\n\n"
-                + "Trân trọng,\nĐội ngũ ALO";
-        emailService.sendTextEmail(email, subject, text);
+        String htmlContent = buildOtpHtmlTemplate(
+                "Khôi Phục Mật Khẩu",
+                "Bạn đã yêu cầu đặt lại mật khẩu cho tài khoản ALO. Mã OTP của bạn là:",
+                otp
+        );
+        emailService.sendHtmlEmail(email, subject, htmlContent);
     }
 
     @Transactional
@@ -554,6 +561,49 @@ public class AuthService {
             rabbitMQPublisher.publishSecurityAlert(accountId, 
                     "⚠️ CẢNH BÁO: Tài khoản của bạn vừa được đăng nhập thành công trên một thiết bị/trình duyệt khác. Nếu không phải bạn thực hiện, vui lòng đổi mật khẩu ngay lập tức!");
         }
+    }
+
+    private String buildOtpHtmlTemplate(String title, String description, String otp) {
+        return "<!DOCTYPE html>"
+                + "<html>"
+                + "<head>"
+                + "<meta charset='UTF-8'>"
+                + "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+                + "<style>"
+                + "  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f6f9fc; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }"
+                + "  .container { max-width: 540px; margin: 40px auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.055); border: 1px solid #eef2f5; }"
+                + "  .header { background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 35px 20px; text-align: center; color: #ffffff; }"
+                + "  .header h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }"
+                + "  .content { padding: 40px 35px; color: #334155; line-height: 1.6; }"
+                + "  .content p { font-size: 15px; margin-top: 0; margin-bottom: 20px; }"
+                + "  .otp-box { background-color: #f1f5f9; border-radius: 12px; padding: 20px; text-align: center; margin: 30px 0; border: 1px dashed #cbd5e1; }"
+                + "  .otp-code { font-size: 36px; font-weight: 800; letter-spacing: 6px; color: #1d4ed8; font-family: 'Courier New', Courier, monospace; margin: 0; }"
+                + "  .expiry-text { font-size: 13px; color: #ef4444; font-weight: 600; margin-top: 10px; }"
+                + "  .footer { background-color: #f8fafc; padding: 25px 35px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #f1f5f9; }"
+                + "  .footer p { margin: 5px 0; }"
+                + "</style>"
+                + "</head>"
+                + "<body>"
+                + "  <div class='container'>"
+                + "    <div class='header'>"
+                + "      <h1>" + title + "</h1>"
+                + "    </div>"
+                + "    <div class='content'>"
+                + "      <p>Xin chào,</p>"
+                + "      <p>" + description + "</p>"
+                + "      <div class='otp-box'>"
+                + "        <div class='otp-code'>" + otp + "</div>"
+                + "        <div class='expiry-text'>Mã này có hiệu lực trong vòng 5 phút</div>"
+                + "      </div>"
+                + "      <p style='font-size: 13px; color: #64748b; margin-bottom: 0;'>Vì lý do bảo mật, vui lòng tuyệt đối không chia sẻ mã này cho bất kỳ ai khác.</p>"
+                + "    </div>"
+                + "    <div class='footer'>"
+                + "      <p>Đây là email tự động từ hệ thống ALO. Vui lòng không phản hồi email này.</p>"
+                + "      <p>&copy; " + java.time.Year.now().getValue() + " ALO Chat. All rights reserved.</p>"
+                + "    </div>"
+                + "  </div>"
+                + "</body>"
+                + "</html>";
     }
 
     private String getClientIpString(HttpServletRequest request) {

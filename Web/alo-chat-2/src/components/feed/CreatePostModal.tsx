@@ -32,7 +32,7 @@ const MOOD_TEMPLATES = [
 export default function CreatePostModal({ isOpen, onClose, onPostCreated }: CreatePostModalProps) {
   const { user: currentUser } = useAuthStore();
   const [content, setContent] = useState("");
-  const [privacy, setPrivacy] = useState<"PUBLIC" | "FRIENDS_ONLY" | "PRIVATE">("FRIENDS_ONLY");
+  const [privacy, setPrivacy] = useState<"FRIENDS_ONLY" | "PRIVATE">("FRIENDS_ONLY");
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<{ url: string; isVideo: boolean; name: string; size: number }[]>([]);
   const [selectedBg, setSelectedBg] = useState<string | null>(null); // Lưu ID template hình nền được chọn

@@ -15,7 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
-import { Audio } from "expo-av";
+import { createAudioPlayer } from "expo-audio";
 import { postService } from "../../services/postService";
 
 interface PickedFile {
@@ -39,7 +39,7 @@ export default function CreateStoryScreen() {
 
   const [file, setFile] = useState<PickedFile | null>(null);
   const [caption, setCaption] = useState("");
-  const [privacy, setPrivacy] = useState<"FRIENDS_ONLY" | "PRIVATE">("FRIENDS_ONLY");
+  const [privacy, setPrivacy] = useState<"PUBLIC" | "FRIENDS_ONLY" | "PRIVATE">("FRIENDS_ONLY");
   const [duration, setDuration] = useState<number>(5000); // mặc định 5s (5000ms)
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -52,7 +52,7 @@ export default function CreateStoryScreen() {
   const [selectedMusic, setSelectedMusic] = useState<SpotifyTrack | null>(null);
   
   // Preview audio state
-  const [previewSound, setPreviewSound] = useState<Audio.Sound | null>(null);
+  const [previewSound, setPreviewSound] = useState<any>(null);
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
 
   // Hàm map kết quả iTunes sang SpotifyTrack structure (tương thích)
@@ -157,8 +157,7 @@ export default function CreateStoryScreen() {
   const handlePlayPreview = async (track: SpotifyTrack) => {
     // Nếu đang phát bài này thì dừng lại
     if (playingTrackId === track.id && previewSound) {
-      await previewSound.stopAsync();
-      await previewSound.unloadAsync();
+      previewSound.pause();
       setPreviewSound(null);
       setPlayingTrackId(null);
       return;
@@ -166,8 +165,7 @@ export default function CreateStoryScreen() {
 
     // Dừng bài đang phát trước đó
     if (previewSound) {
-      await previewSound.stopAsync();
-      await previewSound.unloadAsync();
+      previewSound.pause();
       setPreviewSound(null);
     }
 
@@ -177,19 +175,10 @@ export default function CreateStoryScreen() {
     }
 
     try {
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: track.preview_url },
-        { shouldPlay: true }
-      );
-      setPreviewSound(newSound);
+      const player = createAudioPlayer(track.preview_url);
+      player.play();
+      setPreviewSound(player);
       setPlayingTrackId(track.id);
-
-      // Theo dõi sự kiện kết thúc bài
-      newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          setPlayingTrackId(null);
-        }
-      });
     } catch (e) {
       console.warn("Lỗi phát thử nhạc:", e);
     }
@@ -199,8 +188,7 @@ export default function CreateStoryScreen() {
   const cleanupPreviewSound = async () => {
     if (previewSound) {
       try {
-        await previewSound.stopAsync();
-        await previewSound.unloadAsync();
+        previewSound.pause();
       } catch (e) {}
       setPreviewSound(null);
       setPlayingTrackId(null);
@@ -295,7 +283,7 @@ export default function CreateStoryScreen() {
           <Text className="text-xs font-bold text-gray-400 uppercase tracking-wider">Ai có thể xem?</Text>
           <View className="bg-gray-50 border border-gray-100 rounded-full px-3 py-1">
             <Text className="text-xs font-semibold text-gray-700">
-              {privacy === "FRIENDS_ONLY" ? "👥 Bạn bè" : "🔒 Chỉ mình tôi"}
+              {privacy === "PUBLIC" ? "🌍 Công khai" : privacy === "FRIENDS_ONLY" ? "👥 Bạn bè" : "🔒 Chỉ mình tôi"}
             </Text>
           </View>
         </View>

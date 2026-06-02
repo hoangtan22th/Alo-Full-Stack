@@ -86,15 +86,11 @@ export default function MainProfileScreen() {
           paddingBottom: 120,
         }}
       >
-        {/* Nhóm các nội dung phía trên lại */}
         <View>
           {/* Profile Card */}
           <TouchableOpacity
             className="bg-white p-4 rounded-3xl flex-row items-center justify-between mb-6 border-[1px] border-gray-200"
-            onPress={() => router.push({
-              pathname: "/profile/timeline",
-              params: { userId: user?.id || user?._id }
-            })}
+            onPress={() => router.push(`/profile/timeline?userId=${user?.id || user?._id}`)}
           >
             <View className="flex-row items-center flex-1">
               <Image
@@ -116,6 +112,11 @@ export default function MainProfileScreen() {
           </TouchableOpacity>
 
           {/* Menu Items */}
+          <MenuOption
+            icon={<Ionicons name="notifications-outline" size={22} color="#4b5563" />}
+            title="Thông báo"
+            onPress={() => router.push("/profile/notifications" as any)}
+          />
           <MenuOption
             icon={<Ionicons name="qr-code-outline" size={22} color="#4b5563" />}
             title="Quét mã QR đăng nhập Web"
