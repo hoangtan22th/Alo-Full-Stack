@@ -1227,14 +1227,14 @@ export default function PostCard({
           <ScrollView className="flex-1 px-5 pt-4">
             {/* Privacy */}
             <View className="flex-row gap-2 mb-4">
-              {(["PUBLIC", "FRIENDS_ONLY", "PRIVATE"] as const).map((p) => (
+              {(["FRIENDS_ONLY", "PRIVATE"] as const).map((p) => (
                 <TouchableOpacity
                   key={p}
                   onPress={() => setEditPrivacy(p)}
                   className={`px-3 py-1.5 rounded-full border ${editPrivacy === p ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-100"}`}
                 >
                   <Text className={`text-xs font-semibold ${editPrivacy === p ? "text-blue-600" : "text-gray-600"}`}>
-                    {p === "PUBLIC" ? "Công khai" : p === "FRIENDS_ONLY" ? "Bạn bè" : "Chỉ mình tôi"}
+                    {p === "FRIENDS_ONLY" ? "Bạn bè" : "Chỉ mình tôi"}
                   </Text>
                 </TouchableOpacity>
               ))}
