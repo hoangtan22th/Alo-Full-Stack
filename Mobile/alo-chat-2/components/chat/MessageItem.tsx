@@ -835,55 +835,152 @@ export const OfficeFilePreview = ({ url }: { url: string }) => {
 };
 
 export const AudioMessagePreview = ({ url, isSender }: { url: string; isSender?: boolean }) => {
-  const [sound, setSound] = React.useState<Audio.Sound | null>(null);
+  const isWebmOnIos = Platform.OS === 'ios' && url.toLowerCase().includes('.webm');
+  
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [duration, setDuration] = React.useState(0);
   const [position, setPosition] = React.useState(0);
 
-  React.useEffect(() => {
-    return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
-  }, [sound]);
+  const soundRef = React.useRef<Audio.Sound | null>(null);
+  const webviewRef = React.useRef<WebView>(null);
 
-  const loadAndPlay = async () => {
-    try {
-      if (sound) {
-        if (isPlaying) {
-          await sound.pauseAsync();
-        } else {
-          if (position >= duration && duration > 0) {
-            await sound.setPositionAsync(0);
-          }
-          await sound.playAsync();
-        }
-      } else {
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: url },
-          { shouldPlay: true, positionMillis: 0 },
-          (status) => {
-            if (status.isLoaded) {
-              setDuration(status.durationMillis || 0);
-              setPosition(status.positionMillis || 0);
-              setIsPlaying(status.isPlaying);
-              if (status.didJustFinish) {
+  let finalUrl = url;
+  if (url.startsWith("/")) {
+    finalUrl = `http://${process.env.EXPO_PUBLIC_IP_ADDRESS || "localhost"}:8888${url}`;
+  }
+  const encodedUrl = encodeURI(finalUrl);
+
+  React.useEffect(() => {
+    if (isWebmOnIos) return; // handled by webview
+
+    let isMounted = true;
+    const initSound = async () => {
+      try {
+        const { sound: newSound, status } = await Audio.Sound.createAsync(
+          { uri: encodedUrl },
+          { shouldPlay: false, positionMillis: 0 },
+          (statusUpdate) => {
+            if (statusUpdate.isLoaded) {
+              setPosition(statusUpdate.positionMillis || 0);
+              setIsPlaying(statusUpdate.isPlaying);
+              if (statusUpdate.didJustFinish) {
                 setIsPlaying(false);
-                setPosition(status.durationMillis || 0);
+                setPosition(statusUpdate.durationMillis || 0);
               }
             }
           }
         );
-        setSound(newSound);
+
+        if (isMounted) {
+          soundRef.current = newSound;
+          if (status.isLoaded) {
+            setDuration(status.durationMillis || 0);
+          }
+        } else {
+          newSound.unloadAsync();
+        }
+      } catch (e) {
+        console.error("Lỗi init audio:", e);
       }
-    } catch (e) {
-      console.error("Lỗi phát audio:", e);
+    };
+
+    initSound();
+
+    return () => {
+      isMounted = false;
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+      }
+    };
+  }, [encodedUrl, isWebmOnIos]);
+
+  const loadAndPlay = async () => {
+    if (isWebmOnIos) {
+      if (isPlaying) {
+        webviewRef.current?.injectJavaScript(`window.postMessage(JSON.stringify({action: 'pause'}), '*'); true;`);
+      } else {
+        if (position >= duration && duration > 0) {
+          webviewRef.current?.injectJavaScript(`window.postMessage(JSON.stringify({action: 'seek', value: 0}), '*'); true;`);
+        }
+        webviewRef.current?.injectJavaScript(`window.postMessage(JSON.stringify({action: 'play'}), '*'); true;`);
+      }
+    } else {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          playThroughEarpieceAndroid: false,
+        });
+
+        if (soundRef.current) {
+          if (isPlaying) {
+            await soundRef.current.pauseAsync();
+          } else {
+            if (position >= duration && duration > 0) {
+              await soundRef.current.setPositionAsync(0);
+            }
+            await soundRef.current.playAsync();
+          }
+        }
+      } catch (e) {
+        console.error("Lỗi phát audio:", e);
+      }
     }
   };
 
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+      <body>
+        <audio id="player" src="${finalUrl}" preload="metadata" playsinline></audio>
+        <script>
+          const player = document.getElementById('player');
+          player.addEventListener('loadedmetadata', () => {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'duration', value: player.duration * 1000 }));
+          });
+          player.addEventListener('timeupdate', () => {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'position', value: player.currentTime * 1000 }));
+          });
+          player.addEventListener('ended', () => {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ended' }));
+          });
+          player.addEventListener('play', () => {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'play' }));
+          });
+          player.addEventListener('pause', () => {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'pause' }));
+          });
+          window.addEventListener('message', (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.action === 'play') player.play();
+              if (data.action === 'pause') player.pause();
+              if (data.action === 'seek') player.currentTime = data.value / 1000;
+            } catch(e) {}
+          });
+        </script>
+      </body>
+    </html>
+  `;
+
+  const handleWebViewMessage = (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'duration') setDuration(data.value);
+      if (data.type === 'position') setPosition(data.value);
+      if (data.type === 'ended') {
+        setIsPlaying(false);
+        setPosition(duration);
+      }
+      if (data.type === 'play') setIsPlaying(true);
+      if (data.type === 'pause') setIsPlaying(false);
+    } catch(e) {}
+  };
+
   const formatTime = (ms: number) => {
-    if (!ms) return "0:00";
+    if (!ms || isNaN(ms)) return "0:00";
     const totalSeconds = Math.floor(ms / 1000);
     const m = Math.floor(totalSeconds / 60);
     const s = totalSeconds % 60;
@@ -893,31 +990,47 @@ export const AudioMessagePreview = ({ url, isSender }: { url: string; isSender?:
   const progress = duration > 0 ? (position / duration) * 100 : 0;
 
   return (
-    <View className={`w-[240px] flex-row items-center p-3 rounded-3xl ${isSender ? "bg-black" : "bg-white border border-gray-200"}`}>
-      <TouchableOpacity 
-        onPress={loadAndPlay}
-        className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${isSender ? "bg-white" : "bg-black"}`}
-      >
-        {isPlaying ? (
-          <View className={`w-3 h-3 rounded-sm ${isSender ? "bg-black" : "bg-white"}`} />
-        ) : (
-          <PlayIcon size={20} color={isSender ? "black" : "white"} style={{ transform: [{ translateX: 2 }] }} />
-        )}
-      </TouchableOpacity>
-      
-      <View className="flex-1">
-        <View className={`h-1.5 rounded-full w-full overflow-hidden mb-2 ${isSender ? "bg-gray-700" : "bg-gray-200"}`}>
-           <View className={`h-full rounded-full ${isSender ? "bg-white" : "bg-black"}`} style={{ width: `${progress}%` }} />
-        </View>
-        <View className="flex-row justify-between">
-           <Text className={`text-[11px] font-medium ${isSender ? "text-gray-300" : "text-gray-500"}`}>
-             {formatTime(position)}
-           </Text>
-           <Text className={`text-[11px] font-medium ${isSender ? "text-gray-300" : "text-gray-500"}`}>
-             {formatTime(duration)}
-           </Text>
+    <>
+      <View className={`w-[240px] flex-row items-center p-3 rounded-2xl ${isSender ? "bg-black" : "bg-white border border-gray-200"}`}>
+        <TouchableOpacity 
+          onPress={loadAndPlay}
+          className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${isSender ? "bg-white" : "bg-black"}`}
+        >
+          {isPlaying ? (
+            <View className={`w-3 h-3 rounded-sm ${isSender ? "bg-black" : "bg-white"}`} />
+          ) : (
+            <PlayIcon size={20} color={isSender ? "black" : "white"} style={{ transform: [{ translateX: 2 }] }} />
+          )}
+        </TouchableOpacity>
+        
+        <View className="flex-1">
+          <View className={`h-1.5 rounded-full w-full overflow-hidden mb-2 ${isSender ? "bg-gray-700" : "bg-gray-200"}`}>
+             <View className={`h-full rounded-full ${isSender ? "bg-white" : "bg-black"}`} style={{ width: `${progress}%` }} />
+          </View>
+          <View className="flex-row justify-between">
+             <Text className={`text-[11px] font-medium ${isSender ? "text-gray-300" : "text-gray-500"}`}>
+               {formatTime(position)}
+             </Text>
+             <Text className={`text-[11px] font-medium ${isSender ? "text-gray-300" : "text-gray-500"}`}>
+               {formatTime(duration)}
+             </Text>
+          </View>
         </View>
       </View>
-    </View>
+      
+      {isWebmOnIos && (
+        <View style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }} pointerEvents="none">
+          <WebView
+            ref={webviewRef}
+            source={{ html: htmlContent }}
+            onMessage={handleWebViewMessage}
+            originWhitelist={['*']}
+            allowsInlineMediaPlayback={true}
+            mediaPlaybackRequiresUserAction={false}
+            style={{ width: 0, height: 0, opacity: 0 }}
+          />
+        </View>
+      )}
+    </>
   );
 };
