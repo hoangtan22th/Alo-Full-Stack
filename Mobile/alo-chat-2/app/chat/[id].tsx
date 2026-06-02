@@ -100,7 +100,9 @@ export default function GlobalChatScreen() {
   const messageRefs = useRef<Record<string, View>>({});
   const flatListRef = useRef<FlatList>(null);
 
-  const [showCallMemberSelector, setShowCallMemberSelector] = useState<{ isVideo: boolean } | null>(null);
+  const [showCallMemberSelector, setShowCallMemberSelector] = useState<{
+    isVideo: boolean;
+  } | null>(null);
   const { startCall } = useCall();
 
   const [messages, setMessages] = useState<MessageDTO[]>([]);
@@ -129,7 +131,9 @@ export default function GlobalChatScreen() {
   const [expandedTimeMsgId, setExpandedTimeMsgId] = useState<string | null>(
     null,
   );
-  const [targetScrollMsgId, setTargetScrollMsgId] = useState<string | null>(null);
+  const [targetScrollMsgId, setTargetScrollMsgId] = useState<string | null>(
+    null,
+  );
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [hasNewUnseenMessages, setHasNewUnseenMessages] = useState(false);
   const [userCache, setUserCache] = useState<Record<string, UserProfileDTO>>(
@@ -159,52 +163,72 @@ export default function GlobalChatScreen() {
   const [mentionSearch, setMentionSearch] = useState<string | null>(null);
   const [mentionPosition, setMentionPosition] = useState(0);
   const [mentionIndex, setMentionIndex] = useState(0);
-  const [mentionToScrollId, setMentionToScrollId] = useState<string | null>(null);
+  const [mentionToScrollId, setMentionToScrollId] = useState<string | null>(
+    null,
+  );
   const [showMentionIndicator, setShowMentionIndicator] = useState(false);
 
   const filteredMentions = useMemo(() => {
     if (!isGroupChat || mentionSearch === null) return [];
-    
+
     const allOption = { id: "all", name: "Tất cả", avatar: "" };
     const members = (groupDetails?.members || [])
       .map((m: any) => ({
         id: String(m.userId || m._id),
-        name: userCache[String(m.userId || m._id)]?.fullName || m.fullName || m.displayName || (m as any).name || "Thành viên",
+        name:
+          userCache[String(m.userId || m._id)]?.fullName ||
+          m.fullName ||
+          m.displayName ||
+          (m as any).name ||
+          "Thành viên",
         avatar: userCache[String(m.userId || m._id)]?.avatar || m.avatar || "",
       }))
       .filter((m: any) => m.id !== String(currentUserId));
 
     const combined = [allOption, ...members];
-    
+
     // Find already mentioned names using the exact matching logic
     const mentionedSet = new Set<string>();
     if (inputText) {
-      const sortedNames = [...combined.map(m => m.name)].sort((a, b) => b.length - a.length);
-      const regexStr = sortedNames.map(n => n.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')).join("|");
+      const sortedNames = [...combined.map((m) => m.name)].sort(
+        (a, b) => b.length - a.length,
+      );
+      const regexStr = sortedNames
+        .map((n) => n.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&"))
+        .join("|");
       const regex = new RegExp(`@(${regexStr})`, "g");
       let match;
       while ((match = regex.exec(inputText)) !== null) {
         mentionedSet.add(match[1]);
       }
     }
-    
-    const notMentionedYet = combined.filter(m => !mentionedSet.has(m.name));
+
+    const notMentionedYet = combined.filter((m) => !mentionedSet.has(m.name));
 
     if (mentionSearch === "") return notMentionedYet;
     return notMentionedYet.filter((m) =>
-      m.name.toLowerCase().includes(mentionSearch.toLowerCase())
+      m.name.toLowerCase().includes(mentionSearch.toLowerCase()),
     );
-  }, [isGroupChat, mentionSearch, groupDetails, userCache, currentUserId, inputText]);
+  }, [
+    isGroupChat,
+    mentionSearch,
+    groupDetails,
+    userCache,
+    currentUserId,
+    inputText,
+  ]);
 
   const handleSelectMention = (item: { id: string; name: string }) => {
     const textBefore = inputText.substring(0, mentionPosition);
-    const textAfter = inputText.substring(mentionPosition + (mentionSearch?.length || 0) + 1);
+    const textAfter = inputText.substring(
+      mentionPosition + (mentionSearch?.length || 0) + 1,
+    );
     const newText = `${textBefore}@${item.name} ${textAfter}`;
-    
+
     // Programmatic text changes may not trigger onSelectionChange immediately.
     // Update cursor position manually to stay in sync.
     setCursorPosition(textBefore.length + item.name.length + 2);
-    
+
     setInputText(newText);
     setMentionSearch(null);
     setTimeout(() => {
@@ -218,12 +242,14 @@ export default function GlobalChatScreen() {
 
   useEffect(() => {
     if (!isGroupChat) return;
-    
+
     // React Native's onSelectionChange can be stale by 1 character when typing fast.
     // If the cursor is at or very close to the end, trust the full text.
     const isCursorNearEnd = inputText.length - cursorPosition <= 1;
-    const textBefore = isCursorNearEnd ? inputText : inputText.substring(0, cursorPosition);
-    
+    const textBefore = isCursorNearEnd
+      ? inputText
+      : inputText.substring(0, cursorPosition);
+
     const match = textBefore.match(/(?:^|\s)@([^\s]*)$/);
     if (match) {
       setMentionSearch(match[1]);
@@ -234,7 +260,8 @@ export default function GlobalChatScreen() {
     }
   }, [inputText, cursorPosition, isGroupChat]);
   const [isReportModalVisible, setIsReportModalVisible] = useState(false);
-  const [isSendContactModalVisible, setIsSendContactModalVisible] = useState(false);
+  const [isSendContactModalVisible, setIsSendContactModalVisible] =
+    useState(false);
   const [isStickerModalVisible, setIsStickerModalVisible] = useState(false);
   const [reportTarget, setReportTarget] = useState<{
     type: TargetType;
@@ -301,33 +328,44 @@ export default function GlobalChatScreen() {
   );
   const [pinnedMessages, setPinnedMessages] = useState<MessageDTO[]>([]);
 
-  const handleStartGroupCall = useCallback((isVideo: boolean, forcedInviteeIds?: string[]) => {
-    if (isGroupChat && !forcedInviteeIds) {
-      setShowCallMemberSelector({ isVideo });
-      return;
-    }
-    
-    const mappedMembers = (groupDetails?.members || []).map((m: any) => {
-      const uId = String(m.userId || m._id);
-      const cached = userCache[uId];
-      return {
-        ...m,
-        userId: uId,
-        fullName: cached?.fullName || m.fullName,
-        avatar: cached?.avatar || m.avatar
-      };
-    });
+  const handleStartGroupCall = useCallback(
+    (isVideo: boolean, forcedInviteeIds?: string[]) => {
+      if (isGroupChat && !forcedInviteeIds) {
+        setShowCallMemberSelector({ isVideo });
+        return;
+      }
 
-    startCall(
-      String(id),
-      isVideo,
+      const mappedMembers = (groupDetails?.members || []).map((m: any) => {
+        const uId = String(m.userId || m._id);
+        const cached = userCache[uId];
+        return {
+          ...m,
+          userId: uId,
+          fullName: cached?.fullName || m.fullName,
+          avatar: cached?.avatar || m.avatar,
+        };
+      });
+
+      startCall(
+        String(id),
+        isVideo,
+        isGroupChat,
+        realtimeGroupName || `Nhóm ${id}`,
+        realtimeAvatar,
+        forcedInviteeIds,
+        mappedMembers,
+      );
+    },
+    [
+      id,
       isGroupChat,
-      realtimeGroupName || `Nhóm ${id}`,
+      realtimeGroupName,
       realtimeAvatar,
-      forcedInviteeIds,
-      mappedMembers
-    );
-  }, [id, isGroupChat, realtimeGroupName, realtimeAvatar, groupDetails, userCache, startCall]);
+      groupDetails,
+      userCache,
+      startCall,
+    ],
+  );
 
   const confirmGroupCall = (selectedIds: string[]) => {
     const isVideo = showCallMemberSelector?.isVideo || false;
@@ -359,9 +397,15 @@ export default function GlobalChatScreen() {
   useEffect(() => {
     if (!messages || messages.length === 0 || !user) return;
     const myName = user.fullName || "";
-    
+
     const mentionMsg = [...messages].reverse().find((m) => {
-      if (m.type !== "text" || !m.content || m.isRead || String(m.senderId) === String(currentUserId)) return false;
+      if (
+        m.type !== "text" ||
+        !m.content ||
+        m.isRead ||
+        String(m.senderId) === String(currentUserId)
+      )
+        return false;
       return m.content.includes(`@${myName}`) || m.content.includes("@Tất cả");
     });
 
@@ -581,7 +625,8 @@ export default function GlobalChatScreen() {
         {
           text: "Xóa",
           onPress: async () => {
-            const ok = await messageService.bulkDeleteMessagesForMe(selectedReportIds);
+            const ok =
+              await messageService.bulkDeleteMessagesForMe(selectedReportIds);
             if (ok) {
               setMessages((prev) =>
                 prev.filter((m) => !selectedReportIds.includes(m._id)),
@@ -614,7 +659,8 @@ export default function GlobalChatScreen() {
         messages
           .find((m: MessageDTO) => m._id === reactionDetailMsgId)
           ?.reactions?.map((r: any) => r.userId) || [];
-      const groupMemberIds = groupDetails?.members?.map((m: any) => String(m.userId || m._id)) || [];
+      const groupMemberIds =
+        groupDetails?.members?.map((m: any) => String(m.userId || m._id)) || [];
 
       const allIds = Array.from(
         new Set([...messageSenderIds, ...reactionUserIds, ...groupMemberIds]),
@@ -710,8 +756,10 @@ export default function GlobalChatScreen() {
 
       if (needsResolution) {
         try {
-          const conversation =
-            await groupService.createDirectConversation(initialId, true);
+          const conversation = await groupService.createDirectConversation(
+            initialId,
+            true,
+          );
           if (conversation && (conversation._id || conversation.id)) {
             setResolvedConversationId(conversation._id || conversation.id);
           } else {
@@ -736,11 +784,23 @@ export default function GlobalChatScreen() {
             contactService.getPendingRequests(),
             contactService.getSentRequests(),
           ]);
-          
-          const isFriend = friends.some((f: any) => String(f.requesterId) === String(targetUserId) || String(f.recipientId) === String(targetUserId));
-          const hasPending = pending.some((f: any) => String(f.requesterId) === String(targetUserId) || String(f.recipientId) === String(targetUserId));
-          const hasSent = sent.some((f: any) => String(f.requesterId) === String(targetUserId) || String(f.recipientId) === String(targetUserId));
-          
+
+          const isFriend = friends.some(
+            (f: any) =>
+              String(f.requesterId) === String(targetUserId) ||
+              String(f.recipientId) === String(targetUserId),
+          );
+          const hasPending = pending.some(
+            (f: any) =>
+              String(f.requesterId) === String(targetUserId) ||
+              String(f.recipientId) === String(targetUserId),
+          );
+          const hasSent = sent.some(
+            (f: any) =>
+              String(f.requesterId) === String(targetUserId) ||
+              String(f.recipientId) === String(targetUserId),
+          );
+
           setIsStranger(!isFriend && !hasPending && !hasSent);
         } catch (e) {
           setIsStranger(false);
@@ -753,7 +813,12 @@ export default function GlobalChatScreen() {
   }, [isGroupChat, targetUserId]);
 
   const fetchMsgs = async (reset = false) => {
-    if (!resolvedConversationId || resolvedConversationId.startsWith("temp-") || fetchingRef.current) return;
+    if (
+      !resolvedConversationId ||
+      resolvedConversationId.startsWith("temp-") ||
+      fetchingRef.current
+    )
+      return;
     fetchingRef.current = true; // Block further calls immediately
 
     if (reset) {
@@ -806,7 +871,8 @@ export default function GlobalChatScreen() {
   };
 
   const fetchPinnedMessages = async () => {
-    if (!resolvedConversationId || resolvedConversationId.startsWith("temp-")) return;
+    if (!resolvedConversationId || resolvedConversationId.startsWith("temp-"))
+      return;
     try {
       const pins = await messageService.getPinnedMessages(
         resolvedConversationId,
@@ -818,7 +884,12 @@ export default function GlobalChatScreen() {
   };
 
   const fetchGroupDetails = async () => {
-    if (!resolvedConversationId || resolvedConversationId.startsWith("temp-") || !isGroupChat) return;
+    if (
+      !resolvedConversationId ||
+      resolvedConversationId.startsWith("temp-") ||
+      !isGroupChat
+    )
+      return;
     try {
       const res = await groupService.getGroupById(resolvedConversationId);
       const data = res?.data?.data || res?.data || res;
@@ -889,7 +960,12 @@ export default function GlobalChatScreen() {
   }, [isGroupChat, groupDetails, adminIds, currentUserId]);
 
   useEffect(() => {
-    if (!socket || !resolvedConversationId || resolvedConversationId.startsWith("temp-")) return;
+    if (
+      !socket ||
+      !resolvedConversationId ||
+      resolvedConversationId.startsWith("temp-")
+    )
+      return;
 
     const expectedRoomId = isGroupChat ? resolvedConversationId : targetUserId;
 
@@ -999,7 +1075,7 @@ export default function GlobalChatScreen() {
             };
           }
           return updated;
-        })
+        }),
       );
       setPinnedMessages((prev: MessageDTO[]) =>
         prev.filter((m: MessageDTO) => m._id !== data.messageId),
@@ -1159,9 +1235,14 @@ export default function GlobalChatScreen() {
   }, [socket, targetUserId, isGroupChat]);
 
   const handleInputChange = (text: string) => {
-    setCursorPosition(prev => prev + (text.length - inputText.length));
+    setCursorPosition((prev) => prev + (text.length - inputText.length));
     setInputText(text);
-    if (!socket || !resolvedConversationId || resolvedConversationId.startsWith("temp-")) return;
+    if (
+      !socket ||
+      !resolvedConversationId ||
+      resolvedConversationId.startsWith("temp-")
+    )
+      return;
     if (!typingTimeoutRef.current) {
       socket.emit("TYPING", {
         roomId: resolvedConversationId,
@@ -1205,21 +1286,26 @@ export default function GlobalChatScreen() {
         Alert.alert("Thông báo", "Không tìm thấy tin nhắn.");
         return;
       }
-      
+
       let currentSkip = skip;
       let found = false;
       let fetchedMessages: MessageDTO[] = [];
       let stillHasMore: boolean = hasMore;
       let attempts = 0;
-      
-      while (!found && stillHasMore && attempts < 5) {
+
+      setLoadingMore(true);
+      while (!found && stillHasMore && attempts < 50) {
         try {
-          const res = await messageService.getMessageHistory(resolvedConversationId, 50, currentSkip);
+          const res = await messageService.getMessageHistory(
+            resolvedConversationId,
+            50,
+            currentSkip,
+          );
           if (res && res.messages && res.messages.length > 0) {
             fetchedMessages.push(...res.messages);
             currentSkip += res.messages.length;
             stillHasMore = res.hasMore ?? res.messages.length >= 50;
-            if (res.messages.some(m => m._id === msgId)) {
+            if (res.messages.some((m) => m._id === msgId)) {
               found = true;
             }
           } else {
@@ -1230,23 +1316,29 @@ export default function GlobalChatScreen() {
         }
         attempts++;
       }
+      setLoadingMore(false);
 
       if (fetchedMessages.length > 0) {
-        setMessages(prev => {
-           const existingIds = new Set(prev.map(m => m._id));
-           const filtered = fetchedMessages.filter(m => !existingIds.has(m._id));
-           return [...filtered, ...prev];
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m._id));
+          const filtered = fetchedMessages.filter(
+            (m) => !existingIds.has(m._id),
+          );
+          return [...filtered, ...prev];
         });
         setSkip(currentSkip);
         setHasMore(stillHasMore);
-        
+
         if (found) {
           setTargetScrollMsgId(msgId);
         } else {
-          Alert.alert("Thông báo", "Tin nhắn ở quá khứ quá xa, không thể tự động cuộn tới.");
+          Alert.alert(
+            "Thông báo",
+            "Tin nhắn ở quá khứ quá xa, không thể tự động cuộn tới.",
+          );
         }
       } else {
-         Alert.alert("Thông báo", "Không tìm thấy tin nhắn.");
+        Alert.alert("Thông báo", "Không tìm thấy tin nhắn.");
       }
     }
   };
@@ -1274,10 +1366,14 @@ export default function GlobalChatScreen() {
 
   const ensureConversationId = async (): Promise<string | null> => {
     if (!resolvedConversationId) return null;
-    if (!resolvedConversationId.startsWith("temp-")) return resolvedConversationId;
-    
+    if (!resolvedConversationId.startsWith("temp-"))
+      return resolvedConversationId;
+
     try {
-      const convo = await groupService.createDirectConversation(targetUserId as string, false);
+      const convo = await groupService.createDirectConversation(
+        targetUserId as string,
+        false,
+      );
       const newId = convo._id || convo.id;
       setResolvedConversationId(newId);
       return newId;
@@ -1500,7 +1596,10 @@ export default function GlobalChatScreen() {
     }
   };
 
-  const handleSendContactCard = async (selectedFriends: any[], includePhone: boolean) => {
+  const handleSendContactCard = async (
+    selectedFriends: any[],
+    includePhone: boolean,
+  ) => {
     if (!resolvedConversationId) return;
     const actualConversationId = await ensureConversationId();
     if (!actualConversationId) return;
@@ -1539,19 +1638,20 @@ export default function GlobalChatScreen() {
             contactPhone: includePhone ? friend.phone : undefined,
           },
         });
-        
+
         if (sentMessage) {
-          setMessages((prev) => prev.map(m => m._id === tempId ? sentMessage : m));
+          setMessages((prev) =>
+            prev.map((m) => (m._id === tempId ? sentMessage : m)),
+          );
         }
       } catch (err) {
         console.error("Lỗi gửi danh thiếp:", err);
         setMessages((prev) => prev.filter((m) => m._id !== tempId));
       }
     }
-    
+
     setTimeout(
-      () =>
-        flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
+      () => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
       100,
     );
   };
@@ -1586,7 +1686,9 @@ export default function GlobalChatScreen() {
       });
 
       if (sentMessage) {
-        setMessages((prev) => prev.map(m => m._id === tempId ? sentMessage : m));
+        setMessages((prev) =>
+          prev.map((m) => (m._id === tempId ? sentMessage : m)),
+        );
       }
     } catch (err) {
       console.error("Lỗi gửi sticker:", err);
@@ -1594,8 +1696,7 @@ export default function GlobalChatScreen() {
     }
 
     setTimeout(
-      () =>
-        flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
+      () => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
       100,
     );
   };
@@ -1725,7 +1826,9 @@ export default function GlobalChatScreen() {
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: "#f9fafb" }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? -(Math.max(insets.bottom, 12) - 12) : 0}
+      keyboardVerticalOffset={
+        Platform.OS === "ios" ? -(Math.max(insets.bottom, 12) - 12) : 0
+      }
     >
       <View
         style={{ paddingTop: insets.top, backgroundColor: "white", zIndex: 10 }}
@@ -1814,8 +1917,8 @@ export default function GlobalChatScreen() {
       )}
 
       <View className="flex-1 relative">
-        <PinnedMessageBar 
-          pinnedMessages={pinnedMessages} 
+        <PinnedMessageBar
+          pinnedMessages={pinnedMessages}
           onPressMessage={scrollToMessage}
         />
         <View
@@ -1827,6 +1930,16 @@ export default function GlobalChatScreen() {
             data={invertedMessages}
             keyExtractor={(item) => item.messages[0]?._id + "_group"}
             inverted
+            onScrollToIndexFailed={(info) => {
+              const wait = new Promise((resolve) => setTimeout(resolve, 300));
+              wait.then(() => {
+                flatListRef.current?.scrollToIndex({
+                  index: info.index,
+                  animated: true,
+                  viewPosition: 0.5,
+                });
+              });
+            }}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.5}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
@@ -2102,17 +2215,24 @@ export default function GlobalChatScreen() {
           <View className="absolute top-4 right-4 z-50">
             <TouchableOpacity
               onPress={() => {
-                const idx = messages.findIndex((m) => m._id === mentionToScrollId);
+                const idx = messages.findIndex(
+                  (m) => m._id === mentionToScrollId,
+                );
                 if (idx !== -1) {
-                  flatListRef.current?.scrollToIndex({ index: idx, animated: true });
+                  flatListRef.current?.scrollToIndex({
+                    index: idx,
+                    animated: true,
+                  });
                 }
                 setShowMentionIndicator(false);
               }}
               className="bg-blue-600 px-4 py-2 rounded-full shadow-lg flex-row items-center"
             >
-              <Text className="text-white font-bold text-sm">@ Có người nhắc bạn</Text>
+              <Text className="text-white font-bold text-sm">
+                @ Có người nhắc bạn
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setShowMentionIndicator(false)}
               className="absolute -top-2 -right-2 bg-gray-200 rounded-full p-1"
             >
@@ -2136,13 +2256,20 @@ export default function GlobalChatScreen() {
                       className={`flex-row items-center px-4 py-3 border-b border-gray-50 ${index === mentionIndex ? "bg-blue-50" : ""}`}
                     >
                       {item.avatar ? (
-                        <Image source={{ uri: item.avatar }} className="w-8 h-8 rounded-full mr-3 bg-gray-200" />
+                        <Image
+                          source={{ uri: item.avatar }}
+                          className="w-8 h-8 rounded-full mr-3 bg-gray-200"
+                        />
                       ) : (
                         <View className="w-8 h-8 rounded-full bg-blue-100 items-center justify-center mr-3">
-                          <Text className="text-blue-600 font-bold">{item.name.charAt(0).toUpperCase()}</Text>
+                          <Text className="text-blue-600 font-bold">
+                            {item.name.charAt(0).toUpperCase()}
+                          </Text>
                         </View>
                       )}
-                      <Text className="text-gray-900 font-medium text-[15px]">{item.name}</Text>
+                      <Text className="text-gray-900 font-medium text-[15px]">
+                        {item.name}
+                      </Text>
                     </TouchableOpacity>
                   )}
                 />
@@ -2416,7 +2543,7 @@ export default function GlobalChatScreen() {
           setReportMessageIds([]);
         }}
       />
-      
+
       <SendContactCardModal
         visible={isSendContactModalVisible}
         onClose={() => setIsSendContactModalVisible(false)}
@@ -2439,7 +2566,7 @@ export default function GlobalChatScreen() {
               ...m,
               userId: uId,
               fullName: cached?.fullName || m.fullName,
-              avatar: cached?.avatar || m.avatar
+              avatar: cached?.avatar || m.avatar,
             };
           })}
           currentUserId={String(currentUserId)}
