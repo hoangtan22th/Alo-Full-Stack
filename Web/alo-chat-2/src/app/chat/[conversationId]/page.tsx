@@ -111,6 +111,11 @@ const getMediaUrl = (url: string | undefined): string => {
   return `${backendHost}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
+const withCacheBust = (url: string): string => {
+  if (!url || url.startsWith("blob:") || url.startsWith("data:")) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
+};
+
 const BOT_ID = "alo-bot";
 const GROUP_LINK_REGEX = /(?:https?:\/\/)?alo\.chat\/g\/([a-f\d]{24})/i;
 const EMPTY_ARRAY: any[] = [];
@@ -1606,7 +1611,7 @@ export default function ChatPage() {
   const handleDownload = async (url: string, fileName: string) => {
     try {
       // Thêm { cache: 'no-cache' } hoặc thêm một tham số ngẫu nhiên vào URL
-      const response = await fetch(`${url}?t=${new Date().getTime()}`, {
+      const response = await fetch(withCacheBust(getMediaUrl(url)), {
         method: "GET",
         cache: "no-cache", // Ép trình duyệt không dùng cache cũ
       });
@@ -1647,7 +1652,7 @@ export default function ChatPage() {
       const results = await Promise.all(
         availableImages.map(async (img: any, i: number) => {
           const fileName = img.fileName || `image_${i + 1}.png`;
-          const response = await fetch(`${img.url}?t=${Date.now()}`, {
+          const response = await fetch(withCacheBust(getMediaUrl(img.url)), {
             method: "GET",
             cache: "no-cache",
           });

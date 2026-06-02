@@ -88,7 +88,7 @@ export default function FileMessageBubble({
   const fileUrl = getMediaUrl(msg.content);
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
   const isTxt = ext === "txt";
-  const isAudio = msg.metadata?.fileType?.startsWith("audio/") || ["mp3", "wav", "ogg", "m4a", "webm"].includes(ext) && msg.metadata?.fileType?.startsWith("audio/");
+  const isAudio = msg.metadata?.fileType?.startsWith("audio/") || ["mp3", "wav", "ogg", "m4a", "webm"].includes(ext);
   const isVideo = ["mp4", "mov", "webm", "avi", "mkv"].includes(ext) && !isAudio;
   const config = getFileTypeConfig(fileName);
 
