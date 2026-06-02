@@ -6,6 +6,7 @@ import { useAuth } from "./AuthContext";
 import { presenceService } from "../services/presenceService";
 import { userService } from "../services/userService";
 import { createAudioPlayer } from "expo-audio";
+import { getMessageTextContent } from "../utils/messageUtils";
 
 export type OnlineUser = {
   status: "online" | "offline";
@@ -262,22 +263,41 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             });
           });
 
-          // Lắng nghe tin nhắn hệ thống để bắt Nhắc hẹn nhóm
-          newSocket.on("message-received", (data: any) => {
+          // Lắng nghe tin nhắn mới để hiện Notification toàn cục
+          newSocket.on("message-received", async (data: any) => {
             const message = data.message || data;
-            // Chỉ hiện notify nếu là tin nhắn hệ thống loại nhắc hẹn và có metadata
+            
+            // Bỏ qua tin nhắn do chính mình gửi
+            if (String(message.senderId) === String(currentUserId)) return;
+
+            // Nếu là tin nhắn hệ thống loại nhắc hẹn
             if (message.type === "system" && message.metadata?.isReminder) {
               console.log("📥 [Mobile Socket] Received Group REMINDER:", message);
-              // Bỏ gỡ message cho chính mình (message-received đã có filter ở Chat screen, 
-              // nhưng ở đây là Notify toàn cục nên cũng nên check)
-              if (String(message.senderId) !== String(currentUserId)) {
-                  DeviceEventEmitter.emit("show_in_app_notification", {
-                    title: "Nhắc hẹn nhóm",
-                    message: message.metadata.title || message.content,
-                    data: { groupId: message.conversationId },
-                    type: "REMINDER",
-                  });
-              }
+              DeviceEventEmitter.emit("show_in_app_notification", {
+                title: "Nhắc hẹn nhóm",
+                message: message.metadata.title || message.content,
+                data: { groupId: message.conversationId },
+                type: "REMINDER",
+              });
+            } else if (message.type !== "system") {
+              // Tin nhắn bình thường
+              console.log("📥 [Mobile Socket] Received NORMAL MESSAGE:", message._id);
+              await playNotificationSound();
+              
+              let content = getMessageTextContent(message.content);
+              if (message.type === "image") content = "[Hình ảnh]";
+              else if (message.type === "video") content = "[Video]";
+              else if (message.type === "file") content = "[Tệp đính kèm]";
+              else if (message.type === "poll") content = "[Bình chọn]";
+              else if (message.type === "contact") content = "[Danh thiếp]";
+
+              DeviceEventEmitter.emit("show_in_app_notification", {
+                title: message.senderName || "Tin nhắn mới",
+                message: content,
+                avatar: message.senderAvatar,
+                data: { conversationId: message.conversationId, senderId: message.senderId },
+                type: "NEW_MESSAGE",
+              });
             }
           });
 
@@ -356,6 +376,33 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
                data: { groupId: data.conversationId },
                type: "POLL",
              });
+          });
+
+          // ============ Friend Request Real-time Events ============
+          newSocket.on("NEW_FRIEND_REQUEST", async (data: any) => {
+            console.log("📥 [Mobile Socket] Received NEW_FRIEND_REQUEST:", data);
+            await playNotificationSound();
+            DeviceEventEmitter.emit("show_in_app_notification", {
+              title: "Lời mời kết bạn mới",
+              message: `${data.requesterName} đã gửi cho bạn lời mời kết bạn`,
+              avatar: data.requesterAvatar,
+              type: "NEW_FRIEND_REQUEST",
+            });
+            // Bắn event refresh để cập nhật UI danh sách lời mời (nếu có)
+            DeviceEventEmitter.emit("refresh_received_requests");
+            DeviceEventEmitter.emit("refresh_contact_badges");
+          });
+
+          newSocket.on("FRIEND_REQUEST_ACCEPTED", async (data: any) => {
+            console.log("📥 [Mobile Socket] Received FRIEND_REQUEST_ACCEPTED:", data);
+            await playNotificationSound();
+            DeviceEventEmitter.emit("show_in_app_notification", {
+              title: "Chấp nhận kết bạn",
+              message: `${data.accepterName || "Một người dùng"} đã trở thành bạn bè với bạn`,
+              type: "FRIEND_ACCEPTED",
+            });
+            // Bắn event refresh danh sách bạn bè
+            DeviceEventEmitter.emit("refresh_friends_list");
           });
 
           // ============ Post Real-time Events ============

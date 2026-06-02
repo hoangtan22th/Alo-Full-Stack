@@ -1273,13 +1273,16 @@ export default function GlobalChatScreen() {
       const reversedGroups = [...messageGroups].reverse();
       const index = reversedGroups.findIndex((g) => g === group);
       if (index !== -1) {
-        flatListRef.current?.scrollToIndex({
-          index,
-          animated: true,
-          viewPosition: 0.5,
-        });
-        setHighlightedMsgId(msgId);
-        setExpandedTimeMsgId(msgId);
+        // Use setTimeout to ensure UI is ready, even if it's already in the list
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({
+            index,
+            animated: true,
+            viewPosition: 0.5,
+          });
+          setHighlightedMsgId(msgId);
+          setExpandedTimeMsgId(msgId);
+        }, 100);
       }
     } else {
       if (!hasMore || !resolvedConversationId) {
@@ -1760,7 +1763,7 @@ export default function GlobalChatScreen() {
             setHighlightedMsgId(targetScrollMsgId);
             setExpandedTimeMsgId(targetScrollMsgId);
             setTargetScrollMsgId(null);
-          }, 200);
+          }, 600);
         }
       }
     }
@@ -1931,14 +1934,15 @@ export default function GlobalChatScreen() {
             keyExtractor={(item) => item.messages[0]?._id + "_group"}
             inverted
             onScrollToIndexFailed={(info) => {
-              const wait = new Promise((resolve) => setTimeout(resolve, 300));
-              wait.then(() => {
+              const offset = info.averageItemLength * info.index;
+              flatListRef.current?.scrollToOffset({ offset, animated: false });
+              setTimeout(() => {
                 flatListRef.current?.scrollToIndex({
                   index: info.index,
                   animated: true,
                   viewPosition: 0.5,
                 });
-              });
+              }, 200);
             }}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.5}
