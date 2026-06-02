@@ -1,14 +1,20 @@
-import { Eureka } from 'eureka-js-client';
-import dotenv from 'dotenv';
-dotenv.config();
-const PORT = parseInt(process.env.PORT, 10) || 8087;
-const hostName = '127.0.0.1';
-const eurekaClient = new Eureka({
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const eureka_js_client_1 = require("eureka-js-client");
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
+const PORT = parseInt(process.env.PORT, 10) || 8089;
+const hostName = process.env.HOSTNAME || '127.0.0.1';
+const ipAddr = process.env.IP_ADDR || '127.0.0.1';
+const eurekaClient = new eureka_js_client_1.Eureka({
     instance: {
         instanceId: `${hostName}:post-service:${PORT}`,
         app: 'POST-SERVICE',
         hostName: hostName,
-        ipAddr: '127.0.0.1',
+        ipAddr: ipAddr,
         statusPageUrl: `http://${hostName}:${PORT}/info`,
         healthCheckUrl: `http://${hostName}:${PORT}/health`,
         port: {
@@ -29,5 +35,5 @@ const eurekaClient = new Eureka({
         requestRetryDelay: 2000,
     },
 });
-export default eurekaClient;
+exports.default = eurekaClient;
 //# sourceMappingURL=eureka-client.js.map

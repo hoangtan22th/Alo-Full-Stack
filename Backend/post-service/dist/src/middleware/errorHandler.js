@@ -1,7 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.errorHandler = errorHandler;
+exports.notFoundHandler = notFoundHandler;
 /**
  * Global error handling middleware
  */
-export function errorHandler(err, req, res, next) {
+function errorHandler(err, req, res, next) {
     console.error('[ErrorHandler]', err);
     const status = err.status || err.statusCode || 500;
     const message = err.message || 'Internal Server Error';
@@ -16,7 +20,8 @@ export function errorHandler(err, req, res, next) {
 /**
  * 404 Not Found handler
  */
-export function notFoundHandler(req, res) {
+function notFoundHandler(req, res) {
+    console.warn(`[DEBUG] 404 Not Found: ${req.method} ${req.originalUrl}`);
     res.status(404).json({
         error: 'Not Found',
         path: req.path,

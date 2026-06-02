@@ -1,4 +1,4 @@
-import { useRouter, useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,13 +15,18 @@ import {
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { ArrowLeftIcon, CheckIcon } from "react-native-heroicons/outline";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import api from "../../../services/api";
-import { useAuth } from "../../../contexts/AuthContext";
+import api from "../../services/api";
+import { useAuth } from "../../contexts/AuthContext";
 
 export default function PersonalInfoScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const { user, refreshUser } = useAuth();
+
+  const handleBack = () => {
+    router.back();
+  };
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -190,7 +195,7 @@ export default function PersonalInfoScreen() {
       {/* Header */}
       <View className="flex-row items-center justify-between px-4 py-3 bg-white border-b-[1px] border-gray-200">
         <View className="flex-row items-center">
-          <TouchableOpacity onPress={() => router.back()} className="mr-4">
+          <TouchableOpacity onPress={handleBack} className="mr-4">
             <ArrowLeftIcon size={24} color="#1f2937" />
           </TouchableOpacity>
           <Text className="text-lg font-bold text-gray-900">

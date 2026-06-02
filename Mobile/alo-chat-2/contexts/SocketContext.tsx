@@ -4,6 +4,8 @@ import { DeviceEventEmitter, Alert } from "react-native";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "./AuthContext";
 import { presenceService } from "../services/presenceService";
+import { userService } from "../services/userService";
+import { createAudioPlayer } from "expo-audio";
 
 export type OnlineUser = {
   status: "online" | "offline";
@@ -15,6 +17,10 @@ type SocketContextType = {
   isConnected: boolean;
   onlineUsers: Record<string, OnlineUser>;
   fetchBulkPresence: (userIds: string[]) => Promise<void>;
+  joinPost: (postId: string) => void;
+  leavePost: (postId: string) => void;
+  emitNewPost: (friendIds: string[], post: any) => void;
+  emitPostDeleted: (friendIds: string[], postId: string) => void;
 };
 
 const SocketContext = createContext<SocketContextType>({
@@ -22,11 +28,29 @@ const SocketContext = createContext<SocketContextType>({
   isConnected: false,
   onlineUsers: {},
   fetchBulkPresence: async () => {},
+  joinPost: () => {},
+  leavePost: () => {},
+  emitNewPost: () => {},
+  emitPostDeleted: () => {},
 });
 
 export function useSocket() {
   return useContext(SocketContext);
 }
+
+let notificationPlayer: any = null;
+
+const playNotificationSound = () => {
+  try {
+    if (!notificationPlayer) {
+      notificationPlayer = createAudioPlayer(require("../assets/audio_nhan.mp3"));
+    }
+    notificationPlayer.seekTo(0);
+    notificationPlayer.play();
+  } catch (error) {
+    console.log("Lỗi phát âm thanh thông báo:", error);
+  }
+};
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuth();
@@ -334,6 +358,79 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
              });
           });
 
+          // ============ Post Real-time Events ============
+          newSocket.on("NEW_POST_RECEIVED", (data: any) => {
+            console.log("📰 [Socket] NEW_POST_RECEIVED:", data?._id);
+            DeviceEventEmitter.emit("new_post_received", data);
+          });
+
+          newSocket.on("POST_DELETED_RECEIVED", (data: { postId: string }) => {
+            console.log("🗑️ [Socket] POST_DELETED_RECEIVED:", data?.postId);
+            DeviceEventEmitter.emit("post_deleted_received", data);
+          });
+
+          newSocket.on("POST_INTERACTION", (data: any) => {
+            console.log("🔄 [Socket] POST_INTERACTION:", data?.eventType, data?.postId);
+            DeviceEventEmitter.emit("post_interaction", data);
+          });
+
+          // ============ Story Real-time Events ============
+          newSocket.on("NEW_STORY_RECEIVED", (data: any) => {
+            console.log("📸 [Socket] NEW_STORY_RECEIVED:", data?._id);
+            DeviceEventEmitter.emit("new_story_received", data);
+          });
+
+          newSocket.on("STORY_DELETED_RECEIVED", (data: { storyId: string }) => {
+            console.log("🗑️ [Socket] STORY_DELETED_RECEIVED:", data?.storyId);
+            DeviceEventEmitter.emit("story_deleted_received", data);
+          });
+
+          newSocket.on("STORY_VIEWED", (data: any) => {
+            console.log("👁️ [Socket] STORY_VIEWED:", data?.storyId);
+            DeviceEventEmitter.emit("story_viewed", data);
+          });
+
+          newSocket.on("STORY_REACTED", (data: any) => {
+            console.log("❤️ [Socket] STORY_REACTED:", data?.storyId);
+            DeviceEventEmitter.emit("story_reacted", data);
+          });
+
+          // ============ Notification Real-time Events ============
+          newSocket.on("NEW_NOTIFICATION", async (data: any) => {
+            console.log("📥 [Mobile Socket] Received NEW_NOTIFICATION:", data);
+            
+            // Play notification sound
+            await playNotificationSound();
+            
+            // Refresh notifications list event
+            DeviceEventEmitter.emit("refresh_notifications");
+            
+            // Resolve sender details to show beautiful in-app notification
+            let senderName = "Ai đó";
+            try {
+              if (data.senderId) {
+                const profile = await userService.getUserById(data.senderId);
+                if (profile) {
+                  senderName = profile.fullName;
+                }
+              }
+            } catch (err) {
+              console.log("Lỗi tải thông tin người gửi thông báo:", err);
+            }
+            
+            // Show in-app notification popup
+            DeviceEventEmitter.emit("show_in_app_notification", {
+              title: "Thông báo mới",
+              message: `${senderName} ${data.message}`,
+              data: { 
+                postId: data.postId, 
+                commentId: data.commentId,
+                type: data.type
+              },
+              type: "NEW_NOTIFICATION",
+            });
+          });
+
           // Lắng nghe trạng thái Online/Offline chung của các User khác
           newSocket.on(
             "USER_ONLINE",
@@ -427,8 +524,32 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isAuthenticated]);
 
+  const joinPost = (postId: string) => {
+    if (socket && isConnected) {
+      socket.emit("joinPost", postId);
+    }
+  };
+
+  const leavePost = (postId: string) => {
+    if (socket && isConnected) {
+      socket.emit("leavePost", postId);
+    }
+  };
+
+  const emitNewPost = (friendIds: string[], post: any) => {
+    if (socket && isConnected) {
+      socket.emit("EMIT_NEW_POST", { friendIds, post });
+    }
+  };
+
+  const emitPostDeleted = (friendIds: string[], postId: string) => {
+    if (socket && isConnected) {
+      socket.emit("EMIT_POST_DELETED", { friendIds, postId });
+    }
+  };
+
   return (
-    <SocketContext.Provider value={{ socket, isConnected, onlineUsers, fetchBulkPresence }}>
+    <SocketContext.Provider value={{ socket, isConnected, onlineUsers, fetchBulkPresence, joinPost, leavePost, emitNewPost, emitPostDeleted }}>
       {children}
     </SocketContext.Provider>
   );

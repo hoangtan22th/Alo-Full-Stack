@@ -121,7 +121,7 @@ export default function GroupLinkScreen() {
         <Text className="text-[17px] font-bold text-gray-900">
           Link tham gia nhóm
         </Text>
-        {isLinkEnabled ? (
+        {isLinkEnabled && isAdmin ? (
           <TouchableOpacity
             onPress={() => setIsMenuVisible(true)}
             className="p-2 -mr-2"
@@ -150,7 +150,7 @@ export default function GroupLinkScreen() {
               <Switch
                 value={isLinkEnabled}
                 onValueChange={handleToggleLink}
-                disabled={isLoading}
+                disabled={isLoading || !isAdmin}
                 trackColor={{ false: "#e5e7eb", true: "#10b981" }}
                 thumbColor="#fff"
               />
