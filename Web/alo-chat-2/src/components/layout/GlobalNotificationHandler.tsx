@@ -166,7 +166,7 @@ export default function GlobalNotificationHandler() {
     const onTyping = (data: any) => {
       console.log("⌨️ [GlobalNotification] Typing:", data);
       const convoId = data.conversationId || data.roomId;
-      const senderId = data.userId || data.senderId;
+      const senderId = data.userId || data.senderId || data.actorId;
       if (String(senderId) === myId) return;
       if (convoId) setTyping(String(convoId), String(senderId), true);
     };
@@ -174,7 +174,7 @@ export default function GlobalNotificationHandler() {
     const onStopTyping = (data: any) => {
       console.log("🛑 [GlobalNotification] Stop Typing:", data);
       const convoId = data.conversationId || data.roomId;
-      const senderId = data.userId || data.senderId;
+      const senderId = data.userId || data.senderId || data.actorId;
       if (convoId) setTyping(String(convoId), String(senderId), false);
     };
 

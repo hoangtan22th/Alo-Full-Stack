@@ -1017,8 +1017,8 @@ export default function ConversationSidebar() {
             })}
           </div>
 
-          <div className="flex items-center justify-end -mt-4">
-            <div className="relative group/filter pb-4 -mb-4">
+          <div className="flex items-center justify-end px-4 py-2 border-b border-gray-50">
+            <div className="relative group/filter">
               <button
                 className={`p-1.5 rounded-lg transition-colors ${selectedLabelId ? "bg-blue-50 text-blue-500" : "text-gray-400 hover:text-black"}`}
               >
