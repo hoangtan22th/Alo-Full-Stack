@@ -406,9 +406,9 @@ services:
       - IP_ADDR=post-service
       - EUREKA_HOST=discovery-service
       - EUREKA_PORT=8761
-      - MONGO_URI=${MONGO_URI}
-      - REDIS_URL=${REDIS_URL}
-      - RABBITMQ_URL=${RABBITMQ_URL}
+      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017/alo_post_db}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - RABBITMQ_URL=${RABBITMQ_URL:-amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672}
       - AWS_REGION=${AWS_REGION}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
