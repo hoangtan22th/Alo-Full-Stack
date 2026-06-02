@@ -144,7 +144,7 @@ export const postService = {
   createPost: async (
     content: string, 
     files: any[], 
-    privacy: string = "PUBLIC",
+    privacy: string = "FRIENDS_ONLY",
     tags?: string[],
     backgroundTemplate?: string
   ): Promise<IPost | null> => {

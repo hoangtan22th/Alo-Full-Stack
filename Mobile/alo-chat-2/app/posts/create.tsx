@@ -26,7 +26,7 @@ export default function CreatePostScreen() {
   const insets = useSafeAreaInsets();
 
   const [content, setContent] = useState("");
-  const [privacy, setPrivacy] = useState<"PUBLIC" | "FRIENDS_ONLY" | "PRIVATE">("PUBLIC");
+  const [privacy, setPrivacy] = useState<"FRIENDS_ONLY" | "PRIVATE">("FRIENDS_ONLY");
   const [files, setFiles] = useState<PickedFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [showPrivacyMenu, setShowPrivacyMenu] = useState(false);
@@ -106,14 +106,12 @@ export default function CreatePostScreen() {
 
   const getPrivacyLabel = (val: string) => {
     switch (val) {
-      case "PUBLIC":
-        return { text: "Công khai", icon: "earth" as const };
       case "FRIENDS_ONLY":
         return { text: "Bạn bè", icon: "people" as const };
       case "PRIVATE":
         return { text: "Chỉ mình tôi", icon: "lock-closed" as const };
       default:
-        return { text: "Công khai", icon: "earth" as const };
+        return { text: "Bạn bè", icon: "people" as const };
     }
   };
 
@@ -150,16 +148,6 @@ export default function CreatePostScreen() {
             <View className="absolute top-10 left-0 bg-white border border-gray-100 rounded-2xl shadow-lg py-2 w-44 z-50">
               <TouchableOpacity
                 className="flex-row items-center px-4 py-2.5 gap-2.5"
-                onPress={() => {
-                  setPrivacy("PUBLIC");
-                  setShowPrivacyMenu(false);
-                }}
-              >
-                <Ionicons name="earth" size={18} color="#4b5563" />
-                <Text className="text-sm font-medium text-gray-800">Công khai</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-row items-center px-4 py-2.5 gap-2.5 border-t border-gray-50"
                 onPress={() => {
                   setPrivacy("FRIENDS_ONLY");
                   setShowPrivacyMenu(false);

@@ -75,7 +75,7 @@ export const postService = {
     }
   },
 
-  createPost: async (content: string, files: any[], privacy: string = "PUBLIC"): Promise<IPost | null> => {
+  createPost: async (content: string, files: any[], privacy: string = "FRIENDS_ONLY"): Promise<IPost | null> => {
     try {
       const formData = new FormData();
       formData.append("content", content);

@@ -39,7 +39,7 @@ export default function CreateStoryScreen() {
 
   const [file, setFile] = useState<PickedFile | null>(null);
   const [caption, setCaption] = useState("");
-  const [privacy, setPrivacy] = useState<"PUBLIC" | "FRIENDS_ONLY" | "PRIVATE">("FRIENDS_ONLY");
+  const [privacy, setPrivacy] = useState<"FRIENDS_ONLY" | "PRIVATE">("FRIENDS_ONLY");
   const [duration, setDuration] = useState<number>(5000); // mặc định 5s (5000ms)
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -295,7 +295,7 @@ export default function CreateStoryScreen() {
           <Text className="text-xs font-bold text-gray-400 uppercase tracking-wider">Ai có thể xem?</Text>
           <View className="bg-gray-50 border border-gray-100 rounded-full px-3 py-1">
             <Text className="text-xs font-semibold text-gray-700">
-              {privacy === "PUBLIC" ? "🌍 Công khai" : privacy === "FRIENDS_ONLY" ? "👥 Bạn bè" : "🔒 Chỉ mình tôi"}
+              {privacy === "FRIENDS_ONLY" ? "👥 Bạn bè" : "🔒 Chỉ mình tôi"}
             </Text>
           </View>
         </View>

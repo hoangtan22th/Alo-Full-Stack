@@ -19,7 +19,7 @@ export default function CreateStoryModal({ isOpen, onClose, onStoryCreated }: Cr
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<{ url: string; isVideo: boolean } | null>(null);
   const [caption, setCaption] = useState("");
-  const [privacy, setPrivacy] = useState<"PUBLIC" | "FRIENDS_ONLY" | "PRIVATE">("FRIENDS_ONLY");
+  const [privacy, setPrivacy] = useState<"FRIENDS_ONLY" | "PRIVATE">("FRIENDS_ONLY");
   const [selectedMusic, setSelectedMusic] = useState<SpotifyTrack | null>(null);
   const [duration, setDuration] = useState<number>(5000); // Mặc định 5s (5000ms)
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
@@ -149,7 +149,6 @@ export default function CreateStoryModal({ isOpen, onClose, onStoryCreated }: Cr
               onChange={(e) => setPrivacy(e.target.value as any)}
               className="bg-slate-50 dark:bg-zinc-900 border border-slate-200/60 dark:border-zinc-800 text-gray-700 dark:text-zinc-300 text-xs rounded-full px-3 py-1.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer transition-all"
             >
-              <option value="PUBLIC">🌍 Công khai</option>
               <option value="FRIENDS_ONLY">👥 Bạn bè</option>
               <option value="PRIVATE">🔒 Chỉ mình tôi</option>
             </select>
