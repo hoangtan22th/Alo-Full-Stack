@@ -37,7 +37,7 @@ export default function ReminderModal({
   const [showCreate, setShowCreate] = useState(initialShowCreate);
   const [editingReminderId, setEditingReminderId] = useState<string | null>(null);
   
-  const { userId: currentUserId } = useAuthStore();
+  const { userId: currentUserId, user } = useAuthStore();
 
   // Create Reminder State
   const [title, setTitle] = useState(initialTitle);
@@ -100,7 +100,16 @@ export default function ReminderModal({
           try {
             await messageService.sendMessage({
               conversationId,
-              type: "system",
+              type: "text",
+              senderName: user?.fullName || "Tôi",
+              metadata: {
+                messageKind: "reminder",
+                reminderId: created._id,
+                reminderTitle: title.trim(),
+                reminderTime: combinedDateTime,
+                remindFor,
+                repeat,
+              },
               content: `⏰ Đã tạo nhắc hẹn: "${title}" vào lúc ${time} ngày ${date.split('-').reverse().join('/')}`
             });
           } catch (error) {
