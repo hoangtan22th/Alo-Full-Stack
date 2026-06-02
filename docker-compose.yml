@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ============================================================================
   # 1. INFRASTRUCTURE & DATABASES
@@ -416,6 +414,7 @@ services:
       - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
       - AWS_SECRET_KEY=${AWS_SECRET_KEY}
       - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+      - CONTACT_SERVICE_URL=http://contact-service:8081/api/v1/contacts
     depends_on:
       mongodb:
         condition: service_healthy
