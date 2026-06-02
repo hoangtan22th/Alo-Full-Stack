@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # FRONTEND WEB SERVICES (Auto-sync & Hot Reload)
+  # ============================================================================
+
+  alo-chat-2:
+    volumes:
+      # Mount the host source code folder to the container's /app directory
+      - ./Web/alo-chat-2:/app
+      # Preserve the container's Node modules (built for Linux) from being overwritten by host
+      - /app/node_modules
+      # Exclude build output so NextJS can compile on-the-fly dynamically
+      - /app/.next
+    # Override command to run in development mode on port 3001
+    command: npm run dev -- -p 3001
+    environment:
+      - NODE_ENV=development
+
+  alo-chat-admin:
+    volumes:
+      - ./Web/alo-chat-admin:/app
+      - /app/node_modules
+      - /app/.next
+    # Override command to run in development mode on port 3002
+    command: npm run dev -- -p 3002
+    environment:
+      - NODE_ENV=development
+
+  # ============================================================================
+  # NODE.JS BACKEND SERVICES (Target 'builder' stage to keep 'tsx' and 'nodemon')
+  # ============================================================================
+
+  message-service:
+    build:
+      context: .
+      dockerfile: Backend/message-service/Dockerfile
+      target: builder
+    volumes:
+      - ./Backend/message-service:/app
+      - /app/node_modules
+    # Override command to run development server (tsx watch index.ts)
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+
+  group-service:
+    build:
+      context: .
+      dockerfile: Backend/group-service/Dockerfile
+      target: builder
+    volumes:
+      - ./Backend/group-service:/app
+      - /app/node_modules
+    # Override command to run development server (nodemon index.ts)
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+
+  realtime-service:
+    build:
+      context: .
+      dockerfile: Backend/realtime-service/Dockerfile
+      target: builder
+    volumes:
+      - ./Backend/realtime-service:/app
+      - /app/node_modules
+    # Override command to run development server (nodemon src/index.ts)
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+
+  post-service:
+    build:
+      context: .
+      dockerfile: Backend/post-service/Dockerfile
+      target: builder
+    volumes:
+      - ./Backend/post-service:/app
+      - /app/node_modules
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+
+  voting-service:
+    build:
+      context: .
+      dockerfile: Backend/voting-service/Dockerfile
+      target: builder
+    volumes:
+      - ./Backend/voting-service:/app
+      - /app/node_modules
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
