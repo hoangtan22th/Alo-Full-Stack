@@ -1,4 +1,4 @@
-import React, { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect } from "react";
 import {
   TextInput,
   TouchableOpacity,
@@ -20,6 +20,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
 } from "react-native-reanimated";
+import { Audio } from "expo-av";
 import { getMessageTextContent } from "../../utils/messageUtils";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MessageDTO } from "../../services/messageService";
@@ -44,6 +45,7 @@ interface ChatInputProps {
   canSendMessage?: boolean;
   isBanned?: boolean;
   onSelectionChange?: (e: any) => void;
+  onSendAudio?: (uri: string, durationMillis: number) => void;
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
@@ -63,12 +65,89 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       canSendMessage = true,
       isBanned = false,
       onSelectionChange,
+      onSendAudio,
     },
     ref,
   ) => {
     const insets = useSafeAreaInsets();
     const [showExtensionMenu, setShowExtensionMenu] = useState(false);
     const textInputRef = useRef<TextInput>(null);
+
+    // Audio states
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingTime, setRecordingTime] = useState(0);
+    const [recording, setRecording] = useState<Audio.Recording | null>(null);
+    const recordingInterval = useRef<any>(null);
+
+    useEffect(() => {
+      return () => {
+        if (recordingInterval.current) clearInterval(recordingInterval.current);
+        if (recording) {
+          recording.stopAndUnloadAsync().catch(() => {});
+        }
+      };
+    }, [recording]);
+
+    const startRecording = async () => {
+      try {
+        const permission = await Audio.requestPermissionsAsync();
+        if (permission.status !== "granted") return;
+        
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+
+        const { recording: newRecording } = await Audio.Recording.createAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY
+        );
+        
+        setRecording(newRecording);
+        setIsRecording(true);
+        setRecordingTime(0);
+
+        recordingInterval.current = setInterval(() => {
+          setRecordingTime((prev) => prev + 1);
+        }, 1000);
+      } catch (err) {
+        console.error("Failed to start recording", err);
+      }
+    };
+
+    const stopRecordingAndSend = async () => {
+      if (!recording) return;
+      setIsRecording(false);
+      if (recordingInterval.current) clearInterval(recordingInterval.current);
+
+      try {
+        await recording.stopAndUnloadAsync();
+        const uri = recording.getURI();
+        const status = await recording.getStatusAsync();
+        if (uri && onSendAudio) {
+          onSendAudio(uri, status.durationMillis || recordingTime * 1000);
+        }
+      } catch (err) {
+        console.error("Failed to stop recording", err);
+      }
+      setRecording(null);
+    };
+
+    const cancelRecording = async () => {
+      if (!recording) return;
+      setIsRecording(false);
+      if (recordingInterval.current) clearInterval(recordingInterval.current);
+
+      try {
+        await recording.stopAndUnloadAsync();
+      } catch (err) {}
+      setRecording(null);
+    };
+
+    const formatDuration = (seconds: number) => {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    };
 
     useImperativeHandle(ref, () => ({
       focus: () => textInputRef.current?.focus(),
@@ -200,32 +279,54 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
         </TouchableOpacity>
 
         <View className="flex-1 flex-row items-end bg-white rounded-[25px] pl-4 pr-1.5 py-1.5 shadow-sm border border-gray-200 min-h-[50px]">
-          <TextInput
-            ref={textInputRef}
-            className={`flex-1 text-[15px] text-gray-800 max-h-24 pt-2 pb-2 mt-0.5 mb-0.5 ${(!canSendMessage || isBanned) ? "text-gray-400" : ""}`}
-            placeholder={isBanned ? "Nhóm này đã bị khóa do vi phạm tiêu chuẩn" : canSendMessage ? "Nhập tin nhắn..." : "Chỉ trưởng/phó nhóm mới được nhắn tin"}
-            placeholderTextColor="#9ca3af"
-            multiline
-            value={inputText}
-            onChangeText={onInputChange}
-            onSelectionChange={onSelectionChange}
-            editable={canSendMessage && !isBanned}
-          />
+          {isRecording ? (
+            <View className="flex-1 flex-row items-center justify-between min-h-[36px] max-h-24 py-1">
+              <TouchableOpacity onPress={cancelRecording} className="p-2 ml-1">
+                <XMarkIcon size={22} color="#ef4444" />
+              </TouchableOpacity>
+              <View className="flex-1 items-center flex-row justify-center">
+                 <View className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse mr-2" />
+                 <Text className="text-red-500 font-bold">{formatDuration(recordingTime)}</Text>
+              </View>
+            </View>
+          ) : (
+            <>
+              <TextInput
+                ref={textInputRef}
+                className={`flex-1 text-[15px] text-gray-800 max-h-24 pt-2 pb-2 mt-0.5 mb-0.5 ${(!canSendMessage || isBanned) ? "text-gray-400" : ""}`}
+                placeholder={isBanned ? "Nhóm bị khóa do vi phạm" : canSendMessage ? "Nhập tin nhắn..." : "Chỉ trưởng/phó nhóm mới được nhắn"}
+                placeholderTextColor="#9ca3af"
+                multiline
+                value={inputText}
+                onChangeText={onInputChange}
+                onSelectionChange={onSelectionChange}
+                editable={canSendMessage && !isBanned}
+              />
+              <TouchableOpacity
+                onPress={() => (onOpenSticker && onOpenSticker())}
+                disabled={isBanned}
+                className={`w-[36px] h-[36px] rounded-full items-center justify-center mr-1 ${isBanned ? "opacity-40" : ""}`}
+              >
+                <FaceSmileIcon size={24} color={!isBanned ? "#9ca3af" : "#d1d5db"} />
+              </TouchableOpacity>
+            </>
+          )}
           <TouchableOpacity
-            onPress={() => (onOpenSticker && onOpenSticker())}
-            disabled={isBanned}
-            className={`w-[36px] h-[36px] rounded-full items-center justify-center mr-1 ${isBanned ? "opacity-40" : ""}`}
-          >
-            <FaceSmileIcon size={24} color={!isBanned ? "#9ca3af" : "#d1d5db"} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => (inputText.trim() && canSendMessage && !isBanned ? onSendMessage() : null)}
-            disabled={(!canSendMessage && !inputText.trim()) || isBanned}
+            onPress={() => {
+              if (isRecording) {
+                 stopRecordingAndSend();
+              } else if (inputText.trim() && canSendMessage && !isBanned) {
+                 onSendMessage();
+              } else if (!inputText.trim() && canSendMessage && !isBanned) {
+                 startRecording();
+              }
+            }}
+            disabled={(!canSendMessage && !inputText.trim() && !isRecording) || isBanned}
             className={`w-[36px] h-[36px] rounded-full items-center justify-center ${
-              inputText.trim() && canSendMessage && !isBanned ? "bg-black" : "bg-gray-100"
+              (inputText.trim() || isRecording) && canSendMessage && !isBanned ? "bg-black" : "bg-gray-100"
             }`}
           >
-            {inputText.trim() ? (
+            {(inputText.trim() || isRecording) ? (
               <PaperAirplaneIcon
                 size={20}
                 color="white"

@@ -1599,6 +1599,43 @@ export default function GlobalChatScreen() {
     }
   };
 
+  const handleSendAudio = async (uri: string, durationMillis: number) => {
+    if (!resolvedConversationId) return;
+    
+    const actualConversationId = await ensureConversationId();
+    if (!actualConversationId) return;
+
+    const replyData = getReplyData(replyingToRef.current);
+    setReplyingToWithRef(null);
+    try {
+      const asset = {
+        uri,
+        name: `voice_message.m4a`,
+        type: "audio/m4a",
+      };
+      const sentMessage = await messageService.sendFileMessage({
+        conversationId: actualConversationId,
+        file: asset as any,
+        senderName: currentUserName,
+        replyTo: replyData,
+      });
+
+      if (sentMessage) {
+        setMessages((prev: MessageDTO[]) => {
+          if (prev.find((m) => m._id === sentMessage._id)) return prev;
+          return [...prev, sentMessage];
+        });
+        setTimeout(
+          () =>
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
+          100,
+        );
+      }
+    } catch (e) {
+      console.error("Lỗi gửi tin nhắn thoại:", e);
+    }
+  };
+
   const handleSendContactCard = async (
     selectedFriends: any[],
     includePhone: boolean,
@@ -2305,6 +2342,7 @@ export default function GlobalChatScreen() {
                 groupDetails?.isBanned || groupDetails?.status === "READ_ONLY"
               }
               onSelectionChange={handleSelectionChange}
+              onSendAudio={handleSendAudio}
             />
           </View>
         ) : (
