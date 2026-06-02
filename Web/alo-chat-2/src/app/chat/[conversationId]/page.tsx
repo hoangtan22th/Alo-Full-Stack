@@ -3801,15 +3801,43 @@ export default function ChatPage() {
 
                                         return (
                                           <div className="w-full">
-                                            <div
-                                              className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap"
-                                            >
-                                              {parsedMsgContent.isRichText ? (
-                                                <div dangerouslySetInnerHTML={{ __html: parsedMsgContent.text }} className="rich-text-content" />
-                                              ) : (
-                                                renderContentWithMentions(parsedMsgContent.text, conversationInfo?.members || [], userCache)
-                                              )}
-                                            </div>
+                                            {msg.metadata?.messageKind === "reminder" && (
+                                              <div className="mb-2 overflow-hidden rounded-xl border border-amber-100 bg-white shadow-sm">
+                                                <div className="bg-amber-50 px-3 py-2 text-[11px] font-black uppercase tracking-wider text-amber-700">
+                                                  Nhắc hẹn nhóm
+                                                </div>
+                                                <div className="px-3 py-3">
+                                                  <div className="text-[14px] font-black text-gray-900">
+                                                    {msg.metadata?.reminderTitle || parsedMsgContent.plainText}
+                                                  </div>
+                                                  {msg.metadata?.reminderTime && (
+                                                    <div className="mt-1 text-[12px] font-bold text-gray-500">
+                                                      {new Date(msg.metadata.reminderTime).toLocaleString("vi-VN", {
+                                                        day: "2-digit",
+                                                        month: "2-digit",
+                                                        year: "numeric",
+                                                        hour: "2-digit",
+                                                        minute: "2-digit",
+                                                      })}
+                                                    </div>
+                                                  )}
+                                                  <div className="mt-2 text-[11px] font-bold text-gray-400">
+                                                    {msg.metadata?.remindFor === "GROUP" ? "Nhắc cả nhóm" : "Nhắc người tạo"}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            )}
+                                            {msg.metadata?.messageKind !== "reminder" && (
+                                              <div
+                                                className="px-2 py-1 text-[15px] font-medium leading-relaxed break-words whitespace-pre-wrap"
+                                              >
+                                                {parsedMsgContent.isRichText ? (
+                                                  <div dangerouslySetInnerHTML={{ __html: parsedMsgContent.text }} className="rich-text-content" />
+                                                ) : (
+                                                  renderContentWithMentions(parsedMsgContent.text, conversationInfo?.members || [], userCache)
+                                                )}
+                                              </div>
+                                            )}
                                             {parsedReminder && msg._id === latestReminderMessageId && (
                                               <div
                                                 className={`mt-2 pt-2 border-t-2 w-full flex justify-center
