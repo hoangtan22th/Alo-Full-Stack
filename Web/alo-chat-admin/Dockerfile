@@ -2,6 +2,13 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+
+# Nhận biến từ docker-compose lúc build
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 # Copy package files and install all dependencies
 COPY Web/alo-chat-admin/package*.json ./
 RUN npm ci
@@ -15,14 +22,9 @@ COPY Web/alo-chat-admin/components.json ./
 COPY Web/alo-chat-admin/public ./public
 COPY Web/alo-chat-admin/src ./src
 
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_ENV=production
-# Nhận biến môi trường từ docker-compose truyền vào lúc build
-ARG NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-
 # Build the NextJS application
 RUN npm run build
+
 
 # Stage 2: Runtime
 FROM node:20-alpine
@@ -31,6 +33,10 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 ENV PORT=3002
+
+# Giữ lại biến này trong container để kiểm tra bằng printenv
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 # Copy package files and install only production dependencies
 COPY Web/alo-chat-admin/package*.json ./
@@ -42,4 +48,5 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./
 
 EXPOSE 3002
+
 CMD ["npm", "start", "--", "-p", "3002"]
