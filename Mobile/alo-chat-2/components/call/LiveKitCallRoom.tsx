@@ -7,6 +7,8 @@ import { Track, setLogLevel, LogLevel } from 'livekit-client';
 setLogLevel(LogLevel.silent);
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSocket } from '../../contexts/SocketContext';
+import { CallMemberSelectorModal } from './CallMemberSelectorModal';
 
 const { width } = Dimensions.get('window');
 
@@ -18,6 +20,8 @@ interface LiveKitCallRoomProps {
   myAvatar?: string;
   targetName?: string;
   targetAvatar?: string;
+  isGroup?: boolean;
+  members?: any[];
 }
 
 export default function LiveKitCallRoom(props: LiveKitCallRoomProps) {
@@ -76,13 +80,16 @@ export default function LiveKitCallRoom(props: LiveKitCallRoomProps) {
   );
 }
 
-function CallContent({ isVideoCall, onLeaveRoom, targetName }: LiveKitCallRoomProps) {
+function CallContent({ isVideoCall, onLeaveRoom, targetName, roomId, isGroup, members }: LiveKitCallRoomProps) {
   const room = useRoomContext();
   const participants = useParticipants();
   const { localParticipant } = useLocalParticipant();
+  const { user } = useAuth();
+  const { socket } = useSocket();
   
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(!isVideoCall);
+  const [showInviteModal, setShowInviteModal] = useState(false);
   
   // All tracks
   const tracks = useTracks([Track.Source.Camera]);
@@ -102,20 +109,63 @@ function CallContent({ isVideoCall, onLeaveRoom, targetName }: LiveKitCallRoomPr
     setIsCameraOff(!enabled);
   };
 
-  // We can render the first remote track
-  const activeRemoteTrack = remoteTracks.length > 0 ? remoteTracks[0] : null;
+  const handleInvite = (selectedIds: string[]) => {
+    if (socket) {
+      socket.emit("CALL_INITIATED", {
+        targetRoom: roomId,
+        caller: {
+          id: String(user?.id || user?._id),
+          name: user?.fullName || "Tôi",
+          avatar: user?.avatar
+        },
+        isVideo: isVideoCall,
+        inviteeIds: selectedIds,
+        isGroup: true
+      });
+    }
+    setShowInviteModal(false);
+  };
+
+  const renderRemoteTracks = () => {
+    if (remoteTracks.length === 0) {
+      return (
+        <View style={styles.avatarPlaceholder}>
+           <Text style={styles.avatarText}>{targetName?.charAt(0) || "U"}</Text>
+           <Text style={styles.statusText}>{participants.length > 1 ? "Đang gọi thoại..." : "Đang kết nối..."}</Text>
+        </View>
+      );
+    }
+    
+    const trackCount = remoteTracks.length;
+    let itemStyle: any = styles.fullScreenVideo;
+    if (trackCount === 2) itemStyle = { width: '100%', height: '50%' };
+    else if (trackCount === 3 || trackCount === 4) itemStyle = { width: '50%', height: '50%' };
+    else if (trackCount > 4) itemStyle = { width: '50%', height: '33.33%' };
+
+    return (
+      <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap' }}>
+        {remoteTracks.map(track => (
+          <View key={track.participant.sid} style={[itemStyle, { position: 'relative' }]}>
+            {track.publication?.videoTrack ? (
+               <VideoView videoTrack={track.publication.videoTrack} style={{ width: '100%', height: '100%' }} objectFit="cover" />
+            ) : (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#222' }}>
+                 <Text style={{ color: 'white', fontSize: 32 }}>{track.participant.name?.charAt(0) || "U"}</Text>
+              </View>
+            )}
+            <View style={{ position: 'absolute', bottom: 10, left: 10, backgroundColor: 'rgba(0,0,0,0.5)', padding: 4, borderRadius: 4 }}>
+              <Text style={{ color: 'white', fontSize: 12 }}>{track.participant.name || track.participant.identity}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  };
 
   return (
     <View style={styles.contentContainer}>
       <View style={styles.remoteVideoContainer}>
-        {activeRemoteTrack && activeRemoteTrack.publication?.videoTrack ? (
-           <VideoView videoTrack={activeRemoteTrack.publication.videoTrack} style={styles.fullScreenVideo} objectFit="cover" />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-             <Text style={styles.avatarText}>{targetName?.charAt(0) || "U"}</Text>
-             <Text style={styles.statusText}>{participants.length > 1 ? "Đang gọi thoại..." : "Đang kết nối..."}</Text>
-          </View>
-        )}
+        {renderRemoteTracks()}
       </View>
 
       {!isCameraOff && localCameraTrack?.publication?.videoTrack && (
@@ -129,6 +179,12 @@ function CallContent({ isVideoCall, onLeaveRoom, targetName }: LiveKitCallRoomPr
            <MaterialIcons name={isMuted ? "mic-off" : "mic"} size={28} color={isMuted ? "white" : "black"} />
         </TouchableOpacity>
 
+        {isGroup && (
+          <TouchableOpacity style={[styles.controlBtn]} onPress={() => setShowInviteModal(true)}>
+             <MaterialIcons name="person-add" size={28} color="black" />
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity style={styles.endCallBtn} onPress={() => onLeaveRoom()}>
            <MaterialIcons name="call-end" size={36} color="white" />
         </TouchableOpacity>
@@ -137,6 +193,17 @@ function CallContent({ isVideoCall, onLeaveRoom, targetName }: LiveKitCallRoomPr
            <MaterialIcons name={isCameraOff ? "videocam-off" : "videocam"} size={28} color={isCameraOff ? "white" : "black"} />
         </TouchableOpacity>
       </View>
+
+      {showInviteModal && members && (
+        <CallMemberSelectorModal
+          visible={true}
+          isVideo={isVideoCall}
+          members={members.filter(m => !participants.some(p => p.identity === String(m.userId)))}
+          currentUserId={String(user?.id || user?._id)}
+          onClose={() => setShowInviteModal(false)}
+          onStartCall={handleInvite}
+        />
+      )}
     </View>
   );
 }

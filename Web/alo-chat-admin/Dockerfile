@@ -17,7 +17,9 @@ COPY Web/alo-chat-admin/src ./src
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
-ENV NEXT_PUBLIC_API_URL=http://54.255.57.50:8888
+# Nhận biến môi trường từ docker-compose truyền vào lúc build
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 # Build the NextJS application
 RUN npm run build

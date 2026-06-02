@@ -462,6 +462,13 @@ services:
     build:
       context: .
       dockerfile: Web/alo-chat-2/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://${EXPO_PUBLIC_IP_ADDRESS:-localhost}:8888
+        NEXT_PUBLIC_ZEGO_APP_ID: ${NEXT_PUBLIC_ZEGO_APP_ID}
+        NEXT_PUBLIC_ZEGO_SERVER_SECRET: ${NEXT_PUBLIC_ZEGO_SERVER_SECRET}
+        NEXT_PUBLIC_LIVEKIT_URL: ${NEXT_PUBLIC_LIVEKIT_URL}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+        NEXT_PUBLIC_STIPOP_API_KEY: ${NEXT_PUBLIC_STIPOP_API_KEY}
     container_name: alo-chat-web
     ports:
       - "3001:3001"
@@ -475,16 +482,16 @@ services:
       - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
       - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - NEXT_PUBLIC_STIPOP_API_KEY=${NEXT_PUBLIC_STIPOP_API_KEY}
-    depends_on:
-      - api-gateway
-    networks:
-      - alo-network
 
   alo-chat-admin:
     image: ${DOCKER_USERNAME:-hoangtan22th}/alo-chat-admin:latest
     build:
       context: .
       dockerfile: Web/alo-chat-admin/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://${EXPO_PUBLIC_IP_ADDRESS:-localhost}:8888
+        NEXT_PUBLIC_ZEGO_APP_ID: ${NEXT_PUBLIC_ZEGO_APP_ID}
+        NEXT_PUBLIC_ZEGO_SERVER_SECRET: ${NEXT_PUBLIC_ZEGO_SERVER_SECRET}
     container_name: alo-chat-admin
     ports:
       - "3002:3002"
@@ -493,10 +500,6 @@ services:
       - NEXT_PUBLIC_API_URL=http://${EXPO_PUBLIC_IP_ADDRESS:-localhost}:8888
       - NEXT_PUBLIC_ZEGO_APP_ID=${NEXT_PUBLIC_ZEGO_APP_ID}
       - NEXT_PUBLIC_ZEGO_SERVER_SECRET=${NEXT_PUBLIC_ZEGO_SERVER_SECRET}
-    depends_on:
-      - api-gateway
-    networks:
-      - alo-network
 
 
 

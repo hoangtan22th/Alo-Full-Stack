@@ -21,6 +21,8 @@ interface ChatHeaderProps {
   onInfo: () => void;
   onHeaderClick?: () => void;
   onSearchToggle?: () => void;
+  onVoiceCall?: () => void;
+  onVideoCall?: () => void;
 }
 
 export const ChatHeader = ({
@@ -35,6 +37,8 @@ export const ChatHeader = ({
   onInfo,
   onHeaderClick,
   onSearchToggle,
+  onVoiceCall,
+  onVideoCall,
 }: ChatHeaderProps) => {
   const { startCall } = useCall();
   const getOfflineText = (lastActive?: number) => {
@@ -96,10 +100,10 @@ export const ChatHeader = ({
       </View>
 
       <View className="flex-row items-center gap-4">
-        <TouchableOpacity onPress={() => startCall(String(id), false, isGroupChat, name, avatar)}>
+        <TouchableOpacity onPress={onVoiceCall ? onVoiceCall : () => startCall(String(id), false, isGroupChat, name, avatar)}>
           <PhoneIcon size={22} color="#374151" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => startCall(String(id), true, isGroupChat, name, avatar)}>
+        <TouchableOpacity onPress={onVideoCall ? onVideoCall : () => startCall(String(id), true, isGroupChat, name, avatar)}>
           <VideoCameraIcon size={22} color="#374151" />
         </TouchableOpacity>
         <TouchableOpacity onPress={onSearchToggle}>

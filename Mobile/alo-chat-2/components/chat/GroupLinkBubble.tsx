@@ -14,9 +14,11 @@ interface GroupInfo {
 interface GroupLinkBubbleProps {
   msg: MessageDTO;
   linkGroupId: string;
+  isTextOnly?: boolean;
+  onLongPress?: () => void;
 }
 
-export const GroupLinkBubble = ({ msg, linkGroupId }: GroupLinkBubbleProps) => {
+export const GroupLinkBubble = ({ msg, linkGroupId, isTextOnly, onLongPress }: GroupLinkBubbleProps) => {
   const router = useRouter();
   const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
 
@@ -61,11 +63,12 @@ export const GroupLinkBubble = ({ msg, linkGroupId }: GroupLinkBubbleProps) => {
   });
 
   return (
-    <View className="mt-2 mb-1">
+    <View className={isTextOnly ? "" : "mt-2 mb-1"}>
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={handlePress}
-        className="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100 border-b-[3px] border-b-gray-200"
+        onLongPress={() => onLongPress?.()}
+        className="bg-white rounded-xl overflow-hidden border border-gray-200"
         style={{ width: 280 }}
       >
         {/* Header Link */}
@@ -127,7 +130,7 @@ export const GroupLinkBubble = ({ msg, linkGroupId }: GroupLinkBubbleProps) => {
           </Text>
           <View className="flex-row items-center justify-between pt-2 border-t border-gray-50">
             <Text className="text-[10px] font-black text-gray-300 tracking-widest">ALO.ME</Text>
-            <Text className="text-[10px] text-gray-400 font-bold">{timeString}</Text>
+            {/* <Text className="text-[10px] text-gray-400 font-bold">{timeString}</Text> */}
           </View>
         </View>
       </TouchableOpacity>
