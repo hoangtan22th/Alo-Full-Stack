@@ -18,8 +18,8 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   );
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-white text-black relative">
-      <div className={`${isConversationActive ? 'hidden md:block' : 'block'} shrink-0 relative z-50`}>
+    <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-white text-black relative pb-16 md:pb-0">
+      <div className="block shrink-0 relative z-50">
         <Sidebar />
       </div>
       
@@ -40,7 +40,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
         Trên mobile: Ẩn children (Chat Area) nếu KHÔNG có cuộc trò chuyện nào active.
         Trên md trở lên: Luôn hiện (khi không active thường là màn hình rỗng).
       */}
-      <div className={!isConversationActive ? "hidden md:flex flex-1 h-full flex-row min-w-0" : "flex flex-1 h-full flex-row min-w-0"}>
+      <div className={!isConversationActive ? "hidden md:flex flex-1 min-h-0 flex-row min-w-0" : "flex flex-1 min-h-0 flex-row min-w-0"}>
         {children}
       </div>
     </div>
