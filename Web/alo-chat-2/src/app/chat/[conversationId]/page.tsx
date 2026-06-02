@@ -117,7 +117,7 @@ const withCacheBust = (url: string): string => {
 };
 
 const BOT_ID = "alo-bot";
-const GROUP_LINK_REGEX = /(?:https?:\/\/)?alo\.chat\/g\/([a-f\d]{24})/i;
+const GROUP_LINK_REGEX = /(?:https?:\/\/[^\s/]+)?\/g\/([a-f\d]{24})(?:[/?#][^\s]*)?/i;
 const EMPTY_ARRAY: any[] = [];
 const TEXT_COLOR_OPTIONS = ["#111827", "#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c"];
 const BOT_INFO = {
