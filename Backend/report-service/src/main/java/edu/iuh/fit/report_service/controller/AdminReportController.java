@@ -44,8 +44,8 @@ public class AdminReportController {
 
     @RequestMapping(value = "/{reportId}/action", method = {RequestMethod.PATCH, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<ReportAdminResponse>> resolveReport(
-            @PathVariable @Size(min = 36, max = 36, message = "Report ID must be exactly 36 characters") String reportId,
-            @RequestHeader("X-Admin-Id") @Size(min = 36, max = 36, message = "Admin ID must be exactly 36 characters") String adminId,
+            @PathVariable @Size(min = 24, max = 36, message = "Report ID must be between 24 and 36 characters") String reportId,
+            @RequestHeader("X-Admin-Id") @Size(min = 24, max = 36, message = "Admin ID must be between 24 and 36 characters") String adminId,
             @Valid @RequestBody AdminActionRequest actionRequest) {
 
         ReportAdminResponse response = reportService.resolveReport(reportId, actionRequest, adminId);
