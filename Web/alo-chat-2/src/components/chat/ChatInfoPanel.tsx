@@ -46,6 +46,7 @@ import { useChatStore } from "@/store/useChatStore";
 import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
 import { getMediaUrl } from "../../utils/media";
+import { parseMessageContent } from "@/utils/html";
 
 interface ChatInfoPanelProps {
   show: boolean;
@@ -255,6 +256,18 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
       .reverse();
   }, [messages]);
 
+  const searchResults = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase();
+    if (!keyword) return [];
+
+    return messages
+      .filter((m) => {
+        if (m.type !== "text" || m.isRevoked) return false;
+        return parseMessageContent(m.content).plainText.toLowerCase().includes(keyword);
+      })
+      .reverse();
+  }, [messages, searchQuery]);
+
   if (!show) return null;
 
   return (
@@ -334,10 +347,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                   </div>
                 ) : (
                   <div className="flex flex-col gap-1">
-                    {messages
-                      .filter((m) => m.type === "text" && m.content?.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .reverse()
-                      .map((m) => (
+                    {searchResults.map((m) => {
+                      const parsedContent = parseMessageContent(m.content);
+                      return (
                         <div
                           key={m._id}
                           onClick={() => {
@@ -352,19 +364,20 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                           }}
                           className="p-3 hover:bg-gray-50 cursor-pointer rounded-xl flex flex-col gap-1 transition"
                         >
-                          <div className="flex items-center justify-between">
-                            <span className="text-[13px] font-bold text-gray-800">{m.senderName}</span>
-                            <span className="text-[11px] text-gray-400">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-[13px] font-bold text-gray-800 truncate">{m.senderName || "Người dùng"}</span>
+                            <span className="text-[11px] text-gray-400 shrink-0">
                               {new Date(m.createdAt || "").toLocaleDateString("vi-VN", {
                                 day: "2-digit", month: "2-digit", year: "2-digit",
                                 hour: "2-digit", minute: "2-digit"
                               })}
                             </span>
                           </div>
-                          <p className="text-[13px] text-gray-600 line-clamp-2">{m.content}</p>
+                          <p className="text-[13px] text-gray-600 line-clamp-2 break-words">{parsedContent.plainText}</p>
                         </div>
-                      ))}
-                    {messages.filter((m) => m.type === "text" && m.content?.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                      );
+                    })}
+                    {searchResults.length === 0 && (
                       <div className="py-10 text-center text-[13px] text-gray-500 font-medium">
                         Không tìm thấy kết quả nào cho "{searchQuery}"
                       </div>
