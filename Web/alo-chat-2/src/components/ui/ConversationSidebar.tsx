@@ -266,6 +266,7 @@ export default function ConversationSidebar() {
   const menuRef = useRef<HTMLDivElement>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const conversationIdRef = useRef(conversationId);
+  const autoSyncedTabConversationRef = useRef<string | null>(null);
   const userFetchCache = useRef<Record<string, any>>({});
 
   useEffect(() => {
@@ -761,6 +762,7 @@ export default function ConversationSidebar() {
   // Auto-switch tab to match active conversation
   useEffect(() => {
     if (!conversationId || conversationsWithTemp.length === 0) return;
+    if (autoSyncedTabConversationRef.current === conversationId) return;
     
     const activeConvo = conversationsWithTemp.find(c => (c.id || c._id) === conversationId);
     if (activeConvo) {
@@ -777,13 +779,10 @@ export default function ConversationSidebar() {
         folder === "stranger" ||
         (!folder && isStrangerConvo);
         
-      if (isOther && activeTab !== "Khác") {
-        setActiveTab("Khác");
-      } else if (!isOther && activeTab !== "Ưu tiên") {
-        setActiveTab("Ưu tiên");
-      }
+      setActiveTab(isOther ? "Khác" : "Ưu tiên");
+      autoSyncedTabConversationRef.current = conversationId;
     }
-  }, [conversationId, conversationsWithTemp, friendIds, activeTab]);
+  }, [conversationId, conversationsWithTemp, friendIds]);
 
   const sortedConversations = [...conversationsWithTemp].sort((a, b) => {
     const aPinned = pinnedIds.has(a.id);
