@@ -11,8 +11,8 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 # Copy package files and install all dependencies
 COPY Web/alo-chat-admin/package*.json ./
-RUN npm ci
-
+RUN npm install
+RUN npm ls @tailwindcss/postcss
 # Copy configuration and source files
 COPY Web/alo-chat-admin/tsconfig.json ./
 COPY Web/alo-chat-admin/next.config.ts ./
