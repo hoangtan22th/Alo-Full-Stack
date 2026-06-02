@@ -25,6 +25,7 @@ import { WebView } from "react-native-webview";
 import { PollMessagePreview } from "./PollMessagePreview";
 import { useAuth } from "../../contexts/AuthContext";
 import Pdf from "react-native-pdf";
+import { Audio } from "expo-av";
 
 interface MessageItemProps {
   msg: MessageDTO;
@@ -402,6 +403,22 @@ export const MessageItem = ({
                 "3gp",
                 "mkv",
               ].includes(ext || "");
+              const isAudio = [
+                "m4a",
+                "mp3",
+                "wav",
+                "webm",
+                "aac",
+                "ogg"
+              ].includes(ext || "");
+
+              if (isAudio) {
+                return (
+                  <TouchableOpacity onLongPress={() => onLongPress()}>
+                    <AudioMessagePreview url={msg.content} isSender={isSender} />
+                  </TouchableOpacity>
+                );
+              }
 
               if (isVideo) {
                 return (
@@ -813,6 +830,94 @@ export const OfficeFilePreview = ({ url }: { url: string }) => {
           );
         }}
       />
+    </View>
+  );
+};
+
+export const AudioMessagePreview = ({ url, isSender }: { url: string; isSender?: boolean }) => {
+  const [sound, setSound] = React.useState<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = React.useState(false);
+  const [duration, setDuration] = React.useState(0);
+  const [position, setPosition] = React.useState(0);
+
+  React.useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
+
+  const loadAndPlay = async () => {
+    try {
+      if (sound) {
+        if (isPlaying) {
+          await sound.pauseAsync();
+        } else {
+          if (position >= duration && duration > 0) {
+            await sound.setPositionAsync(0);
+          }
+          await sound.playAsync();
+        }
+      } else {
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri: url },
+          { shouldPlay: true, positionMillis: 0 },
+          (status) => {
+            if (status.isLoaded) {
+              setDuration(status.durationMillis || 0);
+              setPosition(status.positionMillis || 0);
+              setIsPlaying(status.isPlaying);
+              if (status.didJustFinish) {
+                setIsPlaying(false);
+                setPosition(status.durationMillis || 0);
+              }
+            }
+          }
+        );
+        setSound(newSound);
+      }
+    } catch (e) {
+      console.error("Lỗi phát audio:", e);
+    }
+  };
+
+  const formatTime = (ms: number) => {
+    if (!ms) return "0:00";
+    const totalSeconds = Math.floor(ms / 1000);
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${s < 10 ? "0" : ""}${s}`;
+  };
+
+  const progress = duration > 0 ? (position / duration) * 100 : 0;
+
+  return (
+    <View className={`w-[240px] flex-row items-center p-3 rounded-3xl ${isSender ? "bg-black" : "bg-white border border-gray-200"}`}>
+      <TouchableOpacity 
+        onPress={loadAndPlay}
+        className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${isSender ? "bg-white" : "bg-black"}`}
+      >
+        {isPlaying ? (
+          <View className={`w-3 h-3 rounded-sm ${isSender ? "bg-black" : "bg-white"}`} />
+        ) : (
+          <PlayIcon size={20} color={isSender ? "black" : "white"} style={{ transform: [{ translateX: 2 }] }} />
+        )}
+      </TouchableOpacity>
+      
+      <View className="flex-1">
+        <View className={`h-1.5 rounded-full w-full overflow-hidden mb-2 ${isSender ? "bg-gray-700" : "bg-gray-200"}`}>
+           <View className={`h-full rounded-full ${isSender ? "bg-white" : "bg-black"}`} style={{ width: `${progress}%` }} />
+        </View>
+        <View className="flex-row justify-between">
+           <Text className={`text-[11px] font-medium ${isSender ? "text-gray-300" : "text-gray-500"}`}>
+             {formatTime(position)}
+           </Text>
+           <Text className={`text-[11px] font-medium ${isSender ? "text-gray-300" : "text-gray-500"}`}>
+             {formatTime(duration)}
+           </Text>
+        </View>
+      </View>
     </View>
   );
 };

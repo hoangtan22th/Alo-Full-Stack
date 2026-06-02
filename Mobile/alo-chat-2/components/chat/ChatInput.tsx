@@ -86,7 +86,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
           recording.stopAndUnloadAsync().catch(() => {});
         }
       };
-    }, [recording]);
+    }, []);
 
     const startRecording = async () => {
       try {
