@@ -119,6 +119,7 @@ const withCacheBust = (url: string): string => {
 const BOT_ID = "alo-bot";
 const GROUP_LINK_REGEX = /(?:https?:\/\/)?alo\.chat\/g\/([a-f\d]{24})/i;
 const EMPTY_ARRAY: any[] = [];
+const TEXT_COLOR_OPTIONS = ["#111827", "#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c"];
 const BOT_INFO = {
   id: BOT_ID,
   name: "Trợ lý Alo Chat",
@@ -253,6 +254,7 @@ export default function ChatPage() {
   const [mediaMessages, setMediaMessages] = useState<MessageDTO[]>([]);
   const [messageText, setMessageText] = useState("");
   const [conversationInfo, setConversationInfo] = useState<any>(null);
+  const [activeTextColor, setActiveTextColor] = useState(TEXT_COLOR_OPTIONS[0]);
   const latestReminderMessageId = useMemo(() => {
     if (!messages || messages.length === 0) return null;
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -2451,7 +2453,14 @@ export default function ChatPage() {
     if (!editorRef.current) return;
     editorRef.current.focus();
     document.execCommand(command, false, value);
-    setMessageText(editorRef.current.innerText);
+    setTimeout(() => {
+      if (editorRef.current) setMessageText(editorRef.current.innerText);
+    }, 0);
+  };
+
+  const applyEditorColor = (color: string) => {
+    setActiveTextColor(color);
+    execEditorCommand("foreColor", color);
   };
 
   /* ─── Send sticker ─── */
@@ -2690,7 +2699,7 @@ export default function ChatPage() {
           color: #64748b !important;
         }
         .editor-input:empty:before {
-          content: attr(placeholder);
+          content: attr(data-placeholder);
           color: #9ca3af;
           cursor: text;
         }
@@ -4446,9 +4455,10 @@ export default function ChatPage() {
                         : "text-gray-600 hover:bg-gray-100"
                       }`}
                     onClick={() => {
-                      setIsFormatMode(!isFormatMode);
+                      const nextFormatMode = !isFormatMode;
+                      setIsFormatMode(nextFormatMode);
                       setMessageText("");
-                      if (!isFormatMode && editorRef.current) {
+                      if (nextFormatMode) {
                         setTimeout(() => editorRef.current?.focus(), 50);
                       }
                     }}
@@ -4603,8 +4613,123 @@ export default function ChatPage() {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2">
-                    {isFormatMode ? (
+                  {isFormatMode && (
+                    <div className="mb-2 rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+                      <div
+                        ref={editorRef}
+                        contentEditable
+                        onInput={handleEditorInput}
+                        onKeyDown={handleEditorKeyDown}
+                        onPaste={handlePaste as any}
+                        data-placeholder="Nhấn Ctrl + Shift + X để định dạng tin nhắn"
+                        className="editor-input min-h-[112px] max-h-[220px] overflow-y-auto px-4 py-3 text-[15px] font-medium leading-relaxed outline-none"
+                        suppressContentEditableWarning
+                      />
+                      <div className="flex flex-wrap items-center gap-1 border-t border-gray-100 px-3 py-2 text-slate-800">
+                        {[
+                          { label: "B", title: "In đậm", command: "bold", className: "font-black" },
+                          { label: "I", title: "In nghiêng", command: "italic", className: "italic" },
+                          { label: "U", title: "Gạch chân", command: "underline", className: "underline" },
+                          { label: "S", title: "Gạch ngang", command: "strikeThrough", className: "line-through" },
+                        ].map((item) => (
+                          <button
+                            key={item.command}
+                            type="button"
+                            title={item.title}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              execEditorCommand(item.command);
+                            }}
+                            className={`h-8 w-8 rounded-md text-[18px] hover:bg-gray-100 active:bg-gray-200 transition ${item.className}`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                        <div className="mx-1 h-5 w-px bg-gray-200" />
+                        <button
+                          type="button"
+                          title="Chữ thường"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            execEditorCommand("fontSize", "3");
+                          }}
+                          className="h-8 w-8 rounded-md text-[13px] font-bold hover:bg-gray-100 active:bg-gray-200 transition"
+                        >
+                          A
+                        </button>
+                        <button
+                          type="button"
+                          title="Chữ lớn"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            execEditorCommand("fontSize", "5");
+                          }}
+                          className="h-8 w-8 rounded-md text-[20px] font-black hover:bg-gray-100 active:bg-gray-200 transition"
+                        >
+                          A
+                        </button>
+                        <div className="mx-1 h-5 w-px bg-gray-200" />
+                        {TEXT_COLOR_OPTIONS.map((color) => (
+                          <button
+                            key={color}
+                            type="button"
+                            title="Đổi màu chữ"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              applyEditorColor(color);
+                            }}
+                            className={`h-7 w-7 rounded-full border-2 transition ${activeTextColor === color ? "border-slate-900 scale-105" : "border-white hover:border-gray-300"}`}
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                        <div className="mx-1 h-5 w-px bg-gray-200" />
+                        <button
+                          type="button"
+                          title="Danh sách chấm"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            execEditorCommand("insertUnorderedList");
+                          }}
+                          className="h-8 w-8 rounded-md text-[18px] hover:bg-gray-100 active:bg-gray-200 transition"
+                        >
+                          •
+                        </button>
+                        <button
+                          type="button"
+                          title="Hoàn tác"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            execEditorCommand("undo");
+                          }}
+                          className="h-8 w-8 rounded-md text-[18px] hover:bg-gray-100 active:bg-gray-200 transition"
+                        >
+                          ↶
+                        </button>
+                        <button
+                          type="button"
+                          title="Làm lại"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            execEditorCommand("redo");
+                          }}
+                          className="h-8 w-8 rounded-md text-[18px] hover:bg-gray-100 active:bg-gray-200 transition"
+                        >
+                          ↷
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSend}
+                          disabled={sending || !messageText.trim()}
+                          className="ml-auto px-3 py-1.5 text-[12px] font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 rounded-lg transition"
+                        >
+                          Gửi
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className={isFormatMode ? "hidden" : "flex items-center gap-2"}>
+                    {false ? (
                       <div
                         ref={editorRef}
                         contentEditable
