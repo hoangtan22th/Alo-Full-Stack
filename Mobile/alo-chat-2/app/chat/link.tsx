@@ -20,6 +20,7 @@ import {
 } from "react-native-heroicons/outline";
 import QRCode from "react-native-qrcode-svg";
 import { groupService } from "../../services/groupService";
+import * as Clipboard from "expo-clipboard";
 
 export default function GroupLinkScreen() {
   const insets = useSafeAreaInsets();
@@ -72,10 +73,12 @@ export default function GroupLinkScreen() {
   };
 
   const handleCopyLink = async () => {
-    // using placeholder console log, would need expo-clipboard if installed
-    // wait expo-clipboard might not be in dependencies let's check
-    // we can just use clipboard or alert
-    Alert.alert("Thành công", "Đã sao chép link vào bộ nhớ tạm");
+    try {
+      await Clipboard.setStringAsync(groupLink);
+      Alert.alert("Thành công", "Đã sao chép link vào bộ nhớ tạm");
+    } catch (error) {
+      Alert.alert("Lỗi", "Không thể sao chép link");
+    }
   };
 
   const handleShareLink = async () => {

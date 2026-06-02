@@ -26,7 +26,6 @@ cssInterop(LinearGradient, {
   className: "style",
 });
 
-
 interface PickedFile {
   uri: string;
   type: string;
@@ -34,10 +33,26 @@ interface PickedFile {
 }
 
 const MOOD_TEMPLATES = [
-  { id: "sunset", name: "Sunset Glow", colors: ["#fb923c", "#f43f5e"] as const },
-  { id: "midnight", name: "Midnight Neon", colors: ["#3b82f6", "#8b5cf6"] as const },
-  { id: "cosmic", name: "Cosmic Purple", colors: ["#a855f7", "#4f46e5"] as const },
-  { id: "emerald", name: "Emerald Forest", colors: ["#34d399", "#0d9488"] as const },
+  {
+    id: "sunset",
+    name: "Sunset Glow",
+    colors: ["#fb923c", "#f43f5e"] as const,
+  },
+  {
+    id: "midnight",
+    name: "Midnight Neon",
+    colors: ["#3b82f6", "#8b5cf6"] as const,
+  },
+  {
+    id: "cosmic",
+    name: "Cosmic Purple",
+    colors: ["#a855f7", "#4f46e5"] as const,
+  },
+  {
+    id: "emerald",
+    name: "Emerald Forest",
+    colors: ["#34d399", "#0d9488"] as const,
+  },
   { id: "rose", name: "Rose Petal", colors: ["#f472b6", "#e11d48"] as const },
   { id: "sky", name: "Blue Sky", colors: ["#22d3ee", "#2563eb"] as const },
 ];
@@ -50,7 +65,9 @@ export default function CreatePostScreen() {
   const currentUserId = currentUser?.id || currentUser?._id;
 
   const [content, setContent] = useState("");
-  const [privacy, setPrivacy] = useState<"PUBLIC" | "FRIENDS_ONLY" | "PRIVATE">("FRIENDS_ONLY");
+  const [privacy, setPrivacy] = useState<"PUBLIC" | "FRIENDS_ONLY" | "PRIVATE">(
+    "FRIENDS_ONLY",
+  );
   const [files, setFiles] = useState<PickedFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [showPrivacyMenu, setShowPrivacyMenu] = useState(false);
@@ -66,7 +83,8 @@ export default function CreatePostScreen() {
 
   // Load danh sách bạn bè
   useEffect(() => {
-    contactService.getFriendsList()
+    contactService
+      .getFriendsList()
       .then((list) => {
         const accepted = list.filter((f) => f.status === "ACCEPTED");
         setFriends(accepted);
@@ -77,9 +95,13 @@ export default function CreatePostScreen() {
   // Chọn ảnh/video từ thư viện
   const handlePickMedia = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Quyền truy cập", "Ứng dụng cần quyền truy cập thư viện ảnh để đăng tải phương tiện.");
+        Alert.alert(
+          "Quyền truy cập",
+          "Ứng dụng cần quyền truy cập thư viện ảnh để đăng tải phương tiện.",
+        );
         return;
       }
 
@@ -92,7 +114,8 @@ export default function CreatePostScreen() {
       if (!result.canceled && result.assets) {
         const selected: PickedFile[] = result.assets.map((asset) => {
           const uri = asset.uri;
-          const fileName = asset.fileName || uri.split("/").pop() || "media.jpg";
+          const fileName =
+            asset.fileName || uri.split("/").pop() || "media.jpg";
           const type = asset.type === "video" ? "video/mp4" : "image/jpeg";
           return { uri, type, fileName };
         });
@@ -133,7 +156,10 @@ export default function CreatePostScreen() {
   // Thực hiện đăng bài viết
   const handlePost = async () => {
     if (!content.trim() && files.length === 0) {
-      Alert.alert("Nội dung trống", "Vui lòng nhập nội dung bài viết hoặc chọn ảnh/video.");
+      Alert.alert(
+        "Nội dung trống",
+        "Vui lòng nhập nội dung bài viết hoặc chọn ảnh/video.",
+      );
       return;
     }
 
@@ -144,16 +170,18 @@ export default function CreatePostScreen() {
         files,
         privacy,
         taggedFriendIds,
-        selectedBg || undefined
+        selectedBg || undefined,
       );
 
       if (response) {
         // Emit real-time event to friends
         try {
           const friendsList = await contactService.getFriendsList();
-          const accepted = friendsList.filter((f: any) => f.status === "ACCEPTED");
-          const friendIds = accepted.map((f: any) => 
-            f.requesterId === currentUserId ? f.recipientId : f.requesterId
+          const accepted = friendsList.filter(
+            (f: any) => f.status === "ACCEPTED",
+          );
+          const friendIds = accepted.map((f: any) =>
+            f.requesterId === currentUserId ? f.recipientId : f.requesterId,
           );
           if (friendIds.length > 0) {
             emitNewPost(friendIds, response);
@@ -235,21 +263,33 @@ export default function CreatePostScreen() {
         {loading ? (
           <ActivityIndicator size="small" color="#2563eb" className="px-2" />
         ) : (
-          <TouchableOpacity onPress={handlePost} className="bg-blue-600 px-4 py-1.5 rounded-full">
+          <TouchableOpacity
+            onPress={handlePost}
+            className="bg-blue-600 px-4 py-1.5 rounded-full"
+          >
             <Text className="text-white font-semibold text-sm">Đăng</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      <ScrollView className="flex-1 px-5 pt-4" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1 px-5 pt-4"
+        showsVerticalScrollIndicator={false}
+      >
         {/* Quyền riêng tư Selector */}
         <View className="relative z-50 mb-4">
           <TouchableOpacity
             className="flex-row items-center self-start bg-gray-50 border border-gray-100 rounded-full px-3 py-1.5 gap-1.5"
             onPress={() => setShowPrivacyMenu(!showPrivacyMenu)}
           >
-            <Ionicons name={getPrivacyLabel(privacy).icon} size={15} color="#4b5563" />
-            <Text className="text-xs font-semibold text-gray-700">{getPrivacyLabel(privacy).text}</Text>
+            <Ionicons
+              name={getPrivacyLabel(privacy).icon}
+              size={15}
+              color="#4b5563"
+            />
+            <Text className="text-xs font-semibold text-gray-700">
+              {getPrivacyLabel(privacy).text}
+            </Text>
             <Ionicons name="chevron-down" size={12} color="#4b5563" />
           </TouchableOpacity>
 
@@ -263,7 +303,9 @@ export default function CreatePostScreen() {
                 }}
               >
                 <Ionicons name="earth" size={18} color="#4b5563" />
-                <Text className="text-sm font-medium text-gray-800">Công khai</Text>
+                <Text className="text-sm font-medium text-gray-800">
+                  Công khai
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-row items-center px-4 py-2.5 gap-2.5 border-t border-gray-100"
@@ -273,7 +315,9 @@ export default function CreatePostScreen() {
                 }}
               >
                 <Ionicons name="people" size={18} color="#4b5563" />
-                <Text className="text-sm font-medium text-gray-800">Bạn bè</Text>
+                <Text className="text-sm font-medium text-gray-800">
+                  Bạn bè
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-row items-center px-4 py-2.5 gap-2.5 border-t border-gray-100"
@@ -283,7 +327,9 @@ export default function CreatePostScreen() {
                 }}
               >
                 <Ionicons name="lock-closed" size={18} color="#4b5563" />
-                <Text className="text-sm font-medium text-gray-800">Chỉ mình tôi</Text>
+                <Text className="text-sm font-medium text-gray-800">
+                  Chỉ mình tôi
+                </Text>
               </TouchableOpacity>
             </View>
           )}
@@ -341,14 +387,21 @@ export default function CreatePostScreen() {
         {/* Tagged friends list preview */}
         {taggedFriendIds.length > 0 && (
           <View className="flex-row flex-wrap gap-1.5 items-center bg-gray-50/50 p-2.5 rounded-2xl border border-gray-100 mt-4">
-            <Text className="text-[11px] text-gray-400 font-semibold mr-1">Cùng với:</Text>
+            <Text className="text-[11px] text-gray-400 font-semibold mr-1">
+              Cùng với:
+            </Text>
             {taggedFriendIds.map((id) => {
               const friend = friends.find((f) => getFriendId(f) === id);
               if (!friend) return null;
               const name = getFriendName(friend);
               return (
-                <View key={id} className="flex-row items-center bg-blue-50 border border-blue-100 rounded-full px-2.5 py-1 gap-1">
-                  <Text className="text-blue-600 text-[10px] font-bold">{name}</Text>
+                <View
+                  key={id}
+                  className="flex-row items-center bg-blue-50 border border-blue-100 rounded-full px-2.5 py-1 gap-1"
+                >
+                  <Text className="text-blue-600 text-[10px] font-bold">
+                    {name}
+                  </Text>
                   <TouchableOpacity onPress={() => toggleFriendTag(id)}>
                     <Ionicons name="close-circle" size={14} color="#2563eb" />
                   </TouchableOpacity>
@@ -362,8 +415,14 @@ export default function CreatePostScreen() {
         {files.length > 0 && (
           <View className="flex-row flex-wrap gap-2.5 mt-5 pb-5">
             {files.map((file, index) => (
-              <View key={index} className="w-[30%] h-24 rounded-2xl overflow-hidden bg-gray-100 border border-gray-100 relative">
-                <Image source={{ uri: file.uri }} className="w-full h-full object-cover" />
+              <View
+                key={index}
+                className="w-[30%] h-24 rounded-2xl overflow-hidden bg-gray-100 border border-gray-100 relative"
+              >
+                <Image
+                  source={{ uri: file.uri }}
+                  className="w-full h-full object-cover"
+                />
                 {file.type.startsWith("video/") && (
                   <View className="absolute inset-0 bg-black/20 justify-center items-center">
                     <Ionicons name="play-circle" size={24} color="white" />
@@ -383,15 +442,27 @@ export default function CreatePostScreen() {
         {/* Chọn hình nền tâm trạng Zalo */}
         {files.length === 0 && (
           <View className="mt-6 mb-4 px-1">
-            <Text className="text-xs font-semibold text-gray-500 mb-3">Chọn hình nền tâm trạng:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
+            <Text className="text-xs font-semibold text-gray-500 mb-3">
+              Chọn hình nền tâm trạng:
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 10, paddingVertical: 4 }}
+            >
               <TouchableOpacity
                 onPress={() => handleSelectBg(null)}
                 style={{
-                  width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "white",
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "white",
                   borderWidth: selectedBg === null ? 2 : 1,
                   borderColor: selectedBg === null ? "#3b82f6" : "#e5e7eb",
                   transform: selectedBg === null ? [{ scale: 1.1 }] : [],
+                  margin: 3,
                 }}
               >
                 <Ionicons name="ban" size={18} color="#9ca3af" />
@@ -404,10 +475,16 @@ export default function CreatePostScreen() {
                     onPress={() => handleSelectBg(template.id)}
                     activeOpacity={0.8}
                     style={{
-                      width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center",
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      alignItems: "center",
+                      justifyContent: "center",
                       borderWidth: isSelected ? 2 : 0,
                       borderColor: isSelected ? "#3b82f6" : "transparent",
-                      backgroundColor: isSelected ? "rgba(59, 130, 246, 0.2)" : "transparent",
+                      backgroundColor: isSelected
+                        ? "rgba(59, 130, 246, 0.2)"
+                        : "transparent",
                       transform: isSelected ? [{ scale: 1.1 }] : [],
                     }}
                   >
@@ -426,7 +503,7 @@ export default function CreatePostScreen() {
       </ScrollView>
 
       {/* Thanh công cụ dưới đáy (Chọn Media / Gắn thẻ bạn bè) */}
-      <View className="border-t border-gray-100 p-4 bg-white flex-row items-center justify-between">
+      <View className="border-t border-gray-100 p-4 bg-white flex-row items-center justify-between bottom-5">
         <View className="flex-row items-center gap-3">
           {/* Nút đính kèm Media */}
           <TouchableOpacity
@@ -446,7 +523,7 @@ export default function CreatePostScreen() {
         </View>
 
         <Text className="text-xs text-gray-400 font-medium">
-          {files.length > 0 ? `Đã chọn: ${files.length}/10` : "Nhật ký Zalo"}
+          {files.length > 0 ? `Đã chọn: ${files.length}/10` : "Nhật ký Alo"}
         </Text>
       </View>
 
@@ -455,10 +532,15 @@ export default function CreatePostScreen() {
         <View style={{ flex: 1, paddingTop: insets.top }}>
           {/* Header */}
           <View className="flex-row justify-between items-center px-4 py-3 border-b border-gray-100 bg-white">
-            <TouchableOpacity onPress={() => setShowTagModal(false)} className="p-1">
+            <TouchableOpacity
+              onPress={() => setShowTagModal(false)}
+              className="p-1"
+            >
               <Ionicons name="close" size={26} color="#4b5563" />
             </TouchableOpacity>
-            <Text className="text-lg font-bold text-gray-900">Gắn thẻ bạn bè</Text>
+            <Text className="text-lg font-bold text-gray-900">
+              Gắn thẻ bạn bè
+            </Text>
             <TouchableOpacity
               onPress={() => setShowTagModal(false)}
               className="bg-blue-600 px-4 py-1.5 rounded-full"
@@ -481,7 +563,11 @@ export default function CreatePostScreen() {
 
           {/* Friends List */}
           <FlatList
-            data={friends.filter((f) => getFriendName(f).toLowerCase().includes(tagSearchQuery.toLowerCase()))}
+            data={friends.filter((f) =>
+              getFriendName(f)
+                .toLowerCase()
+                .includes(tagSearchQuery.toLowerCase()),
+            )}
             keyExtractor={(item) => getFriendId(item)}
             renderItem={({ item }) => {
               const fid = getFriendId(item);
@@ -495,8 +581,13 @@ export default function CreatePostScreen() {
                   className="flex-row items-center justify-between px-5 py-3.5 border-b border-gray-50"
                 >
                   <View className="flex-row items-center gap-3">
-                    <Image source={{ uri: avatar }} className="w-10 h-10 rounded-full bg-gray-100" />
-                    <Text className="text-sm font-semibold text-gray-800">{name}</Text>
+                    <Image
+                      source={{ uri: avatar }}
+                      className="w-10 h-10 rounded-full bg-gray-100"
+                    />
+                    <Text className="text-sm font-semibold text-gray-800">
+                      {name}
+                    </Text>
                   </View>
                   <Ionicons
                     name={isChecked ? "checkbox" : "square-outline"}
@@ -509,7 +600,9 @@ export default function CreatePostScreen() {
             ListEmptyComponent={
               <View className="items-center justify-center py-20 px-8">
                 <Ionicons name="people-outline" size={48} color="#d1d5db" />
-                <Text className="text-gray-400 text-sm mt-3 text-center">Không tìm thấy bạn bè nào.</Text>
+                <Text className="text-gray-400 text-sm mt-3 text-center">
+                  Không tìm thấy bạn bè nào.
+                </Text>
               </View>
             }
           />

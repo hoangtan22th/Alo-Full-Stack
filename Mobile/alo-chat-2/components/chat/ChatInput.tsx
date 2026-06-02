@@ -20,6 +20,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
 } from "react-native-reanimated";
+import { getMessageTextContent } from "../../utils/messageUtils";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MessageDTO } from "../../services/messageService";
 
@@ -42,6 +43,7 @@ interface ChatInputProps {
   onCancelReply?: () => void;
   canSendMessage?: boolean;
   isBanned?: boolean;
+  onSelectionChange?: (e: any) => void;
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
@@ -60,6 +62,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       onCancelReply,
       canSendMessage = true,
       isBanned = false,
+      onSelectionChange,
     },
     ref,
   ) => {
@@ -163,7 +166,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
             </View>
             <Text className="text-[13px] text-gray-500 italic" numberOfLines={1}>
               {replyingTo.type === "text"
-                ? replyingTo.content
+                ? getMessageTextContent(replyingTo.content)
                 : replyingTo.type === "image"
                   ? "[Hình ảnh]"
                   : replyingTo.metadata?.fileName || "[Tệp tin]"}
@@ -183,9 +186,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       <View
         className="w-full flex-row items-end px-4 py-3 bg-transparent"
         style={{
-          paddingBottom: isKeyboardVisible
-            ? 12
-            : Math.max(insets.bottom, 12),
+          paddingBottom: Math.max(insets.bottom, 12),
         }}
       >
         <TouchableOpacity
@@ -207,6 +208,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
             multiline
             value={inputText}
             onChangeText={onInputChange}
+            onSelectionChange={onSelectionChange}
             editable={canSendMessage && !isBanned}
           />
           <TouchableOpacity
