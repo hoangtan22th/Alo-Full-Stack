@@ -110,7 +110,7 @@ export default function LoginPage() {
               {loading ? (
                 <div className="flex items-center gap-2">
                   <div className="w-5 h-5 border-2 border-on-primary/30 border-t-on-primary rounded-full animate-spin" />
-                  <span>Authenticating...</span>
+                  <span>Authenticating....</span>
                 </div>
               ) : (
                 "Log in to Dashboard"
