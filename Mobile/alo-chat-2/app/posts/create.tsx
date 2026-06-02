@@ -256,19 +256,6 @@ export default function CreatePostScreen() {
               <TouchableOpacity
                 className="flex-row items-center px-4 py-2.5 gap-2.5"
                 onPress={() => {
-<<<<<<< HEAD
-=======
-                  setPrivacy("PUBLIC");
-                  setShowPrivacyMenu(false);
-                }}
-              >
-                <Ionicons name="earth" size={18} color="#4b5563" />
-                <Text className="text-sm font-medium text-gray-800">Công khai</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-row items-center px-4 py-2.5 gap-2.5 border-t border-gray-100"
-                onPress={() => {
->>>>>>> 9d7fce55f1844981b284f708ccf11d308a3f18d2
                   setPrivacy("FRIENDS_ONLY");
                   setShowPrivacyMenu(false);
                 }}
