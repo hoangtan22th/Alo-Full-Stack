@@ -16,7 +16,17 @@ services:
     networks:
       - alo-network
     healthcheck:
-      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-root}"]
+      test:
+        [
+          "CMD",
+          "mariadb-admin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "root",
+          "-p${DB_PASSWORD:-root}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -355,6 +365,7 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_KEY}
       - AWS_BUCKET_NAME=${AWS_S3_BUCKET:-btl-alo-chat}
+      - REDIS_URL=redis://redis:6379
     depends_on:
       mongodb:
         condition: service_healthy
@@ -500,8 +511,6 @@ services:
       - NEXT_PUBLIC_API_URL=http://${EXPO_PUBLIC_IP_ADDRESS:-localhost}:8888
       - NEXT_PUBLIC_ZEGO_APP_ID=${NEXT_PUBLIC_ZEGO_APP_ID}
       - NEXT_PUBLIC_ZEGO_SERVER_SECRET=${NEXT_PUBLIC_ZEGO_SERVER_SECRET}
-
-
 
 # ==============================================================================
 # NETWORKS & VOLUMES CONFIGURATION
