@@ -2,17 +2,16 @@ name: CI_CD_Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
 
 concurrency:
   group: production
   cancel-in-progress: true
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-
   # 1. BUILD + PUSH IMAGES FOR ALL MICROSERVICES (RUNS IN PARALLEL VIA MATRIX)
   build:
     name: Build & Push ${{ matrix.service.name }}
@@ -78,10 +77,10 @@ jobs:
         run: |
           DIR=$(dirname "${{ matrix.service.file }}")
           echo "Checking changes in directory: $DIR"
-          
+
           # Default to true (build by default)
           CHANGED=true
-          
+
           # Check if this is a push event with before/after commits
           if [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ] && [ -n "${{ github.event.before }}" ]; then
             echo "Comparing changes between ${{ github.event.before }} and ${{ github.event.after }}"
@@ -123,7 +122,7 @@ jobs:
               echo "First push or no historical commit found. Forcing full build."
             fi
           fi
-          
+
           echo "changed=$CHANGED" >> $GITHUB_OUTPUT
         shell: bash
 
