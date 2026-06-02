@@ -16,7 +16,7 @@ jest.mock("../src/workers/broadcastWorker", () => ({
 describe("BroadcastController - createBroadcast", () => {
   let req: Partial<Request>;
   let res: Partial<Response>;
-  let statusMock: jest.Mock;
+  let statusMock: jest.Mock; //giả lập 2 cái trả về: status và json
   let jsonMock: jest.Mock;
 
   beforeEach(() => {

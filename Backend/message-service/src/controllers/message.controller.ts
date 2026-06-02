@@ -442,7 +442,7 @@ export async function revokeMessage(
     const userId = getUserIdFromHeader(req);
 
     // Typeof Check cho params
-    if (typeof messageId !== "string") {
+    if (typeof messageId !== "string" || !Types.ObjectId.isValid(messageId)) {
       res.status(400).json({ error: "Invalid or missing messageId" });
       return;
     }
@@ -504,7 +504,7 @@ export async function deleteMessageForMe(
     const { messageId } = req.params;
     const userId = getUserIdFromHeader(req);
 
-    if (typeof messageId !== "string") {
+    if (typeof messageId !== "string" || !Types.ObjectId.isValid(messageId)) {
       res.status(400).json({ error: "Invalid or missing messageId" });
       return;
     }
@@ -542,8 +542,55 @@ export async function sendMessage(
     console.log(`[MessageService] sendMessage: Received request. Sender: ${userId}, Target: ${req.body.targetUserId || 'N/A'}, ConvoId: ${conversationId || 'N/A'}`);
     console.log(`[MessageService] sendMessage: Content snippet: "${content?.substring(0, 50)}..."`);
 
+    // 1. Kiểm tra đăng nhập (userId)
     if (!userId) {
       res.status(401).json({ error: "Unauthorized - no user id" });
+      return;
+    }
+
+    // 2. Kiểm tra senderName bắt buộc
+    if (!senderName || typeof senderName !== "string" || senderName.trim() === "") {
+      res.status(400).json({ error: "Sender name is required" });
+      return;
+    }
+
+    // 3. Kiểm tra định dạng metadata hợp lệ (phải là object)
+    if (metadata && (typeof metadata !== "object" || Array.isArray(metadata))) {
+      res.status(400).json({ error: "Bad request" });
+      return;
+    }
+
+    // Kiểm tra loại tin nhắn (type) hợp lệ
+    const allowedTypes = ["text", "sticker", "emoji"];
+    if (type && !allowedTypes.includes(type)) {
+      res.status(400).json({ error: "Invalid message type" });
+      return;
+    }
+
+    // 4. Kiểm tra tin nhắn phản hồi (replyTo) có tồn tại trong DB không
+    if (replyTo) {
+      let replyMessageId: string | undefined;
+      if (typeof replyTo === "string") {
+        replyMessageId = replyTo;
+      } else if (typeof replyTo === "object" && replyTo.messageId) {
+        replyMessageId = replyTo.messageId;
+      }
+
+      if (!replyMessageId) {
+        res.status(404).json({ error: "Reply message not found" });
+        return;
+      }
+
+      const parentMsg = await messageDataService.getMessageById(replyMessageId);
+      if (!parentMsg) {
+        res.status(404).json({ error: "Reply message not found" });
+        return;
+      }
+    }
+
+    // 5. Kiểm tra content không được rỗng đối với tin nhắn gửi đi
+    if (!content || typeof content !== "string" || content.trim() === "") {
+      res.status(400).json({ error: "Missing conversationId/targetUserId or content" });
       return;
     }
 
@@ -571,7 +618,7 @@ export async function sendMessage(
       }
     }
 
-    if (!actualConversationId || (!content && type !== "image" && type !== "file")) {
+    if (!actualConversationId) {
       res.status(400).json({ error: "Missing conversationId/targetUserId or content" });
       return;
     }

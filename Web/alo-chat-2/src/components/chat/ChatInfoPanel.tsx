@@ -46,6 +46,7 @@ import { useChatStore } from "@/store/useChatStore";
 import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
 import { getMediaUrl } from "../../utils/media";
+import { parseMessageContent } from "@/utils/html";
 
 interface ChatInfoPanelProps {
   show: boolean;
@@ -255,6 +256,18 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
       .reverse();
   }, [messages]);
 
+  const searchResults = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase();
+    if (!keyword) return [];
+
+    return messages
+      .filter((m) => {
+        if (m.type !== "text" || m.isRevoked) return false;
+        return parseMessageContent(m.content).plainText.toLowerCase().includes(keyword);
+      })
+      .reverse();
+  }, [messages, searchQuery]);
+
   if (!show) return null;
 
   return (
@@ -334,10 +347,9 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                   </div>
                 ) : (
                   <div className="flex flex-col gap-1">
-                    {messages
-                      .filter((m) => m.type === "text" && m.content?.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .reverse()
-                      .map((m) => (
+                    {searchResults.map((m) => {
+                      const parsedContent = parseMessageContent(m.content);
+                      return (
                         <div
                           key={m._id}
                           onClick={() => {
@@ -352,19 +364,20 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
                           }}
                           className="p-3 hover:bg-gray-50 cursor-pointer rounded-xl flex flex-col gap-1 transition"
                         >
-                          <div className="flex items-center justify-between">
-                            <span className="text-[13px] font-bold text-gray-800">{m.senderName}</span>
-                            <span className="text-[11px] text-gray-400">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-[13px] font-bold text-gray-800 truncate">{m.senderName || "Người dùng"}</span>
+                            <span className="text-[11px] text-gray-400 shrink-0">
                               {new Date(m.createdAt || "").toLocaleDateString("vi-VN", {
                                 day: "2-digit", month: "2-digit", year: "2-digit",
                                 hour: "2-digit", minute: "2-digit"
                               })}
                             </span>
                           </div>
-                          <p className="text-[13px] text-gray-600 line-clamp-2">{m.content}</p>
+                          <p className="text-[13px] text-gray-600 line-clamp-2 break-words">{parsedContent.plainText}</p>
                         </div>
-                      ))}
-                    {messages.filter((m) => m.type === "text" && m.content?.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                      );
+                    })}
+                    {searchResults.length === 0 && (
                       <div className="py-10 text-center text-[13px] text-gray-500 font-medium">
                         Không tìm thấy kết quả nào cho "{searchQuery}"
                       </div>
@@ -454,7 +467,7 @@ const ChatInfoPanel: React.FC<ChatInfoPanelProps> = ({
             </p>
 
             {/* Quick Actions */}
-            <div className="flex items-center gap-4 mt-7">
+            <div className="flex items-start justify-center gap-3 mt-7 w-full px-4">
               <ActionButton icon={<BellSlashIcon />} label="Tắt báo" />
               <ActionButton icon={<MapPinIcon />} label="Ghim" />
               <ActionButton icon={<MagnifyingGlassIcon />} label="Tìm kiếm" onClick={() => onTabChange?.("search")} />
@@ -865,7 +878,7 @@ const ActionButton: React.FC<{
   onClick?: () => void;
 }> = ({ icon, label, onClick }) => (
   <div
-    className={`flex flex-col items-center gap-1.5 transition-all ${onClick ? "cursor-pointer group active:scale-95" : "cursor-not-allowed opacity-40"}`}
+    className={`flex w-12 shrink-0 flex-col items-center gap-1.5 transition-all ${onClick ? "cursor-pointer group active:scale-95" : "cursor-not-allowed opacity-40"}`}
     onClick={onClick}
   >
     <div className={`w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-500 transition shadow-sm ring-1 ring-gray-100 ${onClick ? "group-hover:bg-blue-50 group-hover:text-blue-600" : ""}`}>
@@ -875,7 +888,7 @@ const ActionButton: React.FC<{
         })
         : icon}
     </div>
-    <span className={`text-[10px] font-bold ${onClick ? "text-gray-400 group-hover:text-gray-600" : "text-gray-300"}`}>
+    <span className={`min-h-8 text-center text-[10px] font-bold leading-4 ${onClick ? "text-gray-400 group-hover:text-gray-600" : "text-gray-300"}`}>
       {label}
     </span>
   </div>

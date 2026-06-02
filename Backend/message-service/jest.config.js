@@ -7,6 +7,9 @@ module.exports = {
       tsconfig: 'tsconfig.json'
     }]
   },
+  moduleNameMapper: {
+    '^(\\.\\.?\\/.+)\\.js$': '$1',
+  },
   testMatch: ['**/?(*.)+(spec|test).[tj]s?(x)'],
   clearMocks: true,
 };
