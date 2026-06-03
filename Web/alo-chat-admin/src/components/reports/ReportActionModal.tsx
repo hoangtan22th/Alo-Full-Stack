@@ -107,18 +107,32 @@ export function ReportActionModal({
   const evidenceMessages = useMemo(() => {
     if (!report?.messageSnapshots) return [];
 
-    return report.messageSnapshots.map((s: any) => ({
-      id: s.messageId,
-      senderName: s.senderName || (s.isByReporter ? (report.reporter?.fullName || "Người tố cáo") : (report.targetUser?.fullName || report.targetName || "Bị tố cáo")),
-      senderAvatar: s.senderAvatar,
-      type: s.contentType || "text",
-      content: s.content,
-      timestamp: new Date(s.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isTarget: !(s.isByReporter ?? s.byReporter ?? false),
-      isAnchor: s.isAnchor ?? s.anchor ?? false,
-      isByReporter: s.isByReporter ?? s.byReporter ?? false,
-      sequenceIndex: s.sequenceIndex,
-    })).sort((a, b) => a.sequenceIndex - b.sequenceIndex);
+    return report.messageSnapshots.map((s: any) => {
+      let parsedContent = s.content;
+      try {
+        if (typeof s.content === 'string' && s.content.trim().startsWith('{') && s.content.trim().endsWith('}')) {
+          const parsed = JSON.parse(s.content);
+          if (typeof parsed.isRichText === 'boolean' && typeof parsed.text === 'string') {
+            parsedContent = parsed.plainText || parsed.text;
+          }
+        }
+      } catch (e) {
+        // Fallback to original content
+      }
+
+      return {
+        id: s.messageId,
+        senderName: s.senderName || (s.isByReporter ? (report.reporter?.fullName || "Người tố cáo") : (report.targetUser?.fullName || report.targetName || "Bị tố cáo")),
+        senderAvatar: s.senderAvatar,
+        type: s.contentType || "text",
+        content: parsedContent,
+        timestamp: new Date(s.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        isTarget: !(s.isByReporter ?? s.byReporter ?? false),
+        isAnchor: s.isAnchor ?? s.anchor ?? false,
+        isByReporter: s.isByReporter ?? s.byReporter ?? false,
+        sequenceIndex: s.sequenceIndex,
+      };
+    }).sort((a, b) => a.sequenceIndex - b.sequenceIndex);
   }, [report]);
 
   const timelineInfo = useMemo(() => {

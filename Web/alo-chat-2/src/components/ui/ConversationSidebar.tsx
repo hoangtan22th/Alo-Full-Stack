@@ -1415,7 +1415,19 @@ export default function ConversationSidebar() {
                                   </span>
                                 </div>
                                 <span className="text-[14px] font-bold text-gray-800 truncate">
-                                  {msg.senderId === currentUser?.id ? "Bạn: " : ""}<span className="text-blue-600">{msg.content}</span>
+                                  {msg.senderId === currentUser?.id ? "Bạn: " : ""}
+                                  <span className="text-blue-600">
+                                    {(() => {
+                                      try {
+                                        if (typeof msg.content === 'string' && msg.content.trim().startsWith('{')) {
+                                          const parsed = JSON.parse(msg.content.trim());
+                                          if (parsed && typeof parsed.plainText === 'string') return parsed.plainText;
+                                          if (parsed && typeof parsed.text === 'string') return parsed.text;
+                                        }
+                                      } catch(e) {}
+                                      return parseMessageContent(msg.content).plainText;
+                                    })()}
+                                  </span>
                                 </span>
                               </div>
                             </div>

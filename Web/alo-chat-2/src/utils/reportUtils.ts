@@ -1,4 +1,5 @@
 import { MessageDTO } from "../services/messageService";
+import { parseMessageContent } from "./html";
 
 export interface MessageSnapshot {
   messageId: string;
@@ -12,6 +13,7 @@ export interface MessageSnapshot {
   isByReporter: boolean;
   senderName?: string;
   senderAvatar?: string;
+  isRichText?: boolean;
 }
 
 /**
@@ -55,11 +57,12 @@ export const generateEvidenceSnapshot = (
 
   return slicedMessages.map((msg) => {
     const originalIndex = conversationMessages.findIndex((m) => m._id === msg._id);
+    const parsed = parseMessageContent(msg.content);
 
     return {
       messageId: msg._id,
       senderId: msg.senderId,
-      content: msg.content,
+      content: parsed.text,
       contentType: msg.type.toUpperCase(),
       sentAt: msg.createdAt ? msg.createdAt.replace('Z', '') : new Date().toISOString().replace('Z', ''),
       isAnchor: msg._id === anchorId,
@@ -68,6 +71,7 @@ export const generateEvidenceSnapshot = (
       isByReporter: msg.senderId === currentUserId,
       senderName: msg.senderName,
       senderAvatar: getAvatarForUser(msg.senderId),
+      isRichText: parsed.isRichText,
     };
   });
 };
