@@ -26,37 +26,45 @@ async function getConversation(
 ): Promise<any> {
   try {
     // Call group-service directly to bypass Gateway JWT requirements for internal service-to-service calls
-    const groupServiceUrl = process.env.GROUP_SERVICE_URL || "http://127.0.0.1:8082/api/v1/groups";
+    const groupServiceUrl =
+      process.env.GROUP_SERVICE_URL || "http://127.0.0.1:8082/api/v1/groups";
     // Ensure we don't double the /api/v1/groups path if it's already in the env var
-    const baseUrl = groupServiceUrl.endsWith('/api/v1/groups') ? groupServiceUrl : `${groupServiceUrl}/api/v1/groups`;
+    const baseUrl = groupServiceUrl.endsWith("/api/v1/groups")
+      ? groupServiceUrl
+      : `${groupServiceUrl}/api/v1/groups`;
     const url = `${baseUrl}/${conversationId}`;
-    
-    const response = await fetch(
-      url,
-      {
-        headers: {
-          "X-User-Id": userId,
-          "Content-Type": "application/json",
-        },
+
+    const response = await fetch(url, {
+      headers: {
+        "X-User-Id": userId,
+        "Content-Type": "application/json",
       },
-    );
+    });
 
     if (!response.ok) {
-      console.warn(`[getConversation] Fetch failed for ${conversationId}: ${response.status} ${response.statusText}`);
+      console.warn(
+        `[getConversation] Fetch failed for ${conversationId}: ${response.status} ${response.statusText}`,
+      );
       return null;
     }
     const result = await response.json();
     // Handle both { data: ... } wrapped and unwrapped responses
     const conversation = result?.data || result;
-    
+
     if (!conversation || !conversation._id) {
-      console.warn(`[getConversation] Invalid conversation data received for ${conversationId}`, result);
+      console.warn(
+        `[getConversation] Invalid conversation data received for ${conversationId}`,
+        result,
+      );
       return null;
     }
-    
+
     return conversation;
   } catch (error: any) {
-    console.error(`[getConversation] Exception fetching conversation ${conversationId}:`, error.message);
+    console.error(
+      `[getConversation] Exception fetching conversation ${conversationId}:`,
+      error.message,
+    );
     return null;
   }
 }
@@ -68,7 +76,13 @@ async function hasGroupPermission(
   req: Request,
   conversationId: string,
   userId: string,
-  action: "pinMessages" | "sendMessage" | "createPolls" | "createNotes" | "createReminders" | "editGroupInfo",
+  action:
+    | "pinMessages"
+    | "sendMessage"
+    | "createPolls"
+    | "createNotes"
+    | "createReminders"
+    | "editGroupInfo",
 ): Promise<boolean> {
   const conversation = await getConversation(req, conversationId, userId);
   if (!conversation) return false;
@@ -244,19 +258,19 @@ export async function getMessageHistory(
     let clearedAt: Date | undefined = undefined;
     let joinedAt: Date | undefined = undefined;
     try {
-      const groupServiceUrl = process.env.GROUP_SERVICE_URL || "http://127.0.0.1:8082/api/v1/groups";
-      const baseUrl = groupServiceUrl.endsWith('/api/v1/groups') ? groupServiceUrl : `${groupServiceUrl}/api/v1/groups`;
+      const groupServiceUrl =
+        process.env.GROUP_SERVICE_URL || "http://127.0.0.1:8082/api/v1/groups";
+      const baseUrl = groupServiceUrl.endsWith("/api/v1/groups")
+        ? groupServiceUrl
+        : `${groupServiceUrl}/api/v1/groups`;
       const url = `${baseUrl}/${conversationId}`;
 
-      const response = await fetch(
-        url,
-        {
-          headers: {
-            "X-User-Id": userId,
-            "Content-Type": "application/json",
-          },
+      const response = await fetch(url, {
+        headers: {
+          "X-User-Id": userId,
+          "Content-Type": "application/json",
         },
-      );
+      });
       if (response.ok) {
         const result = await response.json();
         const conversation = result.data;
@@ -538,9 +552,13 @@ export async function sendMessage(
     const { conversationId, type, content, metadata, replyTo, senderName } =
       req.body;
     const userId = getUserIdFromHeader(req);
-    
-    console.log(`[MessageService] sendMessage: Received request. Sender: ${userId}, Target: ${req.body.targetUserId || 'N/A'}, ConvoId: ${conversationId || 'N/A'}`);
-    console.log(`[MessageService] sendMessage: Content snippet: "${content?.substring(0, 50)}..."`);
+
+    console.log(
+      `[MessageService] sendMessage: Received request. Sender: ${userId}, Target: ${req.body.targetUserId || "N/A"}, ConvoId: ${conversationId || "N/A"}`,
+    );
+    console.log(
+      `[MessageService] sendMessage: Content snippet: "${content?.substring(0, 50)}..."`,
+    );
 
     // 1. Kiểm tra đăng nhập (userId)
     if (!userId) {
@@ -548,95 +566,121 @@ export async function sendMessage(
       return;
     }
 
-    // 2. Kiểm tra senderName bắt buộc
-    if (!senderName || typeof senderName !== "string" || senderName.trim() === "") {
-      res.status(400).json({ error: "Sender name is required" });
-      return;
-    }
+    // // 2. Kiểm tra senderName bắt buộc
+    // if (!senderName || typeof senderName !== "string" || senderName.trim() === "") {
+    //   res.status(400).json({ error: "Sender name is required" });
+    //   return;
+    // }
 
-    // 3. Kiểm tra định dạng metadata hợp lệ (phải là object)
-    if (metadata && (typeof metadata !== "object" || Array.isArray(metadata))) {
-      res.status(400).json({ error: "Bad request" });
-      return;
-    }
+    // // 3. Kiểm tra định dạng metadata hợp lệ (phải là object)
+    // if (metadata && (typeof metadata !== "object" || Array.isArray(metadata))) {
+    //   res.status(400).json({ error: "Bad request" });
+    //   return;
+    // }
 
-    // Kiểm tra loại tin nhắn (type) hợp lệ
-    const allowedTypes = ["text", "sticker", "emoji"];
-    if (type && !allowedTypes.includes(type)) {
-      res.status(400).json({ error: "Invalid message type" });
-      return;
-    }
+    // // Kiểm tra loại tin nhắn (type) hợp lệ
+    // const allowedTypes = ["text", "sticker", "emoji", "contact"];
+    // if (type && !allowedTypes.includes(type)) {
+    //   res.status(400).json({ error: "Invalid message type" });
+    //   return;
+    // }
 
-    // 4. Kiểm tra tin nhắn phản hồi (replyTo) có tồn tại trong DB không
-    if (replyTo) {
-      let replyMessageId: string | undefined;
-      if (typeof replyTo === "string") {
-        replyMessageId = replyTo;
-      } else if (typeof replyTo === "object" && replyTo.messageId) {
-        replyMessageId = replyTo.messageId;
-      }
+    // // 4. Kiểm tra tin nhắn phản hồi (replyTo) có tồn tại trong DB không
+    // if (replyTo) {
+    //   let replyMessageId: string | undefined;
+    //   if (typeof replyTo === "string") {
+    //     replyMessageId = replyTo;
+    //   } else if (typeof replyTo === "object" && replyTo.messageId) {
+    //     replyMessageId = replyTo.messageId;
+    //   }
 
-      if (!replyMessageId) {
-        res.status(404).json({ error: "Reply message not found" });
-        return;
-      }
+    //   if (!replyMessageId) {
+    //     res.status(404).json({ error: "Reply message not found" });
+    //     return;
+    //   }
 
-      const parentMsg = await messageDataService.getMessageById(replyMessageId);
-      if (!parentMsg) {
-        res.status(404).json({ error: "Reply message not found" });
-        return;
-      }
-    }
+    //   const parentMsg = await messageDataService.getMessageById(replyMessageId);
+    //   if (!parentMsg) {
+    //     res.status(404).json({ error: "Reply message not found" });
+    //     return;
+    //   }
+    // }
 
-    // 5. Kiểm tra content không được rỗng đối với tin nhắn gửi đi
-    if (!content || typeof content !== "string" || content.trim() === "") {
-      res.status(400).json({ error: "Missing conversationId/targetUserId or content" });
-      return;
-    }
+    // // 5. Kiểm tra content không được rỗng đối với tin nhắn gửi đi
+    // if (!content || typeof content !== "string" || content.trim() === "") {
+    //   res.status(400).json({ error: "Missing conversationId/targetUserId or content" });
+    //   return;
+    // }
 
     const { targetUserId } = req.body;
     let actualConversationId = conversationId;
 
     // Support targetUserId for auto-creating direct chats (useful for System DMs)
-    if (!actualConversationId && targetUserId) {
+    if (
+      !actualConversationId ||
+      (!content && type !== "image" && type !== "file")
+    ) {
       try {
-        const groupServiceUrl = process.env.GROUP_SERVICE_URL || "http://127.0.0.1:8082/api/v1/groups";
-        const baseUrl = groupServiceUrl.endsWith('/api/v1/groups') ? groupServiceUrl : `${groupServiceUrl}/api/v1/groups`;
-        
+        const groupServiceUrl =
+          process.env.GROUP_SERVICE_URL ||
+          "http://127.0.0.1:8082/api/v1/groups";
+        const baseUrl = groupServiceUrl.endsWith("/api/v1/groups")
+          ? groupServiceUrl
+          : `${groupServiceUrl}/api/v1/groups`;
+
         const convoRes = await fetch(`${baseUrl}/direct`, {
-          method: 'POST',
-          headers: { 'X-User-Id': userId, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ targetUserId })
+          method: "POST",
+          headers: { "X-User-Id": userId, "Content-Type": "application/json" },
+          body: JSON.stringify({ targetUserId }),
         });
-        
+
         if (convoRes.ok) {
           const convoData = await convoRes.json();
           actualConversationId = convoData?.data?._id || convoData?._id;
         }
       } catch (err) {
-        console.error("[MessageService] Failed to get/create direct conversation:", err);
+        console.error(
+          "[MessageService] Failed to get/create direct conversation:",
+          err,
+        );
       }
     }
 
     if (!actualConversationId) {
-      res.status(400).json({ error: "Missing conversationId/targetUserId or content" });
+      res
+        .status(400)
+        .json({ error: "Missing conversationId/targetUserId or content" });
       return;
     }
 
     // 0. Kiểm tra quyền nhắn tin & Lấy info conversation
-    console.log(`[MessageService] sendMessage: Checking conversation ${actualConversationId} for user ${userId}`);
-    const conversation = await getConversation(req, String(actualConversationId), userId);
+    console.log(
+      `[MessageService] sendMessage: Checking conversation ${actualConversationId} for user ${userId}`,
+    );
+    const conversation = await getConversation(
+      req,
+      String(actualConversationId),
+      userId,
+    );
     if (!conversation) {
-      console.warn(`[MessageService] sendMessage: Conversation ${actualConversationId} NOT FOUND for user ${userId}`);
+      console.warn(
+        `[MessageService] sendMessage: Conversation ${actualConversationId} NOT FOUND for user ${userId}`,
+      );
       res.status(404).json({ error: "Conversation not found" });
       return;
     }
-    console.log(`[MessageService] sendMessage: Found conversation ${conversation._id}, isGroup=${conversation.isGroup}`);
+    console.log(
+      `[MessageService] sendMessage: Found conversation ${conversation._id}, isGroup=${conversation.isGroup}`,
+    );
 
-    const permission = conversation.isGroup ? (conversation.permissions?.sendMessage || "EVERYONE") : "EVERYONE";
+    const permission = conversation.isGroup
+      ? conversation.permissions?.sendMessage || "EVERYONE"
+      : "EVERYONE";
     let allowed = true;
     if (conversation.isGroup && permission !== "EVERYONE") {
-      const member = conversation.members?.find((m: any) => String(m.userId) === userId);
+      const member = conversation.members?.find(
+        (m: any) => String(m.userId) === userId,
+      );
       const role = member?.role?.toUpperCase();
       allowed = role === "LEADER" || role === "DEPUTY";
     }
@@ -687,12 +731,19 @@ export async function sendMessage(
     if (!type || type === "text") {
       const contentStr = content || "";
       if (SENSITIVE_KEYWORDS_REGEX.test(contentStr)) {
-        console.log(`[MessageService AI Moderation] Message matched sensitive keyword rules. Triggering AI scan for: "${contentStr.substring(0, 30)}..."`);
+        console.log(
+          `[MessageService AI Moderation] Message matched sensitive keyword rules. Triggering AI scan for: "${contentStr.substring(0, 30)}..."`,
+        );
         runAIModeration(messageEvent).catch((err) => {
-          console.error("[MessageController] Background AI moderation triggered error:", err);
+          console.error(
+            "[MessageController] Background AI moderation triggered error:",
+            err,
+          );
         });
       } else {
-        console.log(`[MessageService AI Moderation] Message does not match sensitive keyword rules. Skipping AI scan.`);
+        console.log(
+          `[MessageService AI Moderation] Message does not match sensitive keyword rules. Skipping AI scan.`,
+        );
       }
     }
   } catch (error) {
@@ -706,13 +757,13 @@ export async function sendMessage(
  */
 const SENSITIVE_KEYWORDS_REGEX = new RegExp(
   "(" +
-  "otp|mã\\s*otp|ma\\s*otp|cung\\s*cấp\\s*otp|cung\\s*cap\\s*otp|gửi\\s*otp|gui\\s*otp|nhập\\s*otp|nhap\\s*otp|" +
-  "trúng\\s*thưởng|nhận\\s*thưởng|trung\\s*thuong|nhan\\s*thuong|quà\\s*miễn\\s*phí|qua\\s*mien\\s*phi|quà\\s*tri\\s*ân|qua\\s*tri\\s*an|" +
-  "chuyển\\s*tiền\\s*gấp|chuyen\\s*tien\\s*gap|mượn\\s*tiền\\s*gấp|muon\\s*tien\\s*gap|nạp\\s*thẻ\\s*cào|nap\\s*the\\s*cao|" +
-  "phạt\\s*nguội|phat\\s*nguoi|công\\s*an|cong\\s*an|tòa\\s*án|toa\\s*an|viện\\s*kiểm\\s*sát|vien\\s*kiem\\s*sat|cục\\s*thuế|cuc\\s*thue|" +
-  "việc\\s*nhẹ\\s*lương\\s*cao|viec\\s*nhe\\s*luong\\s*cao|kiếm\\s*tiền\\s*online|kiem\\s*tien\\s*online|tuyển\\s*dụng\\s*gấp|tuyen\\s*dung\\s*gap|tuyển\\s*cộng\\s*tác\\s*viên|tuyen\\s*cong\\s*tac\\s*vien" +
-  ")",
-  "i"
+    "otp|mã\\s*otp|ma\\s*otp|cung\\s*cấp\\s*otp|cung\\s*cap\\s*otp|gửi\\s*otp|gui\\s*otp|nhập\\s*otp|nhap\\s*otp|" +
+    "trúng\\s*thưởng|nhận\\s*thưởng|trung\\s*thuong|nhan\\s*thuong|quà\\s*miễn\\s*phí|qua\\s*mien\\s*phi|quà\\s*tri\\s*ân|qua\\s*tri\\s*an|" +
+    "chuyển\\s*tiền\\s*gấp|chuyen\\s*tien\\s*gap|mượn\\s*tiền\\s*gấp|muon\\s*tien\\s*gap|nạp\\s*thẻ\\s*cào|nap\\s*the\\s*cao|" +
+    "phạt\\s*nguội|phat\\s*nguoi|công\\s*an|cong\\s*an|tòa\\s*án|toa\\s*an|viện\\s*kiểm\\s*sát|vien\\s*kiem\\s*sat|cục\\s*thuế|cuc\\s*thue|" +
+    "việc\\s*nhẹ\\s*lương\\s*cao|viec\\s*nhe\\s*luong\\s*cao|kiếm\\s*tiền\\s*online|kiem\\s*tien\\s*online|tuyển\\s*dụng\\s*gấp|tuyen\\s*dung\\s*gap|tuyển\\s*cộng\\s*tác\\s*viên|tuyen\\s*cong\\s*tac\\s*vien" +
+    ")",
+  "i",
 );
 
 /**
@@ -724,13 +775,16 @@ async function runAIModeration(messageEvent: any): Promise<void> {
   }
 
   try {
-    const chatbotServiceUrl = process.env.CHATBOT_SERVICE_URL || "http://localhost:8085";
-    const baseUrl = chatbotServiceUrl.endsWith("/") 
-      ? chatbotServiceUrl.slice(0, -1) 
+    const chatbotServiceUrl =
+      process.env.CHATBOT_SERVICE_URL || "http://localhost:8085";
+    const baseUrl = chatbotServiceUrl.endsWith("/")
+      ? chatbotServiceUrl.slice(0, -1)
       : chatbotServiceUrl;
     const url = `${baseUrl}/api/v1/chatbot/moderate`;
 
-    console.log(`[MessageService AI Moderation] Sending message ${messageEvent._id} to chatbot-service for scanning...`);
+    console.log(
+      `[MessageService AI Moderation] Sending message ${messageEvent._id} to chatbot-service for scanning...`,
+    );
 
     const payload = {
       messageId: messageEvent._id,
@@ -740,7 +794,9 @@ async function runAIModeration(messageEvent: any): Promise<void> {
       type: messageEvent.type,
       conversationId: messageEvent.conversationId,
       isGroup: !!messageEvent.isGroup,
-      timestamp: messageEvent.createdAt ? new Date(messageEvent.createdAt).toISOString() : new Date().toISOString()
+      timestamp: messageEvent.createdAt
+        ? new Date(messageEvent.createdAt).toISOString()
+        : new Date().toISOString(),
     };
 
     const response = await fetch(url, {
@@ -752,17 +808,24 @@ async function runAIModeration(messageEvent: any): Promise<void> {
     });
 
     if (!response.ok) {
-      console.warn(`[MessageService AI Moderation] Failed to moderate message ${messageEvent._id}: ${response.status} ${response.statusText}`);
+      console.warn(
+        `[MessageService AI Moderation] Failed to moderate message ${messageEvent._id}: ${response.status} ${response.statusText}`,
+      );
       return;
     }
 
     const result = await response.json();
-    console.log(`[MessageService AI Moderation] Scan completed for message ${messageEvent._id}:`, result?.data);
+    console.log(
+      `[MessageService AI Moderation] Scan completed for message ${messageEvent._id}:`,
+      result?.data,
+    );
   } catch (err: any) {
-    console.error(`[MessageService AI Moderation] Exception in background moderation thread for message ${messageEvent._id}:`, err.message);
+    console.error(
+      `[MessageService AI Moderation] Exception in background moderation thread for message ${messageEvent._id}:`,
+      err.message,
+    );
   }
 }
-
 
 /**
  * Helper to convert HEIC to JPG if needed
@@ -779,7 +842,9 @@ async function convertHeicToJpgIfNeeded(
 
   if (isHeic) {
     try {
-      console.log(`[HeicConverter] Converting HEIC to JPG: ${file.originalname}`);
+      console.log(
+        `[HeicConverter] Converting HEIC to JPG: ${file.originalname}`,
+      );
       const outputBuffer = await convert({
         buffer: file.buffer,
         format: "JPEG",
@@ -838,16 +903,24 @@ export async function uploadFile(
     file = await convertHeicToJpgIfNeeded(file);
 
     // 0. Kiểm tra quyền nhắn tin & Lấy info
-    const conversation = await getConversation(req, String(conversationId), userId);
+    const conversation = await getConversation(
+      req,
+      String(conversationId),
+      userId,
+    );
     if (!conversation) {
       res.status(404).json({ error: "Conversation not found" });
       return;
     }
 
-    const permission = conversation.isGroup ? (conversation.permissions?.sendMessage || "EVERYONE") : "EVERYONE";
+    const permission = conversation.isGroup
+      ? conversation.permissions?.sendMessage || "EVERYONE"
+      : "EVERYONE";
     let allowed = true;
     if (conversation.isGroup && permission !== "EVERYONE") {
-      const member = conversation.members?.find((m: any) => String(m.userId) === userId);
+      const member = conversation.members?.find(
+        (m: any) => String(m.userId) === userId,
+      );
       const role = member?.role?.toUpperCase();
       allowed = role === "LEADER" || role === "DEPUTY";
     }
@@ -937,15 +1010,18 @@ export async function uploadRawFiles(
     const uploadPromises = files.map(async (file) => {
       const convertedFile = await convertHeicToJpgIfNeeded(file);
       // Fix Vietnamese encoding for originalname
-      const originalName = Buffer.from(convertedFile.originalname, "latin1").toString("utf8");
-      
+      const originalName = Buffer.from(
+        convertedFile.originalname,
+        "latin1",
+      ).toString("utf8");
+
       // Upload to S3
       const fileUrl = await uploadFileToS3(
         convertedFile.buffer,
         convertedFile.mimetype,
-        originalName
+        originalName,
       );
-      
+
       return fileUrl;
     });
 
@@ -1142,16 +1218,24 @@ export async function uploadImages(
     }
 
     // 0. Kiểm tra quyền nhắn tin & Lấy info
-    const conversation = await getConversation(req, String(conversationId), userId);
+    const conversation = await getConversation(
+      req,
+      String(conversationId),
+      userId,
+    );
     if (!conversation) {
       res.status(404).json({ error: "Conversation not found" });
       return;
     }
 
-    const permission = conversation.isGroup ? (conversation.permissions?.sendMessage || "EVERYONE") : "EVERYONE";
+    const permission = conversation.isGroup
+      ? conversation.permissions?.sendMessage || "EVERYONE"
+      : "EVERYONE";
     let allowed = true;
     if (conversation.isGroup && permission !== "EVERYONE") {
-      const member = conversation.members?.find((m: any) => String(m.userId) === userId);
+      const member = conversation.members?.find(
+        (m: any) => String(m.userId) === userId,
+      );
       const role = member?.role?.toUpperCase();
       allowed = role === "LEADER" || role === "DEPUTY";
     }
@@ -1171,9 +1255,10 @@ export async function uploadImages(
     // 1. Upload all to S3 concurrently
     const uploadPromises = files.map(async (file, index) => {
       const convertedFile = await convertHeicToJpgIfNeeded(file);
-      const originalName = Buffer.from(convertedFile.originalname, "latin1").toString(
-        "utf8",
-      );
+      const originalName = Buffer.from(
+        convertedFile.originalname,
+        "latin1",
+      ).toString("utf8");
       const url = await uploadFileToS3(
         convertedFile.buffer,
         convertedFile.mimetype,
@@ -1430,8 +1515,14 @@ export async function globalSearchMessages(
     const conversationIds = req.body.conversationIds; // Array of ids passed in POST body
     const userId = getUserIdFromHeader(req);
 
-    if (!conversationIds || !Array.isArray(conversationIds) || conversationIds.length === 0) {
-      res.status(400).json({ error: "Missing or invalid conversationIds array" });
+    if (
+      !conversationIds ||
+      !Array.isArray(conversationIds) ||
+      conversationIds.length === 0
+    ) {
+      res
+        .status(400)
+        .json({ error: "Missing or invalid conversationIds array" });
       return;
     }
 
@@ -1449,7 +1540,7 @@ export async function globalSearchMessages(
       conversationIds,
       query,
       userId,
-      filterType === 'file' ? 'file' : 'all'
+      filterType === "file" ? "file" : "all",
     );
 
     res.status(200).json({ data: messages });
@@ -1504,37 +1595,44 @@ export async function getBulkMessages(
 
     const messages = await Message.find({ _id: { $in: validIds } })
       .sort({ createdAt: 1 }) // ASC — chronological order
-      .select("_id conversationId senderId senderName type content createdAt isRevoked")
+      .select(
+        "_id conversationId senderId senderName type content createdAt isRevoked",
+      )
       .lean();
 
     // --- INVISIBLE MESSAGE COUNT ALGORITHM ---
-    const result = await Promise.all(messages.map(async (m, index) => {
-      let hiddenAfterCount = 0;
-      
-      // If there is a next message in the evidence list, check for gaps in the DB
-      if (index < messages.length - 1) {
-        const nextMsg = messages[index + 1];
-        // Only check gap if they belong to the same conversation
-        if (nextMsg && m.conversationId.toString() === nextMsg.conversationId.toString()) {
-          hiddenAfterCount = await Message.countDocuments({
-            conversationId: m.conversationId,
-            createdAt: { $gt: m.createdAt, $lt: nextMsg.createdAt }
-          });
-        }
-      }
+    const result = await Promise.all(
+      messages.map(async (m, index) => {
+        let hiddenAfterCount = 0;
 
-      return {
-        id: m._id.toString(),
-        conversationId: m.conversationId.toString(),
-        senderId: m.senderId,
-        senderName: m.senderName ?? "Unknown",
-        type: m.type,
-        content: m.isRevoked ? "[Tin nhắn đã bị thu hồi]" : m.content,
-        createdAt: m.createdAt,
-        isRevoked: m.isRevoked,
-        hiddenAfterCount, // The "Anti-Cherry-Picking" payload
-      };
-    }));
+        // If there is a next message in the evidence list, check for gaps in the DB
+        if (index < messages.length - 1) {
+          const nextMsg = messages[index + 1];
+          // Only check gap if they belong to the same conversation
+          if (
+            nextMsg &&
+            m.conversationId.toString() === nextMsg.conversationId.toString()
+          ) {
+            hiddenAfterCount = await Message.countDocuments({
+              conversationId: m.conversationId,
+              createdAt: { $gt: m.createdAt, $lt: nextMsg.createdAt },
+            });
+          }
+        }
+
+        return {
+          id: m._id.toString(),
+          conversationId: m.conversationId.toString(),
+          senderId: m.senderId,
+          senderName: m.senderName ?? "Unknown",
+          type: m.type,
+          content: m.isRevoked ? "[Tin nhắn đã bị thu hồi]" : m.content,
+          createdAt: m.createdAt,
+          isRevoked: m.isRevoked,
+          hiddenAfterCount, // The "Anti-Cherry-Picking" payload
+        };
+      }),
+    );
 
     res.json({
       status: "success",
@@ -1720,18 +1818,18 @@ export async function getLastMessagesForConversations(
       {
         $match: {
           conversationId: { $in: objectIds },
-          deletedByUsers: { $ne: userId }
-        }
+          deletedByUsers: { $ne: userId },
+        },
       },
       {
-        $sort: { createdAt: -1 }
+        $sort: { createdAt: -1 },
       },
       {
         $group: {
           _id: "$conversationId",
-          lastMessage: { $first: "$$ROOT" }
-        }
-      }
+          lastMessage: { $first: "$$ROOT" },
+        },
+      },
     ]);
 
     // Format output as a Map of conversationId -> messageDetails
@@ -1756,8 +1854,10 @@ export async function getLastMessagesForConversations(
       data,
     });
   } catch (error) {
-    console.error("[MessageController] getLastMessagesForConversations error:", error);
+    console.error(
+      "[MessageController] getLastMessagesForConversations error:",
+      error,
+    );
     next(error);
   }
 }
-
