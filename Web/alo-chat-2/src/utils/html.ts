@@ -39,23 +39,57 @@ export interface MessageContentJSON {
  * Nếu nội dung là định dạng JSON hợp lệ do Client tạo ra, trả về object.
  * Nếu không (tin nhắn cũ hoặc do bên thứ ba tạo), trả về cấu trúc fallback.
  */
-export const parseMessageContent = (content: string | undefined | null): MessageContentJSON => {
-  const safeContent = content || "";
+export const parseMessageContent = (content: any): MessageContentJSON => {
+  // Nếu content đã là object (do axios tự parse)
+  if (typeof content === 'object' && content !== null) {
+    if (typeof content.isRichText === 'boolean' && typeof content.text === 'string') {
+      return {
+        isRichText: content.isRichText,
+        text: content.text,
+        plainText: content.plainText || (content.isRichText ? stripHtml(content.text) : content.text)
+      };
+    }
+  }
+
+  const safeContent = (typeof content === 'string' ? content : JSON.stringify(content)) || "";
   const trimmed = safeContent.trim();
   
-  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+  // Thử parse nhiều lần nếu bị double stringify
+  let currentStr = trimmed;
+  let parsedObj: any = null;
+  
+  for (let i = 0; i < 3; i++) {
     try {
-      const parsed = JSON.parse(trimmed);
-      if (typeof parsed.isRichText === "boolean" && typeof parsed.text === "string") {
-        return {
-          isRichText: parsed.isRichText,
-          text: parsed.text,
-          plainText: parsed.plainText || (parsed.isRichText ? stripHtml(parsed.text) : parsed.text)
-        };
+      // Loại bỏ ngoặc kép bao ngoài nếu bị double stringify dạng "{\"isRichText\"...}"
+      if (currentStr.startsWith('"') && currentStr.endsWith('"')) {
+        currentStr = currentStr.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+      }
+      if (currentStr.startsWith("{") && currentStr.endsWith("}")) {
+        const parsed = JSON.parse(currentStr);
+        if (parsed && typeof parsed === 'object' && 'text' in parsed) {
+          parsedObj = parsed;
+          break;
+        }
+        if (typeof parsed === 'string') {
+          currentStr = parsed;
+        } else {
+          break;
+        }
+      } else {
+        break;
       }
     } catch (e) {
-      // Bỏ qua lỗi parse và fallback
+      break; // Lỗi parse thì dừng
     }
+  }
+
+  if (parsedObj && typeof parsedObj.text === "string") {
+    const isRich = parsedObj.isRichText === true || parsedObj.isRichText === "true";
+    return {
+      isRichText: isRich,
+      text: parsedObj.text,
+      plainText: parsedObj.plainText || (isRich ? stripHtml(parsedObj.text) : parsedObj.text)
+    };
   }
   
   // Fallback cho tin nhắn cũ dạng text thường hoặc HTML thô
